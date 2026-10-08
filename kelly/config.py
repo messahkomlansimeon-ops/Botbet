@@ -119,6 +119,7 @@ SPORTS = _list("SPORTS", ",".join(LEAGUE_KEYS)) + _list("SPORTS_EXTRA", "")     
 BOOT_LEAGUES = _list("BOOT_LEAGUES", "soccer_epl,soccer_spain_la_liga,soccer_italy_serie_a,soccer_germany_bundesliga,"
                                      "soccer_france_ligue_one")
 # Durées maximales (secondes) pour tenir le passage de 08:00 sous les 15 minutes du workflow.
+DAY_END_HOUR = _int("DAY_END_HOUR", 8)            # le « jour Kelly » du run du matin (08:00 UTC) va jusqu'au lendemain à cette heure UTC (matchs du soir des Amériques)
 SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de toutes les ligues
 SOURCES_SECONDS = _int("SOURCES_SECONDS", 420)    # téléchargements des stats gratuites (le reste vient du cache)
 # Pronostics Kelly sans cote de bookmaker (kelly/fair.py) : proba du modèle + « cote juste » = 1 / proba.
