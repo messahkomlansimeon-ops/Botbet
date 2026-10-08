@@ -25,17 +25,23 @@ PROP_MARKETS = os.environ.get(
     "btts,double_chance,alternate_totals_corners,alternate_totals_cards,"
     "player_shots_on_target,player_shots,player_fouls",
 ).split(",")
-# (tier, titre, nb de matchs, cote minimale)
+# (titre, cote minimale, cote maximale) : le nombre de matchs est libre, seule
+# la cote compte ; on prend la combinaison la plus probable dans la fourchette.
 COMBOS = [
-    ("🛡️ SÛR (cote >= 5)", 3, 5.0),
-    ("⚖️ COSTAUD (cote >= 10)", 5, 10.0),
-    ("🔥 MÉCHANT (cote >= 40)", 7, 40.0),
-    ("💀 MONSTRE (cote >= 120)", 9, 120.0),
+    ("🛡️ SÛR (cote 5 à 7)", 5.0, 7.0),
+    ("⚖️ COSTAUD (cote 12 à 20)", 12.0, 20.0),
+    ("🔥 MÉCHANT (cote 40 à 80)", 40.0, 80.0),
+    ("💀 MONSTRE (cote 150+)", 150.0, None),
 ]
-# Les marchés secondaires sont moins bien pricés par les bookmakers : bonus.
-MARKET_WEIGHT = {"h2h": 1.0, "totals": 1.0, "double_chance": 1.0, "btts": 1.1,
-                 "alternate_totals_corners": 1.3, "alternate_totals_cards": 1.3}
-PLAYER_WEIGHT = 1.4                      # player_* : les plus inefficaces
+MAX_LEGS = 8
+# Priorité aux marchés mal pricés par les bookmakers. Le 1N2 et les buts sont
+# les marchés les plus efficaces (gros volumes, traders dédiés) : pénalisés.
+# Corners, cartons et stats joueurs sont pricés par des modèles génériques,
+# rarement ajustés match par match : bonus.
+MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "btts": 1.0,
+                 "alternate_totals_corners": 1.6, "alternate_totals_cards": 1.6}
+PLAYER_WEIGHT = 1.8                      # player_* : les plus inefficaces
+SOFT_SHARE = 0.75                        # part mini de marchés secondaires dans le pool
 HISTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "odds_history.json")
 UNITS = {
     "totals": "buts", "alternate_totals": "buts",
@@ -164,32 +170,52 @@ def build_picks(events, today=None, after=None, history=None):
                 "start": start.strftime("%H:%M"),
                 "pick": label(market, name, point, who),
                 "prob": p, "odds": odds, "edge": edge, "id": ev["id"], "key": key,
-                "score": (edge + 0.5 * spread + 2 * steam) * weight,
+                "score": (edge + 0.5 * spread + 2 * steam) * weight + (weight - 1) * 0.05,
+                "weight": weight,
                 "why": ", ".join(signals),
             })
     return picks
 
 
-def one_per_event(picks):
-    """Un seul pari par match (les paris d'un même match sont corrélés)."""
-    best = {}
-    for c in picks:
-        if c["id"] not in best or c["score"] > best[c["id"]]["score"]:
-            best[c["id"]] = c
-    return list(best.values())
+def per_event(picks, k=1):
+    """Les `k` meilleurs paris de chaque match (un combiné n'en prendra qu'un :
+    les paris d'un même match sont corrélés)."""
+    by_event = {}
+    for c in sorted(picks, key=lambda c: c["score"], reverse=True):
+        by_event.setdefault(c["id"], [])
+        if len(by_event[c["id"]]) < k:
+            by_event[c["id"]].append(c)
+    return [c for cs in by_event.values() for c in cs]
 
 
-def make_combo(pool, size, min_odds):
-    """Combiné de `size` matchs qui atteint `min_odds` avec la plus forte proba."""
-    pool = sorted(pool, key=lambda c: c["score"], reverse=True)[:16]
+def soft_market(c):
+    return c["weight"] > 1.0
+
+
+def make_pool(picks, n=22):
+    """Pool de candidats : 2 paris max par match, meilleurs scores, majorité de
+    marchés mal pricés."""
+    ranked = per_event(picks, k=2)
+    soft = [c for c in ranked if soft_market(c)][:int(n * SOFT_SHARE)]
+    rest = [c for c in ranked if c not in soft][:n - len(soft)]
+    return soft + rest
+
+
+def make_combo(pool, min_odds, max_odds=None):
+    """Combiné (nombre de matchs libre) dans la fourchette de cote, proba max."""
     best = None
-    for combo in itertools.combinations(pool, size):
-        odds = prob = 1.0
-        for c in combo:
-            odds *= c["odds"]
-            prob *= c["prob"]
-        if odds >= min_odds and (best is None or prob > best[2]):
-            best = (combo, odds, prob)
+    for size in range(2, min(MAX_LEGS, len(pool)) + 1):
+        for combo in itertools.combinations(pool, size):
+            odds = prob = 1.0
+            for c in combo:
+                odds *= c["odds"]
+                prob *= c["prob"]
+            if odds < min_odds or (max_odds and odds > max_odds):
+                continue
+            if len({c["id"] for c in combo}) < size:
+                continue
+            if best is None or prob > best[2]:
+                best = (combo, odds, prob)
     return best
 
 
@@ -201,20 +227,22 @@ def fmt_combo(title, combo):
     for c in picks:
         why = f' ({c["why"]})' if c["why"] else ""
         lines.append(f'• {c["start"]} {c["event"]}\n   → {c["pick"]} @ {c["odds"]:.2f}{why}')
-    lines.append(f"💰 Cote totale : {odds:.1f} | Proba estimée : {prob*100:.1f}%")
+    lines.append(f"💰 {len(picks)} matchs | Cote totale : {odds:.1f} | Proba estimée : {prob*100:.1f}%")
     return "\n".join(lines)
 
 
 def build_messages(picks):
     today = datetime.now(timezone.utc).strftime("%d/%m/%Y")
-    pool = one_per_event(picks)
-    parts = [f"🔥 COMBINÉS DU {today} 🔥\n{len(pool)} matchs analysés, {len(picks)} paris étudiés"]
+    pool = make_pool(picks)
+    soft = sum(1 for c in picks if soft_market(c))
+    parts = [f"🔥 COMBINÉS DU {today} 🔥\n{len(per_event(picks))} matchs analysés, "
+             f"{len(picks)} paris étudiés dont {soft} sur marchés secondaires (corners, cartons, joueurs)"]
     if pool:
         top = max(pool, key=lambda c: c["score"])
         parts.append(f'⭐ PARI DU JOUR\n{top["start"]} {top["event"]} ({top["league"]})\n→ {top["pick"]} @ {top["odds"]:.2f} '
                      f'(proba {top["prob"]*100:.0f}%)' + (f'\nPourquoi : {top["why"]}' if top["why"] else ""))
-    for title, size, min_odds in COMBOS:
-        parts.append(fmt_combo(title, make_combo(pool, size, min_odds)))
+    for title, min_odds, max_odds in COMBOS:
+        parts.append(fmt_combo(title, make_combo(pool, min_odds, max_odds)))
     parts.append("Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
                  "mise petit. 18+")
     return parts

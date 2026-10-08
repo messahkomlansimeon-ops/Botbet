@@ -2,7 +2,7 @@
 
 Bot Telegram personnel : chaque matin (08:00 Abidjan), il analyse les matchs de foot du jour dans jusqu'à 25 championnats et envoie :
 - **⭐ Pari du jour** ;
-- **🛡️ Sûr** (3 matchs, cote >= 5), **⚖️ Costaud** (5 matchs, cote >= 10), **🔥 Méchant** (7 matchs, cote >= 40), **💀 Monstre** (9 matchs, cote >= 120).
+- **🛡️ Sûr** (cote 5 à 7), **⚖️ Costaud** (cote 12 à 20), **🔥 Méchant** (cote 40 à 80), **💀 Monstre** (cote 150+). Le nombre de matchs est libre : le bot prend la combinaison la plus probable qui atteint la cote visée.
 
 Marchés : 1N2, plus/moins de buts, les 2 équipes marquent, double chance, corners, cartons, tirs, tirs cadrés, fautes (selon ce que fournit ton forfait The Odds API ; un marché indisponible est ignoré). Les probabilités viennent du consensus des bookmakers (marge retirée) : ce sont des estimations, aucun gain n'est garanti. Plus la cote est grosse, plus la probabilité est faible (un combiné à cote 100+ passe moins de 1 fois sur 100).
 
@@ -10,7 +10,7 @@ Marchés : 1N2, plus/moins de buts, les 2 équipes marquent, double chance, corn
 1. la **valeur** : la meilleure cote du marché face au consensus des autres books (un book en retard = opportunité) ;
 2. le **désaccord** entre bookmakers sur le même pari ;
 3. le **mouvement de la cote** depuis le relevé de la veille (20:00) : une cote qui baisse signale l'argent des parieurs pros ;
-4. un **bonus** pour les marchés secondaires (corners, cartons, tirs, fautes), moins bien pricés que le 1N2.
+4. une **priorité forte** aux marchés mal pricés : corners, cartons et stats joueurs (pricés par des modèles génériques, rarement ajustés match par match) ; le 1N2 et les buts, très efficaces, sont pénalisés. Au moins 75 % des candidats aux combinés viennent de ces marchés.
 
 Le message indique pour chaque pari les signaux détectés. Ce n'est pas de la voyance : le bot ne bat pas les bookmakers, il cherche les endroits où ils se trompent entre eux.
 
