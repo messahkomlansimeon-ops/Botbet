@@ -6,6 +6,7 @@
   python bot.py --alert      journée : alerte si une cote chute (balayage large)
   python bot.py --commands   traite les commandes Telegram reçues (une passe)
   python bot.py --serve      écoute les commandes en continu (serveur)
+  python bot.py --check      diagnostic des clés (Odds API, API-Football, Telegram) + message de test
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
 """
 import sys
@@ -15,7 +16,9 @@ from kelly import app
 
 def main(argv):
     sample = "--sample" in argv
-    if "--snapshot" in argv:
+    if "--check" in argv:
+        sys.exit(0 if app.run_check() else 1)
+    elif "--snapshot" in argv:
         app.run_snapshot()
     elif "--track" in argv:
         app.run_track()

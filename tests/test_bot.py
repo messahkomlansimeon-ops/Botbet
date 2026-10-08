@@ -1,6 +1,8 @@
 """Test de bout en bout hors ligne : journée -> clôture -> apprentissage ->
 règlement -> bilan -> calibration -> commandes. Lancer : python -m tests.test_bot"""
+import contextlib
 import copy
+import io
 import math
 import os
 import random
@@ -11,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-test-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import app, bankroll, learn, odds, settle, store, track  # noqa: E402
+from kelly import app, bankroll, config as C, learn, odds, settle, store, telegram, track  # noqa: E402
 
 
 def fake_scores(rows):
@@ -51,6 +53,164 @@ def closing_events(events, tracked):
                     o["price"] = round(max(1.05, o["price"] * (1 + drift + random.uniform(-0.03, 0.03))), 2)
         return ev
     return fetch
+
+
+def fake_odds_api(state, calls):
+    """Faux odds.get : décompte les crédits comme l'API (1 par marché) et remplit odds.CREDITS."""
+    sports = [{"key": k, "has_outrights": False} for k in ("soccer_epl", "soccer_uefa_champs_league_women", "soccer_spain_la_liga")]
+    sports.append({"key": "soccer_epl_winner", "has_outrights": True})
+
+    def get(path, **params):
+        calls.append((path, params.get("markets")))
+        if path != "/sports":
+            state["remaining"] -= len(params["markets"].split(","))
+        odds.CREDITS.update(remaining=state["remaining"], used=500 - state["remaining"])
+        if path == "/sports":
+            return sports
+        if path.endswith("/odds") and "/events/" not in path:
+            sk = path.split("/")[2]
+            return [{"id": f"{sk}-{i}", "commence_time": "2026-10-08T18:00:00Z", "home_team": "A", "away_team": "B",
+                     "bookmakers": [{"key": f"b{j}", "markets": []} for j in range(3)]} for i in range(2)]
+        if params["markets"] == "double_chance":          # marché non supporté : 422
+            raise odds.OddsError("HTTP 422 INVALID_MARKET", 422, "INVALID_MARKET")
+        return {"id": "x", "bookmakers": [{"key": "b0", "markets": [{"key": params["markets"], "outcomes": []}]}]}
+    return get
+
+
+def test_credit_guard():
+    real_get, saved = odds.get, (dict(odds.CREDITS), set(odds._warned), C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS)
+    C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS = 30, 6, 3
+    sports = [{"key": k} for k in ("soccer_uefa_champs_league_women", "soccer_uefa_champs_league", "basketball_nba",
+                                   "soccer_epl", "x_sport")]
+    try:
+        # Sélection des sports : ordre de C.SPORTS, clés exactes (pas la version féminine), préfixe avec « _ ».
+        saved_sports = C.SPORTS
+        C.SPORTS = ["soccer_epl", "soccer_uefa_champs_league", "basketball_nba"]
+        assert [x["key"] for x in odds.select_sports(sports)] == ["soccer_epl", "soccer_uefa_champs_league", "basketball_nba"]
+        C.SPORTS = ["soccer_"]
+        assert len(odds.select_sports(sports)) == 3
+        C.SPORTS = saved_sports
+
+        # Crédits suffisants : marchés détaillés demandés, 422 ignoré sans erreur.
+        state, calls = {"remaining": 400}, []
+        odds.get = fake_odds_api(state, calls)
+        events = odds.fetch_events(datetime(2026, 10, 8).date())
+        props = [c for c in calls if "/events/" in c[0]]
+        assert len(events) == 4 and len(props) == 3 * len(C.PROP_MARKETS["soccer"]), (len(events), len(props))
+        assert not any("women" in c[0] or "winner" in c[0] for c in calls), calls
+
+        # Crédits bas : plus aucun marché détaillé, ni balayage large (optional), mais pas d'exception.
+        odds.CREDITS.update(remaining=None)
+        state, calls = {"remaining": 33}, []
+        odds.get = fake_odds_api(state, calls)
+        events = odds.fetch_events(datetime(2026, 10, 8).date())          # 2 ligues x 2 crédits : 33 -> 29 < 30
+        assert events and not [c for c in calls if "/events/" in c[0]], calls
+        assert odds.low_credits() and not odds.credits_ok("test")
+        calls.clear()
+        assert odds.fetch_events(datetime(2026, 10, 8).date(), optional=True) == []
+        assert [c[0] for c in calls] == ["/sports"], calls                  # seul /sports (gratuit)
+
+        # Clôture : crédits bas -> seuls les paris envoyés sont relevés (marchés envoyés uniquement).
+        saved_rows = track.load()
+        soon = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(timespec="minutes")
+        base = {"closed_at": None, "commence": soon, "odds": 2.0, "sport_key": "soccer_epl", "group": "soccer"}
+        track.save([dict(base, key="g|h2h", id="ghost", market="h2h", sent=False),
+                    dict(base, key="s|h2h", id="sent", market="h2h", sent=True),
+                    dict(base, key="s|totals", id="sent", market="totals", sent=False),
+                    dict(base, key="m|btts", id="mixed", market="btts", sent=False)])
+        for low, expect in ((False, {"ghost", "sent", "mixed"}), (True, {"sent"})):
+            odds.CREDITS.update(remaining=10 if low else 400)
+            asked = []
+
+            def get(path, **params):
+                asked.append((path.split("/")[4], params["markets"]))
+                return {"id": path.split("/")[4], "commence_time": soon, "home_team": "A",
+                        "away_team": "B", "bookmakers": []}
+            odds.get = get
+            app.run_track()
+            assert {a[0] for a in asked} == expect, (low, asked)
+            if low:
+                assert asked == [("sent", "h2h")], asked                      # marché fantôme (totals) non demandé
+            elif asked[0][0] != "sent":
+                raise AssertionError(f"les envoyés doivent passer d'abord : {asked}")
+            track.save([dict(r, closed_at=None) for r in track.load()])
+        track.save(saved_rows)
+    finally:
+        odds.get = real_get
+        odds.CREDITS.update(saved[0])
+        odds._warned.clear(); odds._warned.update(saved[1])
+        C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS = saved[2:]
+        C.SPORTS = saved_sports
+    print("garde-fou crédits : OK")
+
+
+def test_build_picks_shapes():
+    """handicaps (points opposés) et double chance (somme des probas = 2) bien lus."""
+    def bk(i, spread_h, spread_a, dc):
+        return {"key": f"b{i}", "title": f"B{i}", "markets": [
+            {"key": "spreads", "outcomes": [{"name": "A", "price": spread_h, "point": -1.5},
+                                            {"name": "B", "price": spread_a, "point": 1.5}]},
+            {"key": "double_chance", "outcomes": [{"name": "A or Draw", "price": dc[0]}, {"name": "A or B", "price": dc[1]},
+                                                  {"name": "Draw or B", "price": dc[2]}]}]}
+    ev = {"id": "e1", "sport_key": "basketball_nba", "sport_title": "NBA", "commence_time": "2026-10-08T18:00:00Z",
+          "home_team": "A", "away_team": "B", "bookmakers": [bk(i, 1.9, 1.95, (1.5, 1.3, 2.0)) for i in range(3)]}
+    picks = {(c["market"], c["name"]): c for c in odds.build_picks([ev], datetime(2026, 10, 8).date())}
+    assert ("spreads", "A") in picks and picks[("spreads", "A")]["point"] == -1.5 and picks[("spreads", "B")]["point"] == 1.5
+    dc = [c["prob_book"] for k, c in picks.items() if k[0] == "double_chance"]
+    assert len(dc) == 3 and abs(sum(dc) - 2) < 1e-9, dc
+
+
+def test_check():
+    """--check : rapport français, aucun secret affiché, indices sur les erreurs courantes."""
+    real = (odds.get, telegram.api, app.requests.get, dict(odds.CREDITS))
+    env = {"ODDS_API_KEY": "odds-secret-xyz", "TELEGRAM_TOKEN": "123:tok-secret", "TELEGRAM_CHAT_ID": "42",
+           "STATS_API_KEY": "rapidapi-secret-key"}
+    old_env = {k: os.environ.get(k) for k in env}
+    os.environ.update(env)
+    sent = []
+
+    class Resp:
+        status_code = 200
+        def json(self):
+            return {"errors": {"token": "Error/Missing application key"}, "response": []}
+
+    def run():
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ok = app.run_check()
+        return ok, buf.getvalue()
+    try:
+        def odds_get(path, **p):
+            odds.CREDITS.update(remaining=412, used=88)
+            return [{"key": "soccer_epl", "has_outrights": False}]
+        odds.get = odds_get
+        app.requests.get = lambda *a, **k: Resp()
+
+        def tg(method, **p):
+            if method == "getMe":
+                return {"username": "kelly_bot"}
+            sent.append(p["text"])
+            raise telegram.TelegramError("Bad Request: chat not found", 400)
+        telegram.api = tg
+        ok, out = run()
+        assert not ok and "clé valide" in out and "412 restants" in out and "kelly_bot" in out, out
+        assert "RapidAPI" in out and "/start" in out and sent[0].startswith("✅ Kelly est en ligne"), out
+        assert not any(v in out + sent[0] for v in env.values()), "secret affiché"
+
+        # Odds 401 : indice clé ; Telegram OK ; stats absente (ignorée).
+        def bad_get(path, **p):
+            raise odds.OddsError("HTTP 401 INVALID_KEY", 401, "INVALID_KEY")
+        odds.get = bad_get
+        del os.environ["STATS_API_KEY"]
+        telegram.api = lambda method, **p: {"username": "kelly_bot"} if method == "getMe" else {}
+        ok, out = run()
+        assert not ok and "clé refusée" in out and "STATS_API_KEY absente" in out and "message de test envoyé" in out, out
+    finally:
+        odds.get, telegram.api, app.requests.get = real[:3]
+        odds.CREDITS.update(real[3])
+        for k, v in old_env.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+    print("diagnostic --check : OK")
 
 
 def main():
@@ -141,6 +301,9 @@ def main():
     assert "TOP 10" in app.handle_command("/top")
     assert "réglée" in app.handle_command("/bank 50000")
     assert "Kelly" in app.handle_command("/aide")
+    test_build_picks_shapes()
+    test_credit_guard()
+    test_check()
     shutil.rmtree(os.environ["DATA_DIR"], ignore_errors=True)
     print("OK : tout le flux passe hors ligne.")
 

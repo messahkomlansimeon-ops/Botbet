@@ -44,10 +44,14 @@ Secrets GitHub (Settings > Secrets and variables > Actions) : `ODDS_API_KEY` (th
 
 Les marchés détaillés coûtent 1 crédit par match et par marché chez The Odds API ; le relevé de clôture coûte environ le nombre de marchés suivis par match, 1 à 2 fois par match et par jour. Adapte `MAX_SPORTS`, `PROP_EVENTS`, `PROP_MARKETS` dans le workflow selon ton forfait.
 
+## Vérifier l'installation
+Onglet **Actions** → workflow « Kelly » → **Run workflow** → mode `check`. Kelly vérifie les trois clés (sans dépenser de crédits de cotes), affiche les crédits restants et t'envoie « ✅ Kelly est en ligne » sur Telegram. Si le message n'arrive pas, envoie d'abord `/start` à ton bot.
+
 ## Test hors ligne
 ```
 pip install -r requirements.txt
 python bot.py --sample          # journée fictive
+python -m tests.test_stats      # stats API-Football (quota, correspondance des noms)
 python -m tests.test_bot        # tout le flux : journée, clôture, apprentissage, règlement, bilan, calibration, commandes
 ```
 

@@ -9,7 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "daily | alert | snapshot | track"
+        description: "daily | alert | snapshot | track | check (check = diagnostic des clés + message de test Telegram)"
+        type: choice
+        options: [daily, alert, snapshot, track, check]
         default: daily
 concurrency:
   group: botbet-data
@@ -44,8 +46,11 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
-          MAX_SPORTS: "25"
-          PROP_EVENTS: "8"
+          # Forfait gratuit The Odds API (500 crédits/mois) : peu de ligues et de matchs détaillés.
+          # Sur un forfait payant, monte par exemple MAX_SPORTS à 25 et PROP_EVENTS à 8.
+          MAX_SPORTS: "6"
+          PROP_EVENTS: "3"
+          MIN_CREDITS: "30"   # sous ce seuil de crédits restants, les appels optionnels sont sautés
       - name: Sauvegarder les données (paris, historique, apprentissage)
         run: |
           git config user.name github-actions

@@ -1,6 +1,7 @@
 """Cotes (The Odds API) et construction des sélections."""
 import os
 import sys
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -12,47 +13,133 @@ def sport_group(sport_key):
     return sport_key.split("_", 1)[0]
 
 
+# Derniers crédits connus (en-têtes x-requests-remaining / x-requests-used de chaque réponse).
+CREDITS = {"remaining": None, "used": None}
+_warned = set()
+
+
+class OddsError(Exception):
+    """Erreur The Odds API ou réseau, sans jamais exposer la clé."""
+
+    def __init__(self, msg, status=None, code=None):
+        super().__init__(msg)
+        self.status, self.code = status, code
+
+
+def _scrub(text):
+    key = os.environ.get("ODDS_API_KEY")
+    return str(text).replace(key, "***") if key else str(text)
+
+
+def _note_credits(r):
+    for field, header in (("remaining", "x-requests-remaining"), ("used", "x-requests-used")):
+        try:
+            CREDITS[field] = int(float(r.headers[header]))
+        except (KeyError, ValueError, TypeError):
+            pass
+    if CREDITS["remaining"] is not None:
+        print(f"[odds] crédits restants : {CREDITS['remaining']} (utilisés : {CREDITS['used']})", file=sys.stderr)
+
+
+def low_credits():
+    """Vrai si les crédits restants (derniers connus) sont sous C.MIN_CREDITS."""
+    rem = CREDITS["remaining"]
+    return rem is not None and rem < C.MIN_CREDITS
+
+
+def credits_ok(what):
+    """Garde-fou des appels optionnels : False (et avertissement, une fois) si crédits bas."""
+    if not low_credits():
+        return True
+    if what not in _warned:
+        _warned.add(what)
+        print(f"⚠️ [odds] crédits bas ({CREDITS['remaining']} < {C.MIN_CREDITS}) : {what} ignoré(s).",
+              file=sys.stderr)
+    return False
+
+
 def get(path, **params):
-    params["apiKey"] = os.environ["ODDS_API_KEY"]
-    r = requests.get(f"{C.ODDS_API}{path}", params=params, timeout=30)
-    r.raise_for_status()
+    """GET The Odds API v4 -> JSON. Lève OddsError (message sans clé) ; 1 nouvel essai sur 429."""
+    key = os.environ.get("ODDS_API_KEY")
+    if not key:
+        raise OddsError("ODDS_API_KEY absente", code="NO_KEY")
+    params["apiKey"] = key
+    for attempt in (0, 1):
+        try:
+            r = requests.get(f"{C.ODDS_API}{path}", params=params, timeout=30)
+        except requests.RequestException as e:
+            raise OddsError(f"réseau : {_scrub(e)}") from None
+        _note_credits(r)
+        if r.status_code == 429 and attempt == 0:      # limite de fréquence : on patiente un peu
+            time.sleep(2)
+            continue
+        break
+    if not r.ok:
+        try:
+            body = r.json()
+            msg, code = body.get("message", ""), body.get("error_code")
+        except ValueError:
+            msg, code = r.text[:200], None
+        if code == "OUT_OF_USAGE_CREDITS":
+            CREDITS["remaining"] = 0
+        raise OddsError(f"HTTP {r.status_code} {code or ''} {_scrub(msg)}".strip(), r.status_code, code)
     return r.json()
 
 
-def list_sports():
-    out = []
-    for s in get("/sports"):
-        if s.get("has_outrights"):
-            continue
-        if any(s["key"].startswith(p) for p in C.SPORTS):
-            out.append(s)
+def select_sports(sports):
+    """Sports configurés parmi la liste de /sports, dans l'ordre de C.SPORTS (hors outrights).
+    Entrée finissant par "_" = préfixe, sinon clé exacte."""
+    live = [s for s in sports if not s.get("has_outrights")]
+    out, seen = [], set()
+    for pat in C.SPORTS:
+        for s in live:
+            if s["key"] not in seen and (s["key"].startswith(pat) if pat.endswith("_") else s["key"] == pat):
+                seen.add(s["key"])
+                out.append(s)
     return out[:C.MAX_SPORTS]
 
 
-def fetch_events(day, props=True):
-    """Matchs du jour `day` (date UTC) sur tous les sports suivis + marchés détaillés."""
+def list_sports():
+    return select_sports(get("/sports"))                # gratuit (0 crédit)
+
+
+def fetch_events(day, props=True, optional=False):
+    """Matchs du jour `day` (date UTC) sur tous les sports suivis + marchés détaillés.
+    `optional` : balayage facultatif (alertes, relevé du soir), sauté si crédits bas.
+    Une ligue, un match ou un marché en erreur est ignoré sans arrêter le reste."""
     window = {"commenceTimeFrom": f"{day}T00:00:00Z", "commenceTimeTo": f"{day}T23:59:59Z"}
     events = []
-    for s in list_sports():
+    try:
+        sports = list_sports()
+    except OddsError as e:
+        print(f"[odds] liste des sports indisponible : {e}", file=sys.stderr)
+        return events
+    for s in sports:
+        if CREDITS["remaining"] == 0 or (optional and not credits_ok("balayage large")):
+            break
         group = sport_group(s["key"])
         try:
             for ev in get(f"/sports/{s['key']}/odds", regions="eu", oddsFormat="decimal",
-                          markets=C.FEATURED.get(group, "h2h"), **window):
+                          markets=C.FEATURED.get(group, "h2h"), **window) or []:
                 ev["sport_key"] = s["key"]
+                ev.setdefault("bookmakers", [])
                 events.append(ev)
-        except requests.HTTPError as e:
+        except Exception as e:                          # noqa: BLE001 - une ligue ne tue pas le run
             print(f"[{s['key']}] ignoré : {e}", file=sys.stderr)
     if not props:
         return events
-    events.sort(key=lambda e: -len(e.get("bookmakers", [])))
+    events.sort(key=lambda e: -len(e["bookmakers"]))
     for ev in events[:C.PROP_EVENTS]:
         for market in C.PROP_MARKETS.get(sport_group(ev["sport_key"]), []):
+            if not credits_ok("marchés détaillés"):
+                return events
             try:
                 data = get(f"/sports/{ev['sport_key']}/events/{ev['id']}/odds", regions="eu",
                            markets=market, oddsFormat="decimal")
-            except requests.HTTPError:
+            except Exception as e:                      # noqa: BLE001 - 422 = marché inconnu pour ce sport/match
+                print(f"[{ev['sport_key']}] {market} ignoré : {e}", file=sys.stderr)
                 continue
-            for bk in data.get("bookmakers", []):
+            for bk in (data or {}).get("bookmakers", []):
                 mine = next((b for b in ev["bookmakers"] if b["key"] == bk["key"]), None)
                 if mine is None:
                     ev["bookmakers"].append(bk)
@@ -62,7 +149,9 @@ def fetch_events(day, props=True):
 
 
 def fetch_scores(sport_key, days=3):
-    return get(f"/sports/{sport_key}/scores", daysFrom=days)
+    """Scores terminés des `days` derniers jours (1 à 3, max de l'API ; 2 crédits).
+    `scores` vaut null tant que le match n'a pas commencé, sinon [{name, score}] (texte)."""
+    return get(f"/sports/{sport_key}/scores", daysFrom=min(max(int(days), 1), 3), dateFormat="iso") or []
 
 
 def label(market, name, point, who, group):
@@ -109,14 +198,19 @@ def build_picks(events, day, after=None, history=None, model=None):
             for m in bk["markets"]:
                 groups = {}
                 for o in m["outcomes"]:
-                    groups.setdefault((o.get("description"), o.get("point")), []).append(o)
-                for (who, point), outs in groups.items():
+                    pt = o.get("point")
+                    if m["key"] == "spreads" and pt is not None:
+                        pt = abs(pt)                    # handicap : -1.5 / +1.5 forment une paire
+                    groups.setdefault((o.get("description"), pt), []).append(o)
+                # double chance : 3 issues dont les probas somment à 2 (pas 1)
+                mass = 2.0 if m["key"] == "double_chance" else 1.0
+                for (who, _), outs in groups.items():
                     if len(outs) < 2:
                         continue
                     total = sum(1 / o["price"] for o in outs)
                     for o in outs:
-                        k = (m["key"], who, point, o["name"])
-                        probs.setdefault(k, []).append(1 / o["price"] / total)
+                        k = (m["key"], who, o.get("point"), o["name"])
+                        probs.setdefault(k, []).append(mass / o["price"] / total)
                         if o["price"] > best.get(k, 0):
                             best[k], bests_book[k] = o["price"], bk.get("title", bk["key"])
         for k, ps in probs.items():

@@ -4,18 +4,39 @@ import os
 ODDS_API = "https://api.the-odds-api.com/v4"
 MIN_BOOKMAKERS = 3
 ODDS_RANGE = (1.15, 6.0)
-MAX_SPORTS = int(os.environ.get("MAX_SPORTS", 25))      # ligues interrogées
-PROP_EVENTS = int(os.environ.get("PROP_EVENTS", 8))     # matchs avec marchés détaillés
-# Sports suivis (préfixes de clés The Odds API).
-SPORTS = os.environ.get("SPORTS", "soccer_,basketball_nba,basketball_euroleague,tennis_").split(",")
+
+
+def _int(name, default):
+    """Entier d'environnement ; vide ou invalide = valeur par défaut."""
+    try:
+        return int(os.environ.get(name) or default)
+    except ValueError:
+        return default
+
+
+def _list(name, default):
+    return [x.strip() for x in (os.environ.get(name) or default).split(",") if x.strip()]
+
+
+MAX_SPORTS = _int("MAX_SPORTS", 25)      # ligues interrogées
+PROP_EVENTS = _int("PROP_EVENTS", 8)     # matchs avec marchés détaillés
+# Garde-fou crédits (The Odds API) : sous ce seuil de crédits restants, les appels
+# optionnels (marchés détaillés, balayages larges, clôture des paris fantômes) sont sautés.
+MIN_CREDITS = _int("MIN_CREDITS", 30)
+# Sports suivis, dans l'ordre de priorité (MAX_SPORTS coupe la fin). Une entrée se
+# terminant par "_" est un préfixe de clés The Odds API (ex. "soccer_", "tennis_") ;
+# sinon c'est une clé exacte (soccer_uefa_champs_league n'attrape pas la version féminine).
+# Défaut : forfait gratuit (500 crédits/mois). Élargis via la variable SPORTS.
+SPORTS = _list("SPORTS", "soccer_epl,soccer_spain_la_liga,soccer_italy_serie_a,soccer_germany_bundesliga,"
+                         "soccer_france_ligue_one,soccer_uefa_champs_league,basketball_nba")
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}
-# Marchés détaillés : 1 appel par match et par marché. Indisponible = ignoré.
+# Marchés détaillés : 1 appel par match et par marché (1 crédit chacun et par région).
+# Indisponible (HTTP 422) = ignoré. Clés vérifiées dans la doc « additional markets »
+# de The Odds API ; player_fouls n'y figure pas (il reste compris par le règlement et
+# les libellés, mais n'est plus demandé).
 PROP_MARKETS = {
-    "soccer": os.environ.get(
-        "PROP_MARKETS",
-        "btts,double_chance,alternate_totals_corners,alternate_totals_cards,"
-        "player_shots_on_target,player_shots,player_fouls",
-    ).split(","),
+    "soccer": _list("PROP_MARKETS", "btts,double_chance,alternate_totals_corners,alternate_totals_cards,"
+                                    "player_shots_on_target,player_shots"),
     "basketball": ["player_points", "player_rebounds", "player_assists", "player_threes"],
     "tennis": [],
 }
