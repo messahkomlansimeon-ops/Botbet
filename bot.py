@@ -9,9 +9,15 @@
   python bot.py --check      diagnostic des clés + budget de crédits (aucun crédit dépensé) + message de test
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
 """
+import os
 import sys
+import tempfile
 
-from kelly import app
+# Mode test : données fictives dans un dossier temporaire, jamais dans data/.
+if "--sample" in sys.argv and not os.environ.get("DATA_DIR"):
+    os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-sample-")
+
+from kelly import app  # noqa: E402
 
 
 def main(argv):
