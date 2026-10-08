@@ -1,18 +1,45 @@
 {
- "when": "2026-10-08T12:13:06+00:00",
- "seconds": 75.6,
+ "when": "2026-10-08T12:42:53+00:00",
+ "seconds": 331.6,
  "leagues": [
   "soccer_epl",
   "soccer_spain_la_liga",
   "soccer_italy_serie_a",
   "soccer_germany_bundesliga",
   "soccer_france_ligue_one",
-  "soccer_uefa_champs_league"
+  "soccer_uefa_champs_league",
+  "soccer_portugal_primeira_liga",
+  "soccer_netherlands_eredivisie",
+  "soccer_belgium_first_div",
+  "soccer_turkey_super_league",
+  "soccer_spl",
+  "soccer_efl_champ",
+  "soccer_germany_bundesliga2",
+  "soccer_spain_segunda_division",
+  "soccer_italy_serie_b",
+  "soccer_france_ligue_two",
+  "soccer_england_league1",
+  "soccer_england_league2",
+  "soccer_greece_super_league",
+  "soccer_switzerland_superleague",
+  "soccer_austria_bundesliga",
+  "soccer_poland_ekstraklasa",
+  "soccer_denmark_superliga",
+  "soccer_sweden_allsvenskan",
+  "soccer_norway_eliteserien",
+  "soccer_finland_veikkausliiga",
+  "soccer_league_of_ireland",
+  "soccer_brazil_campeonato",
+  "soccer_argentina_primera_division",
+  "soccer_usa_mls",
+  "soccer_mexico_ligamx",
+  "soccer_japan_j_league",
+  "soccer_china_superleague"
  ],
  "sources": {
   "footballdata": {
    "ok": true,
-   "rows": 2002,
+   "rows": 11887,
    "error": "",
    "blocked_until": null
   },
@@ -25,17 +52,17 @@
   "fbref": {
    "ok": false,
    "rows": 0,
-   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 12:12 UTC",
-   "blocked_until": "2026-10-09T12:12:29+00:00"
+   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 12:40 UTC",
+   "blocked_until": "2026-10-09T12:40:33+00:00"
   }
  },
  "profiles": {
   "src_footballdata.json": {
-   "bytes": 108728,
-   "teams": 110,
-   "referees": 25,
-   "leagues": 5,
-   "matches": 2002
+   "bytes": 295050,
+   "teams": 620,
+   "referees": 129,
+   "leagues": 32,
+   "matches": 11887
   },
   "src_understat.json": {
    "bytes": 0,
@@ -56,12 +83,12 @@
    "2526",
    "2627"
   ],
-  "matches": 5506,
-  "bytes": 94284
+  "matches": 25183,
+  "bytes": 94061
  },
  "cache": {
-  "files": 46,
-  "bytes": 2713293
+  "files": 178,
+  "bytes": 17162801
  },
  "sample_match": {
   "match": "Arsenal - Aston Villa",

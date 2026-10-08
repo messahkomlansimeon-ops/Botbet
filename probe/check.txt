@@ -1,9 +1,11 @@
 🔎 KELLY — DIAGNOSTIC
 ✅ The Odds API : clé valide
    Crédits : 500 restants, 0 utilisés
-   Sports suivis (6, au plus 6 ligues avec matchs payées par jour) : soccer_epl, soccer_spain_la_liga, soccer_italy_serie_a, soccer_germany_bundesliga, soccer_france_ligue_one, soccer_uefa_champs_league
+   Ligues suivies en saison : 46 sur 59 du catalogue (au plus 6 payées par jour) : soccer_epl, soccer_spain_la_liga, soccer_italy_serie_a, soccer_germany_bundesliga, soccer_france_ligue_one, soccer_uefa_champs_league, soccer_uefa_europa_league, soccer_uefa_europa_conference_league …
+   Hors saison ou clé inconnue : 12 ligue(s) (ex. soccer_fa_cup, soccer_spain_copa_del_rey, soccer_concacaf_leagues_cup, soccer_africa_cup_of_nations)
    Allocation du jour : 20 crédits (matin 12, clôture 8), 24 jour(s) avant la remise à zéro (jour 1 du mois ; forfait 500/mois)
-   Ligues avec matchs aujourd'hui (gratuit) : aucune
+   Ligues avec matchs aujourd'hui (gratuit) : soccer_finland_veikkausliiga (2), soccer_league_of_ireland (1), soccer_brazil_campeonato (2), soccer_brazil_serie_b (2)
+   Payées ce matin dans cet ordre (région, ligues majeures, nombre de matchs) : soccer_finland_veikkausliiga, soccer_league_of_ireland, soccer_brazil_campeonato, soccer_brazil_serie_b
 ✅ API-Football : plan Free, requêtes aujourd'hui 0/100 (Kelly s'arrête à 90)
 📡 Sources de stats
 ⚪ football-data : pas encore lancée

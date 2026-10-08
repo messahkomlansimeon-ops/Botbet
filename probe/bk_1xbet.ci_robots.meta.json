@@ -4,7 +4,7 @@
  "headers": {
   "Server": "Angie",
   "Content-Type": "text/plain; charset=utf-8",
-  "X-Time-NG": "0.001, 0.002",
-  "Server-Timing": "wf-uht;dur=0.047"
+  "X-Time-NG": "0.002, 0.002",
+  "Server-Timing": "wf-uht;dur=0.048"
  }
 }
