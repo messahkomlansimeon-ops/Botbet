@@ -8,12 +8,12 @@ import os
 import random
 import shutil
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-test-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import app, bankroll, config as C, learn, odds, settle, store, telegram, track  # noqa: E402
+from kelly import app, bankroll, budget, config as C, learn, odds, settle, stats, store, telegram, track  # noqa: E402
 
 
 def fake_scores(rows):
@@ -55,93 +55,487 @@ def closing_events(events, tracked):
     return fetch
 
 
-def fake_odds_api(state, calls):
-    """Faux odds.get : décompte les crédits comme l'API (1 par marché) et remplit odds.CREDITS."""
-    sports = [{"key": k, "has_outrights": False} for k in ("soccer_epl", "soccer_uefa_champs_league_women", "soccer_spain_la_liga")]
-    sports.append({"key": "soccer_epl_winner", "has_outrights": True})
+UTC = timezone.utc
+DEFAULT_SPORTS = list(C.SPORTS)
+BOOKS = ("b1", "b2", "b3", "b4")
 
-    def get(path, **params):
-        calls.append((path, params.get("markets")))
-        if path != "/sports":
-            state["remaining"] -= len(params["markets"].split(","))
-        odds.CREDITS.update(remaining=state["remaining"], used=500 - state["remaining"])
+
+class Resp:
+    def __init__(self, data, status=200, headers=None):
+        self._d, self.status_code, self.headers = data, status, headers or {}
+        self.ok, self.text = status < 400, str(data)[:200]
+
+    def json(self):
+        return self._d
+
+
+class FakeOdds:
+    """Faux The Odds API (remplace requests.get) qui facture comme la vraie : /sports et /events gratuits,
+    /odds = marchés x régions, /scores = 2. Renvoie les en-têtes x-requests-* ; garde le journal des appels.
+    leagues : {sport_key: [(id, domicile, extérieur, commence ISO)]}."""
+
+    def __init__(self, remaining, leagues, sports=()):
+        self.remaining, self.leagues, self.log = remaining, leagues, []        # log : (chemin, marchés, coût)
+        self.sports = list(sports) or list(leagues)
+        self.finished = {}                                                     # id -> (buts dom, buts ext)
+        self.req = []                                                          # (chemin, paramètres)
+
+    def paid(self):
+        return [c for c in self.log if c[2]]
+
+    def spent(self):
+        return sum(c[2] for c in self.log)
+
+    def _books(self, ev, markets):
+        n = sum(map(ord, ev["id"]))
+        out = []
+        for i, bk in enumerate(BOOKS):
+            j = 1 + 0.01 * ((n + 3 * i) % 5 - 2)
+            ms = []
+            for m in markets:
+                two = lambda point, a="Over", b="Under": [{"name": a, "price": round(1.9 * j, 2), "point": point},
+                                                          {"name": b, "price": round(1.95 / j, 2), "point": point}]
+                if m == "h2h":
+                    ms.append({"key": m, "outcomes": [{"name": ev["home_team"], "price": round(2.0 * j, 2)},
+                                                      {"name": ev["away_team"], "price": round(3.4 / j, 2)},
+                                                      {"name": "Draw", "price": round(3.3 * j, 2)}]})
+                elif m == "totals":
+                    ms.append({"key": m, "outcomes": two(2.5)})
+                elif m == "alternate_totals_corners":
+                    ms.append({"key": m, "outcomes": two(9.5)})
+                elif m == "alternate_totals_cards":
+                    ms.append({"key": m, "outcomes": two(4.5)})
+                elif m == "btts":
+                    ms.append({"key": m, "outcomes": two(None, "Yes", "No")})
+            ms and out.append({"key": bk, "title": bk.upper(), "markets": ms})
+        return out
+
+    def __call__(self, url, params=None, timeout=None, **kw):
+        path, p = url.split("/v4", 1)[1], dict(params or {})
+        markets = [m for m in str(p.get("markets", "")).split(",") if m]
+        cost = 0
+        if path.endswith("/odds"):
+            cost = len(markets) * len(str(p.get("regions", "eu")).split(","))
+        elif path.endswith("/scores"):
+            cost = 2
+        self.log.append((path, ",".join(markets), cost))
+        self.req.append((path, p))
+        hdr = lambda: {"x-requests-remaining": str(self.remaining), "x-requests-used": str(500 - self.remaining)}
+        if cost > self.remaining:
+            return Resp({"message": "usage quota", "error_code": "OUT_OF_USAGE_CREDITS"}, 401, hdr())
+        self.remaining -= cost
+        parts = path.strip("/").split("/")
         if path == "/sports":
-            return sports
-        if path.endswith("/odds") and "/events/" not in path:
-            sk = path.split("/")[2]
-            return [{"id": f"{sk}-{i}", "commence_time": "2026-10-08T18:00:00Z", "home_team": "A", "away_team": "B",
-                     "bookmakers": [{"key": f"b{j}", "markets": []} for j in range(3)]} for i in range(2)]
-        if params["markets"] == "double_chance":          # marché non supporté : 422
-            raise odds.OddsError("HTTP 422 INVALID_MARKET", 422, "INVALID_MARKET")
-        return {"id": "x", "bookmakers": [{"key": "b0", "markets": [{"key": params["markets"], "outcomes": []}]}]}
-    return get
+            data = [{"key": k, "has_outrights": False} for k in self.sports] + [{"key": "soccer_epl_winner", "has_outrights": True}]
+        else:
+            lg = self.leagues.get(parts[1], [])
+            lo, hi = p.get("commenceTimeFrom", ""), p.get("commenceTimeTo", "~")
+            evs = [{"id": i, "sport_key": parts[1], "sport_title": parts[1], "home_team": h, "away_team": a, "commence_time": t}
+                   for i, h, a, t in lg if lo <= t <= hi]
+            if "eventIds" in p:
+                evs = [e for e in evs if e["id"] in p["eventIds"].split(",")]
+            if path.endswith("/scores"):
+                data = [{"id": e["id"], "completed": True, "scores": [{"name": e["home_team"], "score": str(self.finished[e["id"]][0])},
+                                                                    {"name": e["away_team"], "score": str(self.finished[e["id"]][1])}]}
+                        for e in evs if e["id"] in self.finished]
+            elif path.endswith("/events"):
+                data = evs
+            elif "/events/" in path:
+                e = next(e for e in evs if e["id"] == parts[3])
+                data = dict(e, bookmakers=self._books(e, markets))
+            else:
+                data = [dict(e, bookmakers=self._books(e, markets)) for e in evs]
+        return Resp(data, 200, hdr())
 
 
-def test_credit_guard():
-    real_get, saved = odds.get, (dict(odds.CREDITS), set(odds._warned), C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS)
-    C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS = 30, 6, 3
+class Sandbox:
+    """Environnement isolé : faux The Odds API, horloge simulée, données vides, réglages par défaut."""
+
+    def __enter__(self):
+        self.saved = (requests_get(), dict(odds.CREDITS), budget._now, app.now_utc, os.environ.get("ODDS_API_KEY"),
+                      os.environ.get("STATS_API_KEY"), C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS,
+                      dict(C.BUDGET_SHARES), C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS)
+        for f in os.listdir(store.DATA_DIR):
+            os.remove(os.path.join(store.DATA_DIR, f))
+        odds.CREDITS.update(remaining=None, used=None)
+        odds._warned.clear()
+        os.environ["ODDS_API_KEY"] = "test-odds-key"
+        os.environ.pop("STATS_API_KEY", None)
+        C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS = 30, 6, 8, False
+        C.BUDGET_SHARES.clear(); C.BUDGET_SHARES.update(daily=0.6, closing=0.4)
+        C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS = 1, 500
+        C.SPORTS = ["soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", "soccer_germany_bundesliga",
+                    "soccer_france_ligue_one", "soccer_uefa_champs_league"]
+        self.set_now(datetime(2026, 10, 1, 8, 0, tzinfo=UTC))
+        return self
+
+    def set_now(self, now):
+        budget._now = app.now_utc = lambda: now
+
+    def serve(self, fake):
+        odds.requests.get = fake
+        return fake
+
+    def __exit__(self, *exc):
+        (g, cr, bn, an, ok, sk, C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS, shares,
+         C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS) = self.saved
+        odds.requests.get = g
+        odds.CREDITS.update(cr)
+        budget._now, app.now_utc = bn, an
+        for k, v in (("ODDS_API_KEY", ok), ("STATS_API_KEY", sk)):
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        C.BUDGET_SHARES.clear(); C.BUDGET_SHARES.update(shares)
+
+
+def requests_get():
+    return odds.requests.get
+
+
+def ko_at(day, hour, minute=0):
+    return f"{day}T{hour:02d}:{minute:02d}:00Z"
+
+
+def test_budget():
+    """500 crédits le 1er -> 16/jour ; dépense refusée au-delà ; report du non-dépensé ; remise à zéro ;
+    jamais d'appel quand il ne reste rien ; le plancher ne vaut pas pour la clôture."""
+    with Sandbox() as sb:
+        fake = sb.serve(FakeOdds(500, {"soccer_epl": [("e1", "A", "B", ko_at("2026-10-01", 15))]}))
+        assert budget.days_left() == 31 and budget.allowance() == 16
+        assert (budget.share("daily"), budget.share("closing"), budget.share("alert")) == (9, 6, 0)
+        assert budget.can_spend(9, "daily") and not budget.can_spend(10, "daily")
+        assert not budget.can_spend(1, "alert") and not budget.can_spend(1, "snapshot")      # désactivés sur gratuit
+        # dépense via odds.get : décomptée (marchés x régions), persistée dans budget.json
+        odds.get("/sports/soccer_epl/odds", use="daily", regions="eu", markets="h2h,totals")
+        assert fake.spent() == 2 and budget.spent("daily") == 2 and budget.left("daily") == 7
+        st = store.load("budget.json", {})
+        assert st["day"] == "2026-10-01" and st["spent"] == {"daily": 2} and st["remaining"] == 498, st
+        odds.get("/sports/soccer_epl/events/e1/odds", use="daily", regions="eu", markets="alternate_totals_corners")
+        # refus propre au-delà de la part : BudgetError, aucune requête envoyée
+        n = len(fake.log)
+        try:
+            odds.get("/sports/soccer_epl/odds", use="daily", regions="eu", markets=",".join(["h2h"] * 8))
+            raise AssertionError("aurait dû être refusé")
+        except odds.BudgetError as e:
+            assert "budget" in str(e) and "test-odds-key" not in str(e)
+        try:
+            odds.get("/sports/soccer_epl/odds", use="alert", regions="eu", markets="h2h")
+            raise AssertionError("alert n'a pas de budget")
+        except odds.BudgetError:
+            pass
+        assert len(fake.log) == n
+        # le non-dépensé est reporté : autre processus (CREDITS vide) et lendemain
+        odds.CREDITS.update(remaining=None, used=None)
+        assert budget.allowance() == 16 and budget.left("daily") == 6
+        sb.set_now(datetime(2026, 10, 2, 8, tzinfo=UTC))
+        assert budget.spent("daily") == 0 and budget.allowance() == int(497 / 30) == 16
+        sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))                       # une semaine sans rien dépenser
+        assert budget.allowance() == int(497 / 24) == 20
+        # remise à zéro franchie (état du 30/09 avec 12 crédits -> 500 le 1er) ; jour de remise réglable
+        store.save("budget.json", {"day": "2026-09-30", "spent": {"daily": 5}, "remaining": 12})
+        odds.CREDITS.update(remaining=None)
+        sb.set_now(datetime(2026, 10, 1, 8, tzinfo=UTC))
+        assert budget.allowance() == 16
+        C.ODDS_RESET_DAY = 15
+        sb.set_now(datetime(2026, 10, 20, 8, tzinfo=UTC))
+        assert budget.days_left() == 26 and budget.next_reset(datetime(2026, 12, 20).date()).isoformat() == "2027-01-15"
+        # plus aucun crédit : aucun appel, jamais d'exception
+        C.ODDS_RESET_DAY = 1
+        sb.set_now(datetime(2026, 10, 15, 8, tzinfo=UTC))
+        odds.CREDITS.update(remaining=0)
+        n = len(fake.log)
+        assert not budget.can_spend(1, "daily") and not budget.can_spend(1, "closing")
+        for use in ("daily", "closing"):
+            try:
+                odds.get("/sports/soccer_epl/odds", use=use, regions="eu", markets="h2h")
+                raise AssertionError("remaining=0 : appel interdit")
+            except odds.BudgetError:
+                pass
+        with contextlib.redirect_stderr(io.StringIO()):
+            assert odds.fetch_events(datetime(2026, 10, 15).date()) == [] and len(fake.log) == n   # aucun appel
+        # plancher MIN_CREDITS : le matin s'arrête à 30, la clôture des paris envoyés peut puiser dedans
+        sb.set_now(datetime(2026, 10, 31, 8, tzinfo=UTC))                      # dernier jour : tout le reste est dépensable
+        odds.CREDITS.update(remaining=33)
+        store.save("budget.json", {"day": "2026-10-31", "spent": {}, "remaining": 33})
+        assert budget.allowance() == 33 and budget.can_spend(3, "daily") and not budget.can_spend(4, "daily")
+        assert budget.can_spend(13, "closing") and not budget.can_spend(14, "closing")   # 40 % de 33 = 13
+        # un budget.json illisible ne casse rien : on repart du forfait mensuel
+        with open(store.path("budget.json"), "w") as f:
+            f.write("{pas du json")
+        odds.CREDITS.update(remaining=None)
+        sb.set_now(datetime(2026, 10, 1, 8, tzinfo=UTC))
+        assert budget.allowance() == 16
+    print("budget : OK")
+
+
+def test_free_events_and_typical_day():
+    """/events gratuit : une ligue sans match ne coûte rien. Journée type (5 ligues dont 2 jouent, 12 matchs) :
+    matin + clôtures horaires <= allocation du jour ; corners/cartons avant le reste des marchés détaillés."""
+    day = "2026-10-01"
+    with Sandbox() as sb:
+        epl = [(f"epl{i}", f"E{i}", f"F{i}", ko_at(day, 13 + i % 8, 30 * (i % 2))) for i in range(7)]
+        l1 = [(f"l1{i}", f"L{i}", f"M{i}", ko_at(day, 14 + i, 0)) for i in range(5)]
+        tomorrow = [("sa1", "S1", "S2", ko_at("2026-10-02", 18))]            # demain : ne compte pas
+        fake = sb.serve(FakeOdds(500, {"soccer_epl": epl, "soccer_france_ligue_one": l1, "soccer_italy_serie_a": tomorrow},
+                                 sports=["soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a",
+                                         "soccer_germany_bundesliga", "soccer_france_ligue_one"]))
+        # 1) le matin seul
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            events = odds.fetch_events(datetime(2026, 10, 1).date(), after=datetime(2026, 10, 1, 8, tzinfo=UTC))
+        leagues_paid = {c[0].split("/")[2] for c in fake.paid()}
+        assert leagues_paid == {"soccer_epl", "soccer_france_ligue_one"}, leagues_paid   # 3 ligues sans match : 0 appel payant
+        assert not any(c[2] for c in fake.log if c[0].endswith("/events") or c[0] == "/sports")
+        assert {c[0].split("/")[2] for c in fake.log if c[0].endswith("/events")} >= {"soccer_spain_la_liga", "soccer_germany_bundesliga"}
+        assert len(events) == 12
+        bulk = [c for c in fake.paid() if "/events/" not in c[0]]
+        assert [c[1] for c in bulk] == ["h2h,totals"] * 2 and fake.spent() == 9 == budget.spent("daily")
+        det = [c for c in fake.paid() if "/events/" in c[0]]
+        assert len(det) == 5 and all(c[1] == "alternate_totals_corners" for c in det), det   # corners d'abord, pas de btts
+        # 2) journée complète : matin (run_daily) + passages horaires de clôture
+        for f in os.listdir(store.DATA_DIR):
+            os.remove(os.path.join(store.DATA_DIR, f))
+        odds.CREDITS.update(remaining=None, used=None)
+        fake = sb.serve(FakeOdds(500, {"soccer_epl": epl, "soccer_france_ligue_one": l1}))
+        bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            app.run_daily()
+        morning = fake.spent()
+        sent = [r for r in track.load() if r["sent"]]
+        assert sent and morning == 9, (len(sent), morning)
+        for h in range(11, 23):
+            sb.set_now(datetime(2026, 10, 1, h, 5, tzinfo=UTC))
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                app.run_track()
+        total, allowance = fake.spent(), 16
+        rows = track.load()
+        closed_sent = sum(1 for r in rows if r["sent"] and r.get("clv") is not None)
+        assert total <= allowance and budget.spent("closing") <= budget.share("closing") == 6, total
+        assert budget.spent("daily") == 9 and fake.spent() == budget.spent("daily") + budget.spent("closing")
+        assert closed_sent > 0
+        closing = budget.spent("closing")
+        sb.set_now(datetime(2026, 10, 2, 8, tzinfo=UTC))                       # le non-dépensé est reporté
+        assert budget.allowance() == int((500 - total) / 30)
+        print(f"journée type : 5 ligues dont 2 jouent, 12 matchs -> matin {morning}/9 crédits, "
+              f"clôtures {closing}/6 ({closed_sent} paris envoyés clôturés sur {len(sent)}), total {total}/{allowance} ; "
+              f"allocation du lendemain {budget.allowance()} (reste {fake.remaining}).")
+    print("/events gratuit + journée type : OK")
+
+
+def mk_row(key, ev, market, sent, ko, sport_key="soccer_epl"):
+    return {"key": key, "id": ev, "sport_key": sport_key, "group": "soccer", "market": market, "odds": 2.0,
+            "commence": ko, "closed_at": None, "sent": sent, "result": None, "close_odds": None, "clv": None}
+
+
+def test_closing_plan():
+    """Clôture : bulk par ligue quand >= 2 matchs, fantômes ignorés, Sûr d'abord, budget respecté sans erreur."""
+    now = datetime(2026, 10, 1, 15, 5, tzinfo=UTC)
+    ko = lambda m: (now + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    leagues = {"soccer_epl": [("e1", "Alpha", "Bravo", ko(30)), ("e2", "Cobra", "Delta", ko(45)), ("e3", "Echo", "Foxtrot", ko(60))],
+               "soccer_france_ligue_one": [("f1", "Golf", "Hotel", ko(50))]}
+    k = dict(e1="e1|h2h|||Alpha", e2="e2|totals||2.5|Over", e3="e3|alternate_totals_corners||9.5|Over",
+             f1="f1|h2h|||Golf", g1="e1|btts|||Yes")
+    rows = lambda: [mk_row(k["e1"], "e1", "h2h", True, ko(30)), mk_row(k["e2"], "e2", "totals", True, ko(45)),
+                    mk_row(k["e3"], "e3", "alternate_totals_corners", True, ko(60)),
+                    mk_row(k["f1"], "f1", "h2h", True, ko(50), "soccer_france_ligue_one"),
+                    mk_row(k["g1"], "e1", "btts", False, ko(30))]            # fantôme : jamais relevé
+    combos = [{"tier": C.COMBOS[1][0], "keys": [k["e1"], k["e2"], k["e3"]], "stake": 3.0, "result": None},
+              {"tier": C.COMBOS[0][0], "keys": [k["f1"]], "stake": 5.0, "result": None}]
+
+    # le plan seul : f1 (Sûr) d'abord ; bulk epl pour e1+e2 (h2h,totals = 2 crédits) ; e3 (corners) en appel par match
+    calls = app.plan_closing([r for r in rows() if r["sent"]], combos)
+    assert calls[0]["ids"] == ["f1"] and calls[0]["kind"] == "event", calls
+    assert sorted((c["kind"], tuple(c["ids"]), tuple(sorted(c["markets"]))) for c in calls) == [
+        ("bulk", ("e1", "e2"), ("h2h", "totals")), ("event", ("e3",), ("alternate_totals_corners",)), ("event", ("f1",), ("h2h",))]
+    assert sum(c["cost"] for c in calls) == 4
+    assert [c["kind"] for c in app.plan_closing([r for r in rows() if r["sent"]], combos, bulk=False)] == ["event"] * 4
+    one = app.plan_closing([mk_row(k["e1"], "e1", "h2h", True, ko(30))], [])          # un seul match : pas de bulk
+    assert [c["kind"] for c in one] == ["event"]
+
+    def run(remaining, at, expect_calls):
+        with Sandbox() as sb:
+            sb.set_now(at)                                                    # horloge du budget (jour d'allocation)
+            fake = sb.serve(FakeOdds(remaining, leagues))
+            track.save(rows())
+            store.save("bets.json", {"picks": [], "combos": combos})
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                n, _ = app.run_track(now=now)
+            got = [(c[0].split("/odds")[0].split("/")[-1] if "/events/" in c[0] else "bulk:" + c[0].split("/")[2], c[1]) for c in fake.paid()]
+            assert got == expect_calls, got
+            return n, fake, track.load()
+    # budget confortable (part clôture : 6) : tout est relevé, dans l'ordre de priorité, 4 crédits
+    n, fake, out = run(500, now, [("f1", "h2h"), ("e3", "alternate_totals_corners"), ("bulk:soccer_epl", "h2h,totals")])
+    assert n == 4 and fake.spent() == 4
+    bulk = next(p for path, p in fake.req if path == "/sports/soccer_epl/odds")
+    assert bulk["eventIds"] == "e1,e2" and bulk["markets"] == "h2h,totals", bulk      # ni e3 ni le fantôme btts
+    assert all(r["clv"] is not None for r in out if r["sent"]) and out[-1]["closed_at"] is None   # fantôme intact
+    # part clôture = 1 crédit : seul le Sûr (f1) est relevé, le reste est sauté sans erreur
+    n, fake, out = run(100, now, [("f1", "h2h")])
+    assert n == 1 and sum(1 for r in out if r["clv"] is not None) == 1 and out[3]["clv"] is not None
+    # presque plus de crédits (10, sous le plancher de 30) : la clôture des paris envoyés puise quand même dedans
+    n, fake, out = run(10, datetime(2026, 10, 31, 15, 5, tzinfo=UTC), [("f1", "h2h"), ("e3", "alternate_totals_corners"),
+                                                                        ("bulk:soccer_epl", "h2h,totals")])
+    assert n == 4 and fake.remaining == 6
+    print("clôture ciblée : OK")
+
+
+def test_select_sports():
+    """Ordre de C.SPORTS, clés exactes (pas la version féminine), préfixe avec « _ », plafond MAX_SPORTS."""
     sports = [{"key": k} for k in ("soccer_uefa_champs_league_women", "soccer_uefa_champs_league", "basketball_nba",
-                                   "soccer_epl", "x_sport")]
-    try:
-        # Sélection des sports : ordre de C.SPORTS, clés exactes (pas la version féminine), préfixe avec « _ ».
-        saved_sports = C.SPORTS
+                                   "soccer_epl", "x_sport")] + [{"key": "soccer_epl_winner", "has_outrights": True}]
+    with Sandbox():
         C.SPORTS = ["soccer_epl", "soccer_uefa_champs_league", "basketball_nba"]
         assert [x["key"] for x in odds.select_sports(sports)] == ["soccer_epl", "soccer_uefa_champs_league", "basketball_nba"]
         C.SPORTS = ["soccer_"]
         assert len(odds.select_sports(sports)) == 3
-        C.SPORTS = saved_sports
+        C.MAX_SPORTS = 2
+        assert len(odds.select_sports(sports)) == 2 and len(odds.select_sports(sports, limit=False)) == 3
+        assert DEFAULT_SPORTS and all(k.startswith("soccer_") for k in DEFAULT_SPORTS), DEFAULT_SPORTS   # gratuit : foot seul
+    print("sélection des sports : OK")
 
-        # Crédits suffisants : marchés détaillés demandés, 422 ignoré sans erreur.
-        state, calls = {"remaining": 400}, []
-        odds.get = fake_odds_api(state, calls)
-        events = odds.fetch_events(datetime(2026, 10, 8).date())
-        props = [c for c in calls if "/events/" in c[0]]
-        assert len(events) == 4 and len(props) == 3 * len(C.PROP_MARKETS["soccer"]), (len(events), len(props))
-        assert not any("women" in c[0] or "winner" in c[0] for c in calls), calls
 
-        # Crédits bas : plus aucun marché détaillé, ni balayage large (optional), mais pas d'exception.
+def test_budget_never_crashes():
+    """Budget refusé, 422, plafond de ligues : on saute et on logue en français, jamais d'exception."""
+    day = "2026-10-01"
+    with Sandbox() as sb:
+        lg = {"soccer_epl": [("e1", "A", "B", ko_at(day, 15)), ("e2", "C", "D", ko_at(day, 16))],
+              "soccer_spain_la_liga": [("s1", "E", "F", ko_at(day, 17))]}
+        fake = sb.serve(FakeOdds(33, lg))
+        sb.set_now(datetime(2026, 10, 31, 8, tzinfo=UTC))                      # dernier jour : allocation = 33
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            events = odds.fetch_events(datetime(2026, 10, 31).date())
+        assert fake.remaining == 33 and events == []                           # aucun match le 31 : rien d'acheté
+        lg["soccer_epl"][:] = [("e1", "A", "B", ko_at("2026-10-31", 15)), ("e2", "C", "D", ko_at("2026-10-31", 16))]
+        lg["soccer_spain_la_liga"][:] = [("s1", "E", "F", ko_at("2026-10-31", 17))]
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            events = odds.fetch_events(datetime(2026, 10, 31).date())
+        # 33 crédits, plancher 30 : l'EPL (2 crédits) passe, la Liga ferait descendre à 29 < 30 -> sautée ;
+        # il reste de quoi acheter UN marché détaillé (31 -> 30), les autres sont sautés
+        assert len(events) == 2 and fake.remaining == 30 and [c[1] for c in fake.paid()] == ["h2h,totals", "alternate_totals_corners"]
+        assert "soccer_spain_la_liga ignorée" in err.getvalue() and "ignoré(s)" in err.getvalue(), err.getvalue()
+        # alertes / relevé du soir : aucun budget sur gratuit -> aucun appel du tout, liste vide
+        n = len(fake.log)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            assert odds.fetch_events(datetime(2026, 10, 31).date(), optional=True, use="alert") == []
+            assert odds.fetch_events(datetime(2026, 10, 31).date(), optional=True, use="snapshot") == []
+        assert len(fake.log) == n and "n'a pas de budget" in err.getvalue()
+        # budget réactivé (BUDGET_SHARES) : le balayage large repasse par le budget
+        C.BUDGET_SHARES["alert"] = 0.2
+        assert budget.share("alert") == 6
+        # plafond de ligues avec matchs : les plus chargées d'abord
+        C.BUDGET_SHARES.update(daily=1.0)
+        C.MAX_SPORTS, C.MIN_CREDITS = 1, 0
+        fake.remaining = 300
+        events = odds.fetch_events(datetime(2026, 10, 31).date(), props=False)
+        assert {e["sport_key"] for e in events} == {"soccer_epl"}              # 2 matchs > 1
+        # run_track sans budget de clôture / sans crédit ne plante pas et ne dépense rien
+        track.save([mk_row("e1|h2h|||A", "e1", "h2h", True, ko_at("2026-10-31", 8, 40))])
+        store.save("bets.json", {"picks": [], "combos": []})
+        C.BUDGET_SHARES["closing"] = 0
+        odds.CREDITS.update(remaining=300)
+        before = fake.remaining
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            app.run_track(now=datetime(2026, 10, 31, 8, 5, tzinfo=UTC))
+        assert fake.remaining == before and "sautée" in err.getvalue()
+    print("budget refusé sans erreur : OK")
+
+
+def test_free_settlement():
+    """Foot réglé via API-Football (aucun appel /scores, aucun crédit) ; /scores seulement en repli."""
+    day = date.fromisoformat(stats._today()) - timedelta(days=1)
+    ts = int(datetime.fromisoformat(f"{day}T19:00:00+00:00").timestamp())
+    ko = f"{day}T19:00:00Z"
+    phase = {"s": "NS"}
+    football = []
+
+    def api_football(url, params):
+        football.append(params)
+        if phase["s"] == "NS":
+            fx = [(1, "Alpha", "Bravo", "NS", (None, None), None), (2, "Charlie", "Delta", "NS", (None, None), None)]
+        else:
+            fx = [(1, "Alpha", "Bravo", "FT", (2, 1), None), (2, "Charlie", "Delta", "AET", (3, 2), (1, 1))]
+        return Resp({"errors": [], "response": [
+            {"fixture": {"id": i, "timestamp": ts, "status": {"short": st}}, "goals": {"home": g[0], "away": g[1]},
+             "teams": {"home": {"id": i * 10, "name": h}, "away": {"id": i * 10 + 1, "name": a}},
+             **({"score": {"fulltime": {"home": ft[0], "away": ft[1]}}} if ft else {})} for i, h, a, st, g, ft in fx]})
+
+    def row(key, ev, h, a, market, name, point, sent=True):
+        return mk_row(key, ev, market, sent, ko) | {"home": h, "away": a, "name": name, "point": point, "who": None}
+    rows = [row("m1|h2h|||Alpha", "m1", "Alpha", "Bravo", "h2h", "Alpha", None),
+            row("m1|totals||2.5|Over", "m1", "Alpha", "Bravo", "totals", "Over", 2.5),
+            row("m1|btts|||Yes", "m1", "Alpha", "Bravo", "btts", "Yes", None, sent=False),
+            row("m2|h2h|||Draw", "m2", "Charlie", "Delta", "h2h", "Draw", None),
+            row("m2|totals||2.5|Over", "m2", "Charlie", "Delta", "totals", "Over", 2.5)]
+    with Sandbox() as sb:
+        odds_fake = FakeOdds(500, {"soccer_epl": [("m1", "Alpha", "Bravo", ko), ("m2", "Charlie", "Delta", ko)]})
+        odds_fake.finished.update(m1=(2, 1), m2=(3, 2))
+
+        def net(url, **kw):
+            return api_football(url, kw.get("params")) if "api-sports.io" in url else odds_fake(url, **kw)
+        sb.serve(net)
+        os.environ["STATS_API_KEY"] = "test-stats-key"
+        stats._calls, stats._halted = 0, False
+        stats._refreshed.clear()
+        track.save(rows)
+        # le matin du match : cache du jour avec statut NS (1 requête)
+        assert stats.find_fixture(str(day), "Alpha", "Bravo", kickoff=ko) and len(football) == 1
+        # le lendemain (autre exécution) : le cache NS d'un jour passé est re-téléchargé, puis tout est réglé gratuitement
+        phase["s"] = "FT"
+        stats._refreshed.clear()
+        _, settled = settle.settle_pending(datetime.combine(day + timedelta(days=1), datetime.min.time(), tzinfo=UTC) + timedelta(hours=8))
+        res = {r["key"]: r["result"] for r in track.load()}
+        assert res == {"m1|h2h|||Alpha": "win", "m1|totals||2.5|Over": "win", "m1|btts|||Yes": "win",
+                       "m2|h2h|||Draw": "win",                                 # 90 min : 1-1 (pas 3-2 après prolongation)
+                       "m2|totals||2.5|Over": "loss"}, res
+        assert len(settled) == 5 and len(football) == 2, len(football)         # 1 requête de plus, pour tout le jour
+        assert odds_fake.log == [] and budget.spent("daily") == 0              # aucun appel The Odds API, aucun crédit
+        # sans STATS_API_KEY : repli /scores (2 crédits, budgétés) ; budget vide : on réessaiera, sans erreur
+        os.environ.pop("STATS_API_KEY")
         odds.CREDITS.update(remaining=None)
-        state, calls = {"remaining": 33}, []
-        odds.get = fake_odds_api(state, calls)
-        events = odds.fetch_events(datetime(2026, 10, 8).date())          # 2 ligues x 2 crédits : 33 -> 29 < 30
-        assert events and not [c for c in calls if "/events/" in c[0]], calls
-        assert odds.low_credits() and not odds.credits_ok("test")
-        calls.clear()
-        assert odds.fetch_events(datetime(2026, 10, 8).date(), optional=True) == []
-        assert [c[0] for c in calls] == ["/sports"], calls                  # seul /sports (gratuit)
+        track.save([row("x1|h2h|||Zulu", "x1", "Zulu", "Yankee", "h2h", "Zulu", None)])
+        odds_fake.leagues["soccer_epl"].append(("x1", "Zulu", "Yankee", ko))
+        odds_fake.finished["x1"] = (1, 0)
+        late = datetime.combine(day + timedelta(days=1), datetime.min.time(), tzinfo=UTC) + timedelta(hours=8)
+        sb.set_now(late)
+        odds_fake.remaining = 0
+        odds.CREDITS.update(remaining=0)
+        n = len(odds_fake.log)
+        with contextlib.redirect_stderr(io.StringIO()):
+            settle.settle_pending(late)
+        assert len(odds_fake.log) == n and track.load()[0]["result"] is None   # budget refusé : pas d'appel, pas de crash
+        odds_fake.remaining = 400
+        odds.CREDITS.update(remaining=400)
+        settle.settle_pending(late)
+        assert track.load()[0]["result"] == "win" and [c[:1] + c[2:] for c in odds_fake.paid()] == [(f"/sports/soccer_epl/scores", 2)]
+        assert budget.spent("daily") == 2
+    print("règlement gratuit via API-Football : OK")
 
-        # Clôture : crédits bas -> seuls les paris envoyés sont relevés (marchés envoyés uniquement).
-        saved_rows = track.load()
-        soon = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(timespec="minutes")
-        base = {"closed_at": None, "commence": soon, "odds": 2.0, "sport_key": "soccer_epl", "group": "soccer"}
-        track.save([dict(base, key="g|h2h", id="ghost", market="h2h", sent=False),
-                    dict(base, key="s|h2h", id="sent", market="h2h", sent=True),
-                    dict(base, key="s|totals", id="sent", market="totals", sent=False),
-                    dict(base, key="m|btts", id="mixed", market="btts", sent=False)])
-        for low, expect in ((False, {"ghost", "sent", "mixed"}), (True, {"sent"})):
-            odds.CREDITS.update(remaining=10 if low else 400)
-            asked = []
 
-            def get(path, **params):
-                asked.append((path.split("/")[4], params["markets"]))
-                return {"id": path.split("/")[4], "commence_time": soon, "home_team": "A",
-                        "away_team": "B", "bookmakers": []}
-            odds.get = get
-            app.run_track()
-            assert {a[0] for a in asked} == expect, (low, asked)
-            if low:
-                assert asked == [("sent", "h2h")], asked                      # marché fantôme (totals) non demandé
-            elif asked[0][0] != "sent":
-                raise AssertionError(f"les envoyés doivent passer d'abord : {asked}")
-            track.save([dict(r, closed_at=None) for r in track.load()])
-        track.save(saved_rows)
-    finally:
-        odds.get = real_get
-        odds.CREDITS.update(saved[0])
-        odds._warned.clear(); odds._warned.update(saved[1])
-        C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS = saved[2:]
-        C.SPORTS = saved_sports
-    print("garde-fou crédits : OK")
+def test_check_is_free():
+    """--check : rapport du budget et des ligues du jour, sans aucun appel payant ni secret affiché."""
+    with Sandbox() as sb:
+        fake = sb.serve(FakeOdds(480, {"soccer_epl": [("e1", "A", "B", ko_at("2026-10-01", 15)), ("e2", "C", "D", ko_at("2026-10-01", 17))]},
+                                 sports=["soccer_epl", "soccer_spain_la_liga"]))
+        real_api, old = telegram.api, {k: os.environ.get(k) for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")}
+        os.environ.update(TELEGRAM_TOKEN="123:tok-secret", TELEGRAM_CHAT_ID="42")
+        sent = []
+        telegram.api = lambda method, **p: {"username": "kelly_bot"} if method == "getMe" else sent.append(p["text"]) or {}
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ok = app.run_check()
+        finally:
+            telegram.api = real_api
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        out = buf.getvalue()
+        assert ok and fake.paid() == [] and fake.remaining == 480, fake.paid()
+        assert "Allocation du jour : 15 crédits" in out and "31 jour(s) avant la remise à zéro" in out, out
+        assert "soccer_epl (2)" in out and "spain" not in out.split("matchs aujourd'hui")[1].split("\n")[0], out
+        assert "test-odds-key" not in out + "".join(sent) and "tok-secret" not in out + "".join(sent)
+    print("--check gratuit : OK")
 
 
 def test_build_picks_shapes():
@@ -228,9 +622,11 @@ def main():
     # --- Clôture horaire : on simule les passages de 13:00 à 22:00
     fetch = closing_events(events, rows)
     total = 0
+    C.CLOSE_GHOSTS = True                      # payant : les fantômes sont aussi clôturés (données d'apprentissage)
     for h in range(13, 23):
         n, _ = app.run_track(events_for=fetch, now=datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc) + timedelta(hours=h))
         total += n
+    C.CLOSE_GHOSTS = False
     rows = track.load()
     closed = track.with_clv(rows)
     assert total == len(closed) >= 25, (total, len(closed))
@@ -302,7 +698,13 @@ def main():
     assert "réglée" in app.handle_command("/bank 50000")
     assert "Kelly" in app.handle_command("/aide")
     test_build_picks_shapes()
-    test_credit_guard()
+    test_select_sports()
+    test_budget()
+    test_free_events_and_typical_day()
+    test_closing_plan()
+    test_budget_never_crashes()
+    test_free_settlement()
+    test_check_is_free()
     test_check()
     shutil.rmtree(os.environ["DATA_DIR"], ignore_errors=True)
     print("OK : tout le flux passe hors ligne.")

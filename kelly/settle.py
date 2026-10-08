@@ -1,4 +1,5 @@
 """Règlement des paris (résultats réels) et bilan."""
+import sys
 from datetime import datetime, timedelta, timezone
 
 from . import config as C, learn, odds, stats, store, track
@@ -46,8 +47,20 @@ def settle_pick(b, ev, fstats=None):
     return "win" if (name == "Over") == (v > point) else "loss"
 
 
+def football_score(b):
+    """Score d'un match de foot terminé via API-Football (GRATUIT : 1 requête par jour réglé, mise en
+    cache), au format attendu par settle_pick ; None si introuvable ou pas terminé."""
+    r = stats.fixture_result(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
+    if not r or not r["finished"]:
+        return None
+    return {"id": b["id"], "completed": True,
+            "scores": [{"name": b["home"], "score": str(r["home"])}, {"name": b["away"], "score": str(r["away"])}]}
+
+
 def settle_pending(now=None, scores_by_sport=None, stats_for=None):
-    """Règle les paris suivis passés (envoyés d'abord). Injectables pour les tests."""
+    """Règle les paris suivis passés (envoyés d'abord). Le foot se règle via API-Football (aucun crédit de
+    cotes) ; /scores de The Odds API (2 crédits par ligue, budgétés) ne sert que de repli : sans
+    STATS_API_KEY, ou pour un sport hors foot. `scores_by_sport` / `stats_for` : injectables (tests)."""
     now = now or datetime.now(timezone.utc)
     rows = track.load()
     bets = store.load("bets.json", {"picks": [], "combos": []})
@@ -57,14 +70,18 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     scores_by_sport = scores_by_sport or {}
     settled = []
     for b in pending:
-        if b["sport_key"] not in scores_by_sport:
-            try:
-                scores_by_sport[b["sport_key"]] = odds.fetch_scores(b["sport_key"])
-            except Exception as e:                 # noqa: BLE001
-                print(f"scores {b['sport_key']} : {e}")
-                scores_by_sport[b["sport_key"]] = []
         old = datetime.fromisoformat(b["commence"].replace("Z", "+00:00")) < now - timedelta(days=3)
-        ev = next((e for e in scores_by_sport[b["sport_key"]] if e["id"] == b["id"] and e.get("completed")), None)
+        ev = next((e for e in scores_by_sport.get(b["sport_key"], []) if e["id"] == b["id"] and e.get("completed")), None)
+        free = b["group"] == "soccer" and stats.enabled()
+        if not ev and free:
+            ev = football_score(b)
+        elif not ev and b["sport_key"] not in scores_by_sport:
+            try:                                   # repli payant, une fois par sport et par exécution
+                scores_by_sport[b["sport_key"]] = odds.fetch_scores(b["sport_key"])
+            except Exception as e:                 # noqa: BLE001 - budget refusé, réseau... : on réessaiera
+                print(f"[settle] scores {b['sport_key']} ignorés : {e}", file=sys.stderr)
+                scores_by_sport[b["sport_key"]] = []
+            ev = next((e for e in scores_by_sport[b["sport_key"]] if e["id"] == b["id"] and e.get("completed")), None)
         if not ev:
             if old:
                 b["result"] = "void"               # annulé / reporté / jamais de score

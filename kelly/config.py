@@ -14,29 +14,54 @@ def _int(name, default):
         return default
 
 
+def _bool(name, default=False):
+    v = (os.environ.get(name) or "").strip().lower()
+    return default if not v else v in ("1", "true", "oui", "yes")
+
+
+def _shares(name, default):
+    """« daily=0.6,closing=0.4 » -> dict ; entrée invalide ignorée."""
+    out = dict(default)
+    for part in (os.environ.get(name) or "").split(","):
+        k, _, v = part.partition("=")
+        try:
+            out[k.strip()] = max(0.0, float(v))
+        except ValueError:
+            pass
+    return out
+
+
 def _list(name, default):
     return [x.strip() for x in (os.environ.get(name) or default).split(",") if x.strip()]
 
 
-MAX_SPORTS = _int("MAX_SPORTS", 25)      # ligues interrogées
-PROP_EVENTS = _int("PROP_EVENTS", 8)     # matchs avec marchés détaillés
-# Garde-fou crédits (The Odds API) : sous ce seuil de crédits restants, les appels
-# optionnels (marchés détaillés, balayages larges, clôture des paris fantômes) sont sautés.
+MAX_SPORTS = _int("MAX_SPORTS", 6)       # plafond de ligues AVEC matchs du jour (les plus chargées d'abord)
+PROP_EVENTS = _int("PROP_EVENTS", 8)     # matchs avec marchés détaillés (le budget limite avant)
+# Budget The Odds API (forfait gratuit : 500 crédits/mois). Voir kelly/budget.py.
+ODDS_MONTHLY_CREDITS = _int("ODDS_MONTHLY_CREDITS", 500)
+ODDS_RESET_DAY = _int("ODDS_RESET_DAY", 1)          # jour du mois où les crédits sont remis à zéro
+# Part de l'allocation du jour par usage ; un usage absent (alert, snapshot) = 0 = désactivé.
+BUDGET_SHARES = _shares("BUDGET_SHARES", {"daily": 0.60, "closing": 0.40})
+FEATURED_SHARE = 0.5      # part max du budget du matin pour les marchés vedettes (le reste : corners, cartons...)
+# Plancher de sécurité : le matin ne descend pas sous ce nombre de crédits restants (réserve la clôture).
 MIN_CREDITS = _int("MIN_CREDITS", 30)
+CLOSE_GHOSTS = _bool("CLOSE_GHOSTS")     # clôture aussi les paris fantômes (payant : désactivé sur gratuit)
 # Sports suivis, dans l'ordre de priorité (MAX_SPORTS coupe la fin). Une entrée se
 # terminant par "_" est un préfixe de clés The Odds API (ex. "soccer_", "tennis_") ;
 # sinon c'est une clé exacte (soccer_uefa_champs_league n'attrape pas la version féminine).
-# Défaut : forfait gratuit (500 crédits/mois). Élargis via la variable SPORTS.
+# Défaut : forfait gratuit, foot uniquement (réglable gratuitement via API-Football ; NBA/tennis non).
+# Élargis via la variable SPORTS (ex. ajoute basketball_nba).
 SPORTS = _list("SPORTS", "soccer_epl,soccer_spain_la_liga,soccer_italy_serie_a,soccer_germany_bundesliga,"
-                         "soccer_france_ligue_one,soccer_uefa_champs_league,basketball_nba")
+                         "soccer_france_ligue_one,soccer_uefa_champs_league")
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}
-# Marchés détaillés : 1 appel par match et par marché (1 crédit chacun et par région).
+# Marchés détaillés : 1 appel par match et par marché (1 crédit chacun et par région), DANS CET
+# ORDRE de priorité (marchés mal pricés d'abord : si le budget manque, on coupe la fin).
 # Indisponible (HTTP 422) = ignoré. Clés vérifiées dans la doc « additional markets »
 # de The Odds API ; player_fouls n'y figure pas (il reste compris par le règlement et
 # les libellés, mais n'est plus demandé).
 PROP_MARKETS = {
-    "soccer": _list("PROP_MARKETS", "btts,double_chance,alternate_totals_corners,alternate_totals_cards,"
-                                    "player_shots_on_target,player_shots"),
+    "soccer": _list("PROP_MARKETS", "alternate_totals_corners,alternate_totals_cards,btts,"
+                                    "player_shots_on_target,player_shots,double_chance"),
     "basketball": ["player_points", "player_rebounds", "player_assists", "player_threes"],
     "tennis": [],
 }
@@ -76,7 +101,7 @@ MIN_STAKE_SHARE = 0.002
 STREAK_WARNING = 5
 
 # Suivi et apprentissage par la cote de clôture.
-CLOSE_WINDOW_MIN = 75      # relevé de clôture : matchs qui démarrent dans les 75 min
+CLOSE_WINDOW_MIN = 90      # relevé de clôture : matchs qui démarrent dans les 90 min (tolère un passage horaire en retard)
 TRACK_TOP = 50             # paris fantômes suivis par jour (en plus des envoyés)
 LEARN_MIN_ROWS = 40        # lignes avec clôture avant d'entraîner un modèle
 CALIB_MIN_ROWS = 300       # résultats réglés par famille avant de calibrer

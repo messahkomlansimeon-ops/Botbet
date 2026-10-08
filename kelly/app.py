@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import bankroll, combos as CB, config as C, learn, odds, settle, stats, store, telegram, track
+from . import bankroll, budget, combos as CB, config as C, learn, odds, settle, stats, store, telegram, track
 
 DISCLAIMER = ("Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
               "mise petit. 18+")
@@ -106,10 +106,11 @@ def run_daily(sample=False):
     else:
         report, model = morning_report(now)
         day, after = now.date(), now
-        events = odds.fetch_events(day)
+        events = odds.fetch_events(day, after=now)
+        print(f"[budget] {budget.line()}", file=sys.stderr)
         if not events:
-            report.append("⚠️ Kelly n'a récupéré aucune cote aujourd'hui (clé, quota ou saison : lance "
-                          "« python bot.py --check » ou regarde les logs).")
+            report.append("⚠️ Kelly n'a récupéré aucune cote aujourd'hui (aucun match, clé, budget de crédits ou "
+                          "saison : lance « python bot.py --check » ou regarde les logs).")
     picks = odds.build_picks(events, day, after, history=store.load("odds_history.json", {}), model=model)
     if not sample:
         try:
@@ -129,60 +130,95 @@ def run_daily(sample=False):
     return report + messages
 
 
+def plan_closing(due, combos, bulk=True):
+    """Appels de clôture à faire, du plus prioritaire au moins prioritaire (palier Sûr d'abord, puis grosse
+    mise, puis fantômes) : [{kind: "bulk"|"event", sport_key, ids, markets, cost, rank}].
+    Une ligue avec >= 2 matchs à relever sur les marchés vedettes : un seul appel bulk (coût = nb de
+    marchés) au lieu d'un appel par match, tant qu'il ne coûte pas plus cher. Les autres marchés
+    (corners, cartons, joueurs) : un appel par match, seulement les marchés suivis."""
+    rk = track.ranks(combos)
+    evs = {}
+    for r in due:
+        e = evs.setdefault((r["sport_key"], r["id"]), {"markets": set(), "rank": (99, 0)})
+        e["markets"].add(r["market"])
+        e["rank"] = min(e["rank"], rk.get(r["key"], (-1, 0)) if r.get("sent") else (99, 0))
+    leagues, calls = {}, []
+    for (sk, eid), e in evs.items():
+        leagues.setdefault(sk, []).append((eid, e))
+    for sk, items in leagues.items():
+        feat = set(C.FEATURED.get(odds.sport_group(sk), "h2h").split(","))
+        need = [(eid, e) for eid, e in items if e["markets"] & feat]
+        union = set().union(*(e["markets"] & feat for _, e in need))
+        use_bulk = bulk and len(need) >= 2 and len(union) <= sum(len(e["markets"] & feat) for _, e in need)
+        if use_bulk:
+            calls.append({"kind": "bulk", "sport_key": sk, "ids": [eid for eid, _ in need], "markets": union,
+                          "cost": len(union), "rank": min(e["rank"] for _, e in need)})
+        for eid, e in items:
+            rest = e["markets"] - feat if use_bulk else e["markets"]
+            if rest:
+                calls.append({"kind": "event", "sport_key": sk, "ids": [eid], "markets": rest,
+                              "cost": len(rest), "rank": e["rank"]})
+    return sorted(calls, key=lambda c: (c["rank"], c["cost"]))
+
+
 def run_track(events_for=None, now=None):
-    """Toutes les heures : cote de clôture des paris dont le match démarre
-    bientôt (un appel par événement, seulement ses marchés suivis) + alertes."""
+    """Passage horaire : cote de clôture des paris ENVOYÉS dont le match démarre bientôt (bulk par ligue
+    quand c'est moins cher, sinon un appel par match, seulement les marchés suivis) + alertes de cote.
+    Chaque appel payant passe par le budget « closing » ; refusé = sauté (log), jamais d'erreur.
+    `events_for(sport_key, ev_id, markets)` : injectable pour les tests (un appel par match, sans budget)."""
     now = now or now_utc()
     rows = track.load()
     due, missed = track.pending_closing(rows, now)
     track.mark_missed(rows, missed, now)
-    by_event = {}
-    for r in due:
-        d = by_event.setdefault((r["sport_key"], r["id"]), {"all": set(), "sent": set()})
-        d["all"].add(r["market"])
-        if r.get("sent"):
-            d["sent"].add(r["market"])
-    if by_event and events_for is None and odds.CREDITS["remaining"] is None:
+    combos = store.load("bets.json", {"combos": []})["combos"]
+    calls = plan_closing(due, combos, bulk=events_for is None)
+    if calls and events_for is None and odds.CREDITS["remaining"] is None:
         try:
             odds.get("/sports")                     # gratuit : fait connaître les crédits restants
         except Exception as e:                      # noqa: BLE001
             print(f"[odds] /sports : {e}", file=sys.stderr)
-    closing, alerts_src = [], []
-    # Paris envoyés d'abord ; crédits bas : on ne relève que leurs marchés, jamais les fantômes.
-    for (sport_key, ev_id), m in sorted(by_event.items(), key=lambda kv: not kv[1]["sent"]):
-        markets = m["all"]
-        if events_for is None and odds.low_credits():
-            if not m["sent"]:
-                odds.credits_ok("clôture des paris fantômes")
-                continue
-            markets = m["sent"]
+    closing, skipped = [], 0
+    for c in calls:
+        sk, ids = c["sport_key"], c["ids"]
         try:
-            ev = events_for(sport_key, ev_id, markets) if events_for else odds.get(
-                f"/sports/{sport_key}/events/{ev_id}/odds", regions="eu", oddsFormat="decimal",
-                markets=",".join(sorted(markets)))
-            if not ev:
-                continue
-            ev["sport_key"] = sport_key
-            day = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")).date()
-            closing += odds.build_picks([ev], day)
+            if events_for:
+                evs = [events_for(sk, ids[0], c["markets"])]
+            else:
+                why = budget.why_not(c["cost"], "closing")
+                if why:
+                    skipped += 1
+                    print(f"[budget] clôture de {', '.join(ids)} sautée ({c['cost']} crédit(s) : {why}).", file=sys.stderr)
+                    continue
+                params = dict(use="closing", regions="eu", oddsFormat="decimal", markets=",".join(sorted(c["markets"])))
+                evs = (odds.get(f"/sports/{sk}/odds", eventIds=",".join(ids), **params) if c["kind"] == "bulk"
+                       else [odds.get(f"/sports/{sk}/events/{ids[0]}/odds", **params)])
+            for ev in evs or []:
+                if not ev:
+                    continue
+                ev["sport_key"] = sk
+                day = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")).date()
+                closing += odds.build_picks([ev], day)
         except Exception as e:                      # noqa: BLE001 - un match en erreur ne bloque pas les autres
-            print(f"clôture {ev_id} : {e}", file=sys.stderr)
+            print(f"clôture {', '.join(ids)} : {e}", file=sys.stderr)
     n = track.close(rows, closing, now)
     track.save(rows)
     hist = store.load("odds_history.json", {})
     alerts = find_alerts(closing, hist)
     hist.update(odds.snapshot(closing))
     store.save("odds_history.json", hist)
-    print(f"{n} clôtures relevées, {len(missed)} manquées, {len(alerts)} alertes.")
+    print(f"{n} clôtures relevées, {len(missed)} manquées, {skipped} sautées (budget), {len(alerts)} alertes.")
+    if calls and events_for is None:
+        print(f"[budget] {budget.line()}", file=sys.stderr)
     if alerts:
         telegram.send(alert_text(alerts))
     return n, alerts
 
 
 def run_snapshot():
-    """Le soir : relevé des cotes du lendemain (pour voir les mouvements le matin)."""
+    """Le soir : relevé des cotes du lendemain (pour voir les mouvements le matin).
+    Désactivé sur forfait gratuit (BUDGET_SHARES sans « snapshot » = 0 crédit)."""
     day = now_utc().date() + timedelta(days=1)
-    picks = odds.build_picks(odds.fetch_events(day, optional=True), day)
+    picks = odds.build_picks(odds.fetch_events(day, optional=True, use="snapshot"), day)
     hist = store.load("odds_history.json", {})
     hist.update(odds.snapshot(picks))
     store.save("odds_history.json", hist)
@@ -204,7 +240,8 @@ def find_alerts(picks, history):
 
 
 def run_alert(sample=False):
-    """En journée : cotes qui chutent = argent des pros. Alerte immédiate."""
+    """Balayage large : cotes qui chutent = argent des pros. Désactivé sur forfait gratuit (BUDGET_SHARES sans
+    « alert » = 0 crédit) : les alertes ne viennent plus que de run_track, sur les matchs relevés."""
     now = now_utc()
     hist = store.load("odds_history.json", {})
     if sample:
@@ -213,8 +250,8 @@ def run_alert(sample=False):
         picks = odds.build_picks(events, day)
     else:
         day = now.date()
-        picks = odds.build_picks(odds.fetch_events(day, props=bool(os.environ.get("ALERT_PROPS")), optional=True),
-                                day, now)
+        picks = odds.build_picks(odds.fetch_events(day, props=bool(os.environ.get("ALERT_PROPS")), optional=True,
+                                                   use="alert", after=now), day, now)
     alerts = find_alerts(picks, hist)
     if not sample:
         hist.update(odds.snapshot(picks))
@@ -320,7 +357,7 @@ STATS_STATUS_URL = "https://v3.football.api-sports.io/status"
 
 
 def _check_odds():
-    """-> (ok, lignes). N'utilise que /sports (gratuit) : aucun crédit dépensé."""
+    """-> (ok, lignes). N'utilise que /sports et /events (gratuits) : aucun crédit dépensé."""
     try:
         sports = odds.get("/sports")
     except odds.OddsError as e:
@@ -340,21 +377,29 @@ def _check_odds():
     rem, used = odds.CREDITS["remaining"], odds.CREDITS["used"]
     lines = ["✅ The Odds API : clé valide",
              f"   Crédits : {rem if rem is not None else '?'} restants, {used if used is not None else '?'} utilisés"]
-    chosen = odds.select_sports(sports)
-    lines.append(f"   Sports suivis ({len(chosen)}/{C.MAX_SPORTS}) : " + (", ".join(s["key"] for s in chosen) or "aucun"))
+    chosen = odds.select_sports(sports, limit=False)
+    lines.append(f"   Sports suivis ({len(chosen)}, au plus {C.MAX_SPORTS} ligues avec matchs payées par jour) : "
+                 + (", ".join(s["key"] for s in chosen) or "aucun"))
     active = {s["key"] for s in sports}
     absent = [p for p in C.SPORTS if not p.endswith("_") and p not in active]
     if absent:
         lines.append("   Hors saison ou clé inconnue : " + ", ".join(absent))
     if not chosen:
         lines.append("   ⚠️ Aucun sport actif ne correspond à SPORTS : Kelly n'aura aucun match.")
-    groups = [odds.sport_group(s["key"]) for s in chosen]
-    cost = sum(len(C.FEATURED.get(g, "h2h").split(",")) for g in groups)
-    cost += C.PROP_EVENTS * max([len(C.PROP_MARKETS.get(g, [])) for g in groups] or [0])
-    lines.append(f"   Un --daily coûte au plus ~{cost} crédits (MAX_SPORTS={C.MAX_SPORTS}, PROP_EVENTS={C.PROP_EVENTS})"
-                 + (f" : ~{rem // max(cost, 1)} jours de réserve en daily seul." if rem is not None else "."))
+    lines.append(f"   Allocation du jour : {budget.allowance()} crédits (matin {budget.share('daily')}, clôture "
+                 f"{budget.share('closing')}), {budget.days_left()} jour(s) avant la remise à zéro "
+                 f"(jour {C.ODDS_RESET_DAY} du mois ; forfait {C.ODDS_MONTHLY_CREDITS}/mois)")
+    window, playing = odds.day_window(now_utc().date()), []
+    for sp in chosen[:15]:
+        try:
+            n = len(odds.league_events(sp["key"], window))           # gratuit
+        except odds.OddsError:
+            continue
+        if n:
+            playing.append(f"{sp['key']} ({n})")
+    lines.append("   Ligues avec matchs aujourd'hui (gratuit) : " + (", ".join(playing) or "aucune"))
     if rem is not None and rem < C.MIN_CREDITS:
-        lines.append(f"   ⚠️ Sous le seuil MIN_CREDITS={C.MIN_CREDITS} : marchés détaillés et balayages larges seront sautés.")
+        lines.append(f"   ⚠️ Sous le seuil MIN_CREDITS={C.MIN_CREDITS} : le matin ne dépense plus, la réserve sert à clôturer.")
     return True, lines
 
 
@@ -383,7 +428,7 @@ def _check_stats():
                        "x-apisports-key)." + rapid]
     sub, req = resp.get("subscription") or {}, resp.get("requests") or {}
     lines = [f"✅ API-Football : plan {sub.get('plan', '?')}{'' if sub.get('active', True) else ' (INACTIF)'}, "
-             f"requêtes aujourd'hui {req.get('current', '?')}/{req.get('limit_day', '?')}"]
+             f"requêtes aujourd'hui {req.get('current', '?')}/{req.get('limit_day', '?')} (Kelly s'arrête à {stats._cap()})"]
     if sub.get("active") is False:
         lines.append("   → abonnement inactif : réactive-le sur dashboard.api-football.com.")
     return sub.get("active") is not False, lines
@@ -422,7 +467,7 @@ def _telegram_hint(err):
 
 def run_check():
     """Vérifie chaque service configuré et affiche un rapport. Ne dépense aucun crédit
-    The Odds API (seul /sports, gratuit). Renvoie True si tout ce qui est configuré marche."""
+    The Odds API (seuls /sports et /events, gratuits). Renvoie True si tout ce qui est configuré marche."""
     print("🔎 KELLY — DIAGNOSTIC")
     ok_odds, l_odds = _check_odds()
     ok_stats, l_stats = _check_stats()

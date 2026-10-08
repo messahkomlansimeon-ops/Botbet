@@ -1,7 +1,7 @@
 """Tests hors ligne de kelly/stats.py (aucun réseau). Lancer : python -m tests.test_stats"""
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-")
 os.environ.pop("STATS_API_KEY", None)
@@ -20,6 +20,7 @@ class Resp:
 
 def reset(fake=None, cap=None):
     stats._calls, stats._halted = 0, False
+    stats._refreshed.clear()
     stats.BUDGET = 60
     for f in os.listdir(store.DATA_DIR):
         os.remove(os.path.join(store.DATA_DIR, f))
@@ -33,9 +34,13 @@ def reset(fake=None, cap=None):
     return calls
 
 
-def fx(i, home, away, ts, status="NS"):
-    return {"fixture": {"id": i, "timestamp": ts, "status": {"short": status}},
-            "teams": {"home": {"id": i * 10, "name": home}, "away": {"id": i * 10 + 1, "name": away}}}
+def fx(i, home, away, ts, status="NS", goals=(None, None), fulltime=None):
+    out = {"fixture": {"id": i, "timestamp": ts, "status": {"short": status}},
+           "teams": {"home": {"id": i * 10, "name": home}, "away": {"id": i * 10 + 1, "name": away}},
+           "goals": {"home": goals[0], "away": goals[1]}}
+    if fulltime:
+        out["score"] = {"fulltime": {"home": fulltime[0], "away": fulltime[1]}}
+    return out
 
 
 T0 = int(datetime(2026, 10, 10, 19, 0, tzinfo=timezone.utc).timestamp())
@@ -190,6 +195,53 @@ def test_fixture_stats_and_averages():
     reset(lambda u, p: Resp({"errors": [], "response": [{"team": {"id": 1}, "statistics": []},
                                                         {"team": {"id": 2}, "statistics": []}]}))
     assert stats.fixture_stats(8) is None
+
+
+def test_day_cache_refresh_and_result():
+    """Règlement gratuit : le cache du matin (statut NS) d'un jour PASSÉ est re-téléchargé (1 requête, une
+    fois par exécution) ; buts du temps réglementaire ; jour du jour et matchs reportés non re-téléchargés."""
+    day = str(date.fromisoformat(stats._today()) - timedelta(days=1))
+    ts = int(datetime.fromisoformat(day + "T19:00:00+00:00").timestamp())
+    ko = day + "T19:00:00Z"
+    state = {"status": "NS"}
+
+    def fake(url, p):
+        if state["status"] == "NS":
+            rows = [fx(1, "Alpha", "Bravo", ts), fx(2, "Charlie", "Delta", ts), fx(3, "Echo", "Foxtrot", ts)]
+        else:
+            rows = [fx(1, "Alpha", "Bravo", ts, "FT", (2, 1)),
+                    fx(2, "Charlie", "Delta", ts, "AET", (3, 2), fulltime=(1, 1)),    # 90 min : 1-1
+                    fx(3, "Echo", "Foxtrot", ts, "PST")]                              # reporté
+        return Resp({"errors": [], "response": rows})
+    calls = reset(fake)
+    r = stats.fixture_result(day, "Alpha", "Bravo", ko)                # le matin : NS
+    assert r and r["finished"] is False and r["home"] is None and len(calls) == 1
+    assert stats.fixture_result(day, "Alpha", "Bravo", ko)["finished"] is False
+    assert len(calls) == 1                                             # même exécution : pas de 2e appel
+    state["status"] = "FT"
+    stats._refreshed.clear()                                           # exécution suivante
+    r = stats.fixture_result(day, "Alpha", "Bravo", ko)
+    assert r["finished"] and (r["home"], r["away"]) == (2, 1) and len(calls) == 2, (r, len(calls))
+    r = stats.fixture_result(day, "Charlie", "Delta", ko)
+    assert r["finished"] and (r["home"], r["away"]) == (1, 1) and r["status"] == "AET"   # temps réglementaire
+    r = stats.fixture_result(day, "Echo", "Foxtrot", ko)
+    assert r["status"] == "PST" and not r["finished"] and r["home"] is None
+    stats._refreshed.clear()
+    stats.fixture_result(day, "Alpha", "Bravo", ko)                    # plus de match NS : cache gardé
+    assert len(calls) == 2, calls
+    assert stats.fixture_result(day, "Inconnu", "Equipe", ko) is None
+    # le jour même : un match NS n'est pas re-téléchargé (il n'est pas fini)
+    today = stats._today()
+    calls = reset(lambda u, p: Resp({"errors": [], "response": [fx(9, "Alpha", "Bravo", ts, "NS")]}))
+    stats.find_fixture(today, "Alpha", "Bravo")
+    stats._refreshed.clear()
+    stats.find_fixture(today, "Alpha", "Bravo")
+    assert len(calls) == 1
+    # ancien cache sans buts (format d'avant) pour un jour passé : re-téléchargé
+    reset(lambda u, p: Resp({"errors": [], "response": [fx(1, "Alpha", "Bravo", ts, "FT", (0, 0))]}))
+    store.save("fixtures_day.json", {day: [{"id": 1, "ts": ts, "status": "FT", "home": "Alpha", "home_id": 10,
+                                            "away": "Bravo", "away_id": 11}]})
+    assert stats.fixture_result(day, "Alpha", "Bravo", ko)["finished"]
 
 
 def main():

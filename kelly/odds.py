@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from . import config as C, learn
+from . import budget, config as C, learn
 
 
 def sport_group(sport_key):
@@ -24,6 +24,10 @@ class OddsError(Exception):
     def __init__(self, msg, status=None, code=None):
         super().__init__(msg)
         self.status, self.code = status, code
+
+
+class BudgetError(OddsError):
+    """Appel payant refusé par le budget (kelly/budget.py) : à sauter, jamais fatal."""
 
 
 def _scrub(text):
@@ -58,11 +62,29 @@ def credits_ok(what):
     return False
 
 
-def get(path, **params):
-    """GET The Odds API v4 -> JSON. Lève OddsError (message sans clé) ; 1 nouvel essai sur 429."""
+def cost(path, params):
+    """Crédits facturés par The Odds API pour cet appel (0 = gratuit) : /odds coûte
+    (nb de marchés) x (nb de régions), /scores 1 (2 avec daysFrom), le reste est gratuit."""
+    if path.endswith("/scores"):
+        return 2 if params.get("daysFrom") else 1
+    if path.endswith("/odds"):
+        n = lambda v, d: max(1, len([x for x in str(v if v is not None else d).split(",") if x.strip()]))
+        return n(params.get("markets"), "h2h") * n(params.get("regions"), "eu")
+    return 0
+
+
+def get(path, use=None, **params):
+    """GET The Odds API v4 -> JSON. Lève OddsError (message sans clé) ; 1 nouvel essai sur 429.
+    `use` ("daily", "closing"...) : usage budgété d'un appel payant. Refusé par le budget -> BudgetError
+    (rien n'est envoyé) ; réussi -> crédits décomptés dans data/budget.json. Sans `use` : pas de budget
+    (appels gratuits : /sports, /events)."""
     key = os.environ.get("ODDS_API_KEY")
     if not key:
         raise OddsError("ODDS_API_KEY absente", code="NO_KEY")
+    n = cost(path, params) if use else 0
+    why = budget.why_not(n, use) if n else None
+    if why:
+        raise BudgetError(f"budget « {use} » : {n} crédit(s) refusé(s), {why}", code="BUDGET")
     params["apiKey"] = key
     for attempt in (0, 1):
         try:
@@ -82,13 +104,15 @@ def get(path, **params):
             msg, code = r.text[:200], None
         if code == "OUT_OF_USAGE_CREDITS":
             CREDITS["remaining"] = 0
+        budget.sync()
         raise OddsError(f"HTTP {r.status_code} {code or ''} {_scrub(msg)}".strip(), r.status_code, code)
+    budget.spend(n, use) if n else budget.sync()
     return r.json()
 
 
-def select_sports(sports):
+def select_sports(sports, limit=True):
     """Sports configurés parmi la liste de /sports, dans l'ordre de C.SPORTS (hors outrights).
-    Entrée finissant par "_" = préfixe, sinon clé exacte."""
+    Entrée finissant par "_" = préfixe, sinon clé exacte. `limit` : coupe à C.MAX_SPORTS."""
     live = [s for s in sports if not s.get("has_outrights")]
     out, seen = [], set()
     for pat in C.SPORTS:
@@ -96,62 +120,117 @@ def select_sports(sports):
             if s["key"] not in seen and (s["key"].startswith(pat) if pat.endswith("_") else s["key"] == pat):
                 seen.add(s["key"])
                 out.append(s)
-    return out[:C.MAX_SPORTS]
+    return out[:C.MAX_SPORTS] if limit else out
 
 
-def list_sports():
-    return select_sports(get("/sports"))                # gratuit (0 crédit)
+def list_sports(limit=True):
+    return select_sports(get("/sports"), limit)         # gratuit (0 crédit)
 
 
-def fetch_events(day, props=True, optional=False):
-    """Matchs du jour `day` (date UTC) sur tous les sports suivis + marchés détaillés.
-    `optional` : balayage facultatif (alertes, relevé du soir), sauté si crédits bas.
-    Une ligue, un match ou un marché en erreur est ignoré sans arrêter le reste."""
-    window = {"commenceTimeFrom": f"{day}T00:00:00Z", "commenceTimeTo": f"{day}T23:59:59Z"}
+def _iso(d):
+    return d.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def day_window(day, after=None):
+    """Fenêtre commenceTimeFrom/To du jour UTC `day` (début = `after` si plus tard : matchs à venir)."""
+    start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    if after is not None and after > start:
+        start = after
+    return {"commenceTimeFrom": _iso(start), "commenceTimeTo": f"{day}T23:59:59Z"}
+
+
+def league_events(sport_key, window):
+    """Matchs d'une ligue dans la fenêtre : endpoint GRATUIT /events (0 crédit)."""
+    return get(f"/sports/{sport_key}/events", dateFormat="iso", **window) or []
+
+
+def fetch_events(day, props=True, optional=False, use="daily", after=None):
+    """Matchs du jour `day` (date UTC) + marchés détaillés, dans la limite du budget `use`.
+    1. /events (gratuit) : seules les ligues qui ont des matchs sont payées, les plus chargées d'abord
+       (au plus C.MAX_SPORTS) ;
+    2. marchés vedettes en bulk (1 appel par ligue, au plus C.FEATURED_SHARE du budget) ;
+    3. marchés détaillés, par ordre de priorité de C.PROP_MARKETS (corners, cartons... d'abord), sur les
+       matchs les mieux cotés, tant que le budget le permet.
+    `optional` : balayage facultatif (alertes, relevé du soir), sauté si crédits bas ; `after` : n'achète
+    que les matchs à venir. Une ligue, un match ou un marché refusé ou en erreur est sauté (log stderr)."""
     events = []
+    if budget.left(use) <= 0:
+        why = f"allocation du jour : {budget.allowance()} crédits, déjà utilisée" if C.BUDGET_SHARES.get(use) else "aucune part dans BUDGET_SHARES"
+        print(f"[budget] « {use} » n'a pas de budget aujourd'hui ({why}) : aucun appel payant.", file=sys.stderr)
+        return events
+    if optional and not credits_ok("balayage large"):
+        return events
+    window = day_window(day, after)
     try:
-        sports = list_sports()
+        sports = list_sports(limit=False)
     except OddsError as e:
         print(f"[odds] liste des sports indisponible : {e}", file=sys.stderr)
         return events
-    for s in sports:
-        if CREDITS["remaining"] == 0 or (optional and not credits_ok("balayage large")):
-            break
-        group = sport_group(s["key"])
+    leagues = []
+    for i, s in enumerate(sports):
         try:
-            for ev in get(f"/sports/{s['key']}/odds", regions="eu", oddsFormat="decimal",
-                          markets=C.FEATURED.get(group, "h2h"), **window) or []:
+            n = len(league_events(s["key"], window))
+        except Exception as e:                          # noqa: BLE001 - une ligue ne tue pas le run
+            print(f"[{s['key']}] matchs du jour indisponibles : {e}", file=sys.stderr)
+            continue
+        if n:
+            leagues.append((-n, i, s))
+    leagues = [s for _, _, s in sorted(leagues, key=lambda t: t[:2])][:C.MAX_SPORTS]
+    print(f"[odds] ligues avec matchs : {', '.join(s['key'] for s in leagues) or 'aucune'} "
+          f"(budget « {use} » : {budget.left(use)} crédits)", file=sys.stderr)
+    cap = int(budget.left(use) * C.FEATURED_SHARE + 1e-9) if props else budget.left(use)
+    used = 0
+    for s in leagues:
+        markets = C.FEATURED.get(sport_group(s["key"]), "h2h")
+        n = len(markets.split(","))
+        if used and used + n > cap:                     # au moins une ligue ; le reste va aux marchés détaillés
+            print(f"[budget] part des marchés vedettes atteinte ({used}/{cap}) : {s['key']} ignorée.", file=sys.stderr)
+            break
+        why = budget.why_not(n, use)
+        if why:
+            print(f"[budget] {s['key']} ignorée ({why}).", file=sys.stderr)
+            break
+        try:
+            for ev in get(f"/sports/{s['key']}/odds", use=use, regions="eu", oddsFormat="decimal",
+                          markets=markets, **window) or []:
                 ev["sport_key"] = s["key"]
                 ev.setdefault("bookmakers", [])
                 events.append(ev)
-        except Exception as e:                          # noqa: BLE001 - une ligue ne tue pas le run
+            used += n
+        except Exception as e:                          # noqa: BLE001
             print(f"[{s['key']}] ignoré : {e}", file=sys.stderr)
     if not props:
         return events
     events.sort(key=lambda e: -len(e["bookmakers"]))
-    for ev in events[:C.PROP_EVENTS]:
-        for market in C.PROP_MARKETS.get(sport_group(ev["sport_key"]), []):
-            if not credits_ok("marchés détaillés"):
-                return events
-            try:
-                data = get(f"/sports/{ev['sport_key']}/events/{ev['id']}/odds", regions="eu",
-                           markets=market, oddsFormat="decimal")
-            except Exception as e:                      # noqa: BLE001 - 422 = marché inconnu pour ce sport/match
-                print(f"[{ev['sport_key']}] {market} ignoré : {e}", file=sys.stderr)
-                continue
-            for bk in (data or {}).get("bookmakers", []):
-                mine = next((b for b in ev["bookmakers"] if b["key"] == bk["key"]), None)
-                if mine is None:
-                    ev["bookmakers"].append(bk)
-                else:
-                    mine["markets"].extend(bk["markets"])
+    top = events[:C.PROP_EVENTS]
+    lists = [C.PROP_MARKETS.get(sport_group(ev["sport_key"]), []) for ev in top]
+    # marché par marché (priorité), sur tous les matchs : corners partout avant les cartons.
+    jobs = [(ev, ms[i]) for i in range(max(map(len, lists), default=0)) for ev, ms in zip(top, lists) if i < len(ms)]
+    for k, (ev, market) in enumerate(jobs):
+        why = budget.why_not(1, use)
+        if why:
+            print(f"[budget] {len(jobs) - k} marché(s) détaillé(s) ignoré(s) ({why}).", file=sys.stderr)
+            break
+        try:
+            data = get(f"/sports/{ev['sport_key']}/events/{ev['id']}/odds", use=use, regions="eu",
+                       markets=market, oddsFormat="decimal")
+        except Exception as e:                          # noqa: BLE001 - 422 = marché inconnu pour ce sport/match
+            print(f"[{ev['sport_key']}] {market} ignoré : {e}", file=sys.stderr)
+            continue
+        for bk in (data or {}).get("bookmakers", []):
+            mine = next((b for b in ev["bookmakers"] if b["key"] == bk["key"]), None)
+            if mine is None:
+                ev["bookmakers"].append(bk)
+            else:
+                mine["markets"].extend(bk["markets"])
     return events
 
 
-def fetch_scores(sport_key, days=3):
-    """Scores terminés des `days` derniers jours (1 à 3, max de l'API ; 2 crédits).
-    `scores` vaut null tant que le match n'a pas commencé, sinon [{name, score}] (texte)."""
-    return get(f"/sports/{sport_key}/scores", daysFrom=min(max(int(days), 1), 3), dateFormat="iso") or []
+def fetch_scores(sport_key, days=3, use="daily"):
+    """Scores terminés des `days` derniers jours (1 à 3, max de l'API ; 2 crédits, budgétés).
+    `scores` vaut null tant que le match n'a pas commencé, sinon [{name, score}] (texte).
+    Repli du règlement : le foot se règle gratuitement via API-Football (settle.py)."""
+    return get(f"/sports/{sport_key}/scores", use=use, daysFrom=min(max(int(days), 1), 3), dateFormat="iso") or []
 
 
 def label(market, name, point, who, group):

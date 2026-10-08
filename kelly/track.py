@@ -51,7 +51,9 @@ def record(picks, sent_keys, day, now=None):
 
 
 def pending_closing(rows, now):
-    """Paris sans clôture dont le match démarre dans la fenêtre (ou est passé : « missed »)."""
+    """Paris sans clôture dont le match démarre dans la fenêtre (ou est passé : « missed »).
+    Gratuit : seuls les paris envoyés sont à clôturer (les fantômes servent par leurs résultats),
+    sauf C.CLOSE_GHOSTS."""
     due, missed = [], []
     for r in rows:
         if r["closed_at"]:
@@ -59,9 +61,22 @@ def pending_closing(rows, now):
         start = _ts(r["commence"])
         if start <= now:
             missed.append(r)
-        elif start <= now + timedelta(minutes=C.CLOSE_WINDOW_MIN):
+        elif start <= now + timedelta(minutes=C.CLOSE_WINDOW_MIN) and (r.get("sent") or C.CLOSE_GHOSTS):
             due.append(r)
     return due, missed
+
+
+def ranks(combos):
+    """clé du pari -> (palier, -mise) du combiné en cours qui le contient et passe en premier (Sûr d'abord,
+    puis grosse mise). Un pari envoyé hors combiné (le pari du jour) passe avant : (-1, 0)."""
+    tiers = {t: i for i, (t, _, _) in enumerate(C.COMBOS)}
+    out = {}
+    for c in combos:
+        if c.get("result") is None:
+            rk = (tiers.get(c["tier"], len(tiers)), -c.get("stake", 0))
+            for k in c["keys"]:
+                out[k] = min(out.get(k, rk), rk)
+    return out
 
 
 def close(rows, closing_picks, now):

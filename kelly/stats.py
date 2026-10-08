@@ -186,18 +186,41 @@ def _ts(kickoff):
         return None
 
 
-def _day_fixtures(day):
-    """Tous les matchs du jour (UTC), en un seul appel par jour, mis en cache."""
-    cache = store.load("fixtures_day.json", {})
-    if str(day) in cache:
-        return cache[str(day)]
-    raw = get("/fixtures", date=str(day), timezone="UTC")
-    if not raw:                                 # erreur ou rien : on ne met rien en cache
-        return []
-    lst = [{"id": f["fixture"]["id"], "ts": f["fixture"].get("timestamp"),
+PENDING = ("TBD", "NS", "1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE")   # pas (encore) terminés
+_refreshed = set()                                   # jours re-téléchargés pendant cette exécution
+
+
+def _entry(f):
+    """Match du jour allégé : ids, statut et buts (temps réglementaire si fourni : les paris se
+    règlent sur 90 minutes, pas sur la prolongation)."""
+    ft = (f.get("score") or {}).get("fulltime") or {}
+    goals = f.get("goals") or {}
+    pick = lambda k: ft.get(k) if ft.get(k) is not None else goals.get(k)
+    return {"id": f["fixture"]["id"], "ts": f["fixture"].get("timestamp"),
             "status": (f["fixture"].get("status") or {}).get("short"),
             "home": f["teams"]["home"]["name"], "home_id": f["teams"]["home"]["id"],
-            "away": f["teams"]["away"]["name"], "away_id": f["teams"]["away"]["id"]} for f in raw]
+            "away": f["teams"]["away"]["name"], "away_id": f["teams"]["away"]["id"],
+            "gh": pick("home"), "ga": pick("away")}
+
+
+def _stale(day, lst):
+    """Liste en cache d'un jour PASSÉ qui contient un match non terminé (ou sans buts, ancien format) :
+    le cache du matin (statut NS) bloquerait le règlement."""
+    return str(day) < _today() and any(f.get("status") in PENDING or "gh" not in f for f in lst)
+
+
+def _day_fixtures(day):
+    """Tous les matchs du jour (UTC), en un seul appel par jour, mis en cache. Un jour passé dont le
+    cache contient un match non terminé est re-téléchargé (1 requête, au plus une fois par exécution)."""
+    cache = store.load("fixtures_day.json", {})
+    old = cache.get(str(day))
+    if old is not None and not (_stale(day, old) and str(day) not in _refreshed):
+        return old
+    _refreshed.add(str(day))
+    raw = get("/fixtures", date=str(day), timezone="UTC")
+    if not raw:                                 # erreur ou rien : on garde l'ancien cache
+        return old or []
+    lst = [_entry(f) for f in raw]
     keep = str((datetime.now(timezone.utc) - timedelta(days=10)).date())
     cache = {d: v for d, v in cache.items() if d >= keep}
     cache[str(day)] = lst
@@ -233,6 +256,20 @@ def find_fixture(day, home, away, kickoff=None):
                 "status": best["status"]}
     store.save("fixtures.json", cache)
     return cache[k]
+
+
+def fixture_result(day, home, away, kickoff=None):
+    """Résultat d'un match (règlement gratuit des paris foot) : {id, status, home, away, finished}
+    avec les buts (None tant que non terminé) ; None si le match n'est pas trouvé."""
+    fx = find_fixture(day, home, away, kickoff)
+    if not fx:
+        return None
+    f = next((f for f in _day_fixtures(str(day)[:10]) if f["id"] == fx["id"]), None)
+    if not f:
+        return None
+    done = f["status"] in DONE and f.get("gh") is not None and f.get("ga") is not None
+    return {"id": f["id"], "status": f["status"], "finished": done,
+            "home": f["gh"] if done else None, "away": f["ga"] if done else None}
 
 
 # --- Statistiques d'un match ----------------------------------------------

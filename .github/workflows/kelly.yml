@@ -1,0 +1,64 @@
+name: Kelly
+# Forfait gratuit : ~13 passages par jour d'environ 1 minute (budget GitHub : 2000 min/mois).
+on:
+  schedule:
+    - cron: "0 8 * * *"      # 08:00 Abidjan : résultats d'hier + combinés du jour, puis commandes
+    - cron: "5 11-22 * * *"  # heures de matchs européens : clôture des paris envoyés + alertes, puis commandes
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "daily | track | check | commands (check = diagnostic des clés + budget + message de test Telegram)"
+        type: choice
+        options: [daily, track, check, commands]
+        default: daily
+concurrency:
+  group: botbet-data
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Choisir le mode
+        id: mode
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 8 * * *") m=daily ;;
+            "5 11-22 * * *") m=track ;;
+            *) m="${{ github.event.inputs.mode || 'daily' }}" ;;
+          esac
+          echo "mode=$m" >> "$GITHUB_OUTPUT"
+      - name: Lancer Kelly
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
+          # Forfait gratuit The Odds API (500 crédits/mois) : le budget adaptatif (kelly/budget.py) répartit
+          # les crédits sur le mois. Sur un forfait payant, relève ODDS_MONTHLY_CREDITS (et MAX_SPORTS, voir README).
+          ODDS_MONTHLY_CREDITS: "500"
+          ODDS_RESET_DAY: "1"   # jour du mois où The Odds API remet les crédits à zéro
+          MIN_CREDITS: "30"     # le matin ne descend pas sous ce seuil : réserve pour clôturer les paris envoyés
+        run: |
+          # Les commandes Telegram sont traitées à chaque passage daily/track (réponse dans l'heure).
+          rc=0
+          python bot.py --"$MODE" || rc=$?
+          case "$MODE" in daily|track) python bot.py --commands || rc=$?; esac
+          exit $rc
+      - name: Sauvegarder les données (paris, historique, apprentissage, budget)
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add data
+          git diff --cached --quiet || git commit -m "Données du $(date -u +%Y-%m-%d) (${{ steps.mode.outputs.mode }})"
+          git pull --rebase origin ${{ github.ref_name }} && git push
