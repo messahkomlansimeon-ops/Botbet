@@ -4,9 +4,9 @@
  "headers": {
   "Content-Type": "text/plain; charset=utf-8",
   "Server": "cloudflare",
-  "x-time-ng": "0.002, 0.003",
-  "server-timing": "wf-uht;dur=0.051",
-  "cf-cache-status": "HIT",
-  "CF-RAY": "a475309d2a4dead3-ORD"
+  "x-time-ng": "0.003, 0.004",
+  "server-timing": "wf-uht;dur=0.055",
+  "cf-cache-status": "REVALIDATED",
+  "CF-RAY": "a4753be5de7fa99e-LAX"
  }
 }
