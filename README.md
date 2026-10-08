@@ -1,9 +1,12 @@
 # Botbet
 
-Bot Telegram personnel : chaque matin (08:00 Abidjan), il envoie le pari du jour et trois combinés :
-- **SÛR** (3 matchs, proba max), **ÉQUILIBRÉ** (4 matchs, cote >= 4), **GROS COUP** (5 matchs, cote >= 8) ;
+Bot Telegram personnel : chaque matin (08:00 Abidjan), il analyse les matchs de foot du jour dans jusqu'à 25 championnats et envoie :
+- **⭐ Pari du jour** ;
+- **🛡️ Sûr** (3 matchs), **⚖️ Costaud** (5 matchs, cote >= 10), **🔥 Méchant** (7 matchs, cote >= 40), **💀 Monstre** (9 matchs, cote >= 120).
 
-Marchés : 1N2 et plus/moins de buts. Les probabilités viennent du consensus de plusieurs bookmakers (marge retirée). Ce sont des estimations : aucun gain n'est garanti.
+Marchés : 1N2, plus/moins de buts, les 2 équipes marquent, double chance, corners, cartons, tirs, tirs cadrés, fautes (selon ce que fournit ton forfait The Odds API ; un marché indisponible est ignoré). Les probabilités viennent du consensus des bookmakers (marge retirée) : ce sont des estimations, aucun gain n'est garanti. Plus la cote est grosse, plus la probabilité est faible (un combiné à cote 100+ passe moins de 1 fois sur 100).
+
+**Crédits API :** les marchés détaillés (corners, tirs, fautes...) coûtent 1 crédit par match et par marché. Le forfait gratuit (500 crédits/mois) ne suffit pas pour un usage quotidien complet : réduis `MAX_SPORTS`, `PROP_EVENTS` ou `PROP_MARKETS`, ou prends un forfait payant.
 
 ## Installation
 1. Clé gratuite sur https://the-odds-api.com -> `ODDS_API_KEY`.

@@ -2,7 +2,7 @@
  {
   "id": "0",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T15:00:00Z",
+  "commence_time": "2026-10-08T14:00:00Z",
   "home_team": "PSG",
   "away_team": "Lyon",
   "bookmakers": [
@@ -14,15 +14,15 @@
       "outcomes": [
        {
         "name": "PSG",
-        "price": 2.3
+        "price": 1.69
        },
        {
         "name": "Draw",
-        "price": 3.68
+        "price": 3.62
        },
        {
         "name": "Lyon",
-        "price": 2.81
+        "price": 4.73
        }
       ]
      },
@@ -31,13 +31,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.55
+        "price": 1.84,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.37
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.72
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.76,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.1,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.13,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -51,15 +128,15 @@
       "outcomes": [
        {
         "name": "PSG",
-        "price": 2.34
+        "price": 1.75
        },
        {
         "name": "Draw",
-        "price": 3.59
+        "price": 3.76
        },
        {
         "name": "Lyon",
-        "price": 2.76
+        "price": 4.68
        }
       ]
      },
@@ -68,13 +145,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.64
+        "price": 1.86,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.26
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.14
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.77,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.05,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.13,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.75,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.83,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -88,15 +242,15 @@
       "outcomes": [
        {
         "name": "PSG",
-        "price": 2.39
+        "price": 1.74
        },
        {
         "name": "Draw",
-        "price": 3.73
+        "price": 3.61
        },
        {
         "name": "Lyon",
-        "price": 2.75
+        "price": 4.79
        }
       ]
      },
@@ -105,13 +259,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.57
+        "price": 1.87,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.28
+        "price": 1.92,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.07
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.74,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.11,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.14,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.75,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -125,15 +356,15 @@
       "outcomes": [
        {
         "name": "PSG",
-        "price": 2.35
+        "price": 1.71
        },
        {
         "name": "Draw",
-        "price": 3.57
+        "price": 3.83
        },
        {
         "name": "Lyon",
-        "price": 2.89
+        "price": 4.75
        }
       ]
      },
@@ -142,13 +373,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.61
+        "price": 1.91,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.29
+        "price": 1.91,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.68
+       },
+       {
+        "name": "No",
+        "price": 2.1
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.69,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.15,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.04,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.77,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -159,7 +467,7 @@
  {
   "id": "1",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T16:00:00Z",
+  "commence_time": "2026-10-08T15:00:00Z",
   "home_team": "Real Madrid",
   "away_team": "Getafe",
   "bookmakers": [
@@ -171,15 +479,15 @@
       "outcomes": [
        {
         "name": "Real Madrid",
-        "price": 1.82
+        "price": 3.1
        },
        {
         "name": "Draw",
-        "price": 3.77
+        "price": 3.63
        },
        {
         "name": "Getafe",
-        "price": 4.04
+        "price": 2.24
        }
       ]
      },
@@ -188,13 +496,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.8
+        "price": 1.94,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.01
+        "price": 1.92,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.14
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.67,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.12,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.11,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -208,15 +593,15 @@
       "outcomes": [
        {
         "name": "Real Madrid",
-        "price": 1.84
+        "price": 3.03
        },
        {
         "name": "Draw",
-        "price": 3.98
+        "price": 3.58
        },
        {
         "name": "Getafe",
-        "price": 4.13
+        "price": 2.13
        }
       ]
      },
@@ -225,13 +610,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.82
+        "price": 1.94,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.98
+        "price": 1.84,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.76
+       },
+       {
+        "name": "No",
+        "price": 2.12
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.73,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.09,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.73,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -245,15 +707,15 @@
       "outcomes": [
        {
         "name": "Real Madrid",
-        "price": 1.74
+        "price": 3.15
        },
        {
         "name": "Draw",
-        "price": 3.9
+        "price": 3.72
        },
        {
         "name": "Getafe",
-        "price": 4.21
+        "price": 2.15
        }
       ]
      },
@@ -262,13 +724,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.79
+        "price": 1.83,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.91
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.76
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.74,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.08,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.06,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -282,15 +821,15 @@
       "outcomes": [
        {
         "name": "Real Madrid",
-        "price": 1.79
+        "price": 3.0
        },
        {
         "name": "Draw",
-        "price": 3.98
+        "price": 3.75
        },
        {
         "name": "Getafe",
-        "price": 4.21
+        "price": 2.17
        }
       ]
      },
@@ -299,13 +838,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.76
+        "price": 1.85,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.97
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.76,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.1,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.14,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.68,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -316,7 +932,7 @@
  {
   "id": "2",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T17:00:00Z",
+  "commence_time": "2026-10-08T16:00:00Z",
   "home_team": "Arsenal",
   "away_team": "Everton",
   "bookmakers": [
@@ -328,15 +944,15 @@
       "outcomes": [
        {
         "name": "Arsenal",
-        "price": 1.83
+        "price": 1.31
        },
        {
         "name": "Draw",
-        "price": 4.47
+        "price": 3.57
        },
        {
         "name": "Everton",
-        "price": 3.69
+        "price": 26.93
        }
       ]
      },
@@ -345,13 +961,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.96
+        "price": 1.86,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.9
+        "price": 1.89,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.74
+       },
+       {
+        "name": "No",
+        "price": 2.11
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.67,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.08,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -365,15 +1058,15 @@
       "outcomes": [
        {
         "name": "Arsenal",
-        "price": 1.8
+        "price": 1.37
        },
        {
         "name": "Draw",
-        "price": 4.46
+        "price": 3.5
        },
        {
         "name": "Everton",
-        "price": 3.73
+        "price": 26.33
        }
       ]
      },
@@ -382,13 +1075,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.99
+        "price": 1.9,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.85
+        "price": 1.85,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.07
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.73,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.12,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -402,15 +1172,15 @@
       "outcomes": [
        {
         "name": "Arsenal",
-        "price": 1.76
+        "price": 1.37
        },
        {
         "name": "Draw",
-        "price": 4.38
+        "price": 3.46
        },
        {
         "name": "Everton",
-        "price": 3.59
+        "price": 26.67
        }
       ]
      },
@@ -419,13 +1189,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.95
+        "price": 1.88,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.86
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.71
+       },
+       {
+        "name": "No",
+        "price": 2.13
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.08,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.06,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.73,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -439,15 +1286,15 @@
       "outcomes": [
        {
         "name": "Arsenal",
-        "price": 1.83
+        "price": 1.32
        },
        {
         "name": "Draw",
-        "price": 4.27
+        "price": 3.59
        },
        {
         "name": "Everton",
-        "price": 3.55
+        "price": 26.37
        }
       ]
      },
@@ -456,13 +1303,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.89
+        "price": 1.85,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.84
+        "price": 1.87,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.75,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.05,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.04,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -473,7 +1397,7 @@
  {
   "id": "3",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T18:00:00Z",
+  "commence_time": "2026-10-08T17:00:00Z",
   "home_team": "Inter",
   "away_team": "Torino",
   "bookmakers": [
@@ -485,15 +1409,15 @@
       "outcomes": [
        {
         "name": "Inter",
-        "price": 2.34
+        "price": 1.57
        },
        {
         "name": "Draw",
-        "price": 4.82
+        "price": 4.76
        },
        {
         "name": "Torino",
-        "price": 2.25
+        "price": 4.43
        }
       ]
      },
@@ -502,13 +1426,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.87
+        "price": 1.9,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.99
+        "price": 1.87,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.08
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.75,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.1,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.08,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -522,7 +1523,7 @@
       "outcomes": [
        {
         "name": "Inter",
-        "price": 2.38
+        "price": 1.64
        },
        {
         "name": "Draw",
@@ -530,7 +1531,7 @@
        },
        {
         "name": "Torino",
-        "price": 2.29
+        "price": 4.55
        }
       ]
      },
@@ -539,13 +1540,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.86
+        "price": 1.94,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.98
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.14
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.72,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.11,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.08,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -559,15 +1637,15 @@
       "outcomes": [
        {
         "name": "Inter",
-        "price": 2.4
+        "price": 1.64
        },
        {
         "name": "Draw",
-        "price": 4.86
+        "price": 4.81
        },
        {
         "name": "Torino",
-        "price": 2.26
+        "price": 4.54
        }
       ]
      },
@@ -576,13 +1654,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.84
+        "price": 1.9,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.88
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.68
+       },
+       {
+        "name": "No",
+        "price": 2.11
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.76,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.09,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.12,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -596,15 +1751,15 @@
       "outcomes": [
        {
         "name": "Inter",
-        "price": 2.32
+        "price": 1.6
        },
        {
         "name": "Draw",
-        "price": 4.88
+        "price": 4.7
        },
        {
         "name": "Torino",
-        "price": 2.3
+        "price": 4.44
        }
       ]
      },
@@ -613,13 +1768,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.82
+        "price": 1.9,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.97
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.71
+       },
+       {
+        "name": "No",
+        "price": 2.09
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.7,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.12,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.05,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.77,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -630,7 +1862,7 @@
  {
   "id": "4",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T19:00:00Z",
+  "commence_time": "2026-10-08T18:00:00Z",
   "home_team": "Bayern",
   "away_team": "Mainz",
   "bookmakers": [
@@ -642,15 +1874,15 @@
       "outcomes": [
        {
         "name": "Bayern",
-        "price": 2.55
+        "price": 1.71
        },
        {
         "name": "Draw",
-        "price": 5.22
+        "price": 4.75
        },
        {
         "name": "Mainz",
-        "price": 2.12
+        "price": 3.66
        }
       ]
      },
@@ -659,13 +1891,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.6
+        "price": 1.89,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.21
+        "price": 1.92,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.74
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.67,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.08,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.13,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.67,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -679,15 +1988,15 @@
       "outcomes": [
        {
         "name": "Bayern",
-        "price": 2.59
+        "price": 1.75
        },
        {
         "name": "Draw",
-        "price": 5.13
+        "price": 4.72
        },
        {
         "name": "Mainz",
-        "price": 2.05
+        "price": 3.63
        }
       ]
      },
@@ -696,13 +2005,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.59
+        "price": 1.91,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.2
+        "price": 1.89,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.76
+       },
+       {
+        "name": "No",
+        "price": 2.08
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.69,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.06,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.16,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -716,15 +2102,15 @@
       "outcomes": [
        {
         "name": "Bayern",
-        "price": 2.61
+        "price": 1.7
        },
        {
         "name": "Draw",
-        "price": 5.22
+        "price": 4.94
        },
        {
         "name": "Mainz",
-        "price": 2.07
+        "price": 3.68
        }
       ]
      },
@@ -733,13 +2119,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.6
+        "price": 1.93,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.26
+        "price": 1.83,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.74
+       },
+       {
+        "name": "No",
+        "price": 2.08
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.7,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.15,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.69,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -753,15 +2216,15 @@
       "outcomes": [
        {
         "name": "Bayern",
-        "price": 2.55
+        "price": 1.74
        },
        {
         "name": "Draw",
-        "price": 5.19
+        "price": 4.92
        },
        {
         "name": "Mainz",
-        "price": 2.09
+        "price": 3.62
        }
       ]
      },
@@ -770,13 +2233,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.58
+        "price": 1.89,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 2.18
+        "price": 1.9,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.09
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.72,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.05,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.05,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -787,7 +2327,7 @@
  {
   "id": "5",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T20:00:00Z",
+  "commence_time": "2026-10-08T19:00:00Z",
   "home_team": "Roma",
   "away_team": "Lazio",
   "bookmakers": [
@@ -799,15 +2339,15 @@
       "outcomes": [
        {
         "name": "Roma",
-        "price": 1.78
+        "price": 1.98
        },
        {
         "name": "Draw",
-        "price": 6.06
+        "price": 3.94
        },
        {
         "name": "Lazio",
-        "price": 3.05
+        "price": 3.24
        }
       ]
      },
@@ -816,13 +2356,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 2.15
+        "price": 1.84,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.64
+        "price": 1.9,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.05
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.15,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.05,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.7,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -836,15 +2453,15 @@
       "outcomes": [
        {
         "name": "Roma",
-        "price": 1.72
+        "price": 1.97
        },
        {
         "name": "Draw",
-        "price": 6.17
+        "price": 3.88
        },
        {
         "name": "Lazio",
-        "price": 3.21
+        "price": 3.31
        }
       ]
      },
@@ -853,13 +2470,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 2.19
+        "price": 1.89,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.66
+        "price": 1.88,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.72
+       },
+       {
+        "name": "No",
+        "price": 2.12
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.15,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.13,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.68,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -873,15 +2567,15 @@
       "outcomes": [
        {
         "name": "Roma",
-        "price": 1.73
+        "price": 2.06
        },
        {
         "name": "Draw",
-        "price": 5.96
+        "price": 3.92
        },
        {
         "name": "Lazio",
-        "price": 3.09
+        "price": 3.15
        }
       ]
      },
@@ -890,13 +2584,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 2.18
+        "price": 1.83,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.62
+        "price": 1.86,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.76
+       },
+       {
+        "name": "No",
+        "price": 2.05
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.67,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.14,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -910,15 +2681,15 @@
       "outcomes": [
        {
         "name": "Roma",
-        "price": 1.72
+        "price": 1.99
        },
        {
         "name": "Draw",
-        "price": 6.0
+        "price": 3.99
        },
        {
         "name": "Lazio",
-        "price": 3.19
+        "price": 3.31
        }
       ]
      },
@@ -927,13 +2698,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 2.18
+        "price": 1.87,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.63
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.76
+       },
+       {
+        "name": "No",
+        "price": 2.11
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.71,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.05,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.75,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -944,7 +2792,7 @@
  {
   "id": "6",
   "sport_title": "Football",
-  "commence_time": "2026-10-08T15:00:00Z",
+  "commence_time": "2026-10-08T20:00:00Z",
   "home_team": "Porto",
   "away_team": "Braga",
   "bookmakers": [
@@ -956,15 +2804,15 @@
       "outcomes": [
        {
         "name": "Porto",
-        "price": 1.69
+        "price": 1.7
        },
        {
         "name": "Draw",
-        "price": 3.45
+        "price": 4.15
        },
        {
         "name": "Braga",
-        "price": 5.61
+        "price": 4.2
        }
       ]
      },
@@ -973,13 +2821,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.96
+        "price": 1.86,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.74
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.7
+       },
+       {
+        "name": "No",
+        "price": 2.1
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.7,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.13,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.09,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -993,15 +2918,15 @@
       "outcomes": [
        {
         "name": "Porto",
-        "price": 1.69
+        "price": 1.79
        },
        {
         "name": "Draw",
-        "price": 3.35
+        "price": 4.19
        },
        {
         "name": "Braga",
-        "price": 5.7
+        "price": 4.12
        }
       ]
      },
@@ -1010,13 +2935,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 2.01
+        "price": 1.86,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.78
+        "price": 1.92,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.08
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.76,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.14,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.08,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -1030,15 +3032,15 @@
       "outcomes": [
        {
         "name": "Porto",
-        "price": 1.67
+        "price": 1.77
        },
        {
         "name": "Draw",
-        "price": 3.38
+        "price": 4.05
        },
        {
         "name": "Braga",
-        "price": 5.4
+        "price": 4.2
        }
       ]
      },
@@ -1047,13 +3049,90 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 1.95
+        "price": 1.86,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.76
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.75
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.76,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.08,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.68,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
@@ -1067,15 +3146,15 @@
       "outcomes": [
        {
         "name": "Porto",
-        "price": 1.67
+        "price": 1.76
        },
        {
         "name": "Draw",
-        "price": 3.38
+        "price": 4.19
        },
        {
         "name": "Braga",
-        "price": 5.52
+        "price": 4.13
        }
       ]
      },
@@ -1084,13 +3163,2415 @@
       "outcomes": [
        {
         "name": "Over",
-        "point": 2.5,
-        "price": 2.01
+        "price": 1.87,
+        "point": 2.5
        },
        {
         "name": "Under",
-        "point": 2.5,
-        "price": 1.81
+        "price": 1.9,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.14
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.1,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.05,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "7",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T21:00:00Z",
+  "home_team": "Milan",
+  "away_team": "Genoa",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Milan",
+        "price": 1.62
+       },
+       {
+        "name": "Draw",
+        "price": 4.42
+       },
+       {
+        "name": "Genoa",
+        "price": 5.21
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.72
+       },
+       {
+        "name": "No",
+        "price": 2.06
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.95,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.08,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.11,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Milan",
+        "price": 1.62
+       },
+       {
+        "name": "Draw",
+        "price": 4.33
+       },
+       {
+        "name": "Genoa",
+        "price": 5.15
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.74
+       },
+       {
+        "name": "No",
+        "price": 2.12
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.74,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.1,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.16,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.67,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Milan",
+        "price": 1.57
+       },
+       {
+        "name": "Draw",
+        "price": 4.25
+       },
+       {
+        "name": "Genoa",
+        "price": 5.13
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.7
+       },
+       {
+        "name": "No",
+        "price": 2.12
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.75,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.13,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.16,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Milan",
+        "price": 1.54
+       },
+       {
+        "name": "Draw",
+        "price": 4.33
+       },
+       {
+        "name": "Genoa",
+        "price": 5.17
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.07
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.7,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.08,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.83,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "8",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T14:00:00Z",
+  "home_team": "Ajax",
+  "away_team": "PSV",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Ajax",
+        "price": 2.92
+       },
+       {
+        "name": "Draw",
+        "price": 3.76
+       },
+       {
+        "name": "PSV",
+        "price": 2.25
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.83,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.15
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.72,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.15,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Ajax",
+        "price": 2.99
+       },
+       {
+        "name": "Draw",
+        "price": 3.71
+       },
+       {
+        "name": "PSV",
+        "price": 2.27
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.76
+       },
+       {
+        "name": "No",
+        "price": 2.04
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.73,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.09,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.15,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.73,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Ajax",
+        "price": 2.84
+       },
+       {
+        "name": "Draw",
+        "price": 3.64
+       },
+       {
+        "name": "PSV",
+        "price": 2.21
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.71
+       },
+       {
+        "name": "No",
+        "price": 2.1
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.7,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.05,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.89,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Ajax",
+        "price": 2.96
+       },
+       {
+        "name": "Draw",
+        "price": 3.74
+       },
+       {
+        "name": "PSV",
+        "price": 2.28
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.68
+       },
+       {
+        "name": "No",
+        "price": 2.12
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.74,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.15,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.11,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "9",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T15:00:00Z",
+  "home_team": "Benfica",
+  "away_team": "Sporting",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Benfica",
+        "price": 1.66
+       },
+       {
+        "name": "Draw",
+        "price": 5.17
+       },
+       {
+        "name": "Sporting",
+        "price": 4.05
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.07
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.7,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.06,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.09,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Benfica",
+        "price": 1.58
+       },
+       {
+        "name": "Draw",
+        "price": 5.04
+       },
+       {
+        "name": "Sporting",
+        "price": 3.97
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.14
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.74,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.12,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.76,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Benfica",
+        "price": 1.67
+       },
+       {
+        "name": "Draw",
+        "price": 5.25
+       },
+       {
+        "name": "Sporting",
+        "price": 4.11
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.08
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.73,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.12,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.16,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Benfica",
+        "price": 1.67
+       },
+       {
+        "name": "Draw",
+        "price": 5.1
+       },
+       {
+        "name": "Sporting",
+        "price": 4.1
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.06
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.67,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.1,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.1,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "10",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T16:00:00Z",
+  "home_team": "Lille",
+  "away_team": "Nice",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Lille",
+        "price": 1.83
+       },
+       {
+        "name": "Draw",
+        "price": 3.49
+       },
+       {
+        "name": "Nice",
+        "price": 4.41
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.16
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.89,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.11,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.13,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.74,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Lille",
+        "price": 1.85
+       },
+       {
+        "name": "Draw",
+        "price": 3.36
+       },
+       {
+        "name": "Nice",
+        "price": 4.56
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.67
+       },
+       {
+        "name": "No",
+        "price": 2.05
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.73,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.14,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.06,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Lille",
+        "price": 1.88
+       },
+       {
+        "name": "Draw",
+        "price": 3.36
+       },
+       {
+        "name": "Nice",
+        "price": 4.39
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.07
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.85,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.11,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.16,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Lille",
+        "price": 1.85
+       },
+       {
+        "name": "Draw",
+        "price": 3.44
+       },
+       {
+        "name": "Nice",
+        "price": 4.62
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.91,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.9,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.72
+       },
+       {
+        "name": "No",
+        "price": 2.07
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.83,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.07,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.7,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "11",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T17:00:00Z",
+  "home_team": "Betis",
+  "away_team": "Sevilla",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Betis",
+        "price": 2.1
+       },
+       {
+        "name": "Draw",
+        "price": 3.94
+       },
+       {
+        "name": "Sevilla",
+        "price": 3.03
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.93,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.73
+       },
+       {
+        "name": "No",
+        "price": 2.09
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.86,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.74,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.04,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.13,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.69,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.86,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Betis",
+        "price": 2.1
+       },
+       {
+        "name": "Draw",
+        "price": 3.84
+       },
+       {
+        "name": "Sevilla",
+        "price": 2.92
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.87,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.85,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.08
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.13,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.04,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.71,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.94,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Betis",
+        "price": 2.13
+       },
+       {
+        "name": "Draw",
+        "price": 4.02
+       },
+       {
+        "name": "Sevilla",
+        "price": 2.96
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.84,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.84,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.7
+       },
+       {
+        "name": "No",
+        "price": 2.11
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.71,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.07,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.11,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.68,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.92,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.91,
+        "point": 1.5,
+        "description": "Casemiro"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Betis",
+        "price": 2.15
+       },
+       {
+        "name": "Draw",
+        "price": 3.91
+       },
+       {
+        "name": "Sevilla",
+        "price": 2.92
+       }
+      ]
+     },
+     {
+      "key": "totals",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.93,
+        "point": 2.5
+       },
+       {
+        "name": "Under",
+        "price": 1.87,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "btts",
+      "outcomes": [
+       {
+        "name": "Yes",
+        "price": 1.69
+       },
+       {
+        "name": "No",
+        "price": 2.13
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_corners",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.94,
+        "point": 9.5
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 9.5
+       }
+      ]
+     },
+     {
+      "key": "alternate_totals_cards",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.68,
+        "point": 3.5
+       },
+       {
+        "name": "Under",
+        "price": 2.05,
+        "point": 3.5
+       }
+      ]
+     },
+     {
+      "key": "player_shots_on_target",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 2.07,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       },
+       {
+        "name": "Under",
+        "price": 1.72,
+        "point": 1.5,
+        "description": "Mbapp\u00e9"
+       }
+      ]
+     },
+     {
+      "key": "player_fouls",
+      "outcomes": [
+       {
+        "name": "Over",
+        "price": 1.9,
+        "point": 1.5,
+        "description": "Casemiro"
+       },
+       {
+        "name": "Under",
+        "price": 1.88,
+        "point": 1.5,
+        "description": "Casemiro"
        }
       ]
      }
