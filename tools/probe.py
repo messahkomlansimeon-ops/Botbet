@@ -78,19 +78,23 @@ def probe_bookmaker():
 
 
 def probe_apif_world():
-    """API-Football gratuit : derniers matchs d'une équipe sans saison, et statistiques groupées par ids."""
+    """API-Football gratuit : liste d'un jour passé, puis statistiques groupées par ids (2 requêtes)."""
     key = os.environ.get("STATS_API_KEY")
     if not key:
         return 0
     h = {"x-apisports-key": key}
     out = {}
-    r = fetch("apif_team_last", "https://v3.football.api-sports.io/fixtures", headers=h, params={"team": 127, "last": 12})
+    r = fetch("apif_day_past", "https://v3.football.api-sports.io/fixtures", headers=h,
+              params={"date": "2026-10-04", "timezone": "UTC"})
     ids = []
     if r is not None:
         body = r.json() if r.ok else {}
         resp = body.get("response") or []
-        ids = [f["fixture"]["id"] for f in resp if (f.get("fixture", {}).get("status") or {}).get("short") in ("FT", "AET", "PEN")][:3]
-        out["team_last"] = {"status": r.status_code, "errors": body.get("errors"), "n": len(resp), "finished_ids": ids}
+        fin = [f for f in resp if (f.get("fixture", {}).get("status") or {}).get("short") in ("FT", "AET", "PEN")]
+        big = [f for f in fin if f.get("league", {}).get("country") in ("Brazil", "England", "Spain", "Argentina")]
+        ids = [f["fixture"]["id"] for f in (big or fin)][:3]
+        out["day_past"] = {"status": r.status_code, "errors": body.get("errors"), "n": len(resp), "finished": len(fin),
+                           "sample": [(f["league"]["name"], f["teams"]["home"]["name"], f["teams"]["away"]["name"]) for f in (big or fin)[:3]]}
     if ids:
         r = fetch("apif_ids", "https://v3.football.api-sports.io/fixtures", headers=h, params={"ids": "-".join(map(str, ids))})
         if r is not None:
