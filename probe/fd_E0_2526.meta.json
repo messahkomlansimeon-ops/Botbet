@@ -1,0 +1,11 @@
+{
+ "url": "https://football-data.co.uk/mmz4281/2526/E0.csv",
+ "status": 200,
+ "headers": {
+  "Content-Type": "text/csv",
+  "X-WS-Origin": "available",
+  "X-WS-RateLimit-Limit": "1000",
+  "X-WS-RateLimit-Remaining": "999",
+  "Server": "Apache"
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "url": "https://fbref.com/en/comps/9/shooting/Premier-League-Stats",
+ "status": 403,
+ "headers": {
+  "Content-Type": "text/html; charset=UTF-8",
+  "Cf-Mitigated": "challenge",
+  "Server": "cloudflare",
+  "Server-Timing": "chlray;desc=\"a474c4e4af8ec044\"",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "SAMEORIGIN",
+  "CF-RAY": "a474c4e4af8ec044-LAX"
+ }
+}
