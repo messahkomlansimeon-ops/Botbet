@@ -1,34 +1,102 @@
 {
  "day_past": {
+  "date": "2026-10-07",
   "status": 200,
   "errors": [],
   "n": 233,
   "finished": 225,
-  "sample": [
-   [
-    "Serie B",
-    "Ponte Preta",
-    "Juventude"
-   ],
-   [
-    "Segunda División RFEF - Group 5",
-    "Real Madrid III",
-    "Guadalajara"
-   ],
-   [
-    "Reserve League",
-    "Aldosivi Res.",
-    "Tigre Res."
-   ]
-  ]
+  "kept_by_apileagues": 16,
+  "leagues": {
+   "Italy | Coppa Italia Serie D": 31,
+   "Turkey | Türkiye Kupası": 24,
+   "Albania | Cup": 13,
+   "Japan | Emperor Cup": 10,
+   "Scotland | Football League - Highland League": 9,
+   "Venezuela | Copa Venezuela": 8,
+   "Brazil | Copa do Brasil U20": 7,
+   "Brazil | Serie B": 6,
+   "Greece | Gamma Ethniki - Group 10": 6,
+   "Ukraine | U19 League": 5,
+   "Bulgaria | Third League - Southwest": 5,
+   "Argentina | Reserve League": 5,
+   "Brazil | Goiano - 2": 5,
+   "Brazil | Serie A": 5,
+   "South-Korea | WK-League": 4,
+   "Uganda | Premier League": 4,
+   "Egypt | League Cup": 4,
+   "Peru | Segunda División": 4,
+   "Brazil | Brasileiro U17": 4,
+   "China | League Two": 3,
+   "China | League One": 3,
+   "Uzbekistan | Pro League A": 3,
+   "World | ASEAN Club Championship": 3,
+   "Algeria | Ligue 1": 3,
+   "Bolivia | Copa de la División Profesional": 2,
+   "World | Friendlies": 2,
+   "Canada | Canadian Premier League": 2,
+   "Switzerland | 1. Liga Classic - Group 3": 2,
+   "Brazil | Gaúcho - 3": 2,
+   "Uruguay | Copa Uruguay": 2,
+   "Ecuador | Liga Pro Serie B": 2,
+   "Colombia | Primera B": 2,
+   "Chile | Copa Chile": 2,
+   "Brazil | Piauiense - 2": 2,
+   "USA | USL League One": 2,
+   "Nicaragua | Primera Division": 1,
+   "USA | Major League Soccer": 1,
+   "World | CONCACAF Nations League": 1,
+   "Czech-Republic | 3. liga - CFL B": 1,
+   "Spain | Segunda División RFEF - Group 5": 1,
+   "Turkmenistan | Ýokary Liga": 1,
+   "Azerbaijan | Birinci Dasta": 1,
+   "Poland | Central Youth League": 1,
+   "Italy | Serie D - Girone A": 1,
+   "Zimbabwe | Premier Soccer League": 1,
+   "Lesotho | Premier League": 1,
+   "Uzbekistan | Super League": 1,
+   "Jordan | Cup": 1,
+   "Angola | Girabola": 1,
+   "Iraq | Iraqi League": 1,
+   "Nigeria | NPFL": 1,
+   "Estonia | Cup": 1,
+   "World | Friendlies Women": 1,
+   "Ivory-Coast | Ligue 1": 1,
+   "Serbia | U19 league": 1,
+   "Finland | Veikkausliiga": 1,
+   "Finland | Ykkönen": 1,
+   "Germany | Oberliga - Baden-Württemberg": 1,
+   "Belgium | First Amateur Division": 1,
+   "Spain | Tercera División RFEF - Group 7": 1,
+   "Spain | Primera División RFEF - Group 2": 1,
+   "England | Non League Premier - Northern": 1,
+   "England | Non League Premier - Southern South": 1,
+   "Brazil | Paraibano 2": 1
+  }
  },
- "ids": {
+ "statistics": {
   "status": 200,
-  "errors": {
-   "plan": "Free plans do not have access to the Ids parameter."
-  },
-  "n": 0,
-  "with_statistics": 0,
-  "stat_types": []
+  "errors": [],
+  "league": "Friendlies",
+  "teams": 2,
+  "types": [
+   "Ball Possession",
+   "Blocked Shots",
+   "Corner Kicks",
+   "Fouls",
+   "Goalkeeper Saves",
+   "Offsides",
+   "Passes %",
+   "Passes accurate",
+   "Red Cards",
+   "Shots insidebox",
+   "Shots off Goal",
+   "Shots on Goal",
+   "Shots outsidebox",
+   "Total Shots",
+   "Total passes",
+   "Yellow Cards",
+   "expected_goals",
+   "goals_prevented"
+  ]
  }
 }

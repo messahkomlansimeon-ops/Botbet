@@ -6,8 +6,9 @@
    Allocation du jour : 19 crédits (matin 11, clôture 7), 24 jour(s) avant la remise à zéro (jour 1 du mois ; forfait 500/mois)
    Ligues avec matchs aujourd'hui (gratuit) : soccer_finland_veikkausliiga (1), soccer_league_of_ireland (1), soccer_brazil_campeonato (2), soccer_brazil_serie_b (2)
    Payées ce matin dans cet ordre (région, ligues majeures, nombre de matchs) : soccer_finland_veikkausliiga, soccer_league_of_ireland, soccer_brazil_campeonato, soccer_brazil_serie_b
-✅ API-Football : plan Free, requêtes aujourd'hui 2/100 (Kelly s'arrête à 90)
-   Stats mondiales : 0 équipes couvertes sur 0 suivies (maj ?), 0/60 requêtes de profils aujourd'hui, 30 gardées pour le règlement
+✅ API-Football : plan Free, requêtes aujourd'hui 3/100 (Kelly s'arrête à 90)
+   Stats mondiales (accumulation jour après jour, forfait gratuit) : 0 équipes suivies, 0 avec 3+ matchs (utilisables), 0 avec 6+ (bonnes) · aucun passage du matin enregistré
+   0/55 requêtes de profils aujourd'hui, 30 gardées pour le règlement
 📡 Sources de stats
 ⚪ football-data : pas encore lancée
 ⚪ Understat : pas encore lancée

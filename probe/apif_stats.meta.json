@@ -1,0 +1,14 @@
+{
+ "url": "https://v3.football.api-sports.io/fixtures/statistics?fixture=1629007",
+ "status": 200,
+ "headers": {
+  "Content-Type": "application/json",
+  "Server": "cloudflare",
+  "x-ratelimit-limit": "10",
+  "x-ratelimit-remaining": "8",
+  "x-ratelimit-requests-limit": "100",
+  "x-ratelimit-requests-remaining": "95",
+  "cf-cache-status": "DYNAMIC",
+  "CF-RAY": "a47655938d7574a7-YYZ"
+ }
+}
