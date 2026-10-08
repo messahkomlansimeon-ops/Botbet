@@ -1,26 +1,32 @@
 # Kelly
 
-Kelly est un bot Telegram personnel de paris sportifs (et oui, elle mise selon le critère de Kelly). Chaque matin elle règle les paris de la veille, dresse le bilan, apprend de la cote de clôture, puis envoie le pari du jour et des combinés agressifs construits en priorité sur les marchés que les bookmakers pricent mal.
+Kelly est un bot Telegram personnel de paris sportifs (et oui, elle mise selon le critère de Kelly). Chaque matin elle règle les paris de la veille, dresse le bilan, apprend de la cote de clôture, fait le **tour du monde** des matchs du jour (Europe, Amériques, Asie, Afrique, sélections : même un jour sans grand championnat), puis envoie le pari du jour et des combinés agressifs construits en priorité sur les marchés que les bookmakers pricent mal. Pour les matchs que le budget de cotes ne couvre pas, elle donne ses propres **pronostics avec la « cote juste »** (sans cote de bookmaker) à comparer chez 1xBet.
 
 ## Ce qu'il envoie
 
 **08:00 (Abidjan)**
 - 📋 Résultats des paris d'hier, 📊 bilan (taux de réussite, rendement, CLV, par palier et par marché), 💼 bankroll, 🧠 ce qu'elle a appris.
+- 🌍 **Tour du monde** : nombre de matchs du jour par région, affiches notables, ligues payées en cotes réelles (💳) et ce qui est analysé gratuitement. Jamais vide : un jour où rien ne joue nulle part, elle le dit en une ligne avec les prochains jours de matchs.
 - ⭐ Pari du jour.
 - 📡 L'état des sources de stats gratuites (une ligne par source) et le nombre de matchs couverts par les stats d'avant-match.
 - 🛡️ **Sûr** (cote 5 à 7), ⚖️ **Costaud** (12 à 20), 🎯 **Spécial corners/cartons** (6 à 15, uniquement corners, cartons et stats joueurs : les marchés les plus mal pricés), 🔥 **Méchant** (40 à 80), 💀 **Monstre** (150+). Le nombre de matchs est libre : il prend la combinaison la plus probable qui atteint la cote visée, un seul pari par match. Chaque combiné vient avec une mise conseillée.
+- 🎲 **Pronostics Kelly (sans cote de bookmaker)** : pour les matchs hors budget de cotes, la probabilité de Kelly et la « cote juste » (1 ÷ proba) en plus de buts, les 2 équipes marquent, double chance, corners et cartons, avec la phrase « compare chez 1xBet : joue si la cote ≥ X ». Ils n'entrent dans aucun combiné et ne sont pas des paris envoyés (pas de cote de clôture), mais leurs résultats sont réglés gratuitement pour mesurer si les probabilités de Kelly sont justes.
 
 **De 11:05 à 22:05 (UTC), chaque heure** : relevé de la cote de clôture des paris **envoyés** dont le match démarre dans les 90 minutes (voir « Forfait gratuit »), et 🚨 alerte si une cote chute brutalement sur les matchs relevés (l'argent des parieurs pros). Les alertes ne viennent donc que de ces passages : pas de balayage large ni de relevé du soir sur forfait gratuit.
 
 ## Commandes Telegram
 `/bilan [jours]`, `/match PSG`, `/combi 30` (combiné sur mesure à la cote visée), `/top`, `/bank 50000` (règle ta bankroll), `/aide`. Seul ton chat est écouté.
+- `/monde [région]` : tous les matchs du jour dans le monde, par région et par ligue (relevé gratuit de 08:00, mis en cache : aucun appel réseau). Région facultative : `europe`, `ameriques`, `asie`, `afrique`, `international`. 💳 = ligue payée en cotes réelles aujourd'hui.
+- `/ligues` : le catalogue des ligues suivies par région, avec celles payées en cotes réelles aujourd'hui (💳), celles qui jouent et sont analysées gratuitement (⚽), celles en saison sans match (·) et celles hors saison (💤). `/match` et `/top` montrent aussi les pronostics sans cote quand il n'y a pas de cote réelle.
 - `/stats <équipe>` (ex. `/stats Arsenal`) : corners, cartons, tirs, tirs cadrés, fautes et buts pour et contre sur les 10 derniers matchs, à domicile et à l'extérieur, et la forme xG. Marche à toute heure (profils commités dans `data/`).
 - `/analyse <match>` (ex. `/analyse Arsenal`) : tous les chiffres d'avant-match d'un match du jour (corners, cartons, fautes, tirs, buts et xG attendus) puis ses meilleurs paris avec leur « pourquoi » et l'écart modèle-ligne.
 
 Les commandes sont lues à chaque passage de GitHub Actions (08:00 puis chaque heure de 11:05 à 22:05) : réponse dans l'heure en journée, au matin pour celles de la nuit. Pour des réponses instantanées, lance `python bot.py --serve` sur un petit serveur. `/bilan` inclut aussi le message 🧠.
 
 ## Comment il choisit
-Sports : football (5 grands championnats + Ligue des champions par défaut ; NBA, tennis et autres ligues en les ajoutant à `SPORTS`). Marchés : 1N2, buts/points, handicap, les 2 équipes marquent, double chance, corners, cartons, tirs, tirs cadrés, fautes, points/rebonds/passes/3 pts des joueurs NBA.
+Sports : football, dans un **catalogue mondial** (`config.CATALOGUE`, une cinquantaine de clés The Odds API, par région : Europe, Amériques, Asie/Océanie, Afrique, sélections). Une clé inconnue ou hors saison est ignorée (Kelly ne garde que l'intersection avec `/sports`, gratuit). NBA, tennis et autres sports s'ajoutent via `SPORTS_EXTRA`. Marchés : 1N2, buts/points, handicap, les 2 équipes marquent, double chance, corners, cartons, tirs, tirs cadrés, fautes, points/rebonds/passes/3 pts des joueurs NBA.
+
+**Quelles ligues sont payées en cotes réelles** (au plus `MAX_SPORTS` = 6 par jour, le budget de crédits est la vraie limite) : seules les ligues qui jouent aujourd'hui (relevé gratuit `/events`), dans cet ordre : région (Europe, Amériques, Asie/Océanie, Afrique, sélections), puis dans la région les grandes affiches (5 grands championnats, coupes d'Europe), les ligues majeures, les 2es divisions et petits championnats, puis le nombre de matchs. **Les jours sans grande affiche européenne (trêve internationale), les sélections (Ligue des nations, qualifications, amicaux) passent en tête** : ce sont les seuls gros matchs. Marchés vedettes (`h2h,totals`, 2 crédits par ligue) pour la plupart des ligues ; corners et cartons seulement pour les meilleurs matchs qui ont un profil football-data (c'est là que Kelly a un modèle). Si aucun match payé n'a de profil, la moitié du budget gardée pour les corners va à d'autres ligues.
 
 Chaque pari reçoit un score :
 1. **Valeur** : la meilleure cote du marché face au consensus des autres books (un book en retard = opportunité).
@@ -42,6 +48,17 @@ Chaque pari reçoit un score :
 
 Le message indique pour chaque pari les signaux détectés. Ce n'est pas de la voyance : Kelly cherche les endroits où les bookmakers se trompent entre eux, et mesure honnêtement si elle a raison.
 
+## Tour du monde et pronostics sans cote
+Chaque matin, avant de dépenser un seul crédit, Kelly relève gratuitement les matchs de toutes les ligues du catalogue en saison (`/sports` puis `/events` : 0 crédit, au plus 150 s, dans l'ordre de priorité) et les écrit dans `data/monde.json` (petit : ~3 à 15 Ko). Ce cache alimente le message 🌍 du matin, `/monde` et `/ligues`, sans aucun appel réseau pendant la journée. Matchs africains : si `STATS_API_KEY` est présente, la liste du jour d'API-Football (1 requête, la même que celle du règlement) ajoute les championnats nationaux africains et les compétitions CAF, sans cotes ni stats.
+
+Les matchs que le budget ne couvre pas sont analysés gratuitement (`kelly/fair.py`), avec les mêmes chiffres que le modèle des cotes :
+- **football-data** : profils des 5 grandes ligues (tirs, corners, cartons, fautes), des 2es divisions et petits championnats européens (buts, corners, cartons) et des fichiers « new leagues » (Brésil, Argentine, USA, Mexique, Japon, Chine, Scandinavie, Autriche, Suisse, Pologne, Irlande, Finlande : buts seulement, un fichier par pays). Au moins 5 matchs récents par équipe.
+- **API-Football** (repli, dans son quota) : moyennes de corners et cartons pour 2 matchs sans profil au plus, en gardant 30 requêtes du jour pour le règlement.
+- Modèle de Poisson : plus/moins 1.5, 2.5 et 3.5 buts, les 2 équipes marquent, double chance, corners (7.5 à 12.5), cartons (2.5 à 6.5). Pour chaque marché Kelly garde la ligne dont la proba est la plus proche de 65 % (entre 55 et 80 % : en dessous c'est du hasard, au-dessus la cote juste est trop basse pour être jouée). La proba est rapprochée de 50 % (×0.9, le Poisson est trop sûr de lui) ; **cote juste = 1 ÷ proba** ; « joue si la cote ≥ X » ajoute 5 % de marge de sécurité. Les sélections nationales n'ont pas de profil : pas de pronostic chiffré, elles sont seulement listées.
+- Ces pronostics sont **fantômes** : pas de combiné, pas de cote de clôture, pas d'apprentissage. Les `FAIR_TRACK` (12) meilleurs du jour sont gardés 10 jours dans `data/fair.json`, réglés gratuitement (API-Football puis CSV football-data, comme les paris) et résumés le matin et dans `/bilan` (« 5/8 gagnés pour une proba annoncée moyenne de 64 % »).
+
+Durées : relevé gratuit ≤ 150 s (`SCAN_SECONDS`), téléchargements de stats ≤ 420 s (`SOURCES_SECONDS`, le reste est repris au passage suivant), calcul des pronostics local : le passage de 08:00 reste très en dessous des 15 minutes du workflow, même cache froid.
+
 ## Mises
 Kelly fractionnaire (1/4), plafonné : 5 % de la bankroll max sur le Sûr, 2 % Costaud, 1,5 % Spécial, 1 % Méchant, 0,5 % Monstre. La bankroll est mise à jour avec les résultats des combinés. Après 5 combinés perdus d'affilée, il te dit de lever le pied.
 
@@ -52,9 +69,9 @@ Secrets GitHub (Settings > Secrets and variables > Actions) : `ODDS_API_KEY` (th
 Kelly est réglée pour tourner **tout le mois** sur les forfaits gratuits : The Odds API 500 crédits/mois, API-Football 100 requêtes/jour, GitHub Actions 2 000 minutes/mois (dépôt privé).
 
 **Crédits The Odds API** (`kelly/budget.py`). Chaque appel d'un endpoint de cotes coûte *marchés × régions* (`/sports` et `/events` sont gratuits). Kelly divise les crédits restants par le nombre de jours avant la remise à zéro (500 le 1er = 16 par jour) et répartit cette allocation : 60 % le matin, 40 % pour la clôture. Ce qui n'est pas dépensé un jour s'ajoute aux jours suivants (week-ends chargés en matchs). Un appel refusé par le budget est sauté avec un message dans les logs, jamais une erreur. L'état est dans `data/budget.json`, commité par le workflow. Le matin :
-1. l'endpoint gratuit `/events` dit quelles ligues jouent : une ligue sans match ne coûte rien ;
-2. marchés vedettes (`h2h,totals`, 2 crédits par ligue, tous ses matchs d'un coup) pour les ligues les plus chargées, au plus la moitié du budget du matin ;
-3. le reste va aux marchés mal pricés, dans l'ordre : corners, cartons, puis les 2 équipes marquent, tirs cadrés, tirs, double chance, sur les matchs les mieux cotés.
+1. le relevé gratuit `/events` dit quelles ligues jouent : une ligue sans match ne coûte rien ;
+2. marchés vedettes (`h2h,totals`, 2 crédits par ligue, tous ses matchs d'un coup) pour les ligues les plus prioritaires (voir « Comment il choisit »), au plus la moitié du budget du matin tant que des corners/cartons sont à acheter ;
+3. le reste va aux marchés mal pricés, dans l'ordre : corners, cartons, puis les 2 équipes marquent, tirs cadrés, tirs, double chance, sur les meilleurs matchs **qui ont un profil football-data**. Les matchs sans cote sont analysés gratuitement (pronostics sans cote).
 
 **Clôture** (passages horaires) : seuls les paris envoyés sont relevés, le Sûr d'abord. Une ligue avec au moins 2 matchs à relever : un seul appel groupé ; sinon un appel par match, seulement les marchés envoyés. Sous le plancher `MIN_CREDITS` (30), le matin ne dépense plus : la réserve sert à clôturer les paris déjà envoyés.
 
@@ -64,7 +81,7 @@ Kelly est réglée pour tourner **tout le mois** sur les forfaits gratuits : The
 
 **Minutes GitHub** : un seul workflow (`.github/workflows/kelly.yml`) : 08:00 `--daily`, puis chaque heure de 11:05 à 22:05 (UTC) `--track`, suivis de `--commands`. Environ 13 passages d'une minute par jour (le passage de 08:00 dure 1 à 3 minutes avec les sources), soit ~450 minutes par mois.
 
-Pour passer en payant : relève `ODDS_MONTHLY_CREDITS` (et ajuste `ODDS_RESET_DAY`, le jour du mois où tes crédits sont remis à zéro) dans le workflow, `MAX_SPORTS` et `PROP_EVENTS` pour plus de ligues et de matchs détaillés, remets `basketball_nba` (ou `tennis_`) dans `SPORTS`, `CLOSE_GHOSTS=1` pour clôturer aussi les fantômes, et réactive les alertes larges avec `BUDGET_SHARES=daily=0.5,closing=0.3,alert=0.1,snapshot=0.1` puis des passages `python bot.py --alert` / `--snapshot` dans le workflow.
+Pour passer en payant : relève `ODDS_MONTHLY_CREDITS` (et ajuste `ODDS_RESET_DAY`, le jour du mois où tes crédits sont remis à zéro) dans le workflow, `MAX_SPORTS` et `PROP_EVENTS` pour plus de ligues et de matchs détaillés, ajoute `basketball_nba` (ou `tennis_`) avec `SPORTS_EXTRA` (la variable `SPORTS` remplace tout le catalogue), `CLOSE_GHOSTS=1` pour clôturer aussi les fantômes, et réactive les alertes larges avec `BUDGET_SHARES=daily=0.5,closing=0.3,alert=0.1,snapshot=0.1` puis des passages `python bot.py --alert` / `--snapshot` dans le workflow.
 
 ## Vérifier l'installation
 Onglet **Actions** → workflow « Kelly » → **Run workflow** → mode `check` (les autres modes : `daily`, `track`, `commands`). Kelly vérifie les trois clés (sans dépenser de crédits de cotes), affiche les crédits restants, l'allocation du jour, le nombre de jours avant la remise à zéro, le quota API-Football du jour et les ligues qui ont des matchs aujourd'hui, puis t'envoie « ✅ Kelly est en ligne » sur Telegram. Si le message n'arrive pas, envoie d'abord `/start` à ton bot.
@@ -75,10 +92,10 @@ pip install -r requirements.txt
 python bot.py --sample          # journée fictive
 python -m tests.test_stats      # stats API-Football (quota, noms) et estimations d'avant-match (sources d'abord, tirs des joueurs, xG)
 python -m tests.test_sources    # sources gratuites (faux réseau), amorçage historique, sonde
-python -m tests.test_bot        # tout le flux : budget de crédits, journée type, clôture, apprentissage et amorçage, règlement gratuit (API-Football, football-data), bilan, calibration, commandes, combiné spécial
+python -m tests.test_bot        # tout le flux : budget de crédits, journée type, clôture, apprentissage et amorçage, règlement gratuit (API-Football, football-data), bilan, calibration, commandes, combiné spécial, catalogue et priorités (trêve internationale), budget avec beaucoup de ligues, pronostics sans cote, message du matin toujours utile, /monde et /ligues, Afrique
 ```
 
 ## Fichiers
-`kelly/odds.py` cotes et sélections · `budget.py` budget mensuel de crédits · `combos.py` combinés · `track.py` suivi des paris et clôture · `learn.py` apprentissage · `bootstrap.py` amorçage par l'historique football-data · `stats.py` API-Football et estimations d'avant-match · `prematch.py` modèle Poisson (corners, cartons, tirs, buts) · `sources/` football-data, Understat, FBref · `settle.py` règlement et bilan · `bankroll.py` mises · `telegram.py` envoi et commandes · `app.py` orchestration · `data/` paris suivis, combinés, historique des cotes, modèle, bankroll, budget de crédits, profils de sources et amorçage (commités par le workflow). `tools/probe.py` : sonde des sources.
+`kelly/config.py` réglages et catalogue des ligues · `catalogue.py` régions et priorités · `monde.py` tour du monde, `/monde`, `/ligues` · `fair.py` pronostics sans cote · `kelly/odds.py` relevé gratuit, cotes et sélections · `budget.py` budget mensuel de crédits · `combos.py` combinés · `track.py` suivi des paris et clôture · `learn.py` apprentissage · `bootstrap.py` amorçage par l'historique football-data · `stats.py` API-Football et estimations d'avant-match · `prematch.py` modèle Poisson (corners, cartons, tirs, buts) · `sources/` football-data, Understat, FBref · `settle.py` règlement et bilan · `bankroll.py` mises · `telegram.py` envoi et commandes · `app.py` orchestration · `data/` paris suivis, combinés, tour du monde du jour (`monde.json`), pronostics sans cote (`fair.json`), historique des cotes, modèle, bankroll, budget de crédits, profils de sources et amorçage (commités par le workflow). `tools/probe.py` : sonde des sources.
 
 Probabilités estimées, aucun gain garanti. Ne mise que ce que tu peux perdre. 18+

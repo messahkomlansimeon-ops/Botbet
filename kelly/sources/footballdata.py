@@ -2,6 +2,9 @@
 arbitre, cotes d'ouverture et de clôture). La source la plus fiable.
 
 URL : https://www.football-data.co.uk/mmz4281/{saison ex. 2526}/{div}.csv
+Autres pays (« new leagues » : Brésil, Argentine, USA, Mexique, Japon, Chine, Scandinavie...) : un seul fichier par
+pays, https://www.football-data.co.uk/new/{BRA}.csv, avec les résultats et les cotes 1N2 seulement (pas de corners
+ni de cartons) : assez pour les buts attendus de Kelly (modèle de Poisson), pas pour corners/cartons.
 """
 import csv
 import io
@@ -28,7 +31,19 @@ SPORT_TO_DIV = {
     "soccer_belgium_first_div": "B1", "soccer_turkey_super_league": "T1",
     "soccer_spl": "SC0", "soccer_greece_super_league": "G1",
 }
+NEW_BASE = "https://football-data.co.uk/new"
+SPORT_TO_NEW = {                                          # fichiers « new leagues » : résultats + cotes 1N2
+    "soccer_brazil_campeonato": "BRA", "soccer_argentina_primera_division": "ARG", "soccer_usa_mls": "USA",
+    "soccer_mexico_ligamx": "MEX", "soccer_japan_j_league": "JPN", "soccer_china_superleague": "CHN",
+    "soccer_denmark_superliga": "DNK", "soccer_norway_eliteserien": "NOR", "soccer_sweden_allsvenskan": "SWE",
+    "soccer_poland_ekstraklasa": "POL", "soccer_austria_bundesliga": "AUT", "soccer_switzerland_superleague": "SWZ",
+    "soccer_league_of_ireland": "IRL", "soccer_finland_veikkausliiga": "FIN",
+}
+NEW_DIVS = frozenset(SPORT_TO_NEW.values())
+NEW_KEEP_DAYS = 400                                       # ces fichiers contiennent des années d'historique : on garde le récent
+SPORT_TO_DIV = SPORT_TO_DIV | SPORT_TO_NEW
 DIV_TO_SPORT = {v: k for k, v in SPORT_TO_DIV.items()}
+SLIM_KEYS = ("goals", "corners", "cards")                 # profils allégés des divisions hors DEFAULT_DIVS (taille de data/)
 
 # Colonnes obligatoires (avec variantes des fichiers « nouveau format » : Home/Away/HG/AG).
 ALIASES = {"Home": "HomeTeam", "Away": "AwayTeam", "HG": "FTHG", "AG": "FTAG", "Res": "FTR"}
@@ -76,7 +91,7 @@ def default_seasons(today=None):
 
 
 def url(div, season):
-    return f"{BASE}/{season}/{div}.csv"
+    return f"{NEW_BASE}/{div}.csv" if div in NEW_DIVS else f"{BASE}/{season}/{div}.csv"
 
 
 def divs_for(sport_keys=None):
@@ -190,12 +205,12 @@ def no_vig(odds):
 def fetch_season(div, season):
     """(matchs, erreurs) d'une division et d'une saison (cache : 12 h en cours, ensuite éternel)."""
     u = url(div, season)
-    ttl = http.TTL_CSV_CURRENT if season == current_season() else http.FOREVER
+    ttl = http.TTL_CSV_CURRENT if season == current_season() or div in NEW_DIVS else http.FOREVER
     res = http.fetch(u, NAME, ttl)
-    tag = f"{div} {season}"
+    tag = div if div in NEW_DIVS else f"{div} {season}"
     if not res.ok:
         return [], [f"{tag} : {res.error}"]
-    rows, probs = parse_csv(res.text, div, season)
+    rows, probs = parse_csv(res.text, div, None if div in NEW_DIVS else season)
     if not rows:
         http.invalidate(u)                                   # ne pas garder un fichier inexploitable
         probs = probs or ["aucune ligne exploitable"]
@@ -207,11 +222,22 @@ def fetch_season(div, season):
     return rows, errs
 
 
+def _recent(rows):
+    """Matchs des NEW_KEEP_DAYS derniers jours (fichiers « new leagues » : tout l'historique du pays dans un fichier)."""
+    cut = (state.now().date() - timedelta(days=NEW_KEEP_DAYS)).isoformat()
+    return [m for m in rows if m["date"] >= cut]
+
+
 def _load(divs, seasons):
     matches, errors = [], []
     seasons = [str(s) for s in (seasons or default_seasons())]
     for div in divs:
         got = 0
+        if div in NEW_DIVS:                                  # un seul fichier par pays, quelle que soit la saison
+            rows, errs = fetch_season(div, seasons[0])
+            matches += _recent(rows)
+            errors += errs
+            continue
         for s in seasons:
             rows, errs = fetch_season(div, s)
             got += len(rows)
@@ -237,6 +263,11 @@ def cached_history(divs=None, seasons=None):
     gratuit des paris (le fichier est actualisé le matin par refresh_all)."""
     out = []
     for div in divs or DEFAULT_DIVS:
+        if div in NEW_DIVS:                                  # un seul fichier par pays
+            res = http.cached(url(div, ""))
+            if res:
+                out += _recent(parse_csv(res.text, div)[0])
+            continue
         for s in seasons or default_seasons():
             res = http.cached(url(div, str(s)))
             if res:
@@ -299,10 +330,9 @@ def _side(m, side):
     return pair
 
 
-def _avg_view(recs):
+def _avg_view(recs, keys=("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")):
     """Moyennes sur une liste de dicts {stat: (pour, contre)}."""
     out = {"n": len(recs)}
-    keys = ("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")
     for k in keys:
         f = [r[k][0] for r in recs if r[k][0] is not None]
         a = [r[k][1] for r in recs if r[k][1] is not None]
@@ -327,10 +357,12 @@ def team_profiles(matches, last_n=10, max_age_days=200):
     for team, recs in per.items():
         if latest and (date.fromisoformat(latest) - date.fromisoformat(recs[-1][0])).days > max_age_days:
             continue
-        teams[team] = {"div": recs[-1][2], "last": recs[-1][0],
-                       "all": _avg_view([r[3] for r in recs[-last_n:]]),
-                       "home": _avg_view([r[3] for r in recs if r[1] == "home"][-last_n:]),
-                       "away": _avg_view([r[3] for r in recs if r[1] == "away"][-last_n:])}
+        div = recs[-1][2]
+        kw = {} if div in DEFAULT_DIVS or div is None else {"keys": SLIM_KEYS}     # divisions secondaires : profil léger
+        teams[team] = {"div": div, "last": recs[-1][0],
+                       "all": _avg_view([r[3] for r in recs[-last_n:]], **kw),
+                       "home": _avg_view([r[3] for r in recs if r[1] == "home"][-last_n:], **kw),
+                       "away": _avg_view([r[3] for r in recs if r[1] == "away"][-last_n:], **kw)}
     refs = {}
     for m in ms:
         if not m.get("referee"):

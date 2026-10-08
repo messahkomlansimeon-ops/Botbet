@@ -8,7 +8,9 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import bankroll, bootstrap, budget, combos as CB, config as C, learn, odds, settle, sources, stats, store, telegram, track
+from . import (bankroll, bootstrap, budget, catalogue, combos as CB, config as C, fair, learn, monde, odds, settle, sources,
+               stats, store, telegram, track)
+from .sources import http
 
 DISCLAIMER = ("Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
               "mise petit. 18+")
@@ -40,13 +42,19 @@ def fmt_combo(title, combo, bank):
     return "\n".join(lines), st
 
 
-def build_day(picks, day):
-    """Messages du jour + enregistrement des paris envoyés."""
+def build_day(picks, day, world=None, pronos=(), why_no_odds=None):
+    """Messages du jour + enregistrement des paris envoyés. `world` : cache « tour du monde » (monde.build), `pronos` :
+    pronostics sans cote (fair.make). Toujours au moins un message utile : le tour du monde et les pronostics
+    remplacent les combinés les jours sans cotes réelles."""
     bank = bankroll.load()["bankroll"]
     pool = CB.make_pool(picks)
     soft = sum(1 for c in picks if CB.soft_market(c))
-    messages = [f"🔥 KELLY — COMBINÉS DU {day.strftime('%d/%m/%Y')} 🔥\n{len(CB.per_event(picks))} matchs analysés, "
-                f"{len(picks)} paris étudiés dont {soft} sur marchés secondaires (corners, cartons, joueurs)"]
+    messages = []
+    if picks:
+        messages.append(f"🔥 KELLY — COMBINÉS DU {day.strftime('%d/%m/%Y')} 🔥\n{len(CB.per_event(picks))} matchs analysés, "
+                        f"{len(picks)} paris étudiés dont {soft} sur marchés secondaires (corners, cartons, joueurs)")
+    if world:
+        messages.append(monde.tour_du_monde(world, len(pronos), why_no_odds))
     sent_picks, sent_combos = [], []
     if pool:
         top = max(pool, key=lambda c: c["score"])
@@ -54,7 +62,7 @@ def build_day(picks, day):
                         f'{top["odds"]:.2f} (proba {top["prob"]*100:.0f}%)'
                         + (f'\nPourquoi : {top["why"]}' if top["why"] else ""))
         sent_picks.append(top)
-    for title, lo, hi in C.COMBOS:
+    for title, lo, hi in (C.COMBOS if picks else []):
         combo = CB.make_combo(CB.pool_for(title, picks, pool), lo, hi)
         if combo:
             text, st = fmt_combo(title, combo, bank)
@@ -64,6 +72,11 @@ def build_day(picks, day):
         else:
             text = fmt_combo(title, None, bank)
         messages.append(text)
+    if pronos:
+        messages.append(fair.fmt_pronos(pronos, C.FAIR_MAX if not sent_combos else max(3, C.FAIR_MAX // 2)))
+    if not messages:
+        messages.append(f"🔥 KELLY — {day.strftime('%d/%m/%Y')}\nPas de cotes réelles aujourd'hui"
+                        + (f" — {why_no_odds}" if why_no_odds else "") + " : ni combiné ni pronostic. /monde pour les matchs du jour.")
     messages.append(DISCLAIMER)
     return messages, sent_picks, sent_combos
 
@@ -90,10 +103,34 @@ def morning_report(now):
             lines.append(f'{icon} {c["tier"].split(" (")[0]} (cote {c.get("odds_final", c["odds"]):.1f}, mise {c["stake"]} u)')
         store.save("bets.json", bets)
         msgs += ["\n".join(lines), settle.bilan(bets, rows=rows), bankroll.summary(bets["combos"])]
+    try:
+        msgs += fair_report(now)
+    except Exception as e:                          # noqa: BLE001 - les pronostics sans cote sont facultatifs
+        print(f"[fair] règlement ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     d = learn.describe(model, rows)
     if d:
         msgs.append(d)
     return msgs, model
+
+
+def fair_report(now):
+    """Règle les pronostics sans cote (gratuit) et résume les nouveaux résultats : [] s'il n'y a rien de neuf."""
+    rows, settled = settle.settle_fair(now)
+    new = [b for b in settled if b["result"] in ("win", "loss") and not b.get("reported")]
+    if not new:
+        return []
+    lines = ["🎲 PRONOSTICS KELLY — RÉSULTATS (sans cote)"]
+    for b in new[:12]:
+        icon = "✅" if b["result"] == "win" else "❌"
+        lines.append(f'{icon} {b["home"]} - {b["away"]} : {fair.pick_label(b)} (proba {b["prob"]*100:.0f}%, '
+                     f'cote juste {fair.fair_odds(b):.2f})')
+    if len(new) > 12:
+        lines.append(f"(+ {len(new) - 12} autres)")
+    lines.append(fair.summary(rows))
+    for b in new:
+        b["reported"] = True
+    store.save(fair.FILE, rows)
+    return ["\n".join(lines)]
 
 
 def refresh_sources():
@@ -102,16 +139,19 @@ def refresh_sources():
     if not C.SOURCES_REFRESH:
         return {}
     out = {}
+    http.set_deadline(C.SOURCES_SECONDS)            # cache froid : on reporte au lendemain ce qui dépasse
     try:
         out = sources.refresh_all(C.SPORTS)
         print("[sources] " + ", ".join(f"{k} : {v.get('rows', 0)} lignes" for k, v in out.items()), file=sys.stderr)
     except Exception as e:                          # noqa: BLE001 - les stats sont facultatives
         print(f"[sources] actualisation ignorée : {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        boot = bootstrap.ensure(C.SPORTS)
+        boot = bootstrap.ensure(C.BOOT_LEAGUES)
         print(f"[sources] amorçage : {len(boot.get('rows', []))} lignes historiques", file=sys.stderr)
     except Exception as e:                          # noqa: BLE001
         print(f"[sources] amorçage ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+    finally:
+        http.set_deadline(None)
     return out
 
 
@@ -127,8 +167,35 @@ def sources_message(picks):
     return "\n".join(lines)
 
 
+def world_report(scan, picks, day, now):
+    """Tour du monde + pronostics sans cote. Écrit data/monde.json (relu par /monde, /ligues et les passages horaires,
+    sans réseau) et data/fair.json (suivi). Ne casse jamais le run -> (cache, pronostics)."""
+    africa, ahead, pronos = [], None, []
+    try:
+        africa = stats.africa_matches(day)           # 1 requête API-Football, la même que le règlement (cache)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[monde] Afrique ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+    if not scan.get("leagues") and not africa and not scan.get("error"):
+        try:
+            ahead = odds.scan_ahead(day, scan.get("sports", []))
+        except Exception as e:                      # noqa: BLE001
+            print(f"[monde] prochains matchs ignorés : {e}", file=sys.stderr)
+    try:
+        pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.SCAN_SECONDS)
+        fair.record(pronos, day)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+    data = monde.build(scan, day, now, paid=scan.get("paid", []), africa=africa, ahead=ahead,
+                       spent=budget.spent("daily"), allowance=budget.allowance())
+    monde.save(data)
+    print(f"[monde] {monde.total(data)} matchs, {len(data['leagues'])} ligues, {len(scan.get('paid', []))} payée(s), "
+          f"{len(pronos)} pronostic(s) sans cote.", file=sys.stderr)
+    return data, pronos
+
+
 def run_daily(sample=False):
     now = now_utc()
+    scan = None
     if sample:
         events = load_sample()
         day = datetime.fromisoformat(events[0]["commence_time"].replace("Z", "+00:00")).date()
@@ -138,12 +205,11 @@ def run_daily(sample=False):
         refresh_sources()                           # avant le bilan : le règlement gratuit lit les CSV à jour
         report, model = morning_report(now)
         day, after = now.date(), now
-        events = odds.fetch_events(day, after=now)
+        scan = odds.scan_today(day, after)          # gratuit : toutes les ligues en saison, jouées ou non
+        events = odds.fetch_events(day, after=now, scan=scan)
         print(f"[budget] {budget.line()}", file=sys.stderr)
-        if not events:
-            report.append("⚠️ Kelly n'a récupéré aucune cote aujourd'hui (aucun match, clé, budget de crédits ou "
-                          "saison : lance « python bot.py --check » ou regarde les logs).")
     picks = odds.build_picks(events, day, after, history=store.load("odds_history.json", {}), model=model)
+    world, pronos, why = None, [], None
     if not sample:
         try:
             picks = odds.rescore(stats.enrich(picks, day), model)       # modèle appris : après les stats d'avant-match
@@ -155,10 +221,14 @@ def run_daily(sample=False):
             report.append(sources_message(picks))
         except Exception as e:                      # noqa: BLE001
             print(f"[sources] rapport ignoré : {e}", file=sys.stderr)
-    messages, sent_picks, sent_combos = build_day(picks, day)
+        world, pronos = world_report(scan, picks, day, now)
+        if not scan.get("paid"):
+            why = budget.why_not(len(C.FEATURED["soccer"].split(",")), "daily")
+            why = f"budget de crédits : {why}" if why else None
+    messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why)
     track.record(picks, {c["key"] for c in sent_picks}, day, now)
     settle.record_combos(sent_combos, day)
-    store.save("today.json", {"day": str(day), "picks": picks})
+    store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in pronos[:40]]})
     for m in report + messages:
         telegram.send(m)
     if not sample:
@@ -313,9 +383,11 @@ def alert_text(alerts):
 
 HELP = """🤖 Kelly — commandes :
 /bilan [jours] : résultats et rendement
-/match <nom> : paris intéressants sur un match du jour
+/match <nom> : paris intéressants (ou pronostic sans cote) sur un match du jour
 /combi <cote> : combiné sur mesure à la cote visée
 /top : les 10 meilleurs paris du jour
+/monde [région] : tous les matchs du jour dans le monde (europe, ameriques, asie, afrique, international), relevé de 08:00
+/ligues : le catalogue des ligues suivies et celles payées en cotes réelles aujourd'hui
 /analyse <match> : chiffres d'avant-match (corners, cartons, tirs, xG) d'un match du jour + ses meilleurs paris
 /stats <équipe> : corners, cartons, tirs, fautes et xG des 10 derniers matchs
 /bank [montant] : voir ou régler la bankroll
@@ -439,11 +511,19 @@ def handle_command(text):
         return f"💼 Bankroll : {b['bankroll']:.2f} unités (départ {b['initial']:.2f})"
     if cmd == "/stats":
         return fmt_team(sources.team_profile(" ".join(args)) if args else None, " ".join(args))
-    if not picks:
+    if cmd in ("/monde", "/ligues"):
+        data = monde.load(now_utc().date())
+        return monde.fmt_monde(data, " ".join(args)) if cmd == "/monde" else monde.fmt_ligues(data)
+    pronos = today.get("pronos") or []
+    if not picks and not pronos:
         return "Kelly n'a pas encore analysé la journée (ça arrive à 08:00)."
+    if not picks and cmd in ("/analyse", "/combi"):
+        return "Pas de cotes réelles aujourd'hui : /top et /match montrent les pronostics sans cote, /monde les matchs."
     if cmd == "/analyse":
         return analyse(picks, " ".join(args))
     if cmd == "/top":
+        if not picks:
+            return fair.fmt_pronos(pronos, 10)
         best = sorted(CB.per_event(picks, k=1), key=lambda c: c["score"], reverse=True)[:10]
         return "🔝 TOP 10 DU JOUR\n" + "\n".join(fmt_pick(c) for c in best)
     if cmd == "/match":
@@ -452,6 +532,9 @@ def handle_command(text):
         q = " ".join(args).lower()
         found = [c for c in picks if q in c["event"].lower()]
         if not found:
+            free = [c for c in pronos if q in c["event"].lower()]
+            if free:
+                return fair.fmt_pronos(free, 8)
             return f"Aucun match du jour ne contient « {' '.join(args)} »."
         found = sorted(found, key=lambda c: c["score"], reverse=True)[:8]
         return f"🔎 {found[0]['event']} ({found[0]['start']} UTC)\n" + "\n".join(
@@ -511,26 +594,24 @@ def _check_odds():
     lines = ["✅ The Odds API : clé valide",
              f"   Crédits : {rem if rem is not None else '?'} restants, {used if used is not None else '?'} utilisés"]
     chosen = odds.select_sports(sports, limit=False)
-    lines.append(f"   Sports suivis ({len(chosen)}, au plus {C.MAX_SPORTS} ligues avec matchs payées par jour) : "
-                 + (", ".join(s["key"] for s in chosen) or "aucun"))
+    lines.append(f"   Ligues suivies en saison : {len(chosen)} sur {len(C.LEAGUE_KEYS)} du catalogue (au plus {C.MAX_SPORTS} payées "
+                 "par jour) : " + (", ".join(s["key"] for s in chosen[:8]) + (" …" if len(chosen) > 8 else "") or "aucune"))
     active = {s["key"] for s in sports}
     absent = [p for p in C.SPORTS if not p.endswith("_") and p not in active]
     if absent:
-        lines.append("   Hors saison ou clé inconnue : " + ", ".join(absent))
+        lines.append(f"   Hors saison ou clé inconnue : {len(absent)} ligue(s) (ex. {', '.join(absent[:4])})")
     if not chosen:
         lines.append("   ⚠️ Aucun sport actif ne correspond à SPORTS : Kelly n'aura aucun match.")
     lines.append(f"   Allocation du jour : {budget.allowance()} crédits (matin {budget.share('daily')}, clôture "
                  f"{budget.share('closing')}), {budget.days_left()} jour(s) avant la remise à zéro "
                  f"(jour {C.ODDS_RESET_DAY} du mois ; forfait {C.ODDS_MONTHLY_CREDITS}/mois)")
-    window, playing = odds.day_window(now_utc().date()), []
-    for sp in chosen[:15]:
-        try:
-            n = len(odds.league_events(sp["key"], window))           # gratuit
-        except odds.OddsError:
-            continue
-        if n:
-            playing.append(f"{sp['key']} ({n})")
+    scan = odds.scan_today(now_utc().date(), sports=chosen)                # gratuit
+    counts = {k: len(v) for k, v in scan["leagues"].items()}
+    playing = [f"{k} ({counts[k]})" for k in catalogue.prioritise(counts, C.SPORTS)]
     lines.append("   Ligues avec matchs aujourd'hui (gratuit) : " + (", ".join(playing) or "aucune"))
+    if playing:
+        lines.append("   Payées ce matin dans cet ordre (région, ligues majeures, nombre de matchs) : "
+                     + ", ".join(catalogue.prioritise(counts, C.SPORTS)[:C.MAX_SPORTS]))
     if rem is not None and rem < C.MIN_CREDITS:
         lines.append(f"   ⚠️ Sous le seuil MIN_CREDITS={C.MIN_CREDITS} : le matin ne dépense plus, la réserve sert à clôturer.")
     return True, lines

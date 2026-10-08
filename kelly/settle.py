@@ -2,7 +2,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import config as C, learn, odds, stats, store, track
+from . import config as C, fair, learn, odds, stats, store, track
 from .sources import footballdata as fd
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
@@ -67,20 +67,19 @@ class FootballData:
     matin). Le site ne se met à jour que ~2 fois par semaine : un match récent peut manquer."""
 
     def __init__(self):
-        self._matches, self._memo = None, {}
+        self._by_div, self._memo = {}, {}
 
     def match(self, b):
-        if self._matches is None:
+        div = fd.SPORT_TO_DIV.get(b["sport_key"])
+        if div not in self._by_div:
             try:
-                self._matches = fd.cached_history()
+                self._by_div[div] = fd.cached_history([div] if div else None)
             except Exception as e:                    # noqa: BLE001 - facultatif
                 print(f"[settle] football-data ignoré : {e}", file=sys.stderr)
-                self._matches = []
+                self._by_div[div] = []
         k = (b["home"], b["away"], b["commence"][:10])
         if k not in self._memo:
-            div = fd.SPORT_TO_DIV.get(b["sport_key"])
-            pool = [m for m in self._matches if not div or m.get("div") == div]
-            self._memo[k] = fd.find_match(pool, b["home"], b["away"], b["commence"][:10])
+            self._memo[k] = fd.find_match(self._by_div[div], b["home"], b["away"], b["commence"][:10])
         return self._memo[k]
 
     def score(self, b):
@@ -91,6 +90,23 @@ class FootballData:
     def stats(self, b):
         m = self.match(b)
         return fd.match_stats(m) if m else None
+
+
+def match_stats(b, fdata, stats_for=None):
+    """Totaux du match d'un pari hors buts (corners, cartons, stats joueurs) : API-Football d'abord, puis les CSV
+    football-data si API-Football est absent ou son quota épuisé. None pour un marché de buts."""
+    if b["market"] in GOAL_MARKETS:
+        return None
+    soccer, fstats = b["group"] == "soccer", None
+    if stats_for:
+        fstats = stats_for(b)
+    elif stats.enabled() and soccer:
+        fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
+        fstats = stats.fixture_stats(fx["id"]) if fx else None
+    need = "corners" if "corners" in b["market"] else "cards"
+    if soccer and b["market"] in FD_MARKETS and (fstats or {}).get(need) is None:
+        fstats = fdata.stats(b) or fstats              # API-Football absent ou quota épuisé : football-data
+    return fstats
 
 
 def settle_pending(now=None, scores_by_sport=None, stats_for=None):
@@ -129,17 +145,7 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
             if old:
                 b["result"] = "void"               # annulé / reporté / jamais de score
             continue
-        fstats = None
-        if b["market"] not in GOAL_MARKETS:
-            if stats_for:
-                fstats = stats_for(b)
-            elif stats.enabled() and soccer:
-                fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
-                fstats = stats.fixture_stats(fx["id"]) if fx else None
-            need = "corners" if "corners" in b["market"] else "cards"
-            if soccer and b["market"] in FD_MARKETS and (fstats or {}).get(need) is None:
-                fstats = fdata.stats(b) or fstats  # API-Football absent ou quota épuisé : football-data
-        b["result"] = settle_pick(b, ev, fstats)
+        b["result"] = settle_pick(b, ev, match_stats(b, fdata, stats_for))
         if b["result"] is None and old:
             b["result"] = "void"                   # pas de stats disponibles
         if b["result"]:
@@ -162,6 +168,30 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     track.save(rows)
     store.save("bets.json", bets)
     return bets, settled
+
+
+def settle_fair(now=None, stats_for=None):
+    """Règle les pronostics sans cote (data/fair.json) avec les mêmes sources gratuites que les paris (API-Football,
+    puis CSV football-data) : jamais de crédit, jamais d'annulation payante. Un pronostic sans résultat est annulé après
+    WAIT_DAYS (buts) ou WAIT_DAYS_STATS (corners, cartons). -> (toutes les lignes, lignes réglées cette fois)."""
+    now = now or datetime.now(timezone.utc)
+    rows = fair.load()
+    fdata, settled = FootballData(), []
+    for b in rows:
+        ko = datetime.fromisoformat(b["commence"].replace("Z", "+00:00"))
+        if b.get("result") is not None or ko >= now - timedelta(hours=3):
+            continue
+        full = {"group": "soccer", "who": None} | b            # lignes de fair.json allégées : champs de settle_pick ajoutés
+        old = ko < now - timedelta(days=C.WAIT_DAYS_STATS if b["market"] in FD_MARKETS else C.WAIT_DAYS)
+        ev = (football_score(full) if stats.enabled() else None) or fdata.score(full)
+        if ev:
+            b["result"] = settle_pick(full, ev, match_stats(full, fdata, stats_for))
+        if b.get("result") is None and old:
+            b["result"] = "void"
+        if b.get("result"):
+            settled.append(b)
+    store.save(fair.FILE, rows)
+    return rows, settled
 
 
 def record_combos(combos_sent, day):
@@ -226,4 +256,7 @@ def bilan(bets, days=None, rows=None):
     pending = sum(1 for r in rows if r.get("result") is None)
     if pending:
         lines.append(f"({pending} paris en attente de résultat)")
+    fl = fair.summary(fair.load(), days)
+    if fl:
+        lines.append(fl)
     return "\n".join(lines)

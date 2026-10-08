@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import store
+from . import catalogue, store
 
 BASE = "https://v3.football.api-sports.io"
 BUDGET = int(os.environ.get("STATS_BUDGET", 60))     # appels max par exécution
@@ -191,17 +191,43 @@ PENDING = ("TBD", "NS", "1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"
 _refreshed = set()                                   # jours re-téléchargés pendant cette exécution
 
 
+# Championnats africains (The Odds API n'en couvre presque aucun) : repérés dans la liste du jour d'API-Football.
+AFRICAN = {"algeria", "egypt", "morocco", "tunisia", "south africa", "nigeria", "ghana", "ivory coast", "senegal",
+           "cameroon", "kenya", "tanzania", "uganda", "zambia", "zimbabwe", "mali", "burkina faso", "dr congo", "congo dr",
+           "congo", "ethiopia", "angola", "libya", "sudan", "benin", "togo", "guinea", "gabon", "rwanda", "mozambique",
+           "botswana", "namibia", "malawi", "madagascar", "mauritania", "gambia", "sierra leone", "liberia", "niger",
+           "burundi", "cape verde", "equatorial guinea", "djibouti", "eswatini", "lesotho", "somalia"}
+_NOT_SENIOR = re.compile(r"women|femin|\bu\d\d\b|youth|reserve|junior", re.I)
+
+
+def african_league(f):
+    """« Ligue (Pays) » d'un match africain masculin senior (championnat national ou compétition CAF), sinon None."""
+    lg = f.get("league") or {}
+    name, country = lg.get("name") or "", _norm(lg.get("country") or "")
+    if not name or _NOT_SENIOR.search(name):
+        return None
+    if country in AFRICAN:
+        return f"{name} ({lg.get('country')})"
+    if country == "world" and re.search(r"\bcaf\b|africa", name, re.I):
+        return name
+    return None
+
+
 def _entry(f):
     """Match du jour allégé : ids, statut et buts (temps réglementaire si fourni : les paris se
-    règlent sur 90 minutes, pas sur la prolongation)."""
+    règlent sur 90 minutes, pas sur la prolongation). « lg » : ligue, seulement pour l'Afrique."""
     ft = (f.get("score") or {}).get("fulltime") or {}
     goals = f.get("goals") or {}
     pick = lambda k: ft.get(k) if ft.get(k) is not None else goals.get(k)
-    return {"id": f["fixture"]["id"], "ts": f["fixture"].get("timestamp"),
-            "status": (f["fixture"].get("status") or {}).get("short"),
-            "home": f["teams"]["home"]["name"], "home_id": f["teams"]["home"]["id"],
-            "away": f["teams"]["away"]["name"], "away_id": f["teams"]["away"]["id"],
-            "gh": pick("home"), "ga": pick("away")}
+    e = {"id": f["fixture"]["id"], "ts": f["fixture"].get("timestamp"),
+         "status": (f["fixture"].get("status") or {}).get("short"),
+         "home": f["teams"]["home"]["name"], "home_id": f["teams"]["home"]["id"],
+         "away": f["teams"]["away"]["name"], "away_id": f["teams"]["away"]["id"],
+         "gh": pick("home"), "ga": pick("away")}
+    lg = african_league(f)
+    if lg:
+        e["lg"] = lg
+    return e
 
 
 def _stale(day, lst):
@@ -227,6 +253,22 @@ def _day_fixtures(day):
     cache[str(day)] = lst
     store.save("fixtures_day.json", cache)
     return lst
+
+
+def africa_matches(day):
+    """Matchs africains du jour (entrées de _day_fixtures avec « lg »), triés par heure. Une seule requête pour tous
+    les matchs du monde ce jour-là, la même que celle du règlement (mise en cache) ; [] sans clé API-Football."""
+    if not enabled():
+        return []
+    return sorted((f for f in _day_fixtures(str(day)) if f.get("lg")), key=lambda f: f.get("ts") or 0)
+
+
+def left_today():
+    """Requêtes API-Football que Kelly peut encore faire aujourd'hui (plafond STATS_DAILY_CAP, appels déjà faits déduits)."""
+    if not enabled() or _halted:
+        return 0
+    q = _quota()
+    return 0 if q.get("remaining") == 0 else max(0, _cap() - q["n"])
 
 
 def find_fixture(day, home, away, kickoff=None):
@@ -427,8 +469,8 @@ def enrich(picks, day, max_events=8):
     from . import prematch, sources            # import tardif : sources importe stats
     feats, api = {}, {}
     for c in picks:
-        if c.get("group") != "soccer" or "market" not in c:
-            continue
+        if c.get("group") != "soccer" or "market" not in c or catalogue.region(c.get("sport_key", "")) == "monde":
+            continue                            # les sélections ne sont pas dans les profils de clubs
         a = None
         try:
             if c["id"] not in feats:

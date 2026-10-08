@@ -46,13 +46,84 @@ FEATURED_SHARE = 0.5      # part max du budget du matin pour les marchés vedett
 # Plancher de sécurité : le matin ne descend pas sous ce nombre de crédits restants (réserve la clôture).
 MIN_CREDITS = _int("MIN_CREDITS", 30)
 CLOSE_GHOSTS = _bool("CLOSE_GHOSTS")     # clôture aussi les paris fantômes (payant : désactivé sur gratuit)
-# Sports suivis, dans l'ordre de priorité (MAX_SPORTS coupe la fin). Une entrée se
-# terminant par "_" est un préfixe de clés The Odds API (ex. "soccer_", "tennis_") ;
-# sinon c'est une clé exacte (soccer_uefa_champs_league n'attrape pas la version féminine).
-# Défaut : forfait gratuit, foot uniquement (réglable gratuitement via API-Football ; NBA/tennis non).
-# Élargis via la variable SPORTS (ex. ajoute basketball_nba).
-SPORTS = _list("SPORTS", "soccer_epl,soccer_spain_la_liga,soccer_italy_serie_a,soccer_germany_bundesliga,"
-                         "soccer_france_ligue_one,soccer_uefa_champs_league")
+# Catalogue mondial des ligues (clés The Odds API), par région et par priorité décroissante : (clé, nom affiché).
+# Une clé finissant par "_" est un préfixe (toutes les clés qui commencent ainsi). Une clé inconnue ou hors saison est
+# ignorée : odds.select_sports garde l'intersection avec /sports (gratuit). La priorité du matin est : région (ordre
+# de REGIONS, l'international passe en tête les jours sans grande ligue européenne), puis nombre de matchs du jour.
+REGIONS = (("europe", "🇪🇺 Europe"), ("ameriques", "🌎 Amériques"), ("asie", "🌏 Asie / Océanie"),
+           ("afrique", "🌍 Afrique"), ("monde", "🌐 International"))
+CATALOGUE = {
+    "europe": [
+        ("soccer_epl", "Premier League"), ("soccer_spain_la_liga", "Liga"), ("soccer_italy_serie_a", "Serie A"),
+        ("soccer_germany_bundesliga", "Bundesliga"), ("soccer_france_ligue_one", "Ligue 1"),
+        ("soccer_uefa_champs_league", "Ligue des champions"), ("soccer_uefa_europa_league", "Ligue Europa"),
+        ("soccer_uefa_europa_conference_league", "Ligue Conférence"),
+        ("soccer_portugal_primeira_liga", "Liga portugaise"), ("soccer_netherlands_eredivisie", "Eredivisie"),
+        ("soccer_belgium_first_div", "Pro League belge"), ("soccer_turkey_super_league", "Süper Lig"),
+        ("soccer_spl", "Premiership écossaise"), ("soccer_efl_champ", "Championship"),
+        ("soccer_germany_bundesliga2", "Bundesliga 2"), ("soccer_spain_segunda_division", "Liga 2 espagnole"),
+        ("soccer_italy_serie_b", "Serie B"), ("soccer_france_ligue_two", "Ligue 2"),
+        ("soccer_england_league1", "League One"), ("soccer_england_league2", "League Two"),
+        ("soccer_greece_super_league", "Super League grecque"), ("soccer_switzerland_superleague", "Super League suisse"),
+        ("soccer_austria_bundesliga", "Bundesliga autrichienne"), ("soccer_poland_ekstraklasa", "Ekstraklasa"),
+        ("soccer_denmark_superliga", "Superliga danoise"), ("soccer_sweden_allsvenskan", "Allsvenskan"),
+        ("soccer_norway_eliteserien", "Eliteserien"), ("soccer_finland_veikkausliiga", "Veikkausliiga"),
+        ("soccer_league_of_ireland", "Ligue irlandaise"), ("soccer_sweden_superettan", "Superettan"),
+        ("soccer_germany_liga3", "3. Liga"), ("soccer_fa_cup", "FA Cup"), ("soccer_england_efl_cup", "Coupe de la Ligue (ENG)"),
+        ("soccer_spain_copa_del_rey", "Coupe du Roi"),
+    ],
+    "ameriques": [
+        ("soccer_brazil_campeonato", "Brasileirão"), ("soccer_argentina_primera_division", "Primera argentine"),
+        ("soccer_usa_mls", "MLS"), ("soccer_mexico_ligamx", "Liga MX"), ("soccer_conmebol_copa_libertadores", "Copa Libertadores"),
+        ("soccer_conmebol_copa_sudamericana", "Copa Sudamericana"), ("soccer_concacaf_leagues_cup", "Leagues Cup"),
+        ("soccer_chile_campeonato", "Primera chilienne"), ("soccer_brazil_serie_b", "Brasileirão Série B"),
+    ],
+    "asie": [
+        ("soccer_japan_j_league", "J League"), ("soccer_korea_kleague1", "K League 1"),
+        ("soccer_saudi_arabia_pro_league", "Saudi Pro League"), ("soccer_china_superleague", "Super League chinoise"),
+        ("soccer_australia_aleague", "A-League"),
+    ],
+    "afrique": [("soccer_africa_cup_of_nations", "CAN")],
+    "monde": [
+        ("soccer_uefa_nations_league", "Ligue des nations UEFA"),
+        ("soccer_fifa_world_cup_qualifiers_europe", "Qualif. Coupe du monde Europe"),
+        ("soccer_fifa_world_cup_qualifiers_south_america", "Qualif. Coupe du monde Amérique du Sud"),
+        ("soccer_fifa_world_cup_qualifiers_", "Qualif. Coupe du monde"),      # préfixe : Afrique, Asie, Concacaf... si présents
+        ("soccer_uefa_euro_qualifiers", "Qualif. Euro"), ("soccer_international_friendlies", "Matchs amicaux"),
+        ("soccer_fifa_world_cup", "Coupe du monde"), ("soccer_uefa_european_championship", "Euro"),
+        ("soccer_conmebol_copa_america", "Copa América"), ("soccer_concacaf_gold_cup", "Gold Cup"),
+    ],
+}
+# Dans une région, les ligues « majeures » passent avant les autres (2es divisions, petits championnats, coupes),
+# même si celles-ci ont plus de matchs : à partir de la clé indiquée, une ligue est de rang 2.
+SECOND_TIER = {"europe": "soccer_germany_bundesliga2", "ameriques": "soccer_brazil_serie_b"}
+# « Grandes affiches » : si aucune ne joue (trêve internationale), l'international passe en tête des priorités.
+TOP_LEAGUES = ("soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", "soccer_germany_bundesliga",
+               "soccer_france_ligue_one", "soccer_uefa_champs_league", "soccer_uefa_europa_league",
+               "soccer_uefa_europa_conference_league")
+LEAGUE_KEYS = [k for r, _ in REGIONS for k, _ in CATALOGUE[r]]
+# Sports suivis, dans l'ordre de priorité (MAX_SPORTS coupe la fin). Une entrée se terminant par "_" est un préfixe de
+# clés The Odds API ; sinon c'est une clé exacte (soccer_uefa_champs_league n'attrape pas la version féminine).
+# Défaut : tout le catalogue ci-dessus, foot uniquement (réglable gratuitement). Élargis via la variable SPORTS
+# (ex. SPORTS_EXTRA=basketball_nba ajoute la NBA au catalogue).
+SPORTS = _list("SPORTS", ",".join(LEAGUE_KEYS)) + _list("SPORTS_EXTRA", "")      # SPORTS_EXTRA : ajoute sans remplacer
+# Ligues dont l'historique sert à l'amorçage de l'apprentissage (télécharge 4 saisons par ligue : on reste sur les 5 grandes).
+BOOT_LEAGUES = _list("BOOT_LEAGUES", "soccer_epl,soccer_spain_la_liga,soccer_italy_serie_a,soccer_germany_bundesliga,"
+                                     "soccer_france_ligue_one")
+# Durées maximales (secondes) pour tenir le passage de 08:00 sous les 15 minutes du workflow.
+SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de toutes les ligues
+SOURCES_SECONDS = _int("SOURCES_SECONDS", 420)    # téléchargements des stats gratuites (le reste vient du cache)
+# Pronostics Kelly sans cote de bookmaker (kelly/fair.py) : proba du modèle + « cote juste » = 1 / proba.
+FAIR_MAX = _int("FAIR_MAX", 10)                   # pronostics détaillés dans le message du matin (5 si des combinés existent)
+FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json)
+FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe
+FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'est du hasard, au-dessus la cote juste est < 1.25
+FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
+FAIR_SHRINK = 0.9                                 # la proba du modèle est rapprochée de 50 % (le modèle de Poisson est trop sûr de lui)
+FAIR_MARGIN = 0.05                                # « joue si la cote >= cote juste x 1.05 » : marge de sécurité du modèle
+FAIR_API_EVENTS = _int("FAIR_API_EVENTS", 2)      # matchs sans profil football-data estimés par API-Football (~14 requêtes chacun)
+FAIR_API_RESERVE = 30                             # requêtes API-Football du jour gardées pour le règlement
+FAIR_KEEP_DAYS = 10                               # historique gardé dans data/fair.json
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}
 # Marchés détaillés : 1 appel par match et par marché (1 crédit chacun et par région), DANS CET
 # ORDRE de priorité (marchés mal pricés d'abord : si le budget manque, on coupe la fin).

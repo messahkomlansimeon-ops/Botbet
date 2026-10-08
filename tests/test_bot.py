@@ -3,6 +3,7 @@ règlement -> bilan -> calibration -> commandes. Lancer : python -m tests.test_b
 import contextlib
 import copy
 import io
+import json
 import math
 import os
 import random
@@ -274,6 +275,15 @@ def test_budget():
     print("budget : OK")
 
 
+def put_team_profiles(by_div):
+    """Profils football-data fictifs {division: [équipes]} : les matchs de ces équipes ont un modèle corners/cartons."""
+    v = {"n": 10, "corners_for": 5.5, "corners_against": 5.0, "cards_for": 2.0, "cards_against": 2.0, "goals_for": 1.4,
+         "goals_against": 1.3}
+    store.save("src_footballdata.json", {"updated": "2026-09-30T08:00", "referees": {}, "leagues": {}, "teams": {
+        t: {"div": d, "last": "2026-09-27", "all": v, "home": v, "away": v} for d, ts in by_div.items() for t in ts}})
+    features.reload()
+
+
 def test_free_events_and_typical_day():
     """/events gratuit : une ligue sans match ne coûte rien. Journée type (5 ligues dont 2 jouent, 12 matchs) :
     matin + clôtures horaires <= allocation du jour ; corners/cartons avant le reste des marchés détaillés."""
@@ -285,6 +295,8 @@ def test_free_events_and_typical_day():
         fake = sb.serve(FakeOdds(500, {"soccer_epl": epl, "soccer_france_ligue_one": l1, "soccer_italy_serie_a": tomorrow},
                                  sports=["soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a",
                                          "soccer_germany_bundesliga", "soccer_france_ligue_one"]))
+        profiles = {"E0": [t for e in epl for t in e[1:3]], "F1": [t for e in l1 for t in e[1:3]]}
+        put_team_profiles(profiles)                                    # sans profil football-data : aucun crédit en corners
         # 1) le matin seul
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
@@ -303,6 +315,7 @@ def test_free_events_and_typical_day():
             os.remove(os.path.join(store.DATA_DIR, f))
         odds.CREDITS.update(remaining=None, used=None)
         fake = sb.serve(FakeOdds(500, {"soccer_epl": epl, "soccer_france_ligue_one": l1}))
+        put_team_profiles(profiles)
         bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             app.run_daily()
@@ -407,6 +420,7 @@ def test_budget_never_crashes():
         lg = {"soccer_epl": [("e1", "A", "B", ko_at(day, 15)), ("e2", "C", "D", ko_at(day, 16))],
               "soccer_spain_la_liga": [("s1", "E", "F", ko_at(day, 17))]}
         fake = sb.serve(FakeOdds(33, lg))
+        put_team_profiles({"E0": ["A", "B", "C", "D"], "SP1": ["E", "F"]})
         sb.set_now(datetime(2026, 10, 31, 8, tzinfo=UTC))                      # dernier jour : allocation = 33
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
@@ -942,6 +956,459 @@ def test_run_daily_with_sources():
     print("run_daily + sources (et pannes) : OK")
 
 
+# ---------- catalogue mondial, tour du monde, pronostics sans cote ----------
+
+WDAY = "2026-10-08"
+
+
+def wevs(prefix, pairs, hours, day=WDAY):
+    return [(f"{prefix}{i}", h, a, ko_at(day, hours[i % len(hours)], 15 * (i % 3))) for i, (h, a) in enumerate(pairs)]
+
+
+def break_day_leagues(day=WDAY):
+    """Jeudi de trêve internationale : aucune des grandes affiches, 13 ligues en jeu dans le monde."""
+    n = lambda p, k: [(f"{p}T{i}", f"{p}T{i + 50}") for i in range(k)]            # noqa: E731
+    return {
+        "soccer_uefa_nations_league": wevs("nl", [("France", "Italie"), ("Espagne", "Allemagne"), ("Pays-Bas", "Belgique"),
+                                                  ("Portugal", "Croatie")], [18, 20], day),
+        "soccer_international_friendlies": wevs("fr", [("Côte d'Ivoire", "Sénégal"), ("Maroc", "Égypte"), ("Brésil", "Mexique")], [16, 19], day),
+        "soccer_fifa_world_cup_qualifiers_africa": wevs("qa", [("Ghana", "Nigeria"), ("Mali", "Tunisie")], [15], day),
+        "soccer_efl_champ": wevs("ch", n("CH", 5), [19], day),
+        "soccer_netherlands_eredivisie": wevs("ere", [("Ajax", "PSV"), ("Feyenoord", "AZ"), ("Utrecht", "Twente")], [18, 20], day),
+        "soccer_england_league1": wevs("l1", n("L1", 12), [15], day),
+        "soccer_germany_bundesliga2": wevs("b2", n("B2", 9), [13, 18], day),
+        "soccer_sweden_allsvenskan": wevs("sw", [("Malmo FF", "AIK"), ("Hammarby", "Djurgarden"), ("IFK Goteborg", "Elfsborg")], [17], day),
+        "soccer_usa_mls": wevs("mls", [("Inter Miami", "LA Galaxy"), ("Seattle Sounders", "Portland Timbers"), ("NYCFC", "Orlando City")], [23], day),
+        "soccer_brazil_campeonato": wevs("br", [("Flamengo", "Palmeiras"), ("Corinthians", "Santos")], [22], day),
+        "soccer_argentina_primera_division": wevs("ar", [("River Plate", "Boca Juniors")], [21], day),
+        "soccer_japan_j_league": wevs("jp", [("Kawasaki Frontale", "Vissel Kobe"), ("Urawa", "Gamba Osaka")], [9], day),
+        "soccer_saudi_arabia_pro_league": wevs("sa", [("Al Hilal", "Al Nassr")], [17], day),
+    }
+
+
+JUNK_SPORTS = ["soccer_xyz_unknown", "soccer_uefa_champs_league_women", "tennis_atp_wimbledon", "soccer_epl", "soccer_spain_la_liga"]
+
+
+def world_profiles(leagues, divs=None, corners=(7.0, 5.0)):
+    """Profils football-data pour les ligues qui ont un modèle (Championship, Eredivisie, League One, 2. Bundesliga,
+    Allsvenskan, MLS) : toutes les équipes jouent ~12 corners attendus."""
+    divs = divs or {"soccer_efl_champ": "E1", "soccer_netherlands_eredivisie": "N1", "soccer_england_league1": "E2",
+                    "soccer_germany_bundesliga2": "D2", "soccer_sweden_allsvenskan": "SWE", "soccer_usa_mls": "USA"}
+    v = {"n": 10, "corners_for": corners[0], "corners_against": corners[1], "cards_for": 2.2, "cards_against": 2.0,
+         "goals_for": 1.5, "goals_against": 1.1}
+    teams = {}
+    for key, div in divs.items():
+        for e in leagues.get(key, []):
+            for t in e[1:3]:
+                teams[t] = {"div": div, "last": "2026-10-04", "all": v, "home": v, "away": v}
+    store.save("src_footballdata.json", {"updated": "2026-10-08T07:00", "referees": {}, "leagues": {}, "teams": teams})
+    features.reload()
+
+
+def test_catalogue_and_priority():
+    """Catalogue par région ; select_sports ignore les clés inconnues, les versions féminines et les outrights ; priorité :
+    région, grandes affiches, ligues majeures, nombre de matchs ; l'international passe en tête un jour de trêve."""
+    from kelly import catalogue
+    keys = C.LEAGUE_KEYS
+    assert len(keys) == len(set(keys)) and all(k.startswith("soccer_") for k in keys) and len(keys) >= 50
+    must = {"europe": ["soccer_epl", "soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league",
+                       "soccer_portugal_primeira_liga", "soccer_netherlands_eredivisie", "soccer_belgium_first_div",
+                       "soccer_turkey_super_league", "soccer_spl", "soccer_efl_champ", "soccer_germany_bundesliga2"],
+            "ameriques": ["soccer_brazil_campeonato", "soccer_brazil_serie_b", "soccer_argentina_primera_division", "soccer_usa_mls",
+                          "soccer_mexico_ligamx", "soccer_chile_campeonato", "soccer_conmebol_copa_libertadores",
+                          "soccer_conmebol_copa_sudamericana"],
+            "asie": ["soccer_japan_j_league", "soccer_korea_kleague1", "soccer_china_superleague", "soccer_saudi_arabia_pro_league",
+                     "soccer_australia_aleague"],
+            "monde": ["soccer_fifa_world_cup_qualifiers_europe", "soccer_uefa_nations_league"]}
+    for r, ks in must.items():
+        assert all(catalogue.region(k) == r for k in ks), r
+    assert catalogue.region("soccer_fifa_world_cup_qualifiers_africa") == "monde"            # préfixe du catalogue
+    assert catalogue.name("soccer_fifa_world_cup_qualifiers_africa") == "Qualif. Coupe du monde (africa)"
+    assert catalogue.name("soccer_epl") == "Premier League" and catalogue.region("soccer_inconnu") == "autre"
+    assert C.SPORTS == keys and C.REGIONS[0][0] == "europe" and [r for r, _ in C.REGIONS][:3] == ["europe", "ameriques", "asie"]
+    # la liste réelle de /sports : inconnues, féminines, outrights et autres sports ignorés ; ordre du catalogue
+    live = [{"key": k} for k in ("soccer_xyz_unknown", "soccer_uefa_champs_league_women", "tennis_atp", "soccer_usa_mls", "soccer_epl",
+                                 "soccer_fifa_world_cup_qualifiers_africa", "soccer_fifa_world_cup_qualifiers_europe",
+                                 "soccer_uefa_nations_league", "soccer_fifa_world_cup_womens")] + [
+        {"key": "soccer_epl_winner", "has_outrights": True}]
+    with Sandbox():
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        got = [s["key"] for s in odds.select_sports(live, limit=False)]
+        assert got == ["soccer_epl", "soccer_usa_mls", "soccer_uefa_nations_league", "soccer_fifa_world_cup_qualifiers_europe",
+                       "soccer_fifa_world_cup_qualifiers_africa"], got
+        assert len(odds.select_sports(live)) == 5                                  # MAX_SPORTS (6) n'est pas atteint
+        C.MAX_SPORTS = 3
+        assert len(odds.select_sports(live)) == 3
+    # priorité : jour normal -> Europe d'abord, grandes affiches avant le reste, puis Amériques, Asie, international
+    normal = {"soccer_epl": 3, "soccer_england_league1": 12, "soccer_efl_champ": 11, "soccer_usa_mls": 9, "soccer_uefa_nations_league": 4,
+              "soccer_japan_j_league": 6, "soccer_brazil_campeonato": 2}
+    assert not catalogue.is_break_day(normal)
+    assert catalogue.prioritise(normal, C.SPORTS) == ["soccer_epl", "soccer_efl_champ", "soccer_england_league1", "soccer_usa_mls",
+                                                     "soccer_brazil_campeonato", "soccer_japan_j_league", "soccer_uefa_nations_league"]
+    # trêve internationale : aucune grande affiche -> les sélections passent en tête (puis nombre de matchs)
+    brk = {k: v for k, v in normal.items() if k != "soccer_epl"} | {"soccer_international_friendlies": 2}
+    assert catalogue.is_break_day(brk) and catalogue.is_break_day({})
+    assert catalogue.prioritise(brk, C.SPORTS)[:3] == ["soccer_uefa_nations_league", "soccer_international_friendlies", "soccer_efl_champ"]
+    assert catalogue.prioritise({"soccer_epl": 0, "soccer_spl": 0}) == []                 # une ligue sans match n'est jamais payée
+    # même région et même rang : le plus de matchs d'abord, puis l'ordre du catalogue
+    assert catalogue.prioritise({"soccer_france_ligue_one": 4, "soccer_italy_serie_a": 4, "soccer_epl": 2}, C.SPORTS) == [
+        "soccer_italy_serie_a", "soccer_france_ligue_one", "soccer_epl"]
+    # le relevé gratuit ne regarde que les ligues suivies ET en saison, et ne garde que celles qui jouent
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        lg = break_day_leagues()
+        fake = sb.serve(FakeOdds(500, lg, sports=list(lg) + JUNK_SPORTS))
+        scan = odds.scan_today(datetime(2026, 10, 8).date(), datetime(2026, 10, 8, 8, tzinfo=UTC))
+        assert set(scan["leagues"]) == set(lg) and scan["error"] is None and scan["complete"]
+        assert sum(len(v) for v in scan["leagues"].values()) == 50 and fake.paid() == [] and fake.spent() == 0
+        asked = {c[0].split("/")[2] for c in fake.log if c[0].endswith("/events")}
+        assert asked == set(lg) | {"soccer_epl", "soccer_spain_la_liga"}, asked          # jamais les clés inconnues ni féminines
+        assert "soccer_epl" not in scan["leagues"] and "soccer_epl" in scan["sports"] and "soccer_xyz_unknown" not in scan["sports"]
+        # délai maximal : le relevé s'arrête (priorité d'abord) au lieu de dépasser le temps du workflow
+        n = len(fake.log)
+        part = odds.scan_today(datetime(2026, 10, 8).date(), seconds=-1)
+        assert not part["complete"] and part["leagues"] == {} and len(fake.log) == n + 1                 # /sports seulement
+        # /sports en panne : relevé vide avec l'erreur, jamais d'exception
+        sb.serve(lambda url, **kw: Resp({"message": "boom", "error_code": "X"}, 500))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            bad = odds.scan_today(datetime(2026, 10, 8).date())
+        assert bad["error"] and bad["leagues"] == {} and "test-odds-key" not in bad["error"]
+    print("catalogue et priorités : OK")
+
+
+def test_budget_with_many_leagues():
+    """13 ligues jouent un jour de trêve : le faux The Odds API facture comme le vrai ; le matin ne dépasse jamais sa part,
+    ne paie que les plus prioritaires (sélections d'abord), et garde le reste pour les corners du premier match qui a un modèle."""
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
+        lg = break_day_leagues()
+        world_profiles(lg)
+        fake = sb.serve(FakeOdds(500, lg, sports=list(lg) + JUNK_SPORTS))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            scan = odds.scan_today(datetime(2026, 10, 8).date(), datetime(2026, 10, 8, 8, tzinfo=UTC))
+            events = odds.fetch_events(datetime(2026, 10, 8).date(), after=datetime(2026, 10, 8, 8, tzinfo=UTC), scan=scan)
+        share = budget.share("daily")
+        assert share == 12 and fake.spent() == budget.spent("daily") <= share, (fake.spent(), share)
+        bulk = [c for c in fake.paid() if "/events/" not in c[0]]
+        assert [c[0].split("/")[2] for c in bulk] == ["soccer_uefa_nations_league", "soccer_international_friendlies",
+                                                       "soccer_fifa_world_cup_qualifiers_africa", "soccer_efl_champ"], bulk
+        assert all(c[1] == "h2h,totals" for c in bulk) and scan["paid"] == [c[0].split("/")[2] for c in bulk]
+        assert len(scan["paid"]) <= C.MAX_SPORTS and len({e["sport_key"] for e in events}) == 4
+        det = [c for c in fake.paid() if "/events/" in c[0]]
+        assert det and all(c[0].startswith("/sports/soccer_efl_champ/") and c[1] == "alternate_totals_corners" for c in det), det
+        assert fake.spent() == 4 * 2 + len(det) == 12                                  # 8 en vedettes + 4 corners : toute la part du matin
+        assert not any(k in c[0] for c in fake.log for k in ("soccer_xyz", "women", "tennis"))
+        assert not any(c[2] for c in fake.log if c[0].endswith("/events") or c[0] == "/sports")      # le relevé reste gratuit
+        assert "ligues avec matchs : soccer_uefa_nations_league, soccer_international_friendlies" in err.getvalue()
+        # jour normal : la Premier League joue -> l'Europe passe avant l'international ; sans profil, tout va aux vedettes
+        for f in os.listdir(store.DATA_DIR):
+            os.remove(os.path.join(store.DATA_DIR, f))
+        odds.CREDITS.update(remaining=None, used=None)
+        features.reload()
+        normal = dict(lg) | {"soccer_epl": wevs("epl", [("Alpha", "Bravo"), ("Cobra", "Delta")], [15])}
+        fake = sb.serve(FakeOdds(500, normal, sports=list(normal)))
+        with contextlib.redirect_stderr(io.StringIO()):
+            scan = odds.scan_today(datetime(2026, 10, 8).date())
+            odds.fetch_events(datetime(2026, 10, 8).date(), scan=scan)
+        assert scan["paid"] == ["soccer_epl", "soccer_efl_champ", "soccer_netherlands_eredivisie", "soccer_england_league1",
+                                "soccer_germany_bundesliga2", "soccer_sweden_allsvenskan"], scan["paid"]   # Europe d'abord, MAX_SPORTS = 6
+        assert fake.spent() <= 12 and all(c[1] == "h2h,totals" for c in fake.paid())             # aucun profil : pas de corners achetés
+        # peu de crédits : au moins une ligue si le budget le permet, jamais une erreur
+        for f in os.listdir(store.DATA_DIR):
+            os.remove(os.path.join(store.DATA_DIR, f))
+        odds.CREDITS.update(remaining=None, used=None)
+        fake = sb.serve(FakeOdds(33, normal, sports=list(normal)))
+        sb.set_now(datetime(2026, 10, 31, 8, tzinfo=UTC))
+        with contextlib.redirect_stderr(io.StringIO()):
+            fake.leagues = {k: [(i, h, a, t.replace("2026-10-08", "2026-10-31")) for i, h, a, t in v] for k, v in normal.items()}
+            odds.fetch_events(datetime(2026, 10, 31).date())
+        assert fake.remaining == 31 and len(fake.paid()) == 1                       # 33 - plancher 30 : une seule ligue (2 crédits)
+    print("budget avec beaucoup de ligues : OK")
+
+
+def test_fair_pronostics():
+    """Pronostics sans cote : proba du modèle, cote juste = 1/proba, vocabulaire 1xBet, aucun pronostic sans données."""
+    from kelly import fair, prematch
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        ev = lambda i, h, a, key="soccer_efl_champ": {"id": i, "sport_key": key, "home_team": h, "away_team": a,   # noqa: E731
+                                                       "commence_time": f"{WDAY}T19:00:00Z"}
+        scan = {"day": WDAY, "leagues": {"soccer_efl_champ": [ev("m1", "Alpha", "Bravo"), ev("m2", "Inconnu A", "Inconnu B")],
+                                         "soccer_uefa_nations_league": [ev("m3", "France", "Italie", "soccer_uefa_nations_league")]}}
+        put_team_profiles({"E1": ["Alpha", "Bravo"]})
+        d = json.load(open(store.path("src_footballdata.json")))
+        for t in d["teams"].values():                                      # 12 corners attendus, 2.6 buts, 4.4 cartons
+            for view in ("all", "home", "away"):
+                t[view].update(corners_for=7.0, corners_against=5.0, goals_for=1.5, goals_against=1.1)
+        store.save("src_footballdata.json", d)
+        features.reload()
+        pronos = fair.make(scan, [], datetime(2026, 10, 8).date())
+        assert pronos and {c["id"] for c in pronos} == {"m1"}, [c["event"] for c in pronos]   # pas de profil / sélection : rien d'inventé
+        assert 1 <= len(pronos) <= 2 and pronos == sorted(pronos, key=lambda c: -c["score"])
+        top = pronos[0]
+        exp_p = 0.5 + (prematch.over_p("Over", prematch.poisson_over(12.0, 10.5)) - 0.5) * C.FAIR_SHRINK
+        assert top["market"] == "alternate_totals_corners" and (top["name"], top["point"]) == ("Over", 10.5), top
+        assert abs(top["prob"] - exp_p) < 1e-3 and top["fair"] == round(1 / top["prob"], 2)
+        assert top["min_odds"] == round(1 / top["prob"] * (1 + C.FAIR_MARGIN), 2) > top["fair"]
+        assert top["pick"] == "Plus de 10.5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
+        assert top["key"] == "m1|alternate_totals_corners||10.5|Over" and top["why"].startswith("stats réelles : 12.0 corners attendus")
+        for c in pronos:                                                   # proba utile : ni hasard ni évidence
+            assert C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and c["min_odds"] >= c["fair"] >= 1 / C.FAIR_P_RANGE[1] - 0.01
+        text = fair.fmt_pronos(pronos)
+        assert text.startswith("🎲 PRONOSTICS KELLY (sans cote de bookmaker)") and "cote juste" in text and "1xBet" in text
+        assert "joue si la cote ≥" in text and "Hors combinés" in text and "Alpha - Bravo [Championship]" in text, text
+        assert f'proba Kelly {top["prob"]*100:.0f}%' in text and f'cote juste {top["fair"]:.2f}' in text
+        # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
+        f = {"n_home": 10, "n_away": 10, "exp_corners": 10.2, "exp_cards": 4.9, "exp_goals_home": 1.6, "exp_goals_away": 1.3}
+        opts = fair.options(f, "Alpha", "Bravo")
+        assert {o[0] for o in opts} == {"totals", "btts", "double_chance", "alternate_totals_corners", "alternate_totals_cards"}
+        picks = {c["market"]: c for c in (fair.make_pick(ev("m9", "Alpha", "Bravo"), *b, "football-data") for b in
+                                          fair.best_per_family(opts, set(fair.FAMILIES)))}
+        assert set(picks) == set(fair.FAMILIES), picks.keys()
+        labels = {c["pick"] for c in picks.values()}
+        assert any(x.startswith(("Plus de", "Moins de")) and x.endswith(" buts") for x in labels), labels
+        assert any(x.startswith("Les 2 équipes marquent : ") for x in labels) and any(x.startswith("Double chance : ") for x in labels)
+        assert any(x.endswith(" corners") for x in labels) and any(x.endswith(" cartons") for x in labels), labels
+        assert "Double chance : Alpha ou Nul" in {fair.make_pick(ev("m9", "Alpha", "Bravo"), "double_chance", "Alpha or Draw", None, 0.7,
+                                                                 "t", "x")["pick"]}
+        # sous 5 matchs récents ou hors bornes : aucune option ; marchés déjà cotés chez les books : pas refaits
+        assert fair.options(dict(f, n_home=3), "A", "B") == [] and fair.options(dict(f, exp_corners=40, exp_cards=None), "A", "B")
+        paid = [{"id": "m1", "market": "alternate_totals_corners"}, {"id": "m1", "market": "totals"}]
+        left = fair.make(scan, paid, datetime(2026, 10, 8).date())
+        assert left and all(c["market"] != "alternate_totals_corners" and c["market"] != "totals" for c in left), left
+        assert all(c["market"] in ("alternate_totals_corners", "alternate_totals_cards") for c in left)   # match payé : corners/cartons seulement
+        # repli API-Football : au plus FAIR_API_EVENTS matchs sans profil, jamais sous la réserve de requêtes
+        calls = []
+        real = (stats.expected_totals, stats.left_today)
+        stats.expected_totals = lambda day, h, a, ko=None: calls.append(h) or {"corners": 11.2, "cards": 4.4, "n": 6}
+        stats.left_today = lambda: 80
+        try:
+            many = {"soccer_efl_champ": [ev(f"u{i}", f"Sans profil {i}", f"Autre {i}") for i in range(5)]}
+            api = fair.make({"leagues": many}, [], datetime(2026, 10, 8).date())
+            assert len(calls) == C.FAIR_API_EVENTS == 2 and {c["src"] for c in api} == {"api"}, calls
+            assert all(c["market"] in ("alternate_totals_corners", "alternate_totals_cards") for c in api)    # API-Football : pas de buts
+            calls.clear()
+            stats.left_today = lambda: C.FAIR_API_RESERVE                  # quota presque épuisé : on le garde pour le règlement
+            assert fair.make({"leagues": many}, [], datetime(2026, 10, 8).date()) == [] and calls == []
+        finally:
+            stats.expected_totals, stats.left_today = real
+        # suivi : au plus FAIR_TRACK par jour, sans doublon, 12 jours d'historique ; bilan de calibration
+        many_p = [dict(top, key=f"k{i}", id=f"id{i}") for i in range(30)]
+        assert fair.record(many_p, WDAY) == C.FAIR_TRACK and fair.record(many_p, WDAY) == 0
+        rows = fair.load()
+        assert len(rows) == C.FAIR_TRACK and all(r["result"] is None and "score" not in r for r in rows)
+        assert os.path.getsize(store.path("fair.json")) < 5_000 and C.FAIR_TRACK * C.FAIR_KEEP_DAYS * 300 < 40_000      # data/ reste petit
+        fair.record([dict(top, key="old")], "2026-11-30")
+        assert [r["key"] for r in fair.load()] == ["old"]                  # les lignes de plus de 10 jours disparaissent
+        rows = [{"result": "win", "prob": 0.6, "date": "2026-11-29"}, {"result": "loss", "prob": 0.7, "date": "2026-11-29"},
+                {"result": "void", "prob": 0.7, "date": "2026-11-29"}]
+        assert fair.summary(rows) == "🎲 Pronostics sans cote : 1/2 gagnés (50%) pour une proba annoncée moyenne de 65%"
+        assert fair.summary([]) == "" and fair.summary(rows, days=1, today="2026-12-30") == ""
+    print("pronostics sans cote : OK")
+
+
+def run_morning(sb, fake, day=WDAY):
+    """run_daily avec Telegram capturé : renvoie les messages envoyés."""
+    sent = []
+    real = telegram.send
+    telegram.send = lambda text, chat_id=None: sent.append(text) or True
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            app.run_daily()
+    finally:
+        telegram.send = real
+    assert all(m.strip() for m in sent), sent
+    return sent
+
+
+def test_morning_always_useful():
+    """run_daily envoie toujours quelque chose d'utile : jour de trêve (sélections payées, le reste en pronostics sans cote),
+    jour sans crédit (tour du monde + pronostics, pas de faux combinés), aucun match nulle part (prochains jours), panne API."""
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
+        bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        lg = break_day_leagues()
+        # --- 1) trêve internationale, budget normal
+        world_profiles(lg)
+        fake = sb.serve(FakeOdds(500, lg, sports=list(lg) + JUNK_SPORTS))
+        sent = run_morning(sb, fake)
+        txt = "\n".join(sent)
+        world = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        assert "50 matchs dans 13 ligues" in world and "trêve internationale" in world, world
+        order = [world.index(x) for x in ("🌐 International", "🇪🇺 Europe", "🌎 Amériques", "🌏 Asie / Océanie")]
+        assert order == sorted(order), world                                   # sélections d'abord un jour de trêve
+        assert "💳 Ligue des nations UEFA (4)" in world and "• MLS (3)" in world and "18:00 France - Italie" in world
+        assert "Cotes réelles aujourd'hui (12/20 crédits)" in world and "🎲" in world
+        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 PRONOSTICS KELLY (sans cote de bookmaker)" in txt
+        prono = next(m for m in sent if m.startswith("🎲 PRONOSTICS"))
+        assert "joue si la cote ≥" in prono and "chez 1xBet" in prono and "cote juste" in prono
+        assert "Alpha" not in prono and "Ligue des nations" not in prono             # les sélections n'ont pas de profil de club
+        paid_leagues = {c[0].split("/")[2] for c in fake.paid()}
+        assert paid_leagues == {"soccer_uefa_nations_league", "soccer_international_friendlies",
+                                "soccer_fifa_world_cup_qualifiers_africa", "soccer_efl_champ"}, paid_leagues
+        assert fake.spent() <= 12 and all(m.strip() for m in sent)
+        sent_rows = [r for r in track.load() if r["sent"]]
+        assert sent_rows and all(r["sport_key"] in paid_leagues for r in sent_rows)
+        today = store.load("today.json", {})
+        assert today["pronos"] and all("score" not in c for c in today["pronos"])
+        data = store.load("monde.json", {})
+        assert data["day"] == WDAY and data["brk"] == 1 and data["paid"] == [k for k in data["leagues"] if k in paid_leagues] \
+            and sum(len(v) for v in data["leagues"].values()) == 50 and os.path.getsize(store.path("monde.json")) < 20_000
+        assert len(fair_rows := store.load("fair.json", [])) == C.FAIR_TRACK and all(r["result"] is None for r in fair_rows)
+        # --- commandes lues dans le cache du matin (aucun appel réseau)
+        sb.serve(lambda url, **kw: (_ for _ in ()).throw(AssertionError(f"requête inattendue : {url}")))
+        m = app.handle_command("/monde")
+        assert m.startswith("🌍 MATCHS DU jeu. 08/10 (50 matchs") and "🌐 International" in m and "💳 Ligue des nations UEFA (4)" in m
+        assert "• Brasileirão (2) : 22:00 Flamengo - Palmeiras" in m and "• League One (12)" in m and "relevé de 08:00 UTC" in m
+        assert m.index("🌐 International") < m.index("🇪🇺 Europe") < m.index("🌎 Amériques") < m.index("🌏 Asie")
+        asia = app.handle_command("/monde asie")
+        assert "J League" in asia and "Saudi Pro League" in asia and "MLS" not in asia and "Premier" not in asia
+        assert "Aucun match dans cette région" in app.handle_command("/monde afrique")
+        assert "MLS" in app.handle_command("/monde Amériques") and "Ajax" not in app.handle_command("/monde amériques")
+        lig = app.handle_command("/ligues")
+        assert lig.startswith(f"📚 LIGUES SUIVIES ({len(C.LEAGUE_KEYS)} dans le catalogue, au plus 6 payées par jour)")
+        assert "💳 Ligue des nations UEFA (4)" in lig and "💳 Championship (5)" in lig and "⚽ MLS (3)" in lig
+        assert "💤 Serie A" in lig and "· Premier League" in lig and "Crédits du matin dépensés : 12" in lig
+        for line in ("🇪🇺 Europe", "🌎 Amériques", "🌏 Asie / Océanie", "🌍 Afrique", "🌐 International"):
+            assert line in lig
+        aide = app.handle_command("/aide")
+        assert "/monde" in aide and "/ligues" in aide
+        fre = app.handle_command("/match Ajax")                              # match payé ? non : pronostic sans cote ou liste
+        assert "Ajax" in fre or "Aucun match" in fre
+        fr1 = app.handle_command("/match L1T3")
+        assert "cote juste" in fr1 and "joue si la cote ≥" in fr1, fr1
+        # le cache d'un autre jour n'est pas servi
+        sb.set_now(datetime(2026, 10, 9, 9, tzinfo=UTC))
+        assert app.handle_command("/monde").startswith("Pas encore de relevé aujourd'hui")
+        assert "pas encore de relevé aujourd'hui" in app.handle_command("/ligues") and "   💤 Serie A" not in app.handle_command("/ligues")
+        sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
+
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
+        bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        # --- 2) aucune ligue payée (crédits sous le plancher) : tour du monde + pronostics, pas de faux combinés
+        week = {k: v for k, v in break_day_leagues().items() if k in ("soccer_efl_champ", "soccer_england_league1", "soccer_usa_mls",
+                                                                      "soccer_brazil_campeonato", "soccer_japan_j_league")}
+        world_profiles(week)
+        fake = sb.serve(FakeOdds(25, week, sports=list(week)))
+        sent = run_morning(sb, fake)
+        txt = "\n".join(sent)
+        assert fake.paid() == [] and not track.load() and fake.remaining == 25
+        assert "🌍 TOUR DU MONDE" in txt and "Pas de cote payée aujourd'hui — budget de crédits : 25 crédits restants" in txt, txt
+        assert "🎲 PRONOSTICS KELLY" in txt and "joue si la cote ≥" in txt and "Brasileirão (2)" in txt
+        assert "Pas assez de matchs" not in txt and "COMBINÉS DU" not in txt and "PARI DU JOUR" not in txt and "SÛR" not in txt
+        assert "   💳" not in next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))          # aucune ligue payée
+        assert not any(r["sent"] for r in track.load())                        # rien n'est suivi comme pari envoyé (pas de cote, pas de CLV)
+        assert store.load("fair.json", []) and store.load("monde.json", {})["paid"] == []
+        assert "cote juste" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
+
+        # --- 3) aucun match nulle part aujourd'hui : on le dit en une ligne avec les prochains jours
+        for f in os.listdir(store.DATA_DIR):
+            os.remove(os.path.join(store.DATA_DIR, f))
+        odds.CREDITS.update(remaining=None, used=None)
+        tomorrow = {"soccer_france_ligue_one": wevs("t", [("A1", "B1"), ("C1", "D1")], [20], "2026-10-09"),
+                    "soccer_usa_mls": wevs("u", [("E1", "F1")], [23], "2026-10-10")}
+        fake = sb.serve(FakeOdds(500, tomorrow, sports=list(tomorrow)))
+        sent = run_morning(sb, fake)
+        w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        assert "😴 Aucun match aujourd'hui dans les 2 ligues en saison" in w, w
+        assert "Prochains matchs : ven. 09/10 : 2 match(s) (Ligue 1) ; sam. 10/10 : 1 match(s) (MLS)" in w, w
+        assert fake.paid() == [] and len(sent) == 3 and sent[-1].startswith("Probabilités estimées")   # bilan + monde + avertissement
+        assert "Aucun match aujourd'hui." in app.handle_command("/monde") and "Prochains matchs" in app.handle_command("/monde")
+        # --- 4) rien non plus les jours suivants
+        fake = sb.serve(FakeOdds(500, {}, sports=["soccer_epl"]))
+        sent = run_morning(sb, fake)
+        assert "Aucun match annoncé dans les 7 prochains jours" in next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        # --- 5) The Odds API en panne : message clair, pas d'exception, pas de combiné vide
+        sb.serve(lambda url, **kw: Resp({"message": "service indisponible", "error_code": "DOWN"}, 503))
+        sent = run_morning(sb, None)
+        w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        assert "Impossible de lister les matchs du jour" in w and "service indisponible" in w and "COMBINÉS" not in "\n".join(sent)
+    print("message du matin toujours utile : OK")
+
+
+def test_africa_and_fair_settlement():
+    """Matchs africains d'API-Football dans le tour du monde (une requête, sans cotes) ; pronostics sans cote réglés
+    gratuitement le lendemain (football-data) et résumés dans le message du matin et /bilan."""
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
+        lg = {"soccer_usa_mls": wevs("mls", [("Inter Miami", "LA Galaxy")], [23])}
+        football = []
+        ts = int(datetime(2026, 10, 8, 15, tzinfo=UTC).timestamp())
+        api = lambda lgn, ctry, i, h, a: {"fixture": {"id": i, "timestamp": ts, "status": {"short": "NS"}},   # noqa: E731
+                                          "league": {"name": lgn, "country": ctry}, "goals": {"home": None, "away": None},
+                                          "teams": {"home": {"id": i * 10, "name": h}, "away": {"id": i * 10 + 1, "name": a}}}
+        resp = [api("Ligue 1", "Ivory-Coast", 1, "ASEC Mimosas", "Africa Sports"), api("CAF Champions League", "World", 2, "Al Ahly", "Wydad"),
+                api("Ligue 1", "France", 3, "Lyon", "Nice"), api("Premier League Women", "Egypt", 4, "X", "Y")]
+        odds_fake = FakeOdds(25, lg, sports=list(lg))
+
+        def net(url, **kw):
+            if "api-sports.io" in url:
+                football.append(kw.get("params"))
+                return Resp({"errors": [], "response": resp})
+            return odds_fake(url, **kw)
+        sb.serve(net)
+        os.environ["STATS_API_KEY"] = "test-stats-key"
+        stats._calls, stats._halted = 0, False
+        stats._refreshed.clear()
+        sent = run_morning(sb, odds_fake)
+        w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        assert "🌍 Afrique : 2 match(s) (API-Football, sans cotes" in w, w
+        assert "• Ligue 1 (Ivory-Coast) (1) : 15:00 ASEC Mimosas - Africa Sports" in w and "• CAF Champions League (1) : 15:00 Al Ahly - Wydad" in w
+        assert "Lyon" not in w and "Women" not in w and len(football) == 1              # une seule requête pour tout le jour
+        cached = store.load("fixtures_day.json", {})[WDAY]
+        assert sum(1 for f in cached if f.get("lg")) == 2 and len(cached) == 4         # seul l'Afrique garde sa ligue : cache léger
+        assert "Al Ahly" in app.handle_command("/monde") and "Al Ahly" in app.handle_command("/monde afrique")
+        assert "Al Ahly" not in app.handle_command("/monde europe")
+        os.environ.pop("STATS_API_KEY")
+
+    # règlement gratuit des pronostics (CSV football-data) et résumé du matin
+    day = datetime(2026, 9, 30, tzinfo=UTC)
+    now = datetime(2026, 10, 2, 8, tzinfo=UTC)
+    with Sandbox() as sb:
+        C.SPORTS = list(C.LEAGUE_KEYS)
+        sb.set_now(now)
+        sb.serve(FakeOdds(500, {}))
+        played = day.strftime("%d/%m/%Y")
+        csv = ("Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,HC,AC,HY,AY,HR,AR\n"
+               f"E0,{played},Man City,Arsenal,2,1,7,5,2,3,0,1\n")                               # 12 corners, 6 cartons, 3 buts
+        fd_cache(csv)
+
+        def prono(key, market, name, point, p=0.64, home="Manchester City", away="Arsenal", ko="2026-09-30T15:00:00Z"):
+            return {"key": key, "id": "m1", "sport_key": "soccer_epl", "event": f"{home} - {away}", "home": home, "away": away,
+                    "commence": ko, "market": market, "name": name, "point": point, "who": None, "group": "soccer",
+                    "pick": key, "prob": p, "fair": round(1 / p, 2), "league": "Premier League", "date": "2026-09-30", "result": None}
+        rows = [prono("c", "alternate_totals_corners", "Over", 10.5), prono("c2", "alternate_totals_corners", "Under", 10.5),
+                prono("k", "alternate_totals_cards", "Over", 5.5), prono("g", "totals", "Over", 2.5),
+                prono("g2", "totals", "Under", 2.5), prono("b", "btts", "Yes", None), prono("d", "double_chance", "Manchester City or Draw", None),
+                prono("d2", "double_chance", "Draw or Arsenal", None),
+                prono("nf", "totals", "Over", 2.5, home="Chelsea", away="Liverpool", ko="2026-10-01T15:00:00Z"),      # absent du CSV
+                prono("old", "totals", "Over", 2.5, home="Chelsea", away="Liverpool", ko="2026-09-20T15:00:00Z")]
+        store.save("fair.json", rows)
+        n = len(sb.serve(FakeOdds(500, {})).log)
+        msgs = app.fair_report(now)                                                     # règle puis résume
+        res = {r["key"]: r["result"] for r in store.load("fair.json", [])}
+        assert res == {"c": "win", "c2": "loss", "k": "win", "g": "win", "g2": "loss", "b": "win", "d": "win", "d2": "loss",
+                       "nf": None, "old": "void"}, res
+        assert len(odds.requests.get.log) == n                                          # aucun appel The Odds API, aucun crédit
+        # message du matin : résultats + calibration, une seule fois
+        assert len(msgs) == 1 and msgs[0].startswith("🎲 PRONOSTICS KELLY — RÉSULTATS (sans cote)"), msgs
+        assert "✅ Manchester City - Arsenal : Plus de 10.5 corners (proba 64%, cote juste 1.56)" in msgs[0] and "❌" in msgs[0] and "5/8 gagnés (62%) pour une proba annoncée moyenne de 64%" in msgs[0]
+        assert app.fair_report(now) == []
+        bil = settle.bilan({"picks": [], "combos": []})
+        assert "Aucun pari réglé" in bil                                                   # sans paris réglés, le bilan reste inchangé
+        track.save([dict(mk_row("x", "e9", "h2h", True, "2026-09-30T15:00:00Z"), result="win", prob=0.5, date="2026-09-30", closed_at="x",
+                         clv=0.01)])
+        assert "🎲 Pronostics sans cote : 5/8 gagnés (62%)" in settle.bilan({"picks": [], "combos": []})
+    print("Afrique et règlement des pronostics : OK")
+
+
 def main():
     bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
     events = app.load_sample()
@@ -1046,6 +1513,11 @@ def main():
     test_stats_and_analyse_commands()
     test_special_combo()
     test_run_daily_with_sources()
+    test_catalogue_and_priority()
+    test_budget_with_many_leagues()
+    test_fair_pronostics()
+    test_morning_always_useful()
+    test_africa_and_fair_settlement()
     shutil.rmtree(os.environ["DATA_DIR"], ignore_errors=True)
     print("OK : tout le flux passe hors ligne.")
 

@@ -6,6 +6,7 @@ import math
 import os
 import shutil
 import tempfile
+import time
 from datetime import date, datetime, timezone
 
 TMP = tempfile.mkdtemp(prefix="kelly-sources-test-")
@@ -783,6 +784,59 @@ def test_probe_sources_report():
         probe.OUT, store.DATA_DIR = real_out, real_data
         for k, v in old_env.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+
+def test_new_leagues_slim_profiles_and_deadline():
+    """Autres pays (fichier « new leagues », résultats seulement) : profil de buts ; divisions secondaires : profil léger ;
+    délai maximal : plus aucun téléchargement, sans bloquer la source."""
+    net = fresh()
+    assert fd.url("BRA", "2627") == "https://football-data.co.uk/new/BRA.csv" and "BRA" in fd.NEW_DIVS
+    assert fd.SPORT_TO_DIV["soccer_usa_mls"] == "USA" and fd.DIV_TO_SPORT["BRA"] == "soccer_brazil_campeonato"
+    teams = ["Flamengo RJ", "Palmeiras", "Santos", "Corinthians"]
+    rows = ["Country,League,Season,Date,Time,Home,Away,HG,AG,Res,PH,PD,PA"]
+    for i in range(12):
+        d = (date(2025, 9, 1) + (date(2025, 9, 7) - date(2025, 9, 1)) * i).strftime("%d/%m/%Y")
+        rows.append(f"Brazil,Serie A,2025,{d},21:00,{teams[i % 4]},{teams[(i + 1) % 4]},{i % 4},{i % 3},H,2.0,3.3,3.6")
+    rows += ["Brazil,Serie A,2019,01/05/2019,21:00,Old FC,Santos,1,0,H,2.0,3.3,3.6",
+             "Brazil,Serie A,2025,20/11/2025,21:00,Santos,Palmeiras,,,,2.0,3.3,3.6"]               # non joué
+    net.routes["https://football-data.co.uk/new/BRA.csv"] = Resp(200, "\n".join(rows).encode())
+    e1 = fixture("E0_2526.csv").decode("utf-8-sig").replace("\nE0,", "\nE1,")
+    net.routes["https://football-data.co.uk/mmz4281/2526/E1.csv"] = Resp(200, e1.encode())
+    net.routes["https://football-data.co.uk/mmz4281/2425/E1.csv"] = Resp(404)
+    h = fd.refresh(["soccer_brazil_campeonato", "soccer_efl_champ"])
+    assert h["ok"], h
+    assert len(net.hits("/new/BRA.csv")) == 1 and not net.hits("/new/BRA.csv")[0][0].endswith("2526")     # un seul fichier par pays
+    prof = fd.profiles()
+    fla = prof["teams"]["Flamengo RJ"]
+    assert fla["div"] == "BRA" and fla["all"]["n"] == 6 and "goals_for" in fla["all"] and "shots_for" not in fla["all"], fla
+    assert "Old FC" not in prof["teams"]                                       # plus d'un an : écarté
+    # profil léger des divisions hors des 5 grandes : buts, corners, cartons ; les grandes gardent tout
+    champ = next(t for t, v in prof["teams"].items() if v["div"] == "E1")
+    assert "corners_for" in prof["teams"][champ]["all"] and "shots_for" not in prof["teams"][champ]["all"]
+    full = fd.team_profiles(fd.parse_csv(fixture("E0_2526.csv").decode("utf-8-sig"), "E0", "2526")[0])
+    assert "shots_for" in full["teams"]["Arsenal"]["all"]                      # les 5 grandes ligues gardent tous les chiffres
+    # chiffres d'avant-match : buts attendus (Poisson) pour le Brésil, jamais de corners (le fichier n'en a pas)
+    features.reload()
+    f = sources.match_features("Flamengo", "Palmeiras", "soccer_brazil_campeonato")
+    assert f["sources"] == ["football-data"] and f["n_home"] >= 5 and "exp_goals_home" in f and "exp_corners" not in f, f
+    assert sources.match_features("Flamengo", "Palmeiras", "soccer_epl")["sources"] == []              # autre division : écarté
+    # règlement gratuit : fichier lu depuis le cache disque, sans requête
+    n = len(net.log)
+    ms = fd.cached_history(["BRA"])
+    assert len(ms) == 12 and len(net.log) == n and fd.find_match(ms, "Flamengo", "Palmeiras", "2025-09-01")
+    # délai maximal dépassé : cache lu, aucun nouveau téléchargement, la source n'est pas bloquée
+    CLOCK.t += 30 * 24 * HOUR
+    http.set_deadline(60)
+    http._deadline = time.monotonic() - 1
+    try:
+        n = len(net.log)
+        res = http.fetch("https://football-data.co.uk/new/BRA.csv", "footballdata", http.TTL_CSV_CURRENT)
+        assert res.ok and res.stale and "délai dépassé" in res.error and len(net.log) == n
+        res = http.fetch("https://football-data.co.uk/mmz4281/2526/D2.csv", "footballdata", http.TTL_CSV_CURRENT)
+        assert not res.ok and "délai dépassé" in res.error and len(net.log) == n and not state.is_blocked("footballdata")
+    finally:
+        http.set_deadline(None)
+    assert http._deadline is None
 
 
 def test_refresh_never_raises():

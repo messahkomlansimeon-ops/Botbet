@@ -37,6 +37,14 @@ _sleep = time.sleep                      # remplaçables dans les tests
 _last = {}                               # domaine -> instant de la dernière réponse
 _crawl = {}                              # domaine -> Crawl-delay de robots.txt
 _robots = {}                             # domaine -> (instant, RobotFileParser | None)
+_deadline = None                         # instant (time.monotonic) au-delà duquel on ne lance plus de téléchargement
+
+
+def set_deadline(seconds=None):
+    """Plus aucun nouveau téléchargement après `seconds` secondes (le cache disque reste lu) ; None = pas de limite.
+    Tient le passage du matin sous la durée maximale du workflow quand le cache est froid."""
+    global _deadline
+    _deadline = time.monotonic() + seconds if seconds else None
 
 
 def cache_dir():
@@ -240,6 +248,8 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
         return _fail(url, cached, state.health(source)["last_error"] or "source bloquée", blocked=True)
     if cached and _fresh(cached[0], ttl):
         return Result(url, cached[1], cached[0].get("status", 200), from_cache=True)
+    if _deadline is not None and time.monotonic() > _deadline:
+        return _fail(url, cached, "délai dépassé, téléchargement reporté au prochain passage")
     if check_robots:
         ok, why, blocked = allowed(url)
         if not ok:

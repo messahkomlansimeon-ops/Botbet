@@ -55,6 +55,23 @@ def p_btts(lh, la, name):
     return yes if name == "Yes" else 1 - yes
 
 
+def p_1x2(lh, la, cap=10):
+    """(P domicile, P nul, P extérieur) pour deux Poisson indépendants de moyennes lh et la."""
+    pm = lambda m, k: math.exp(-m) * m ** k / math.factorial(k)             # noqa: E731
+    ph = pd = pa = 0.0
+    for i in range(cap + 1):
+        for j in range(cap + 1):
+            p = pm(lh, i) * pm(la, j)
+            if i > j:
+                ph += p
+            elif i == j:
+                pd += p
+            else:
+                pa += p
+    t = ph + pd + pa
+    return ph / t, pd / t, pa / t
+
+
 def signed_diff(who, lh, la):
     """Buts attendus (domicile - extérieur) du côté du pari : who = home | away | draw (nul : -|écart|)."""
     d = lh - la

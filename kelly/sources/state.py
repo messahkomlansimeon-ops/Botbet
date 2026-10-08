@@ -9,7 +9,7 @@ FILE = "sources_state.json"
 BLOCK_HOURS = 24
 CLOUDFLARE_HOURS = 24 * 7          # défi Cloudflare : on ne réessaie qu'une fois par semaine
 LABELS = {"footballdata": "football-data", "understat": "Understat", "fbref": "FBref"}
-MAX_PROFILE_BYTES = 350_000          # par source : les trois profils restent sous 1 Mo
+MAX_PROFILE_BYTES = 450_000          # par source : les trois profils restent sous 1 Mo
 clock = time.time                    # remplaçable dans les tests
 
 

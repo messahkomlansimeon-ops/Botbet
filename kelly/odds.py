@@ -2,11 +2,11 @@
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import budget, config as C, learn
+from . import budget, catalogue, config as C, learn
 
 
 def sport_group(sport_key):
@@ -144,15 +144,86 @@ def league_events(sport_key, window):
     return get(f"/sports/{sport_key}/events", dateFormat="iso", **window) or []
 
 
-def fetch_events(day, props=True, optional=False, use="daily", after=None):
+def scan_today(day, after=None, sports=None, seconds=None):
+    """Relevé GRATUIT (0 crédit) des matchs du jour `day` dans toutes les ligues suivies et en saison : /sports puis
+    /events de chaque ligue, dans l'ordre de priorité de C.SPORTS (le plus important d'abord), au plus `seconds`
+    (C.SCAN_SECONDS) pour tenir le passage du matin. Une ligue en erreur est sautée.
+    -> {day, sports: [clés en saison], leagues: {clé: [matchs]}, complete, error}."""
+    out = {"day": str(day), "sports": [], "leagues": {}, "complete": True, "error": None}
+    window = day_window(day, after)
+    try:
+        sports = list_sports(limit=False) if sports is None else sports
+    except OddsError as e:
+        out["error"] = str(e)
+        print(f"[odds] liste des sports indisponible : {e}", file=sys.stderr)
+        return out
+    out["sports"] = [s["key"] for s in sports]
+    limit, t0 = C.SCAN_SECONDS if seconds is None else seconds, time.monotonic()
+    for i, s in enumerate(sports):
+        if time.monotonic() - t0 > limit:
+            out["complete"] = False
+            print(f"[odds] relevé des matchs coupé après {limit} s : {len(sports) - i} ligue(s) non relevée(s).", file=sys.stderr)
+            break
+        try:
+            evs = league_events(s["key"], window)
+        except Exception as e:                          # noqa: BLE001 - une ligue ne tue pas le run
+            print(f"[{s['key']}] matchs du jour indisponibles : {e}", file=sys.stderr)
+            continue
+        if evs:
+            out["leagues"][s["key"]] = [dict(ev, sport_key=s["key"]) for ev in evs]
+    return out
+
+
+def scan_ahead(day, sports, days=7, seconds=None):
+    """Matchs des `days` jours suivant `day` (gratuit), pour dire quand les ligues reprennent un jour sans match :
+    {« AAAA-MM-JJ »: {clé de ligue: nombre de matchs}}. Même limite de durée que scan_today."""
+    window = {"commenceTimeFrom": f"{day + timedelta(days=1)}T00:00:00Z",
+              "commenceTimeTo": f"{day + timedelta(days=days)}T23:59:59Z"}
+    out, limit, t0 = {}, C.SCAN_SECONDS if seconds is None else seconds, time.monotonic()
+    for key in sports:
+        if time.monotonic() - t0 > limit:
+            break
+        try:
+            evs = league_events(key, window)
+        except Exception as e:                          # noqa: BLE001
+            print(f"[{key}] prochains matchs indisponibles : {e}", file=sys.stderr)
+            continue
+        for ev in evs:
+            d = out.setdefault(ev["commence_time"][:10], {})
+            d[key] = d.get(key, 0) + 1
+    return out
+
+
+def match_numbers(home, away, sport_key):
+    """Chiffres d'avant-match gratuits d'un match (sources.match_features) ; {"sources": []} si rien. Les sélections ne
+    sont pas dans les profils de clubs : un nom proche d'un club serait une fausse piste."""
+    if catalogue.region(sport_key) == "monde":
+        return {"sources": []}
+    try:
+        from .sources import features             # import tardif : sources importe stats
+        return features.match_features(home, away, sport_key)
+    except Exception:                                # noqa: BLE001 - stats facultatives
+        return {"sources": []}
+
+
+def model_covered(ev):
+    """Vrai si Kelly a un modèle corners/cartons pour ce match : profils football-data des deux équipes (c'est là que
+    l'écart modèle-ligne existe, donc là que les marchés détaillés valent leurs crédits)."""
+    f = match_numbers(ev["home_team"], ev["away_team"], ev.get("sport_key", ""))
+    return "exp_corners" in f or "exp_cards" in f
+
+
+def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=None):
     """Matchs du jour `day` (date UTC) + marchés détaillés, dans la limite du budget `use`.
-    1. /events (gratuit) : seules les ligues qui ont des matchs sont payées, les plus chargées d'abord
-       (au plus C.MAX_SPORTS) ;
-    2. marchés vedettes en bulk (1 appel par ligue, au plus C.FEATURED_SHARE du budget) ;
-    3. marchés détaillés, par ordre de priorité de C.PROP_MARKETS (corners, cartons... d'abord), sur les
-       matchs les mieux cotés, tant que le budget le permet.
+    1. relevé gratuit (scan_today ; `scan` : relevé déjà fait) : seules les ligues qui ont des matchs sont payées,
+       dans l'ordre de catalogue.prioritise (région, ligues majeures, nombre de matchs), au plus C.MAX_SPORTS ;
+    2. marchés vedettes en bulk (1 appel par ligue ; au plus C.FEATURED_SHARE du budget quand des marchés détaillés
+       suivront, sinon tout le budget : pas de profil de stats, pas de crédit dépensé en corners/cartons) ;
+    3. marchés détaillés, par ordre de priorité de C.PROP_MARKETS (corners, cartons... d'abord), seulement sur les
+       matchs les mieux cotés qui ont un profil football-data (model_covered), tant que le budget le permet.
     `optional` : balayage facultatif (alertes, relevé du soir), sauté si crédits bas ; `after` : n'achète
-    que les matchs à venir. Une ligue, un match ou un marché refusé ou en erreur est sauté (log stderr)."""
+    que les matchs à venir. Une ligue, un match ou un marché refusé ou en erreur est sauté (log stderr).
+    Les clés des ligues payées sont ajoutées à scan["paid"]."""
     events = []
     if budget.left(use) <= 0:
         why = f"allocation du jour : {budget.allowance()} crédits, déjà utilisée" if C.BUDGET_SHARES.get(use) else "aucune part dans BUDGET_SHARES"
@@ -161,48 +232,55 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None):
     if optional and not credits_ok("balayage large"):
         return events
     window = day_window(day, after)
-    try:
-        sports = list_sports(limit=False)
-    except OddsError as e:
-        print(f"[odds] liste des sports indisponible : {e}", file=sys.stderr)
+    scan = scan if scan is not None else scan_today(day, after)
+    scan.setdefault("paid", [])
+    if scan.get("error"):
         return events
-    leagues = []
-    for i, s in enumerate(sports):
-        try:
-            n = len(league_events(s["key"], window))
-        except Exception as e:                          # noqa: BLE001 - une ligue ne tue pas le run
-            print(f"[{s['key']}] matchs du jour indisponibles : {e}", file=sys.stderr)
-            continue
-        if n:
-            leagues.append((-n, i, s))
-    leagues = [s for _, _, s in sorted(leagues, key=lambda t: t[:2])][:C.MAX_SPORTS]
-    print(f"[odds] ligues avec matchs : {', '.join(s['key'] for s in leagues) or 'aucune'} "
+    counts = {k: len(v) for k, v in scan["leagues"].items()}
+    leagues = catalogue.prioritise(counts, C.SPORTS)[:C.MAX_SPORTS]
+    print(f"[odds] ligues avec matchs : {', '.join(leagues) or 'aucune'} "
           f"(budget « {use} » : {budget.left(use)} crédits)", file=sys.stderr)
-    cap = int(budget.left(use) * C.FEATURED_SHARE + 1e-9) if props else budget.left(use)
     used = 0
-    for s in leagues:
-        markets = C.FEATURED.get(sport_group(s["key"]), "h2h")
-        n = len(markets.split(","))
-        if used and used + n > cap:                     # au moins une ligue ; le reste va aux marchés détaillés
-            print(f"[budget] part des marchés vedettes atteinte ({used}/{cap}) : {s['key']} ignorée.", file=sys.stderr)
-            break
-        why = budget.why_not(n, use)
-        if why:
-            print(f"[budget] {s['key']} ignorée ({why}).", file=sys.stderr)
-            break
-        try:
-            for ev in get(f"/sports/{s['key']}/odds", use=use, regions="eu", oddsFormat="decimal",
-                          markets=markets, **window) or []:
-                ev["sport_key"] = s["key"]
-                ev.setdefault("bookmakers", [])
-                events.append(ev)
-            used += n
-        except Exception as e:                          # noqa: BLE001
-            print(f"[{s['key']}] ignoré : {e}", file=sys.stderr)
+
+    def buy(keys, cap):
+        """Marchés vedettes en bulk (1 appel par ligue) tant que `cap` crédits ne sont pas dépassés. -> True si le budget
+        lui-même a refusé (inutile d'insister)."""
+        nonlocal used
+        for key in keys:
+            markets = C.FEATURED.get(sport_group(key), "h2h")
+            n = len(markets.split(","))
+            if used and used + n > cap:                 # au moins une ligue ; le reste va aux marchés détaillés
+                print(f"[budget] part des marchés vedettes atteinte ({used}/{cap}) : {key} ignorée.", file=sys.stderr)
+                return False
+            why = budget.why_not(n, use)
+            if why:
+                print(f"[budget] {key} ignorée ({why}).", file=sys.stderr)
+                return True
+            try:
+                for ev in get(f"/sports/{key}/odds", use=use, regions="eu", oddsFormat="decimal",
+                              markets=markets, **window) or []:
+                    ev["sport_key"] = key
+                    ev.setdefault("bookmakers", [])
+                    events.append(ev)
+                used += n
+                scan["paid"].append(key)
+            except Exception as e:                      # noqa: BLE001
+                print(f"[{key}] ignoré : {e}", file=sys.stderr)
+        return False
+    left = budget.left(use)
+    refused = buy(leagues, int(left * C.FEATURED_SHARE + 1e-9) if props else left)
+    # Aucun match acheté n'a de profil de stats : les marchés détaillés (corners, cartons) n'auraient pas d'écart modèle-ligne
+    # à exploiter. La moitié mise de côté pour eux va alors à d'autres ligues, une par une, jusqu'à en trouver une dont les
+    # matchs ont un profil : le reste du budget sert à ses corners et cartons.
+    if props and not refused:
+        for key in [k for k in leagues if k not in scan["paid"]]:
+            if refused or any(model_covered(ev) for ev in events):
+                break
+            refused = buy([key], left)
     if not props:
         return events
     events.sort(key=lambda e: -len(e["bookmakers"]))
-    top = events[:C.PROP_EVENTS]
+    top = [ev for ev in events if model_covered(ev)][:C.PROP_EVENTS]
     lists = [C.PROP_MARKETS.get(sport_group(ev["sport_key"]), []) for ev in top]
     # marché par marché (priorité), sur tous les matchs : corners partout avant les cartons.
     jobs = [(ev, ms[i]) for i in range(max(map(len, lists), default=0)) for ev, ms in zip(top, lists) if i < len(ms)]
@@ -247,6 +325,12 @@ def label(market, name, point, who, group):
     if market == "double_chance":
         return "Double chance : " + name.replace(" or ", " ou ").replace("Draw", "Nul")
     return "Match nul" if name == "Draw" else name
+
+
+def league_name(ev):
+    """Nom français de la ligue du catalogue (« Ligue des nations UEFA »), sinon le titre donné par l'API."""
+    key = ev.get("sport_key", "")
+    return catalogue.name(key) if catalogue.region(key) != catalogue.OTHER else ev.get("sport_title", "")
 
 
 def market_weight(market):
@@ -318,7 +402,7 @@ def build_picks(events, day, after=None, history=None, model=None):
                 "key": key, "id": ev["id"], "sport_key": ev.get("sport_key", ""), "group": group,
                 "event": f'{ev["home_team"]} - {ev["away_team"]}',
                 "home": ev["home_team"], "away": ev["away_team"],
-                "league": ev.get("sport_title", ""), "start": start.strftime("%H:%M"),
+                "league": league_name(ev), "start": start.strftime("%H:%M"),
                 "commence": ev["commence_time"],
                 "market": market, "who": who, "point": point, "name": name,
                 "pick": label(market, name, point, who, group),
