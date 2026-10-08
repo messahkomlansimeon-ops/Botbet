@@ -17,7 +17,7 @@ os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import (app, bankroll, bootstrap, budget, cache, calib, combos as CB, fair, fmt, config as C, learn, odds, played,  # noqa: E402
+from kelly import (app, bankroll, bootstrap, budget, cache, calib, chat, combos as CB, fair, fmt, config as C, learn, odds, played,  # noqa: E402
                    settle, sources, stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
 from tests import make_sample, synth  # noqa: E402
@@ -843,7 +843,7 @@ def test_stats_and_analyse_commands():
         put_profiles()
         assert "/stats" in app.handle_command("/aide") and "/analyse" in app.handle_command("/aide")
         t = app.handle_command("/stats arsenal")
-        assert t.startswith("📈 Arsenal (Premier League)") and "10 derniers matchs (football-data)" in t, t
+        assert t.startswith("📈 Arsenal (Premier League)\n\n") and "10 derniers matchs (football-data)" in t, t
         assert "Corners : 7,0 pour / 4,0 contre" in t and "Cartons (jaunes + rouges) : 1,5 pour / 2,0 contre" in t, t
         assert "Tirs : 14,0 pour / 9,0 contre" in t and "Fautes" in t and "Buts : 2,0 pour / 0,8 contre" in t, t
         assert "xG (Understat, 6 derniers) : 1,90 pour / 1,00 contre ; domicile 1,90/1,00" in t and "actualisées le 30/09" in t, t
@@ -856,12 +856,12 @@ def test_stats_and_analyse_commands():
         picks = stats.enrich(odds.build_picks(events, day), day)
         store.save("today.json", {"day": str(day), "picks": picks})
         a = app.handle_command("/analyse arsenal")
-        assert a.startswith("🔬 <b>Arsenal – Chelsea</b> · 18h00 · Premier League"), a
-        assert "Corners attendus : 11,0 (6,5 + 4,5)" in a and "Cartons attendus : 3,8 (1,8 + 2,0)" in a, a
-        assert "Buts attendus d'après les tirs : 2,85 (1,70 - 1,15)" in a and "football-data, understat" in a, a
-        assert "Meilleurs paris :" in a and "Kelly s'attend à 11,0 corners ; la ligne est à 9,5" in a, a
+        assert a.startswith("🔬 <b>Arsenal – Chelsea</b>\n<i>18h00 · Premier League</i>"), a
+        assert "Corners : <b>11,0</b>  <i>(6,5 + 4,5)</i>" in a and "Cartons : <b>3,8</b>  <i>(1,8 + 2,0)</i>" in a, a
+        assert "Buts attendus d'après les occasions (xG) : <b>2,9</b>" in a and "football-data, understat" in a, a
+        assert "Meilleurs paris" in a and "Kelly s'attend à 11,0 corners ; la ligne est à 9,5" in a, a
         assert "Bukayo Saka : 2 tirs ou plus" in a and "Il fait 2,9 tirs par match en moyenne ; la ligne est à 1,5" in a, a
-        assert a.count("• ") >= 7                                       # 6 paris + lignes de chiffres
+        assert a.count("👉 ") >= 6 and a.count("• ") >= 3              # 6 paris + lignes de chiffres
         assert app.handle_command("/analyse xyz").startswith("Aucun match du jour")
         assert app.handle_command("/analyse").startswith("Exemple")
         both = app.handle_command("/analyse chelsea")
@@ -1198,8 +1198,8 @@ def test_fair_pronostics():
         for c in pronos:                                                   # proba utile : ni hasard ni évidence
             assert C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and c["min_odds"] >= c["fair"] >= 1 / C.FAIR_P_RANGE[1] - 0.01
         text = fmt.pronos(pronos)
-        assert text.startswith("<b>🎲 Pronostics sans cote (à vérifier chez 1xBet)</b>"), text
-        assert "Alpha – Bravo : Plus de 10,5 corners · joue si la cote est au moins <b>" in text, text
+        assert text.startswith("<b>🎲 Pronostics Kelly sans cote</b>"), text
+        assert "<b>Alpha – Bravo</b>" in text and "👉 Plus de 10,5 corners — mini <b>" in text, text
         assert f'<b>{fmt.num(top["min_odds"])}</b>' in text and "cote juste" not in text
         # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
         f = {"n_home": 10, "n_away": 10, "exp_corners": 10.2, "exp_cards": 4.9, "exp_goals_home": 1.6, "exp_goals_away": 1.3}
@@ -1277,15 +1277,15 @@ def test_morning_always_useful():
         fake = sb.serve(FakeOdds(500, lg, sports=list(lg) + JUNK_SPORTS))
         sent = run_morning(sb, fake)
         txt = "\n".join(sent)
-        world = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
-        assert "50 matchs dans 13 ligues" in world and "trêve internationale" in world, world
+        world = next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))
+        assert "50 matchs aujourd'hui dans 13 ligues" in world and "Trêve internationale" in world, world
         order = [world.index(x) for x in ("🌐 International", "🇪🇺 Europe", "🌎 Amériques", "🌏 Asie / Océanie")]
         assert order == sorted(order), world                                   # sélections d'abord un jour de trêve
-        assert "💳 Ligue des nations UEFA (4)" in world and "• MLS (3)" in world and "18:00 France - Italie" in world
-        assert "Cotes réelles aujourd'hui : " in world and "crédit" not in world and "🎲" in world
-        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 Pronostics sans cote (à vérifier chez 1xBet)" in txt
-        prono = next(m for m in sent if m.startswith("<b>🎲 Pronostics sans cote"))
-        assert "joue si la cote est au moins" in prono and "chez 1xBet" in prono and "cote juste" not in prono
+        assert "💳 Ligue des nations UEFA\n" in world and "⚽ MLS\n" in world and "18h00  France – Italie" in world, world
+        assert "Cotes réelles achetées : " in world and "crédit" not in world and "🎲" in world
+        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 Pronostics Kelly sans cote" in txt
+        prono = next(m for m in sent if m.startswith("<b>🎲 Pronostics Kelly sans cote"))
+        assert "— mini <b>" in prono and "chez 1xBet" in prono and "cote juste" not in prono
         assert "Alpha" not in prono and "Ligue des nations" not in prono             # les sélections n'ont pas de profil de club
         paid_leagues = {c[0].split("/")[2] for c in fake.paid()}
         assert paid_leagues == {"soccer_uefa_nations_league", "soccer_international_friendlies",
@@ -1322,7 +1322,7 @@ def test_morning_always_useful():
         fre = app.handle_command("/match Ajax")                              # match payé ? non : pronostic sans cote ou liste
         assert "Ajax" in fre or "Aucun match" in fre
         fr1 = app.handle_command("/match L1T3")
-        assert "joue si la cote est au moins" in fr1 and "cote juste" not in fr1, fr1
+        assert "— mini <b>" in fr1 and "cote juste" not in fr1, fr1
         # le cache d'un autre jour n'est pas servi
         sb.set_now(datetime(2026, 10, 9, 9, tzinfo=UTC))
         assert app.handle_command("/monde").startswith("Pas encore de relevé aujourd'hui")
@@ -1341,13 +1341,13 @@ def test_morning_always_useful():
         sent = run_morning(sb, fake)
         txt = "\n".join(sent)
         assert fake.paid() == [] and not track.load() and fake.remaining == 25
-        assert "🌍 TOUR DU MONDE" in txt and "Pas de cote payée aujourd'hui — budget de cotes du jour épuisé" in txt, txt
-        assert "🎲 Pronostics sans cote" in txt and "joue si la cote est au moins" in txt and "Brasileirão (2)" in txt
+        assert "🌍 Tour du monde" in txt and "Pas de cote achetée aujourd'hui (budget de cotes du jour épuisé)" in txt, txt
+        assert "🎲 Pronostics Kelly sans cote" in txt and "— mini <b>" in txt and "⚽ Brasileirão\n" in txt
         assert "Pas assez de matchs" not in txt and "COMBINÉS DU" not in txt and "PARI DU JOUR" not in txt and "SÛR" not in txt
-        assert "   💳" not in next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))          # aucune ligue payée
+        assert "Cotes réelles achetées" not in next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))          # aucune ligue payée
         assert not any(r["sent"] for r in track.load())                        # rien n'est suivi comme pari envoyé (pas de cote, pas de CLV)
         assert store.load("fair.json", []) and store.load("monde.json", {})["paid"] == []
-        assert "Pronostics sans cote" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
+        assert "Pronostics Kelly sans cote" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
 
         # --- 3) aucun match nulle part aujourd'hui : on le dit en une ligne avec les prochains jours
         wipe()
@@ -1356,7 +1356,7 @@ def test_morning_always_useful():
                     "soccer_usa_mls": wevs("u", [("E1", "F1")], [23], "2026-10-10")}
         fake = sb.serve(FakeOdds(500, tomorrow, sports=list(tomorrow)))
         sent = run_morning(sb, fake)
-        w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        w = next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))
         assert "😴 Aucun match aujourd'hui dans les 2 ligues en saison" in w, w
         assert "Prochains matchs : ven. 09/10 : 2 match(s) (Ligue 1) ; sam. 10/10 : 1 match(s) (MLS)" in w, w
         assert fake.paid() == [] and len(sent) == 2 and sent[-1].startswith("<i>Probabilités estimées"), sent    # monde + avertissement
@@ -1365,12 +1365,12 @@ def test_morning_always_useful():
         shutil.rmtree(cache.odds_dir(), ignore_errors=True)
         fake = sb.serve(FakeOdds(500, {}, sports=["soccer_epl"]))
         sent = run_morning(sb, fake)
-        assert "Aucun match annoncé dans les 7 prochains jours" in next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        assert "Aucun match annoncé dans les 7 prochains jours" in next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))
         # --- 5) The Odds API en panne : message clair, pas d'exception, pas de combiné vide
         shutil.rmtree(cache.odds_dir(), ignore_errors=True)
         sb.serve(lambda url, **kw: Resp({"message": "service indisponible", "error_code": "DOWN"}, 503))
         sent = run_morning(sb, None)
-        w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
+        w = next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))
         assert "Impossible de lister les matchs du jour" in w and "service indisponible" in w and "COMBINÉS" not in "\n".join(sent)
     print("message du matin toujours utile : OK")
 
@@ -1401,9 +1401,9 @@ def test_africa_and_fair_settlement():
         stats._calls, stats._halted = 0, False
         stats._refreshed.clear()
         sent = run_morning(sb, odds_fake)
-        w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
-        assert "🌍 Afrique : 2 match(s) (API-Football, sans cotes" in w, w
-        assert "• Ligue 1 (Ivory-Coast) (1) : 15:00 ASEC Mimosas - Africa Sports" in w and "• CAF Champions League (1) : 15:00 Al Ahly - Wydad" in w
+        w = next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))
+        assert "🌍 Afrique <i>(sans cotes)</i></b> · 2 matchs" in w, w
+        assert "⚽ Ligue 1 (Ivory-Coast)\n      15h00  ASEC Mimosas – Africa Sports" in w and "⚽ CAF Champions League\n      15h00  Al Ahly – Wydad" in w, w
         assert "Lyon" not in w and "Women" not in w
         assert sorted(p["date"] for p in football if p.get("date")) == ["2026-10-07", "2026-10-08"]       # hier et aujourd'hui, une fois chacun
         cached = store.load("fixtures_day.json", {})[WDAY]
@@ -1831,9 +1831,11 @@ def test_messages_human():
             mkleg(2, 1.90, 0.53, edge=0.07, home="Santos", away="Gremio", pick="Plus de 2,5 buts", start="22:30",
                   why="cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)", best_odds=2.05, book="Betfair")]
     msg = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"})
-    assert isinstance(msg, telegram.Html) and msg.startswith("<b>🛡️ SÛR — cote 2,95</b>\n<i>2 paris · 37 % de chances · espérance +9,4 % · mise conseillée : 2 u</i>\n\n1. <b>Flamengo – Vasco &amp; Fils</b> · 21h00 · Brasileirão")
-    assert "\n   Flamengo gagne — <b>1,55</b>\n   ↳ Très probable : 70 % de chances\n\n2. <b>Santos – Gremio</b> · 22h30" in msg, msg
-    assert "<b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n   ↳ Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)" in msg, msg
+    assert isinstance(msg, telegram.Html) and msg.startswith(
+        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances\n📈 Espérance +9,4 % · 💰 mise conseillée : <b>2 u</b>\n\n"
+        "<b>1. Flamengo – Vasco &amp; Fils</b>  <i>21h00 · Brasileirão</i>"), msg
+    assert "\n👉 Flamengo gagne — <b>1,55</b>\n💡 <i>Très probable : 70 % de chances</i>\n\n<b>2. Santos – Gremio</b>  <i>22h30" in msg, msg
+    assert "<b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n💡 <i>Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)</i>" in msg, msg
     # résultats du lendemain
     rows = fake_rows_for_results()
     won = {"tier": C.COMBOS[0][0], "keys": ["k1", "k2"], "odds": 6.12, "stake": 2.0, "result": "win", "odds_final": 6.12, "date": "2026-10-07"}
@@ -2016,8 +2018,8 @@ def test_fair_combos():
     # messages : titre « à vérifier chez 1xBet », jambes « joue si la cote est au moins X », mise indicative
     for target, (cl, total, prob) in built:
         msg = fmt.fair_combo(total, cl, prob, CB.fair_stake(total))
-        assert isinstance(msg, telegram.Html) and msg.startswith(f"<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini {fmt.odds_txt(total)}</b>\n"), msg
-        assert msg.count("joue si la cote est au moins <b>") == len(cl) and "mise indicative" in msg and "pas calculée sur ta bankroll" in msg
+        assert isinstance(msg, telegram.Html) and msg.startswith(f"<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET</b>\n🎯 Cote mini <b>{fmt.odds_txt(total)}</b>"), msg
+        assert msg.count("Joue si 1xBet paie au moins <b>") == len(cl) and "Mise indicative" in msg and "pas calculée sur ta bankroll" in msg
         assert "mise conseillée" not in msg and "cote juste" not in msg and not re.search(r"\d\.\d", fmt.plain(msg))
         assert msg.count("<b>") == msg.count("</b>") and msg.count("<i>") == msg.count("</i>")
     stakes = [CB.fair_stake(t) for _, (_, t, _) in built]
@@ -2102,16 +2104,16 @@ def test_replay_oct8():
         world = M.build(scan, day, datetime(2026, 10, 8, 8, tzinfo=UTC), paid=monde["paid"], africa=africa)
         msgs, sent_picks, sent_combos = app.build_day(picks, day, world, pronos, None, fair_combos)
         text = [fmt.plain(m) for m in msgs]
-        fair_msgs = [m for m in msgs if m.startswith("<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini")]
+        fair_msgs = [m for m in msgs if m.startswith("<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET</b>")]
         assert len(fair_msgs) == len(built) >= 2
         head = text[0]
         assert "3 avec des cotes réelles" in head and f"{len(built)} combinés à vérifier chez 1xBet" in head, head
         assert all(c["tier"] in [t for t, _, _ in C.COMBOS] for c in sent_combos)
-        assert not any("joue si la cote" in t for t in text if "COMBINÉ À VÉRIFIER" not in t and "Pronostics sans cote" not in t)
+        assert not any("paie au moins" in t or "— mini" in t for t in text if "COMBINÉ À VÉRIFIER" not in t and "Pronostics Kelly sans cote" not in t)
         real_ids = {c["id"] for c in sent_picks}
         assert real_ids <= {p["id"] for p in picks}                                      # les combinés réels n'ont que des jambes à vraies cotes
         for fm in fair_msgs:
-            assert "mise conseillée" not in fm and "mise indicative" in fm
+            assert "mise conseillée" not in fm and "Mise indicative" in fm
         # --- enregistrement : fichier à part, jamais dans bets.json ni dans les mises de la bankroll
         n_rec = fair.record_combos(built, day)
         rows = store.load("fair_combos.json", [])
@@ -2124,9 +2126,9 @@ def test_replay_oct8():
         store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
         reply = app.handle_command("/combi 25")
         assert isinstance(reply, telegram.Html) and "ne permettent pas d'atteindre la cote 25" in reply, reply
-        assert "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini 2" in reply and "à vérifier chez 1xBet" in reply
-        mini = float(re.search(r"cote mini (\d+),(\d+)", reply).group(0).split()[-1].replace(",", "."))
-        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and "joue si la cote est au moins" in reply and "mise indicative" in reply
+        assert "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET" in reply and "Cote mini <b>2" in reply and "à vérifier chez 1xBet" in reply
+        mini = float(re.search(r"Cote mini <b>(\d+,\d+)", reply).group(1).replace(",", "."))
+        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and "Joue si 1xBet paie au moins" in reply and "ise indicative" in reply
         assert "SUR MESURE" not in reply and "mise conseillée" not in reply
         # --- une cote hors de portée de TOUS les pronostics solides du jour : impossible, on dit précisément ce qui manque
         huge = int(CB.fair_shortfall(keep, 25)["best_total"] * 5)
@@ -2145,7 +2147,7 @@ def test_replay_oct8():
         assert "Nautico Recife" in st and "(API-Football, Brasileirão Série B)" in st and "Tirs cadrés" in st and "Corners" in st, st
         store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in pronos]})
         an = app.handle_command("/analyse Santos")
-        assert "Santos - Flamengo" in an and "Chiffres d'avant-match (API-Football" in an and "Tirs cadrés attendus" in an, an
+        assert "Santos - Flamengo" in an and "Chiffres d'avant-match</b>\n<i>API-Football" in an and "• Tirs cadrés : <b>" in an, an
     print("rejeu du 8 octobre : OK")
 
 
@@ -2193,8 +2195,8 @@ def test_run_daily_world():
         last_profile = max(i for i, o in enumerate(order) if o[0] == "football" and o[1] == "/fixtures/statistics")
         first_paid = min(i for i, o in enumerate(order) if o[0] == "odds" and o[1].endswith("/odds"))
         assert last_profile < first_paid, "les profils sont remplis avant l'achat des cotes"
-        fair_msgs = [m for m in sent if m.startswith("<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini")]
-        assert fair_msgs and all("joue si la cote est au moins" in m for m in fair_msgs), [m[:60] for m in sent]
+        fair_msgs = [m for m in sent if m.startswith("<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET</b>")]
+        assert fair_msgs and all("Joue si 1xBet paie au moins" in m for m in fair_msgs), [m[:60] for m in sent]
         header = next(m for m in sent if m.startswith("<b>🔥 Kelly"))
         assert "combiné" in header and "à vérifier chez 1xBet" in header, header
         rows = store.load("fair_combos.json", [])
@@ -2203,7 +2205,7 @@ def test_run_daily_world():
         assert all(c["tier"] in [t for t, _, _ in C.COMBOS] for c in bets["combos"])                  # jamais de combiné à cote juste ici
         today_ = store.load("today.json", {})
         assert today_["pronos"] and {c["sport_key"] for c in today_["pronos"]} & {"africa", "soccer_brazil_campeonato"}
-        assert any(m.startswith("<b>🎲 Pronostics sans cote") for m in sent) and any("🌍 TOUR DU MONDE" in m for m in sent)
+        assert any(m.startswith("<b>🎲 Pronostics Kelly sans cote") for m in sent) and any("🌍 Tour du monde" in m for m in sent)
         for m in sent:
             assert m.count("<b>") == m.count("</b>") and m.count("<i>") == m.count("</i>"), m
         plain_all = "\n".join(fmt.plain(m) for m in sent).lower()
@@ -2407,7 +2409,7 @@ def test_combo_expectation():
     C.COMBO_MIN_EV = old
     assert combo and CB.ev(combo) < 1                                   # 0 = filtre désactivé
     msg = fmt.combo(tiers[0][0], combo[0], combo[1], combo[2], 2.0, hint="/joue sur <cote>")
-    assert "espérance −6,2 %" in msg and "/joue sur &lt;cote&gt;" in msg, msg
+    assert "Espérance −6,2 %" in msg and "/joue sur &lt;cote&gt;" in msg, msg
     print("espérance des combinés : OK")
 
 
@@ -2424,6 +2426,95 @@ def test_started_matches_excluded():
         msg = app.custom_combo([], [], 10, "2026-10-08", started=True)
         assert msg.startswith("Plus de cotes réelles jouables") and "Réessaie demain : aujourd'hui" in msg, msg
     print("matchs commencés écartés de /combi et /top : OK")
+
+
+class FakeTelegram:
+    """Remplace telegram.api : enregistre les appels, renvoie des messages numérotés et les mises à jour `updates` à getUpdates."""
+
+    def __init__(self, updates=()):
+        self.calls, self.updates, self.n = [], list(updates), 100
+
+    def __call__(self, method, **payload):
+        self.calls.append((method, payload))
+        if method == "getUpdates":
+            out, self.updates = self.updates, []
+            return out
+        if method == "sendMessage":
+            self.n += 1
+            return {"message_id": self.n}
+        return True
+
+    def sent(self):
+        return [p for m, p in self.calls if m == "sendMessage"]
+
+
+def test_buttons_and_free_text():
+    """Menu fixe, bouton « ✅ Je l'ai joué » (appui -> question de cote -> « 5,40 2000 » -> noté, bouton remplacé), texte libre."""
+    files = ("bets.json", "tracked.json", "fair_combos.json", "bankroll.json", "today.json", "pending.json", "telegram.json")
+    old_api, old_env = telegram.api, {k: os.environ.get(k) for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")}
+    with saved_files(*files):
+        day = "2026-10-08"
+        bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        store.save("today.json", {"day": day, "picks": [mkleg(1, 1.8, 0.6, home="Santos", away="Flamengo", event="Santos - Flamengo",
+                                                                  commence="2026-10-08T22:30:00Z")], "pronos": []})
+        store.save("bets.json", {"picks": [], "combos": [{"tier": C.COMBOS[0][0], "keys": ["k1"], "odds": 5.0, "prob": 0.22, "stake": 10.0,
+                                                          "date": day, "result": None}]})
+        track.save([])
+        store.save("fair_combos.json", [])
+        store.save("pending.json", {})
+        # --- texte libre
+        assert chat.route("📊 Mes résultats") == ("/bilan", None) and chat.route("🔝 Paris du jour") == ("/top", None)
+        assert chat.route("🧾 À noter") == ("/joue", None) and chat.route("Bilan") == ("/bilan", None)
+        assert chat.route("bilan détail 7")[0].startswith("/bilan détail 7") and chat.route("Combi 20") == ("/combi 20", None)
+        assert chat.route("joué sûr 5,40") == ("/joue sûr 5,40", None) and chat.route("paris du jour") == ("/top", None)
+        assert chat.route("/top") == ("/top", None) and chat.route("flamengo") == ("/analyse flamengo", None)
+        cmd, reply = chat.route("🎯 Un combiné")
+        assert cmd is None and [b["callback_data"] for b in reply.markup["inline_keyboard"][0]] == [f"combi|{t}" for t in chat.COMBI_TARGETS]
+        cmd, reply = chat.route("blablabla xyz")
+        assert cmd is None and "pas compris" in reply and reply.markup["keyboard"]
+        assert "Appuie d'abord" in chat.route("5,40")[1]                    # une cote sans pari en attente
+        aide = app.handle_command("aide")
+        assert "mode d'emploi" in aide and [[b["text"] for b in row] for row in aide.markup["keyboard"]] == chat.MENU
+        assert app.handle_command("bilan").markup["inline_keyboard"][0][0]["callback_data"] == "bilan|detail"
+        todo = app.handle_command("🧾 À noter")
+        assert todo.markup["inline_keyboard"][0][0]["callback_data"] == f"joue|sur|{day}" and "Sûr" in todo
+        # --- bouton « ✅ Je l'ai joué » puis la cote, par le vrai circuit Telegram (poll)
+        os.environ.update(TELEGRAM_TOKEN="t", TELEGRAM_CHAT_ID="42")
+        fake = FakeTelegram([{"update_id": 1, "callback_query": {"id": "cb1", "data": f"joue|sur|{day}",
+                                                                 "message": {"message_id": 7, "chat": {"id": 42}}}},
+                             {"update_id": 2, "callback_query": {"id": "cb2", "data": f"joue|sur|{day}",
+                                                                 "message": {"message_id": 8, "chat": {"id": 666}}}}])
+        telegram.api = fake
+        telegram.poll(app.handle_command, on_callback=chat.on_callback)
+        assert [p["callback_query_id"] for m, p in fake.calls if m == "answerCallbackQuery"] == ["cb1", "cb2"]   # toujours acquittés
+        assert len(fake.sent()) == 1 and "À quelle cote" in fake.sent()[0]["text"]          # le clic d'un autre chat est ignoré
+        assert chat.get_pending()["msg"] == 7
+        fake.updates = [{"update_id": 3, "message": {"text": "5,40 2000", "chat": {"id": 42}}}]
+        telegram.poll(app.handle_command, on_callback=chat.on_callback)
+        assert "Noté" in fake.sent()[-1]["text"] and chat.get_pending() is None
+        c = store.load("bets.json", {})["combos"][0]
+        assert c["played"]["odds"] == 5.4 and c["played"]["stake"] == 2000
+        edit = [p for m, p in fake.calls if m == "editMessageReplyMarkup"]
+        assert edit and edit[0]["message_id"] == 7 and edit[0]["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Joué à 5,40"
+        # --- attente expirée
+        chat.set_pending("sur", day, 9)
+        p = store.load("pending.json", {})
+        p["at"] = (datetime.now(timezone.utc) - timedelta(minutes=chat.PENDING_MINUTES + 1)).isoformat(timespec="seconds")
+        store.save("pending.json", p)
+        assert chat.get_pending() is None and "Appuie d'abord" in chat.route("6")[1]
+        # --- les messages du matin portent les boutons
+        legs = [mkleg(i, 1.9, 0.6, edge=0.06) for i in range(6)]
+        msgs, _, combos = app.build_day(legs, date(2026, 10, 8))
+        assert msgs[0].markup["keyboard"] == chat.menu()["keyboard"]                       # en-tête : le menu fixe
+        datas = [getattr(m, "markup", {}).get("inline_keyboard", [[{}]])[0][0].get("callback_data") for m in msgs[1:]]
+        assert "joue|pari|2026-10-08" in datas and any(d and d.startswith("joue|sur|") for d in datas), datas
+    telegram.api = old_api
+    for k, v in old_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    print("boutons, menu et texte libre : OK")
 
 
 def main():
@@ -2487,7 +2578,7 @@ def main():
     text = settle.bilan(bets, detail=True)
     assert "Envoyés" in text and "Suivis en silence" in text and "Brier" in text and "CLV" in text, text
     simple = settle.bilan(bets)
-    assert "Bilan" in simple and "Combinés :" in simple and not re.search(r"Brier|CLV|rendement", simple), simple
+    assert "Bilan" in simple and "Combinés</b> :" in simple and not re.search(r"Brier|CLV|rendement", simple), simple
     print("\n" + text + "\n")
 
     # --- Calibration : 400 résultats synthétiques « corners/cartons » dont les
@@ -2552,6 +2643,7 @@ def main():
     test_calibration_tracking()
     test_combo_expectation()
     test_started_matches_excluded()
+    test_buttons_and_free_text()
     test_paid_ranking_favours_profiles()
     test_replay_oct8()
     test_run_daily_world()

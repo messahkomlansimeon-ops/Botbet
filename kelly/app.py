@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, combos as CB, config as C, fair, fmt, learn, monde,
+from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, learn, monde,
                odds, played, settle, sources, stats, store, strength, telegram, track)
 from .sources import fmmatch, http
 from .telegram import Html
@@ -59,30 +59,33 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         seen = (f"{n_world} matchs analysés dans le monde, {n_events} avec des cotes réelles" if n_world
                 else f"{n_events} matchs analysés avec des cotes réelles")
         n_c = f"{len(built)} combiné{'s' if len(built) > 1 else ''} aujourd'hui" if built else "aucun combiné aujourd'hui"
+        head = [fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}"), "", f"📊 {seen}", f"🎯 {n_c}"]
         if built_fair:
-            n_c += (f" · {len(built_fair)} combiné{'s' if len(built_fair) > 1 else ''} à vérifier chez 1xBet (cotes de Kelly, "
-                    "pas celles du bookmaker)")
-        head = [fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}"), f"{seen} · {n_c}"]
+            head.append(f"🎲 {len(built_fair)} combiné{'s' if len(built_fair) > 1 else ''} à vérifier chez 1xBet "
+                        + fmt.i("(cotes de Kelly, pas du bookmaker)"))
+        if missing or rejected:
+            head.append("")
         if missing:
             head.append(fmt.i(fmt.esc(CB.skip_line(missing, n_events, anything=bool(quality)))))
         if rejected:
             head.append(fmt.i(fmt.esc(CB.ev_line(rejected))))
-        messages.append(Html("\n".join(head)))
+        messages.append(telegram.with_buttons(Html("\n".join(head)), chat.menu()))
     if world:
         messages.append(monde.tour_du_monde(world, len(pronos), why_no_odds))
     if top:
-        messages.append(fmt.single(top, CB.leg_reason(top), hint="/joue pari <cote>"))
+        messages.append(telegram.with_buttons(fmt.single(top, CB.leg_reason(top)), chat.played_button("pari", day)))
         sent_picks.append(top)
     for title, combo in built:
         picks_, odds_, prob = combo
         st = bankroll.stake(prob, odds_, title, bank)
-        messages.append(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
-                                  hint=f"/joue {played.norm(fmt.tier_word(title))} <cote>"))
+        messages.append(telegram.with_buttons(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_}),
+                                              chat.played_button(played.norm(fmt.tier_word(title)), day)))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_],
                             "odds": round(odds_, 2), "prob": round(prob, 5), "stake": st})
     for target, (legs, min_total, prob) in built_fair:
-        messages.append(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), hint=f"/joue v{target} <cote>"))
+        messages.append(telegram.with_buttons(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total)),
+                                              chat.played_button(f"v{target}", day)))
     if pronos:
         messages.append(fmt.pronos(pronos, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
     if not messages:
@@ -514,18 +517,22 @@ def alert_text(alerts):
 
 # ---------- commandes Telegram ----------
 
-HELP = """🤖 Kelly — commandes :
-/bilan [jours] : résultats et gains (/bilan détail pour les chiffres techniques)
-/match <nom> : les paris d'un match du jour (ou le pronostic sans cote)
-/combi <cote> : combiné sur mesure à la cote visée, quel que soit le nombre de matchs (à cotes réelles, sinon à vérifier chez 1xBet)
-/top : les meilleurs paris du jour
-/monde [région] : tous les matchs du jour dans le monde (europe, ameriques, asie, afrique, international)
-/ligues : le catalogue des ligues suivies et celles payées en cotes réelles aujourd'hui
-/analyse <match> : chiffres d'avant-match (corners, cartons, tirs, buts) d'un match du jour + ses meilleurs paris
-/stats <équipe> : corners, cartons, tirs, fautes et buts des 10 derniers matchs (football-data, ou API-Football pour le Brésil, l'Afrique...)
-/joue <palier> <cote> [mise] : note ce que tu as joué chez 1xBet (ex. /joue sur 5,40 · /joue pari 1,85 · /joue v5 6,10) ; /joue seul : ce qui reste à noter
-/bank [montant] : voir ou régler la bankroll
-/aide : ce message"""
+HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
+
+<b>Les boutons en bas</b>
+🔝 <b>Paris du jour</b> : les meilleurs paris encore jouables
+🎯 <b>Un combiné</b> : choisis une cote, Kelly le construit
+📊 <b>Mes résultats</b> : gagnés, perdus, ta bankroll
+🧾 <b>À noter</b> : les paris du jour à noter une fois joués
+
+<b>Quand tu as parié chez 1xBet</b>
+Appuie sur <b>✅ Je l'ai joué</b> sous le pari, puis envoie juste la cote (ex. 5,40). Ajoute ta mise si tu veux : 5,40 2000.
+
+<b>Tu peux aussi écrire</b>
+• un nom d'équipe : <i>Flamengo</i>
+• <i>combi 20</i>, <i>bilan</i>, <i>bilan détail</i>, <i>bank 50000</i>
+
+<i>Les anciennes commandes marchent toujours : /top, /combi, /bilan, /joue, /match, /analyse, /stats, /monde, /ligues, /bank.</i>""")
 
 
 LEAGUES = {"E0": "Premier League", "SP1": "Liga", "I1": "Serie A", "D1": "Bundesliga", "F1": "Ligue 1",
@@ -549,10 +556,11 @@ def _venues(src):
 
 
 def _stat_block(allv, skip=()):
-    return [x for k, x in (("corners", _pair(allv, "corners", "• Corners :")),
+    return [x for k, x in (("goals", _pair(allv, "goals", "• Buts :")), ("shots", _pair(allv, "shots", "• Tirs :")),
+                           ("sot", _pair(allv, "sot", "• Tirs cadrés :")), ("corners", _pair(allv, "corners", "• Corners :")),
                            ("cards", _pair(allv, "cards", "• Cartons (jaunes + rouges) :")),
-                           ("shots", _pair(allv, "shots", "• Tirs :")), ("sot", _pair(allv, "sot", "• Tirs cadrés :")),
-                           ("fouls", _pair(allv, "fouls", "• Fautes :")), ("goals", _pair(allv, "goals", "• Buts :")))
+                           ("fouls", _pair(allv, "fouls", "• Fautes :")), ("throws", _pair(allv, "throws", "• Touches :")),
+                           ("offsides", _pair(allv, "offsides", "• Hors-jeu :")))
             if x and k not in skip]
 
 
@@ -566,23 +574,25 @@ def fmt_team(p, query):
                 "elles le sont chaque matin à 08:00).")
     if "many" in p:
         return f"Plusieurs équipes correspondent à « {query} » : {', '.join(p['many'])}. Précise le nom."
-    lines = [f"📈 {p['team']} ({LEAGUES.get(p['div'], p['div']) or 'API-Football'})"]
+    league = LEAGUES.get(p["div"], p["div"]) if p.get("div") else None
+    lines = [f"📈 {p['team']}" + (f" ({league})" if league else "")]
     fd = p.get("fd") or {}
     allv = fd.get("all") or {}
+    shown = set()
     if allv.get("n"):
-        lines.append(f"{allv['n']} derniers matchs (football-data) :")
+        lines += ["", f"📋 {allv['n']} derniers matchs (football-data), pour / contre :"]
         lines += _stat_block(allv)
         lines += _venues(fd)
+        shown |= {k for k in ("corners", "cards", "shots", "sot", "fouls", "goals") if allv.get(k + "_for") is not None}
+    # FotMob (stats de match) puis API-Football complètent sans répéter ce qui figure déjà
     aps = p.get("aps") or {}
-    av = aps.get("all") or {}
-    if av.get("n"):
-        # API-Football complète football-data (qui n'a que les buts hors grands championnats) sans répéter ce qui y figure
-        skip = {k for k in ("corners", "cards", "shots", "sot", "fouls", "goals") if allv.get(k + "_for") is not None}
-        block = _stat_block(av, skip)
+    for src, label in ((p.get("fm") or {}, "FotMob"), (aps, "API-Football" + (f", {aps['lg']}" if aps.get("lg") else ""))):
+        av = src.get("all") or {}
+        block = _stat_block(av, shown) if av.get("n") else []
         if block:
-            lines.append(f"{av['n']} derniers matchs (API-Football{', ' + aps['lg'] if aps.get('lg') else ''}) :")
-            lines += block
-            lines += _venues(aps) if not skip else []
+            lines += ["", f"📋 {av['n']} derniers matchs ({label}), pour / contre :"] + block
+            shown |= {k for k in ("corners", "cards", "shots", "sot", "fouls", "goals", "throws", "offsides")
+                      if av.get(k + "_for") is not None}
     us = p.get("us") or {}
     if (us.get("all") or {}).get("xg") is not None:
         u = us["all"]
@@ -591,11 +601,11 @@ def fmt_team(p, query):
             v = us.get(venue) or {}
             if v.get("xg") is not None and v.get("xga") is not None:
                 txt += f" ; {label} {v['xg']:.2f}/{v['xga']:.2f}"
-        lines.append(txt)
+        lines += ["", txt]
     if len(lines) == 1:
         lines.append("Pas assez de matchs récents dans les sources.")
     if p.get("updated"):
-        lines.append(f"(sources actualisées le {p['updated'][8:10]}/{p['updated'][5:7]})")
+        lines += ["", f"(sources actualisées le {p['updated'][8:10]}/{p['updated'][5:7]})"]
     return "\n".join(lines)
 
 
@@ -635,18 +645,20 @@ def features_lines(f, only=None, head="Chiffres d'avant-match"):
         t, h, a = n("exp_" + k), n(f"exp_{k}_home"), n(f"exp_{k}_away")
         if (t is None and h is None) or not (ok("exp_" + k) or ok(f"exp_{k}_home")):
             return None
-        split = f" ({h:.1f} + {a:.1f})" if h is not None and a is not None else ""
-        return f"• {label} : {t if t is not None else h + a:.1f}{unit}{split}"
-    lines = [f"{head} ({fmt.esc(', '.join(f['sources']))}, {f.get('n_home', '?')} et {f.get('n_away', '?')} derniers matchs) :"]
-    lines += [x for x in (two("corners", "Corners attendus"), two("cards", "Cartons attendus"),
-                          two("fouls", "Fautes attendues"), two("shots", "Tirs attendus"),
-                          two("sot", "Tirs cadrés attendus"), two("goals", "Buts attendus (moyennes)")) if x]
+        split = f"  {fmt.i(f'({h:.1f} + {a:.1f})')}" if h is not None and a is not None else ""
+        return f"• {label} : {fmt.b(f'{t if t is not None else h + a:.1f}{unit}')}{split}"
+    lines = ["", fmt.b(f"📐 {head}"), fmt.i(f"{fmt.esc(', '.join(f['sources']))} · {f.get('n_home', '?')} et "
+                                          f"{f.get('n_away', '?')} derniers matchs"), ""]
+    lines += [x for x in (two("goals", "Buts"), two("shots", "Tirs"), two("sot", "Tirs cadrés"), two("corners", "Corners"),
+                          two("cards", "Cartons"), two("fouls", "Fautes"), two("throws", "Touches"),
+                          two("offsides", "Hors-jeu")) if x]
     if only is None:
         if f.get("exp_xg_total") is not None:
-            lines.append(f"• Buts attendus d'après les tirs : {f['exp_xg_total']:.2f} ({f['exp_xg_home']:.2f} - {f['exp_xg_away']:.2f})")
+            xg = f"{f['exp_xg_total']:.1f}"
+            lines.append(f"• Buts attendus d'après les occasions (xG) : {fmt.b(xg)}")
         if f.get("ref_cards") is not None:
             lines.append(f"• Arbitre {fmt.esc(f['referee'])} : {f['ref_cards']:.1f} cartons par match")
-    return lines if len(lines) > 1 else []
+    return lines if len(lines) > 4 else []
 
 
 def analyse(picks, query, pronos=()):
@@ -662,19 +674,19 @@ def analyse(picks, query, pronos=()):
         if len(events) > 1:
             return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
         deep = deep_analysis(free[0])
-        head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))} · {fmt.hhmm(free[0]['start'])} · {fmt.esc(free[0]['league'])}"
+        head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))}\n{fmt.i(fmt.hhmm(free[0]['start']) + ' · ' + fmt.esc(free[0]['league']))}"
         fl = [] if deep else features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"]))
-        body = fmt.esc(deep) if deep else ("\n".join(fl) if fl else "Pas assez de données pour une analyse approfondie de ce match.")
+        body = ("\n" + fmt.esc(deep)) if deep else ("\n".join(fl) if fl else "\nPas assez de données pour une analyse approfondie de ce match.")
         return Html(comma(head + "\n" + body) + "\n\n" + fmt.pronos(free, 6))
     events = list(dict.fromkeys(c["event"] for c in found))
     if len(events) > 1:
         return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
     first = found[0]
-    lines = [f"🔬 {fmt.b(fmt.event_name(first))} · {fmt.hhmm(first['start'])} · {fmt.esc(first['league'])}"]
+    lines = [f"🔬 {fmt.b(fmt.event_name(first))}", fmt.i(f"{fmt.hhmm(first['start'])} · {fmt.esc(first['league'])}")]
     deep = deep_analysis(first)
     f = {"sources": []} if first["group"] != "soccer" else sources.match_features(first["home"], first["away"], first["sport_key"])
     if deep:
-        lines.append(fmt.esc(deep))
+        lines += ["", fmt.esc(deep)]
         if f.get("aps_keys"):                                   # le modèle approfondi n'a que les buts : API-Football complète
             lines += features_lines(f, only=set(f["aps_keys"]), head="Chiffres complémentaires")
     elif f["sources"]:
@@ -682,11 +694,12 @@ def analyse(picks, query, pronos=()):
     else:
         lines.append("Pas de stats réelles pour ce match (équipes inconnues des sources ou sources indisponibles).")
     best = sorted(found, key=lambda c: c["score"], reverse=True)[:6]
-    lines.append("Meilleurs paris :")
+    lines += ["", fmt.b("🎯 Meilleurs paris")]
     for c in best:
         why = fmt.why_line(c, CB.leg_reason(c))
-        lines.append(f"• {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances){'' if why else pm_note(c)}"
-                     + (f"\n   ↳ {fmt.esc(why)}" if why else ""))
+        lines.append(f"\n👉 {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances)"
+                     f"{'' if why else pm_note(c)}"
+                     + (f"\n💡 {fmt.i(fmt.esc(why))}" if why else ""))
     return Html(comma("\n".join(lines)))
 
 
@@ -706,7 +719,10 @@ def handle_command(text):
     """Répond à une commande Telegram. Hors ligne par construction : aucune requête réseau (cotes payantes ou non,
     API-Football, sources), seulement les données du matin dans data/."""
     with cache.offline():
-        return _handle_command(text)
+        cmd, reply = chat.route(text)
+        if reply is not None or not cmd:
+            return reply
+        return _handle_command(cmd)
 
 
 def _handle_command(text):
@@ -715,7 +731,7 @@ def _handle_command(text):
     today = store.load("today.json", {"day": "", "picks": []})
     picks = today["picks"]
     if cmd in ("/aide", "/help", "/start"):
-        return HELP
+        return telegram.with_buttons(HELP, chat.menu())
     if cmd == "/bilan":
         detail = any(a.lower() in ("détail", "detail", "details", "détails") for a in args)
         days = next((int(a) for a in args if a.isdigit()), None)
@@ -725,7 +741,8 @@ def _handle_command(text):
             d = learn.describe(learn.load(), track.load())
             return out + "\n\n" + bankroll.summary(bets["combos"]) + ("\n\n" + d if d else "")
         d = learn.describe_simple(learn.load(), track.load())
-        return Html(out + "\n\n" + fmt.esc(bank_line(bets["combos"])) + (("\n\n" + d) if d else ""))
+        return telegram.with_buttons(Html(out + "\n\n" + fmt.esc(bank_line(bets["combos"])) + (("\n\n" + d) if d else "")),
+                                     telegram.inline([[("🔎 Plus de détails", "bilan|detail")]]))
     if cmd == "/bank":
         b = bankroll.load()
         if args:
@@ -844,12 +861,12 @@ def run_commands(serve=False):
         print("Bot à l'écoute (Ctrl+C pour arrêter)...")
         while True:
             try:
-                telegram.poll(handle_command, timeout=30)
+                telegram.poll(handle_command, timeout=30, on_callback=chat.on_callback)
             except Exception as e:                  # noqa: BLE001 - le serveur ne s'arrête pas sur une erreur
                 print(f"[serve] {e}", file=sys.stderr)
                 time.sleep(5)
     else:
-        n = telegram.poll(handle_command)
+        n = telegram.poll(handle_command, on_callback=chat.on_callback)
         print(f"{n} message(s) traité(s).")
 
 

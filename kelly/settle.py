@@ -319,7 +319,8 @@ def bilan(bets, days=None, rows=None, detail=False):
         picks = [b for b in picks if b["date"] >= cutoff]
         combos = [c for c in combos if c["date"] >= cutoff]
     if not picks and not combos and not fair_combo_line(fair.load_combos(), days):
-        return "📊 BILAN\nAucun pari réglé pour l'instant." if detail else fmt.Html("📊 <b>Bilan</b>\nAucun pari réglé pour l'instant.")
+        return "📊 BILAN\nAucun pari réglé pour l'instant." if detail else fmt.Html(
+            "📊 <b>Bilan</b>\n\nAucun pari réglé pour l'instant : les paris du jour sont réglés le lendemain matin.")
     return _bilan_detail(bets, days, rows, picks, combos) if detail else _bilan_simple(days, rows, picks, combos)
 
 
@@ -355,35 +356,35 @@ def _gain(c):
 
 
 def _bilan_simple(days, rows, picks, combos):
+    """Bilan en mots simples, par blocs séparés d'une ligne vide : combinés, paris envoyés, paris joués chez 1xBet, pronostics sans
+    cote, fiabilité par marché."""
     sent = [r for r in picks if r.get("sent")]
-    lines = [f"📊 <b>Bilan</b>{f' — {days} derniers jours' if days else ''}"]
+    blocks = [[f"📊 <b>Bilan</b>{f' — {days} derniers jours' if days else ''}"]]
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
-        lines.append(f"Combinés : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat {fmt.signed(sum(map(_gain, combos)))}")
+        b = [f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat {fmt.b(fmt.signed(sum(map(_gain, combos))))}"]
         tiers = {}
         for c in combos:
             tiers.setdefault(fmt.tier_name(c["tier"]), []).append(c)
-        for tier, cs in tiers.items():
-            lines.append(f"   {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)} "
-                         f"({fmt.signed(sum(map(_gain, cs)))})")
+        b += [f"      {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)} ({fmt.signed(sum(map(_gain, cs)))})"
+              for tier, cs in tiers.items()]
+        blocks.append(b)
     if sent:
         w = sum(1 for r in sent if r["result"] == "win")
-        lines.append(f"Paris envoyés : {w} gagnés sur {len(sent)} ({fmt.pct(w / len(sent))})")
-    lines += [fmt.esc(x) for x in played.summary_lines(store.load("bets.json", {"combos": []}), rows, fair.load_combos(), days)]
-    fl = fair_line(fair.load(), days)
-    if fl:
-        lines.append(fmt.esc(fl))
-    fc = fair_combo_line(fair.load_combos(), days)
-    if fc:
-        lines.append(fmt.esc(fc))
+        blocks.append([f"✅ <b>Paris envoyés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(sent)} ({fmt.pct(w / len(sent))})"])
+    pl = played.summary_lines(store.load("bets.json", {"combos": []}), rows, fair.load_combos(), days)
+    if pl:
+        blocks.append([f"💵 <b>{fmt.esc(pl[0])}</b>"] + [f"      {fmt.esc(x)}" for x in pl[1:]])
+    free = [x for x in (fair_line(fair.load(), days), fair_combo_line(fair.load_combos(), days)) if x]
+    if free:
+        blocks.append([f"🎲 {fmt.esc(x)}" for x in free])
     cl = calib.lines()
     if cl:
-        lines.append(fmt.esc("Fiabilité de Kelly (pronostics réglés, depuis le début) : " + " · ".join(cl)))
+        blocks.append(["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(pronostics réglés, depuis le début)")] + [f"• {fmt.esc(x)}" for x in cl])
     pending = sum(1 for r in rows if r.get("result") is None)
-    if pending:
-        lines.append(fmt.i(f"{pending} pari{'s' if pending > 1 else ''} en attente de résultat"))
-    lines.append(fmt.i("Chiffres techniques : /bilan détail"))
-    return fmt.Html("\n".join(lines))
+    foot = ([f"⏳ {pending} pari{'s' if pending > 1 else ''} en attente de résultat"] if pending else [])
+    blocks.append(foot + [fmt.i("Chiffres techniques : bouton « Plus de détails », ou écris « bilan détail »")])
+    return fmt.Html("\n\n".join("\n".join(b) for b in blocks))
 
 
 def _bilan_detail(bets, days, rows, picks, combos):

@@ -12,7 +12,7 @@ import math
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
-from . import bankroll, combos as CB, config as C, fair, fmt, store, track
+from . import bankroll, combos as CB, config as C, fair, fmt, store, telegram, track
 
 MAX_ODDS = 10000.0
 
@@ -137,25 +137,29 @@ def command(args, day, now=None):
 def todo(day):
     """/joue sans argument : les paris du jour, notés ou non, avec la commande à taper."""
     bets = store.load("bets.json", {"picks": [], "combos": []})
-    lines = []
-    for c in (c for c in bets["combos"] if c["date"] == day):
-        w = norm(fmt.tier_word(c["tier"]))
-        lines.append(_todo_line(fmt.tier_word(c["tier"]), c, c["odds"], f"/joue {w} <cote>"))
-    for r in (r for r in single_rows(track.load(), bets["combos"]) if r["date"] == day):
-        lines.append(_todo_line("Pari du jour", r, r["odds"], "/joue pari <cote>"))
-    for c in (c for c in fair.load_combos() if c["date"] == day):
-        lines.append(_todo_line(f"À vérifier (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"/joue v{c['tier']} <cote>"))
+    lines, rows = [], []
+    items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
+    items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
+    items_ += [(f"À vérifier (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"v{c['tier']}")
+               for c in fair.load_combos() if c["date"] == day]
+    for name, x, ref, what in items_:
+        lines.append(_todo_line(name, x, ref, f"/joue {what} <cote>"))
+        if not x.get("played") and x.get("result") is None:
+            rows.append([(f"✅ {name} — {fmt.odds_txt(ref)}", f"joue|{what}|{day}")])
     if not lines:
-        return "Rien à noter aujourd'hui. Exemple pour plus tard : /joue sur 5,40"
-    return "\n".join(["🧾 À noter (cote obtenue chez 1xBet) :"] + lines
-                     + ["Mise facultative en 3e : /joue sur 5,40 2. Cote 0 : annule."])
+        return "Rien à noter aujourd'hui : les paris du jour arrivent à 08:00."
+    text = "\n".join(["🧾 Tes paris du jour", ""] + lines + ["", "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet."
+                                                         if rows else "Tout est noté 👍"])
+    return telegram.with_buttons(text, telegram.inline(rows)) if rows else text
 
 
 def _todo_line(name, x, ref, cmd):
     p = x.get("played")
     if p:
-        return f"• {name} : joué à {fmt.odds_txt(p['odds'])}, mise {fmt.units(p['stake'])} ✅"
-    return f"• {name} (cote {fmt.odds_txt(ref)}) : pas noté — {cmd}"
+        return f"✅ {name} : joué à {fmt.odds_txt(p['odds'])}, mise {fmt.units(p['stake'])}"
+    if x.get("result") is not None:
+        return f"⏹ {name} (cote {fmt.odds_txt(ref)}) : déjà réglé, pas noté"
+    return f"▫️ {name} (cote {fmt.odds_txt(ref)}) : pas noté — {cmd}"
 
 
 # ---------- bilan ----------

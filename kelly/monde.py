@@ -5,6 +5,7 @@ saison avec ses matchs [domicile, extérieur, "HH:MM" UTC], les ligues payées e
 d'API-Football (sans cotes) et, les jours sans match, les prochains jours. Petit : une journée chargée tient dans
 ~15 Ko. Les passages horaires et les commandes ne le relisent que, sans appel réseau.
 """
+import html
 from datetime import date
 
 from . import catalogue, config as C, store
@@ -96,6 +97,30 @@ def _africa_lines(data, limit=4):
     return lines
 
 
+def _esc(x):
+    return html.escape(str(x), quote=False)
+
+
+def _plural(n, word, many=None):
+    """« 1 match », « 3 matchs » ; `many` : forme du pluriel quand elle n'est pas juste « + s » (« autres matchs »)."""
+    return f"{n} {word if n == 1 else (many or word + 's')}"
+
+
+def _block(title, leagues, paid, max_leagues=3, max_matches=3):
+    """Bloc d'une région du tour du monde (HTML) : titre en gras, puis chaque ligue et ses matchs, un match par ligne.
+    leagues = [(nom, payée, [(heure, domicile, extérieur)])]."""
+    n = sum(len(ms) for _, _, ms in leagues)
+    lines = ["", f"<b>{title}</b> · {_plural(n, 'match')}"]
+    for name, is_paid, ms in leagues[:max_leagues]:
+        lines.append(f"{FLAG_PAID if is_paid else '⚽'} {_esc(name)}")
+        lines += [f"      {t.replace(':', 'h')}  {_esc(h)} – {_esc(a)}" for t, h, a in ms[:max_matches]]
+        if len(ms) > max_matches:
+            lines.append(f"      <i>+ {_plural(len(ms) - max_matches, 'autre match', 'autres matchs')}</i>")
+    if len(leagues) > max_leagues:
+        lines.append(f"<i>+ {_plural(len(leagues) - max_leagues, 'autre ligue', 'autres ligues')} : écris « monde » pour tout voir</i>")
+    return lines
+
+
 def _ahead(data):
     nxt = data.get("nxt") or {}
     if not nxt:
@@ -105,44 +130,46 @@ def _ahead(data):
 
 
 def tour_du_monde(data, n_prono=0, why_no_odds=None):
-    """Message « 🌍 TOUR DU MONDE » : matchs du jour par région, affiches notables, ce qui est payé en cotes réelles et
+    """Message « 🌍 Tour du monde » (HTML) : matchs du jour par région, un match par ligne, ce qui est payé en cotes réelles et
     ce qui est analysé gratuitement. Jamais vide : même sans aucun match, il le dit avec les prochains jours."""
+    from .telegram import Html
     d = date.fromisoformat(data["day"])
-    head = f"🌍 TOUR DU MONDE — {fr_date(d)}/{d.year}"
+    from .fmt import fr_day
+    head = f"<b>🌍 Tour du monde — {fr_day(d)}</b>"
     if data.get("error") and not data.get("leagues"):
-        return (f"{head}\n⚠️ Impossible de lister les matchs du jour ({data['error']}). Kelly réessaiera au prochain passage.")
+        return Html(f"{head}\n\n⚠️ Impossible de lister les matchs du jour ({_esc(data['error'])}). Kelly réessaiera au prochain passage.")
     n_tot = total(data)
     if not n_tot:
-        return (f"{head}\n😴 Aucun match aujourd'hui dans les {len(data.get('act', []))} ligues en saison que Kelly suit "
-                f"(Europe, Amériques, Asie, Afrique, sélections).\n{_ahead(data)}")
+        return Html(f"{head}\n\n😴 Aucun match aujourd'hui dans les {len(data.get('act', []))} ligues en saison que Kelly suit.\n"
+                    f"{_esc(_ahead(data))}")
     paid = set(data.get("paid", []))
     n_lg = len(data["leagues"]) + len({m[0] for m in data.get("africa", [])})
-    lines = [head, f"{n_tot} matchs dans {n_lg} ligues"
-                   + (" — trêve internationale : pas de grande affiche en Europe, les sélections passent d'abord"
-                      if data.get("brk") and "monde" in dict(groups(data)) else "")
-             + (" (relevé partiel : délai atteint)" if not data.get("complete", 1) else "")]
+    lines = [head, f"{_plural(n_tot, 'match')} aujourd'hui dans {_plural(n_lg, 'ligue')}"]
+    if data.get("brk") and "monde" in dict(groups(data)):
+        lines.append("<i>Trêve internationale : pas de grande affiche en Europe, les sélections passent d'abord.</i>")
+    if not data.get("complete", 1):
+        lines.append("<i>Relevé partiel (délai atteint).</i>")
     for r, leagues in groups(data):
-        n = sum(len(e) for _, _, e in leagues)
-        lines.append(f"{catalogue.region_label(r)} : {n} match(s) en {len(leagues)} ligue(s)")
-        for key, name, evs in leagues[:3]:
-            lines.append(_league_line(name, evs, key in paid, 3))
-        if len(leagues) > 3:
-            lines.append("   … " + ", ".join(nm for _, nm, _ in leagues[3:8]) + (" …" if len(leagues) > 8 else "")
-                         + "  (/monde pour tout voir)")
-    lines += _africa_lines(data)
+        lines += _block(catalogue.region_label(r),
+                        [(name, key in paid, [(m[2], m[0], m[1]) for m in evs]) for key, name, evs in leagues], paid)
+    af = data.get("africa") or []
+    if af:
+        by = {}
+        for m in af:
+            by.setdefault(m[0], []).append((m[3], m[1], m[2]))
+        lines += _block(catalogue.region_label("afrique") + " <i>(sans cotes)</i>", [(lg, False, ms) for lg, ms in by.items()], paid)
+    lines.append("")
     if paid:
-        sp = f" ({data['spent']}/{data['allow']} crédits)" if data.get("spent") is not None and data.get("allow") is not None else ""
-        lines.append(f"{FLAG_PAID} Cotes réelles aujourd'hui{sp} : " + ", ".join(catalogue.name(k) for k in data["leagues"] if k in paid)
-                     + " → combinés ci-dessous")
+        lines.append(f"{FLAG_PAID} Cotes réelles achetées : " + ", ".join(_esc(catalogue.name(k)) for k in data["leagues"] if k in paid)
+                     + " → combinés plus bas")
     else:
-        lines.append(f"{FLAG_PAID} Pas de cote payée aujourd'hui" + (f" — {why_no_odds}" if why_no_odds else "")
-                     + ". Kelly analyse gratuitement.")
+        lines.append(f"{FLAG_PAID} Pas de cote achetée aujourd'hui" + (f" ({_esc(why_no_odds)})" if why_no_odds else "")
+                     + " : Kelly analyse gratuitement.")
     if n_prono:
-        lines.append(f"🎲 {n_prono} pronostic(s) Kelly sans cote : voir plus bas.")
+        lines.append(f"🎲 {_plural(n_prono, 'pronostic')} Kelly sans cote plus bas")
     elif not paid:
-        lines.append("ℹ️ Pas assez de stats gratuites pour chiffrer ces matchs (sélections, ligues sans historique) : "
-                     "liste seulement. Regarde-les chez 1xBet, sans pronostic Kelly.")
-    return "\n".join(lines)
+        lines.append("<i>Pas assez de stats pour chiffrer ces matchs : regarde-les chez 1xBet, sans pronostic Kelly.</i>")
+    return Html("\n".join(lines))
 
 
 def fmt_monde(data, arg=""):

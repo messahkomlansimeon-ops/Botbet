@@ -342,4 +342,4 @@ def describe_simple(model, rows):
             lines.append(f"Elle fait davantage confiance au marché « {fmt.esc(C.MARKET_LABELS.get(best, best))} » en ce moment.")
     elif model and rows:
         lines.append("Elle apprend encore : pas assez de paris suivis pour changer sa façon de choisir.")
-    return fmt.Html("🧠 " + "\n".join(lines)) if lines else ""
+    return fmt.Html("🧠 <b>Ce que Kelly apprend</b>\n" + "\n".join(f"• {x}" for x in lines)) if lines else ""

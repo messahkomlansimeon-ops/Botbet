@@ -118,7 +118,9 @@ def _fotmob(out, home, away, sport_key):
     if not h or not a or h == a:
         return
     hv, av = data[h], data[a]
-    eh, ea = _mix(hv.get("xg"), av.get("xga")), _mix(av.get("xg"), hv.get("xga"))
+    # Le classement xG de FotMob donne des TOTAUX de saison : par match = total / matchs joués.
+    per = lambda t, k: t[k] / t["n"] if t.get(k) is not None and (t.get("n") or 0) >= MIN_N else None      # noqa: E731
+    eh, ea = _mix(per(hv, "xg"), per(av, "xga")), _mix(per(av, "xg"), per(hv, "xga"))
     if eh is None or ea is None:
         return
     new = {k: _r(v) for k, v in (("exp_xg_home", eh), ("exp_xg_away", ea), ("exp_xg_total", eh + ea))
@@ -343,6 +345,12 @@ def _aps_block(name, query=None):
     return teams.get(n) if n else None
 
 
+def _fm_block(name):
+    teams = _p("fmm", fmmatch).get("teams") or {}
+    n = names.best_team(name, teams)
+    return teams.get(n) if n else None
+
+
 def team_profile(query):
     fdp = _p("fd", footballdata)
     teams = fdp.get("teams") or {}
@@ -358,16 +366,24 @@ def team_profile(query):
         uteams = (us.get(ulg) or {}).get("teams") or {}
         un = names.best_team(name, uteams)
         return {"team": name, "div": div, "fd": teams[name], "us": uteams.get(un), "aps": _aps_block(name),
-                "updated": fdp.get("updated")}
+                "fm": _fm_block(name), "updated": fdp.get("updated")}
     for lg, d in us.items():
         f2 = _find(query, d.get("teams") or {})
         if f2 and f2[0] == "ok":
-            return {"team": f2[1], "div": lg, "fd": None, "us": d["teams"][f2[1]], "aps": _aps_block(f2[1]), "updated": None}
+            return {"team": f2[1], "div": lg, "fd": None, "us": d["teams"][f2[1]], "aps": _aps_block(f2[1]), "fm": _fm_block(f2[1]),
+                    "updated": None}
     uniq = {p["nm"]: p for p in aps.values() if p.get("nm")}
     f3 = _find(query, uniq)
     if f3 and f3[0] == "many":
         return {"many": f3[1]}
     if f3:
         p = uniq[f3[1]]
-        return {"team": f3[1], "div": p.get("lg"), "fd": None, "us": None, "aps": p, "updated": p.get("d")}
+        return {"team": f3[1], "div": p.get("lg"), "fd": None, "us": None, "aps": p, "fm": _fm_block(f3[1]), "updated": p.get("d")}
+    fm = _p("fmm", fmmatch).get("teams") or {}
+    f4 = _find(query, fm)
+    if f4 and f4[0] == "many":
+        return {"many": f4[1]}
+    if f4:
+        p = fm[f4[1]]
+        return {"team": f4[1], "div": None, "fd": None, "us": None, "aps": None, "fm": p, "updated": p.get("d")}
     return None

@@ -188,15 +188,19 @@ def event_name(c):
     return f"{esc(c['home'])} – {esc(c['away'])}" if c.get("home") and c.get("away") else esc(c.get("event", ""))
 
 
+def _match_line(n, c):
+    """« <b>1. PSG – Lyon</b>  <i>14h00 · Ligue 1</i> » : le match d'une jambe, son heure et sa ligue."""
+    when = " · ".join(x for x in (hhmm(c.get("start")), esc(c.get("league") or "")) if x)
+    return b(f"{'' if n is None else f'{n}. '}{event_name(c)}") + (f"  {i(when)}" if when else "")
+
+
 def leg(n, c, reason=None):
-    """Bloc d'une jambe : titre du match, pari et cote, raison."""
+    """Bloc d'une jambe : le match, le pari et sa cote, la raison (une information par ligne)."""
     note = best_note(c)
-    pad = "" if n is None else "   "
-    lines = [f"{'' if n is None else f'{n}. '}{b(event_name(c))} · {hhmm(c.get('start'))} · {esc(c.get('league', ''))}",
-             f"{pad}{esc(c['pick'])} — {b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else "")]
+    lines = [_match_line(n, c), f"👉 {esc(c['pick'])} — {b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else "")]
     why = why_line(c, reason)
     if why:
-        lines.append(f"{pad}↳ {esc(why)}")
+        lines.append(f"💡 {i(esc(why))}")
     return "\n".join(lines)
 
 
@@ -210,48 +214,52 @@ def played_hint(hint):
 
 
 def combo(title, picks, odds_total, prob, stake, reasons=None, hint=None):
-    """Message d'un combiné : titre et cote, chances, espérance et mise, puis les jambes (ligne vide entre deux) et la commande
-    /joue pour le noter."""
+    """Message d'un combiné : titre et cote ; chances, espérance et mise sur deux lignes ; puis les jambes, séparées par une ligne
+    vide."""
     reasons = reasons or {}
     head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
-            i(f"{len(picks)} paris · {pct(prob)} de chances · {expect(prob, odds_total)} · mise conseillée : {units(stake)}")]
+            f"🎯 {len(picks)} paris · {pct(prob)} de chances",
+            f"📈 {expect(prob, odds_total).capitalize()} · 💰 mise conseillée : {b(units(stake))}"]
     legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
     return Html("\n".join(head) + "\n\n" + "\n\n".join(legs) + played_hint(hint))
 
 
 def single(c, reason=None, title="⭐ PARI DU JOUR", hint=None):
     """Pari du jour : une seule jambe."""
-    head = [b(f"{title} — cote {odds_txt(c['odds'])}"), i(f"{pct(c['prob'])} de chances")]
+    head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances"]
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + played_hint(hint))
 
 
 def pronos(items, limit=10):
-    """Bloc des pronostics sans cote de bookmaker : titre clair, une ligne par pronostic."""
-    lines = [b("🎲 Pronostics sans cote (à vérifier chez 1xBet)"), ""]
-    seen, shown = [], items[:limit]
+    """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale."""
+    shown = items[:limit]
+    lines = [b("🎲 Pronostics Kelly sans cote"),
+             i("À comparer chez 1xBet : joue seulement si la cote est au moins celle indiquée.")]
+    by = {}
     for c in shown:
-        if c["id"] not in seen:
-            seen.append(c["id"])
-        lines.append(f"{esc(c['home'])} – {esc(c['away'])} : {esc(c['pick'])} · joue si la cote est au moins "
-                     f"{b(num(c['min_odds']))}")
+        by.setdefault(c["id"], []).append(c)
+    for cs in by.values():
+        lines.append("")
+        lines.append(_match_line(None, cs[0]))
+        lines += [f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}" for c in cs]
     if len(items) > len(shown):
-        lines.append(i(f"+ {len(items) - len(shown)} autres : /match <équipe> pour un match précis"))
-    lines.append(i("Kelly donne sa probabilité, pas une cote : si le bookmaker paie moins, passe ton chemin."))
+        lines += ["", i(f"+ {len(items) - len(shown)} autres : écris un nom d'équipe pour voir un match")]
     return Html("\n".join(lines))
 
 
 def fair_leg(n, c):
     """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
-    return "\n".join([f"{n}. {b(event_name(c))} · {hhmm(c.get('start'))} · {esc(c.get('league', ''))}",
-                      f"   {esc(c['pick'])} · joue si la cote est au moins {b(num(c['min_odds']))}",
-                      f"   ↳ Kelly lui donne {pct(c['prob'])} de chances"])
+    chances = i(f"({pct(c['prob'])} de chances)")
+    return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 
 def fair_combo(min_total, picks, prob, stake, hint=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
     (mise indicative seulement), chaque jambe avec sa cote minimale."""
-    head = [b(f"🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini {odds_txt(min_total)}"),
-            i(f"{len(picks)} paris · {pct(prob)} de chances · mise indicative : {units(stake)} au plus (pas calculée sur ta bankroll)"),
-            i("Kelly n'a pas vu les cotes de 1xBet : ces cotes sont ses minimums. Joue seulement si 1xBet paie au moins la cote "
-              "indiquée sur CHAQUE pari (la cote totale sera alors d'au moins " + odds_txt(min_total) + "), sinon passe ton chemin.")]
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)) + played_hint(hint))
+    head = [b("🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET"),
+            f"🎯 Cote mini {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
+            f"💰 Mise indicative : {units(stake)} au plus {i('(pas calculée sur ta bankroll)')}"]
+    foot = i("⚠️ Kelly n'a pas vu les cotes de 1xBet : joue seulement si CHAQUE pari atteint sa cote mini "
+             f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)) + "\n\n" + foot
+                + played_hint(hint))
