@@ -19,7 +19,7 @@ _EXTRA = {
     "sheffield utd": "sheffield united", "west brom": "west bromwich albion", "qpr": "queens park rangers",
     "inter milan": "inter", "fc koln": "koln", "1 fc koln": "koln", "mainz 05": "mainz",
     "1 fsv mainz 05": "mainz", "bielefeld": "arminia bielefeld",
-    "greuther furth": "furth", "spvgg greuther furth": "furth",
+    "greuther furth": "furth", "spvgg greuther furth": "furth", "austria wien": "austria vienna",
 }
 _SUFFIX = {"jr", "junior", "sr", "filho"}
 
@@ -31,6 +31,9 @@ def norm(s):
 
 def _pre(name):
     n = norm(name)
+    if n in _EXTRA:
+        return _EXTRA[n]
+    n = norm(str(name or "").replace("'", "").replace("\u2019", ""))         # « Newell's » = « Newells »
     return _EXTRA.get(n, n)
 
 
@@ -55,13 +58,20 @@ def team_sim(a, b):
     return _fallback_sim(a, b)
 
 
-def best_team(name, candidates, min_sim=0.8):
-    best, best_s = None, 0.0
-    for c in candidates:
-        s = team_sim(name, c)
-        if s > best_s:
-            best, best_s = c, s
-    return best if best_s >= min_sim else None
+def best_team(name, candidates, min_sim=0.8, margin=0.05):
+    """Candidat le plus proche de `name`, ou None. Deux candidats différents à `margin` près l'un de l'autre sont ambigus (« Tokyo Verdy »
+    ~ « FC Tokyo » et « Verdy ») : None, sauf si l'un est le nom exact (casse et accents près). Plusieurs noms d'une même équipe
+    (même profil dans un dict) ne sont pas une ambiguïté."""
+    scored = sorted(((team_sim(name, c), i, c) for i, c in enumerate(candidates)), key=lambda x: (-x[0], x[1]))
+    if not scored or scored[0][0] < min_sim:
+        return None
+    best_s, _, best = scored[0]
+    close = [c for s, _, c in scored if s >= best_s - margin]
+    ident = lambda c: id(candidates[c]) if hasattr(candidates, "items") and isinstance(candidates[c], (dict, list)) else c    # noqa: E731
+    if len({ident(c) for c in close}) == 1:
+        return best
+    exact = [c for c in close if norm(c) == norm(name)]
+    return exact[0] if len({ident(c) for c in exact}) == 1 else None
 
 
 def _pkey(name):

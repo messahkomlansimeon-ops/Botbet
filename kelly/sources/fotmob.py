@@ -27,7 +27,7 @@ PREFIX = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 # Clés The Odds API -> id FotMob (tous vérifiés : pays + nom lus sur la page de la ligue).
 SPORT_TO_LEAGUE = {
-    "soccer_epl": 47, "soccer_efl_champ": 123, "soccer_england_league1": 108, "soccer_england_league2": 109,
+    "soccer_epl": 47, "soccer_efl_champ": 48, "soccer_england_league1": 108, "soccer_england_league2": 109,
     "soccer_spain_la_liga": 87, "soccer_italy_serie_a": 55, "soccer_germany_bundesliga": 54, "soccer_france_ligue_one": 53,
     "soccer_netherlands_eredivisie": 57, "soccer_belgium_first_div": 40, "soccer_turkey_super_league": 71,
     "soccer_greece_super_league": 135, "soccer_austria_bundesliga": 38, "soccer_poland_ekstraklasa": 196,
@@ -190,7 +190,7 @@ def refresh(sport_keys=None):
                 errors += [f"{key} : {p}" for p in probs]
                 http.invalidate(u)
                 continue
-            built = build(data)
+            built = build(data) | {"id": lgid}               # id : une ligue dont l'id a changé (ex. 123 -> 48) n'est plus servie
             prof["leagues"][key] = built
             rows += len(built["teams"]) + len(built["matches"])
             if probs:
@@ -211,4 +211,8 @@ def health():
 
 def profiles():
     p = store.load(PROFILE_FILE, {})
-    return p if isinstance(p, dict) else {}
+    if not isinstance(p, dict):
+        return {}
+    cur = EXTRA_LEAGUES | SPORT_TO_LEAGUE
+    lg = {k: v for k, v in (p.get("leagues") or {}).items() if not isinstance(v, dict) or v.get("id") in (None, cur.get(k))}
+    return p | {"leagues": lg} if "leagues" in p else p

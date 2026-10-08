@@ -57,6 +57,8 @@ def _put_pair(out, stat, key, hv, av, total=True):
 def _football_data(out, home, away, sport_key, referee):
     prof = _p("fd", footballdata)
     div = footballdata.SPORT_TO_DIV.get(sport_key)
+    if not div and not sport_key.startswith("soccer_uefa_"):       # ligue sans division football-data : jamais les 600 autres équipes
+        return                                                      # (« Atlético-GO » n'est pas « Ath Madrid », « Juventude » pas « Juventus »)
     teams = {t: v for t, v in (prof.get("teams") or {}).items() if not div or v.get("div") == div}
     h, a = names.best_team(home, teams), names.best_team(away, teams)
     if not h or not a or h == a:
