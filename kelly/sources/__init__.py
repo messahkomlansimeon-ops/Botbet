@@ -1,10 +1,11 @@
 """Sources de stats gratuites (football-data, Understat, FBref) : téléchargement poli, profils
 compacts dans data/, auto-diagnostic. Points d'entrée : refresh_all(leagues), report(),
-features.match_features(home, away, sport_key), features.player_features(name, team)."""
+features.match_features(home, away, sport_key), features.player_features(name, team),
+features.team_profile(équipe)."""
 from datetime import datetime
 
 from . import fbref, features, footballdata, state, understat
-from .features import match_features, player_features
+from .features import match_features, player_features, team_profile
 
 SOURCES = (footballdata, understat, fbref)       # FBref en dernier : la plus lente (6 s entre requêtes)
 SOCCER_PREFIX = "soccer_"

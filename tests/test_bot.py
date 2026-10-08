@@ -6,14 +6,19 @@ import io
 import math
 import os
 import random
+import re
 import shutil
 import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-test-")
+os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-cache-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import app, bankroll, budget, config as C, learn, odds, settle, stats, store, telegram, track  # noqa: E402
+from kelly import (app, bankroll, bootstrap, budget, combos as CB, config as C, learn, odds, settle, sources,  # noqa: E402
+                   stats, store, telegram, track)
+from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
+from tests import synth  # noqa: E402
 
 
 def fake_scores(rows):
@@ -154,7 +159,7 @@ class Sandbox:
     def __enter__(self):
         self.saved = (requests_get(), dict(odds.CREDITS), budget._now, app.now_utc, os.environ.get("ODDS_API_KEY"),
                       os.environ.get("STATS_API_KEY"), C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS,
-                      dict(C.BUDGET_SHARES), C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS)
+                      dict(C.BUDGET_SHARES), C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH)
         for f in os.listdir(store.DATA_DIR):
             os.remove(os.path.join(store.DATA_DIR, f))
         odds.CREDITS.update(remaining=None, used=None)
@@ -162,6 +167,8 @@ class Sandbox:
         os.environ["ODDS_API_KEY"] = "test-odds-key"
         os.environ.pop("STATS_API_KEY", None)
         C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS = 30, 6, 8, False
+        C.SOURCES_REFRESH = False                  # hors ligne : les tests des sources l'activent avec un faux réseau
+        features.reload()
         C.BUDGET_SHARES.clear(); C.BUDGET_SHARES.update(daily=0.6, closing=0.4)
         C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS = 1, 500
         C.SPORTS = ["soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", "soccer_germany_bundesliga",
@@ -178,7 +185,7 @@ class Sandbox:
 
     def __exit__(self, *exc):
         (g, cr, bn, an, ok, sk, C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS, shares,
-         C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS) = self.saved
+         C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH) = self.saved
         odds.requests.get = g
         odds.CREDITS.update(cr)
         budget._now, app.now_utc = bn, an
@@ -535,6 +542,8 @@ def test_check_is_free():
         assert "Allocation du jour : 15 crédits" in out and "31 jour(s) avant la remise à zéro" in out, out
         assert "soccer_epl (2)" in out and "spain" not in out.split("matchs aujourd'hui")[1].split("\n")[0], out
         assert "test-odds-key" not in out + "".join(sent) and "tok-secret" not in out + "".join(sent)
+        assert "📡 Sources de stats" in out and "football-data : pas encore lancée" in out, out      # état des sources, sans réseau
+        assert "Sources de stats" in sent[0]
     print("--check gratuit : OK")
 
 
@@ -605,6 +614,332 @@ def test_check():
         for k, v in old_env.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
     print("diagnostic --check : OK")
+
+
+class Raw:
+    """Réponse HTTP brute (football-data) pour kelly.sources.http."""
+
+    def __init__(self, status=200, body=b""):
+        self.status_code, self.content, self.headers = status, body, {}
+
+
+def fd_cache(csv_text, div="E0"):
+    """Écrit un CSV football-data dans le cache disque des sources (périmé : fetched_at = 0), pour toutes les
+    saisons que lit le règlement gratuit."""
+    shutil.rmtree(http.cache_dir(), ignore_errors=True)
+    for sn in fd.default_seasons():
+        http._write(http._key(fd.url(div, sn)), {"fetched_at": 0, "status": 200}, csv_text.encode())
+
+
+def test_settle_football_data():
+    """Corners et cartons réglés gratuitement avec football-data (API-Football absent, ou quota épuisé) ; ces paris
+    attendent 8 jours (football-data ne se met à jour que ~2 fois par semaine) avant d'être annulés, les buts 3."""
+    now = datetime(2026, 9, 30, 8, tzinfo=UTC)
+    ko = lambda n: f"{(now - timedelta(days=n)).date()}T15:00:00Z"                      # noqa: E731
+    played = (now - timedelta(days=2)).strftime("%d/%m/%Y")
+    csv = ("Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,HC,AC,HY,AY,HR,AR\n"
+           f"E0,{played},Man City,Arsenal,2,1,7,5,2,3,0,1\n")                            # 12 corners, 6 cartons
+
+    def row(key, market, name, point, n, home="Manchester City", away="Arsenal", ev="m1", who=None):
+        return mk_row(key, ev, market, True, ko(n)) | {"home": home, "away": away, "name": name, "point": point, "who": who}
+    rows = [row("c_over", "alternate_totals_corners", "Over", 11.5, 2), row("c_under", "alternate_totals_corners", "Under", 11.5, 2),
+            row("k_over", "alternate_totals_cards", "Over", 5.5, 2), row("k_under", "alternate_totals_cards", "Under", 6.5, 2),
+            row("goal", "h2h", "Manchester City", None, 2), row("shots", "player_shots", "Over", 1.5, 2, who="Bukayo Saka"),
+            # match absent du fichier : corners/cartons attendent 8 jours, buts et tirs de joueurs 3 jours
+            row("c_5d", "alternate_totals_corners", "Over", 8.5, 5, "Chelsea", "Liverpool", "m2"),
+            row("k_5d", "alternate_totals_cards", "Over", 3.5, 5, "Chelsea", "Liverpool", "m2"),
+            row("c_9d", "alternate_totals_corners", "Over", 8.5, 9, "Chelsea", "Liverpool", "m2"),
+            row("k_9d", "alternate_totals_cards", "Over", 3.5, 9, "Chelsea", "Liverpool", "m2")]
+    expect = {"c_over": "win", "c_under": "loss", "k_over": "win", "k_under": "win", "goal": "win", "shots": None,
+              "c_5d": None, "k_5d": None, "c_9d": "void", "k_9d": "void"}
+    shots_5d = row("s_5d", "player_shots", "Over", 1.5, 5, "Chelsea", "Liverpool", "m2", who="Cole Palmer")
+    with Sandbox() as sb:
+        fake = sb.serve(FakeOdds(500, {}))
+        fd_cache(csv)
+        track.save(rows + [shots_5d])
+        with contextlib.redirect_stderr(io.StringIO()):
+            _, settled = settle.settle_pending(now)
+        res = {r["key"]: r["result"] for r in track.load()}
+        assert res == expect | {"s_5d": "void"}, res
+        assert len(settled) == 5 and fake.paid() == []          # aucun crédit : /scores ne sert qu'aux marchés de buts
+        # un pari de buts introuvable : repli payant /scores (2 crédits, une fois), puis annulé après 3 jours seulement
+        goal5 = row("g_5d", "h2h", "Chelsea", None, 5, "Chelsea", "Liverpool", "m2")
+        goal2 = row("g_2d", "h2h", "Chelsea", None, 2, "Chelsea", "Liverpool", "m2")
+        track.save([goal5, goal2])
+        with contextlib.redirect_stderr(io.StringIO()):
+            settle.settle_pending(now)
+        assert {r["key"]: r["result"] for r in track.load()} == {"g_5d": "void", "g_2d": None}
+        assert [c[0] for c in fake.paid()] == ["/sports/soccer_epl/scores"]
+        # API-Football configuré mais quota du jour épuisé : même règlement, sans aucune requête api-sports
+        os.environ["STATS_API_KEY"] = "k"
+        stats._calls, stats._halted = 0, False
+        store.save("stats_quota.json", {"day": stats._today(), "n": 999})
+        track.save([dict(r, result=None) for r in rows[:6]])
+        n = len(fake.log)
+        sb.serve(lambda url, **kw: (_ for _ in ()).throw(AssertionError(f"requête inattendue : {url}")))
+        settle.settle_pending(now)
+        assert {r["key"]: r["result"] for r in track.load()} == {k: v for k, v in expect.items() if k in
+                                                                  [r["key"] for r in rows[:6]]}
+        assert len(fake.log) == n
+        # fichier absent du cache : rien n'est réglé (corners attendent), pas d'erreur
+        shutil.rmtree(http.cache_dir(), ignore_errors=True)
+        track.save([dict(rows[0], result=None)])
+        settle.settle_pending(now)
+        assert track.load()[0]["result"] is None
+    print("règlement corners/cartons via football-data (8 jours) : OK")
+
+
+def hist_boot(seasons=("2324", "2425", "2526")):
+    ms = []
+    for sn in seasons:
+        ms += fd.parse_csv(synth.csv_for(sn), "E0", sn)[0]
+    return bootstrap.build(ms)
+
+
+def test_bootstrap_training():
+    """Amorçage : modèle entraîné dès le premier jour sur l'historique football-data (test sur la tranche la plus
+    récente, mise de côté), puis validé sur les paris réels dès qu'il y en a assez ; le 🧠 dit combien de lignes."""
+    obj = hist_boot()
+    boot = learn.boot_rows(obj)
+    # 1) jour 1, aucun pari réel : adopté sur la tranche historique mise de côté
+    m = learn.train_clv([], None, boot)
+    tr, te = learn._split(boot)
+    assert m["adopted"] and m["oos_source"] == "historique" and m["n"] == 0 and m["boot_n"] == len(boot), m
+    assert m["test_rows"] == len(te) > 20 and max(r["date"] for r in tr) < min(r["date"] for r in te)
+    assert m["oos_model"] >= m["oos_heuristic"] and "bootstrap" in m["names"] and "gap_goals" in m["names"]
+    assert learn.predict(m, boot[0]["features"]) is not None
+    # 2) ni réel ni assez d'historique : pas de modèle
+    few = learn.train_clv([], None, boot[:C.BOOT_MIN_ROWS - 1])
+    assert not few["adopted"] and "pas assez de clôtures" in few["reason"]
+    assert not learn.train_clv([], None, [])["adopted"]
+    # 3) assez de paris réels (>= 40 sur >= 2 jours) : le test se fait sur les paris réels, pas sur l'historique
+    random.seed(4)
+    real = []
+    for d in range(6):
+        for i in range(12):
+            edge = random.uniform(0, 0.25)
+            real.append({"date": f"2026-09-{10 + d}", "clv": round(0.5 * edge + random.gauss(0, 0.02), 4), "sent": False,
+                         "features": {"edge": edge, "heuristic": edge * 0.8, "log_odds": 0.7, "market=h2h": 1.0, "group=soccer": 1.0}})
+    r = learn.train_clv(real, None, boot)
+    assert r["oos_source"] == "réel" and r["n"] == 72 and r["test_rows"] == 24 and r["boot_n"] == len(boot), r
+    assert r["adopted"] and r["oos_model"] >= r["oos_heuristic"]
+    # une seule journée de paris réels : pas de vrai test hors échantillon possible -> tranche historique
+    one = learn.train_clv([dict(x, date="2026-09-10") for x in real], None, boot)
+    assert one["oos_source"] == "historique" and one["n"] == 72
+    # sans historique, comportement d'avant (test sur les paris réels)
+    assert learn.train_clv(real)["oos_source"] == "réel" and learn.train_clv(real[:30])["reason"].startswith("pas assez")
+    # 4) un modèle adopté sur l'historique ne survit pas à un test réel perdu ; un modèle adopté sur du réel, si
+    old_predict = learn.predict
+    learn.predict = lambda model, f: -f.get("heuristic", 0.0)               # classement à l'envers : pire que l'heuristique
+    try:
+        lost = learn.train_clv(real, {"adopted": True, "oos_source": "historique", "names": ["edge"], "mean": [0], "std": [1], "w": [1, 0]}, boot)
+        assert not lost["adopted"] and "ne bat pas" in lost["reason"], lost
+        kept = learn.train_clv(real, {"adopted": True, "oos_source": "réel", "names": ["edge"], "mean": [0], "std": [1], "w": [1, 0]}, boot)
+        assert kept["adopted"] and "ancien conservé" in kept["reason"] and kept["names"] == ["edge"]
+    finally:
+        learn.predict = old_predict
+    # 5) learn.update lit data/bootstrap.json ; le 🧠 annonce les lignes historiques même sans paris suivis
+    with Sandbox():
+        store.save("bootstrap.json", obj)
+        model = learn.update([])
+        assert model["adopted"] and model["boot_n"] == len(obj["rows"]) and store.load("model.json", {})["boot_n"] == model["boot_n"]
+        d = learn.describe(model, [])
+        assert d.startswith("🧠 KELLY APPREND") and f"Historique football-data : {len(obj['rows'])} lignes" in d, d
+        assert "matchs historiques" in d
+        store.save("bootstrap.json", {"rows": "illisible"})                 # fichier corrompu : sans effet
+        assert not learn.update([])["adopted"]
+        os.remove(store.path("bootstrap.json"))
+        assert learn.describe(learn.update([]), []) == ""
+    print("amorçage de l'apprentissage : OK")
+
+
+def fixture_event(i, home, away, ko, stars=False):
+    """Match avec 1N2, corners (9,5), cartons (4,5) et tirs d'un joueur, chez 4 books."""
+    books = []
+    for b in range(4):
+        j = 1 + 0.01 * ((i + b) % 3 - 1)
+        ms = [{"key": "h2h", "outcomes": [{"name": home, "price": round(2.0 * j, 2)}, {"name": away, "price": round(3.4 / j, 2)},
+                                         {"name": "Draw", "price": round(3.3 * j, 2)}]},
+              {"key": "totals", "outcomes": [{"name": "Over", "price": round(1.9 * j, 2), "point": 2.5},
+                                             {"name": "Under", "price": round(1.95 / j, 2), "point": 2.5}]},
+              {"key": "alternate_totals_corners", "outcomes": [{"name": "Over", "price": round(1.9 * j, 2), "point": 9.5},
+                                                               {"name": "Under", "price": round(1.95 / j, 2), "point": 9.5}]},
+              {"key": "alternate_totals_cards", "outcomes": [{"name": "Over", "price": round(1.9 * j, 2), "point": 4.5},
+                                                             {"name": "Under", "price": round(1.95 / j, 2), "point": 4.5}]}]
+        if stars:
+            ms.append({"key": "player_shots", "outcomes": [
+                {"name": "Over", "description": "Bukayo Saka", "price": round(2.0 * j, 2), "point": 1.5},
+                {"name": "Under", "description": "Bukayo Saka", "price": round(1.85 / j, 2), "point": 1.5}]})
+        books.append({"key": f"b{b}", "title": f"B{b}", "markets": ms})
+    return {"id": f"ev{i}", "sport_key": "soccer_epl", "sport_title": "EPL", "home_team": home, "away_team": away,
+            "commence_time": ko, "bookmakers": books}
+
+
+def put_profiles():
+    v = lambda cf, ca, kf, ka, gf, ga: {"n": 10, "corners_for": cf, "corners_against": ca, "cards_for": kf, "cards_against": ka,   # noqa: E731
+                                        "shots_for": 14.0, "shots_against": 9.0, "sot_for": 5.0, "sot_against": 3.0,
+                                        "fouls_for": 10.0, "fouls_against": 11.0, "goals_for": gf, "goals_against": ga}
+    team = lambda *a: {"div": "E0", "last": "2026-09-27", "all": v(*a), "home": v(*a), "away": v(*a)}                             # noqa: E731
+    store.save("src_footballdata.json", {"updated": "2026-09-30T08:00", "referees": {}, "leagues": {}, "teams": {
+        "Arsenal": team(7, 4, 1.5, 2, 2.0, 0.8), "Chelsea": team(5, 6, 2, 2, 1.4, 1.2), "Liverpool": team(6, 5, 1.8, 2.1, 1.9, 1.0)}})
+    f = lambda xg, xga: {"n": 6, "xg": xg, "xga": xga}                                                                              # noqa: E731
+    u = lambda xg, xga: {"all": f(xg, xga), "home": f(xg, xga), "away": f(xg, xga)}                                                 # noqa: E731
+    store.save("src_understat.json", {"leagues": {"EPL": {"teams": {"Arsenal": u(1.9, 1.0), "Chelsea": u(1.3, 1.5)}, "players": {
+        "Arsenal": {"Bukayo Saka": {"min": 2000, "pos": "F", "shots90": 2.9}}}}}})
+    features.reload()
+
+
+def test_stats_and_analyse_commands():
+    """/stats <équipe> (profil des derniers matchs) et /analyse <match> (chiffres d'avant-match + meilleurs paris)."""
+    day = date(2026, 10, 1)
+    with Sandbox():
+        put_profiles()
+        assert "/stats" in app.handle_command("/aide") and "/analyse" in app.handle_command("/aide")
+        t = app.handle_command("/stats arsenal")
+        assert t.startswith("📈 Arsenal (Premier League)") and "10 derniers matchs (football-data)" in t, t
+        assert "Corners : 7.0 pour / 4.0 contre" in t and "Cartons (jaunes + rouges) : 1.5 pour / 2.0 contre" in t, t
+        assert "Tirs : 14.0 pour / 9.0 contre" in t and "Fautes" in t and "Buts : 2.0 pour / 0.8 contre" in t, t
+        assert "xG (Understat, 6 derniers) : 1.90 pour / 1.00 contre ; domicile 1.90/1.00" in t and "actualisées le 30/09" in t, t
+        assert "Corners" in app.handle_command("/stats Chelsea") and "xG" not in app.handle_command("/stats Liverpool")
+        assert app.handle_command("/stats").startswith("Exemple") and "Aucune stat pour « Zzz »" in app.handle_command("/stats Zzz")
+        # /stats fonctionne sans que la journée ait été analysée ; /analyse non
+        assert app.handle_command("/analyse arsenal").startswith("Kelly n'a pas encore analysé")
+        events = [fixture_event(1, "Arsenal", "Chelsea", "2026-10-01T18:00:00Z", stars=True),
+                  fixture_event(2, "Chelsea", "Liverpool", "2026-10-01T19:00:00Z")]
+        picks = stats.enrich(odds.build_picks(events, day), day)
+        store.save("today.json", {"day": str(day), "picks": picks})
+        a = app.handle_command("/analyse arsenal")
+        assert a.startswith("🔬 Arsenal - Chelsea (18:00 UTC)"), a
+        assert "Corners attendus : 11.0 (6.5 + 4.5)" in a and "Cartons attendus : 3.8 (1.8 + 2.0)" in a, a
+        assert "xG attendus : 2.85 (1.70 - 1.15)" in a and "football-data, understat" in a, a
+        assert "Meilleurs paris :" in a and "[modèle 11.0 vs ligne 9.5]" in a and "stats réelles : 11.0 corners attendus" in a, a
+        assert "Bukayo Saka : Plus de 1.5 tirs" in a and "[modèle 2.7 vs ligne 1.5]" in a and "stats réelles : 2.9 tirs/90 vs ligne 1.5" in a, a
+        assert a.count("• ") >= 7                                       # 6 paris + lignes de chiffres
+        assert app.handle_command("/analyse xyz").startswith("Aucun match du jour")
+        assert app.handle_command("/analyse").startswith("Exemple")
+        both = app.handle_command("/analyse chelsea")
+        assert both.startswith("Plusieurs matchs correspondent") and "Arsenal - Chelsea" in both and "Chelsea - Liverpool" in both
+        # équipes inconnues des sources : message clair, paris quand même listés
+        features._cache["fd"], features._cache["us"] = {}, {}
+        b = app.handle_command("/analyse liverpool")
+        assert "Pas de stats réelles pour ce match" in b and "Meilleurs paris" in b
+        features.reload()
+    print("commandes /stats et /analyse : OK")
+
+
+def test_special_combo():
+    """Combiné spécial : uniquement corners, cartons et stats joueurs, cote 6 à 15, un pari par match."""
+    day = date(2026, 10, 1)
+    pairs = [("A", "B"), ("C", "D"), ("E", "F"), ("G", "H"), ("I", "J"), ("K", "L")]
+    events = [fixture_event(i, h, a, "2026-10-01T1%d:00:00Z" % i, stars=i == 0) for i, (h, a) in enumerate(pairs)]
+    with Sandbox():
+        bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        picks = odds.build_picks(events, day)
+        assert any(c["market"] == "h2h" for c in picks)
+        messages, sent, combos = app.build_day(picks, day)
+        assert C.SPECIAL in [t for t, _, _ in C.COMBOS] and [t for t, _, _ in C.COMBOS][2] == C.SPECIAL
+        msg = next(m for m in messages if m.startswith(C.SPECIAL))
+        assert "Pas assez" not in msg and "Mise conseillée" in msg, msg
+        sp = next(c for c in combos if c["tier"] == C.SPECIAL)
+        legs = [next(c for c in picks if c["key"] == k) for k in sp["keys"]]
+        assert 6.0 <= sp["odds"] <= 15.0 and len(legs) >= 2 and len({c["id"] for c in legs}) == len(legs)
+        assert all(CB.soft_market(c) and (c["market"].startswith("player_") or c["market"] in
+                   ("alternate_totals_corners", "alternate_totals_cards")) for c in legs), [c["market"] for c in legs]
+        assert sp["stake"] <= 1000 * C.STAKE_CAP["🎯"] + 1e-9
+        assert all(c["key"] in {x["key"] for x in sent} for c in legs)                       # suivis comme les autres combinés
+        pool = CB.make_special_pool(picks)
+        assert pool and all(CB.pool_for(C.SPECIAL, picks, [])[i]["key"] == pool[i]["key"] for i in range(len(pool)))
+        assert CB.pool_for(C.COMBOS[0][0], picks, ["x"]) == ["x"]
+        # priorité de clôture : après le Costaud, avant le Méchant
+        rk = track.ranks([{"tier": C.SPECIAL, "keys": ["k1"], "stake": 1, "result": None},
+                          {"tier": C.COMBOS[1][0], "keys": ["k2"], "stake": 1, "result": None},
+                          {"tier": C.COMBOS[3][0], "keys": ["k3"], "stake": 1, "result": None}])
+        assert rk["k2"] < rk["k1"] < rk["k3"], rk
+        # sans marché mal pricé : message « pas assez de matchs »
+        only_h2h = [c for c in picks if c["market"] in ("h2h", "totals")]
+        out = app.build_day(only_h2h, day)[0]
+        assert next(m for m in out if m.startswith(C.SPECIAL)).endswith("Pas assez de matchs aujourd'hui pour ce combiné.")
+    print("combiné spécial corners/cartons : OK")
+
+
+def test_run_daily_with_sources():
+    """run_daily : sources actualisées AVANT le bilan, amorçage, estimations d'avant-match dans les paris et les
+    variables d'apprentissage, message 📡 ; une panne des sources ne casse jamais le run."""
+    csvs = {sn: synth.csv_for(sn, until=date(2026, 9, 28) if sn == "2627" else None) for sn in ("2223", "2324", "2425", "2526", "2627")}
+    leagues = {"soccer_epl": [("ev1", "Arsenal", "Chelsea", ko_at("2026-10-01", 18)),
+                              ("ev2", "Liverpool", "Manchester City", ko_at("2026-10-01", 19))]}
+    saved = (state.clock, http._sleep, sources.refresh_all, bootstrap.ensure, settle.settle_pending)
+    state.clock, http._sleep = lambda: datetime(2026, 10, 1, 8, tzinfo=UTC).timestamp(), lambda s: None
+    order = []
+    try:
+        with Sandbox() as sb:
+            C.SOURCES_REFRESH, C.SPORTS = True, ["soccer_epl"]
+            bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+            fake = FakeOdds(500, leagues)
+            urls = []
+
+            def net(url, **kw):
+                if "the-odds-api" in url:
+                    return fake(url, **kw)
+                urls.append(url)
+                m = re.search(r"mmz4281/(\d{4})/E0\.csv", url)
+                if url.endswith("/robots.txt"):
+                    return Raw(200, b"User-agent: *\nDisallow:\n")
+                return Raw(200, csvs[m[1]].encode()) if m and m[1] in csvs else Raw(404, b"")
+            sb.serve(net)
+            shutil.rmtree(http.cache_dir(), ignore_errors=True)
+            http.reset()
+            features.reload()
+            real_refresh, real_settle = sources.refresh_all, settle.settle_pending
+            sources.refresh_all = lambda keys=None: order.append(("refresh", keys)) or real_refresh(keys)
+            settle.settle_pending = lambda *a, **k: order.append(("settle",)) or real_settle(*a, **k)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                msgs = app.run_daily()
+            assert order[0] == ("refresh", ["soccer_epl"]) and order[1] == ("settle",), order       # CSV à jour avant le règlement
+            src = next(m for m in msgs if m.startswith("📡 Sources de stats"))
+            assert "✅ football-data" in src and "Understat" in src and "2/2 matchs couverts" in src, src
+            today = store.load("today.json", {})["picks"]
+            cor = [c for c in today if c["market"] == "alternate_totals_corners"]
+            assert cor and all(c["pm"]["src"] == "sources" and c["pm"]["kind"] == "corners" for c in cor), cor[:1]
+            assert any(c["pm"]["kind"] == "goals" for c in today if c["market"] == "totals" and c.get("pm"))
+            assert any(c.get("pm", {}).get("xgd") for c in today if c["market"] == "h2h")
+            rows = track.load()
+            assert any("gap_corners" in r["features"] and "pm_gap" in r["features"] for r in rows)
+            assert all("heuristic" in r["features"] for r in rows) and not any("bootstrap" in r["features"] for r in rows)
+            boot = store.load("bootstrap.json", {})
+            assert len(boot["rows"]) > 200 and boot["seasons"] == ["2324", "2425", "2526", "2627"], boot.get("seasons")
+            assert os.path.getsize(store.path("bootstrap.json")) < 100_000
+            assert os.path.exists(store.path("src_footballdata.json")) and not any("api-sports" in u for u in urls)
+            # le lendemain : le modèle appris sur l'historique est utilisé et le 🧠 annonce les lignes historiques
+            model = learn.update(track.load())
+            assert model["adopted"] and model["boot_n"] == len(boot["rows"]) and "Historique football-data" in learn.describe(model, track.load())
+
+        # panne des sources : exception de refresh_all ET de l'amorçage -> le run continue, journée complète envoyée
+        with Sandbox() as sb:
+            C.SOURCES_REFRESH, C.SPORTS = True, ["soccer_epl"]
+            bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+            sb.serve(FakeOdds(500, leagues))
+            calls = []
+
+            def boom(*a, **k):
+                calls.append(1)
+                raise RuntimeError("source en panne")
+            sources.refresh_all, bootstrap.ensure = boom, boom
+            settle.settle_pending = real_settle
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                msgs = app.run_daily()
+            assert len(calls) == 2 and "actualisation ignorée" in err.getvalue() and "amorçage ignoré" in err.getvalue()
+            assert any(m.startswith("🔥 KELLY") for m in msgs) and any("PARI DU JOUR" in m for m in msgs) and track.load()
+            assert "pas encore lancée" in next(m for m in msgs if m.startswith("📡 Sources de stats"))
+            # kill-switch : SOURCES_REFRESH=0 n'appelle rien
+            C.SOURCES_REFRESH = False
+            calls.clear()
+            assert app.refresh_sources() == {} and calls == []
+    finally:
+        state.clock, http._sleep, sources.refresh_all, bootstrap.ensure, settle.settle_pending = saved
+        features.reload()
+    print("run_daily + sources (et pannes) : OK")
 
 
 def main():
@@ -706,6 +1041,11 @@ def main():
     test_free_settlement()
     test_check_is_free()
     test_check()
+    test_settle_football_data()
+    test_bootstrap_training()
+    test_stats_and_analyse_commands()
+    test_special_combo()
+    test_run_daily_with_sources()
     shutil.rmtree(os.environ["DATA_DIR"], ignore_errors=True)
     print("OK : tout le flux passe hors ligne.")
 

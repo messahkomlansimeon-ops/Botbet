@@ -190,3 +190,40 @@ def player_features(name, team=None, sport_key=None):
             elif k != "pos":
                 out.setdefault(k, v)
     return out
+
+
+def _find(query, candidates):
+    """('ok', nom) | ('many', [noms]) | None : nom proche de `query` (plusieurs noms aussi proches = ambigu),
+    sinon nom qui contient tous ses mots."""
+    candidates = list(candidates)
+    good = sorted(((names.team_sim(query, c), c) for c in candidates), reverse=True)
+    good = [(s, c) for s, c in good if s >= 0.8]
+    if good:
+        tied = [c for s, c in good if s >= good[0][0] - 0.05]
+        return ("ok", tied[0]) if len(tied) == 1 else ("many", sorted(tied)[:8])
+    q = set(names.norm(query).split())
+    hits = sorted(c for c in candidates if q and q <= set(names.norm(c).split()))
+    return ("ok", hits[0]) if len(hits) == 1 else (("many", hits[:8]) if hits else None)
+
+
+def team_profile(query):
+    """Profil d'une équipe pour /stats : {team, div, fd (vues all/home/away sur ~10 matchs), us (forme xG),
+    updated}, {"many": [noms]} si plusieurs équipes correspondent, None si inconnue."""
+    fdp = _p("fd", footballdata)
+    teams = fdp.get("teams") or {}
+    us = (_p("us", understat).get("leagues") or {})
+    found = _find(query, teams)
+    if found and found[0] == "many":
+        return {"many": found[1]}
+    if found:
+        name = found[1]
+        div = teams[name].get("div")
+        ulg = understat.SPORT_TO_LEAGUE.get(footballdata.DIV_TO_SPORT.get(div))
+        uteams = (us.get(ulg) or {}).get("teams") or {}
+        un = names.best_team(name, uteams)
+        return {"team": name, "div": div, "fd": teams[name], "us": uteams.get(un), "updated": fdp.get("updated")}
+    for lg, d in us.items():                             # équipe absente de football-data (ligue non couverte)
+        f2 = _find(query, d.get("teams") or {})
+        if f2 and f2[0] == "ok":
+            return {"team": f2[1], "div": lg, "fd": None, "us": d["teams"][f2[1]], "updated": None}
+    return None

@@ -66,10 +66,20 @@ PROP_MARKETS = {
     "tennis": [],
 }
 
+# Stats gratuites (kelly/sources) : actualisées chaque matin par run_daily (SOURCES_REFRESH=0 les coupe).
+SOURCES_REFRESH = _bool("SOURCES_REFRESH", True)
+# Poids du modèle « vraies stats » face à la proba des books (corners, cartons, tirs : 40 %; buts : 20 %, marché efficace).
+MODEL_WEIGHT = {"corners": 0.4, "cards": 0.4, "player": 0.4, "goals": 0.2}
+PLAYER_MINUTES = 85        # minutes attendues d'un titulaire régulier (tirs/90 -> tirs du match)
+SOT_RATIO = 0.35           # tirs cadrés ~ 35 % des tirs, si seul le nombre de tirs est connu (FBref bloqué)
+PM_FLAG = 0.08             # écart modèle/books (en proba) à partir duquel la ligne est signalée dans le « pourquoi »
+
 # (titre, cote minimale, cote maximale) : le nombre de matchs est libre.
+SPECIAL = "🎯 SPÉCIAL CORNERS/CARTONS (cote 6 à 15)"     # construit uniquement sur corners, cartons et stats joueurs
 COMBOS = [
     ("🛡️ SÛR (cote 5 à 7)", 5.0, 7.0),
     ("⚖️ COSTAUD (cote 12 à 20)", 12.0, 20.0),
+    (SPECIAL, 6.0, 15.0),
     ("🔥 MÉCHANT (cote 40 à 80)", 40.0, 80.0),
     ("💀 MONSTRE (cote 150+)", 150.0, None),
 ]
@@ -96,7 +106,7 @@ ALERT_PROB_RISE = 0.07
 
 # Bankroll
 KELLY_FRACTION = 0.25
-STAKE_CAP = {"🛡️": 0.05, "⚖️": 0.02, "🔥": 0.01, "💀": 0.005}   # part max de la bankroll par tier
+STAKE_CAP = {"🛡️": 0.05, "⚖️": 0.02, "🎯": 0.015, "🔥": 0.01, "💀": 0.005}   # part max de la bankroll par tier
 MIN_STAKE_SHARE = 0.002
 STREAK_WARNING = 5
 
@@ -107,6 +117,17 @@ LEARN_MIN_ROWS = 40        # lignes avec clôture avant d'entraîner un modèle
 CALIB_MIN_ROWS = 300       # résultats réglés par famille avant de calibrer
 RIDGE_LAMBDA = 1.0
 TOP_BOOKS = 12             # bookmakers encodés individuellement
+# Amorçage de l'apprentissage par l'historique football-data (cotes d'ouverture vs clôture, kelly/bootstrap.py).
+BOOT_SEASONS = _int("BOOT_SEASONS", 3)   # saisons passées en plus de la saison en cours
+BOOT_MAX_ROWS = 1200       # lignes gardées dans data/bootstrap.json (fichier petit)
+BOOT_PER_DAY = 3           # meilleurs candidats gardés par jour de match (comme les paris suivis)
+BOOT_MIN_ROWS = 200        # lignes historiques minimum pour valider un modèle sans paris réels
+BOOT_WEIGHT = 0.3          # poids d'une ligne historique face à un pari réel suivi
+BOOT_REFRESH_DAYS = 7      # le fichier est reconstruit au plus une fois par semaine
+# Règlement : jours d'attente avant d'annuler un pari sans résultat. football-data ne se met à jour que
+# ~2 fois par semaine : corners et cartons attendent plus longtemps que les buts.
+WAIT_DAYS = 3
+WAIT_DAYS_STATS = 8
 
 MARKET_LABELS = {
     "h2h": "1N2", "double_chance": "double chance", "totals": "buts/points", "spreads": "handicap",

@@ -1,5 +1,8 @@
 """Tests hors ligne de kelly/sources (aucun réseau). Lancer : python -m tests.test_sources"""
+import contextlib
+import io
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -12,8 +15,10 @@ os.environ.pop("FBREF_MAX_PAGES", None)
 
 import requests  # noqa: E402
 
-from kelly import sources, store  # noqa: E402
+from kelly import bootstrap, config as C, learn, sources, store  # noqa: E402
 from kelly.sources import fbref, features, footballdata as fd, http, names, state, understat  # noqa: E402
+
+from tests import synth  # noqa: E402
 
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sources")
 T0 = datetime(2025, 12, 1, 12, 0, tzinfo=timezone.utc).timestamp()
@@ -623,6 +628,161 @@ def test_health_report_and_features():
     assert sources.player_features("Haaland", None, "soccer_epl")["team"] == "Manchester City"
     assert sources.player_features("Haaland", "Chelsea") is None and sources.player_features("Inconnu Total", "Arsenal") is None
     assert sources.player_features("Saka", "Arsenal", "soccer_spain_la_liga") is None
+
+
+def test_football_data_for_settlement():
+    """Règlement gratuit : CSV lus depuis le cache disque SANS requête (même périmés), match retrouvé à ±1 jour."""
+    net = fresh()
+    assert fd.cached_history(["E0"], ["2526"]) == [] and net.log == []
+    fd.fetch_season("E0", "2526")
+    n = len(net.log)
+    CLOCK.t += 30 * 24 * HOUR                                        # cache périmé : toujours lisible
+    ms = fd.cached_history(["E0"], ["2526"])
+    assert len(ms) == 8 and len(net.log) == n
+    m = fd.find_match(ms, "Manchester City", "Arsenal", "2025-09-20")
+    assert m and (m["hg"], m["ag"]) == (2, 2)
+    assert fd.find_match(ms, "Manchester City", "Arsenal", "2025-09-21") and fd.find_match(ms, "Manchester City", "Arsenal", "2025-09-19")
+    assert fd.find_match(ms, "Manchester City", "Arsenal", "2025-09-23") is None
+    assert fd.find_match(ms, "Arsenal", "Manchester City", "2025-09-20") is None          # domicile / extérieur inversés
+    assert fd.find_match(ms, "Arsenal FC", "Chelsea", "2025-08-16")["referee"] == "M Oliver"
+    assert fd.find_match(ms, "Real Madrid", "Barcelona", "2025-08-16") is None
+    st = fd.match_stats(m)
+    assert st["corners"] == 10 and st["shots"] == 24 and st["fouls"] == 17 and st["cards"] == 3 and st["players"] == {}
+    # cartons = jaunes + rouges ; données absentes = clé absente (jamais réglé sur 0)
+    assert fd.match_stats({"hy": 2, "ay": 1, "hr": 1, "ar": None, "hc": 4, "ac": 5}) == {"players": {}, "corners": 9, "cards": 4}
+    assert fd.match_stats({"hy": None, "ay": 1, "hc": None, "ac": 5}) == {"players": {}}
+
+
+def test_team_profile():
+    """/stats : équipe retrouvée par nom approché (ou mot unique), ambiguïté signalée, inconnue = None."""
+    fresh()
+    sources.refresh_all(["soccer_epl"])
+    p = sources.team_profile("arsenal")
+    assert p["team"] == "Arsenal" and p["div"] == "E0" and p["fd"]["all"]["n"] >= 3 and p["us"]["all"]["xg"] > 0, p
+    assert sources.team_profile("man city")["team"] == "Man City" and sources.team_profile("Manchester City")["team"] == "Man City"
+    assert sources.team_profile("city")["team"] == "Man City"                           # mot unique
+    assert sources.team_profile("Zzz Inconnu") is None
+    features._cache["fd"] = {"teams": {"Man City": {"div": "E0"}, "Man United": {"div": "E0"}}}
+    assert sources.team_profile("manchester") == {"many": ["Man City", "Man United"]}
+    assert sources.team_profile("man utd")["team"] == "Man United"
+    features.reload()
+
+
+def history_net(seasons=("2223", "2324", "2425", "2526")):
+    """Faux football-data avec un historique synthétique (E0) pour les saisons demandées."""
+    net = fresh()
+    for sn in seasons:
+        until = date(2025, 11, 29) if sn == "2526" else None
+        net.routes[f"https://football-data.co.uk/mmz4281/{sn}/E0.csv"] = Resp(200, synth.csv_for(sn, until).encode())
+    return net
+
+
+def test_bootstrap_rows():
+    """Lignes d'amorçage : cote d'ouverture vs clôture du même book, consensus Avg sans marge, variables d'avant-match
+    sans fuite, petit fichier, plafond, reconstruction hebdomadaire, jamais d'exception."""
+    net = history_net()
+    ms = []
+    for sn in ("2324", "2425", "2526"):
+        ms += fd.parse_csv(synth.csv_for(sn, date(2025, 11, 29) if sn == "2526" else None), "E0", sn)[0]
+    obj = bootstrap.build(ms)
+    rows = obj["rows"]
+    assert 200 < len(rows) <= C.BOOT_MAX_ROWS and obj["cols"][:3] == ["date", "market", "clv"] and obj["seasons"] == ["2324", "2425", "2526"]
+    assert [r[0] for r in rows] == sorted(r[0] for r in rows)
+    assert max(sum(1 for r in rows if r[0] == d) for d in {r[0] for r in rows}) <= C.BOOT_PER_DAY
+    assert len(json.dumps(obj)) < 60_000, len(json.dumps(obj))
+    # première journée : aucune forme connue => aucune variable d'avant-match (pas de fuite du futur)
+    first = [r for r in rows if r[0] == rows[0][0]]
+    assert all(r[7] == r[8] == r[9] == 0 for r in first)
+    # une ligne recalculée à la main : cote Max d'ouverture / clôture du même book, consensus Avg sans marge
+    mx = {"date": "2025-10-01", "season": "2526", "home": "A", "away": "B", "hg": 1, "ag": 0, "odds": {"1x2": {
+        "open": {"max": [2.2, 3.5, 3.8], "avg": [2.0, 3.4, 3.6], "ps": [2.04, 3.45, 3.55]},
+        "close": {"max": [2.0, 3.5, 4.0], "avg": [1.95, 3.4, 3.7]}}}}
+    r0 = bootstrap.match_rows(mx, None)[0]
+    pv, ps_ = fd.no_vig(mx["odds"]["1x2"]["open"]["avg"]), fd.no_vig(mx["odds"]["1x2"]["open"]["ps"])
+    edge0 = pv[0] * 2.2 - 1
+    assert r0[:3] == ["2025-10-01", 0, round(math.log(2.2 / 2.0), 4)] and r0[3] == round(edge0, 4)
+    assert r0[4] == round(abs(pv[0] - ps_[0]) / pv[0], 4) and r0[5] == round(math.log(2.2), 4)
+    assert r0[6] == round((edge0 + 0.5 * abs(pv[0] - ps_[0]) / pv[0]) * C.MARKET_WEIGHT["h2h"] + (C.MARKET_WEIGHT["h2h"] - 1) * 0.05, 4)
+    xs = bootstrap.match_rows(mx, (1.8, 0.9))                       # écart de buts attendus du côté du pari
+    assert [r[7] for r in xs] == [0.9, -0.9, -0.9]
+    assert any(r[7] != 0 for r in rows) and any(r[9] != 0 for r in rows)             # 1N2 : écart de buts ; buts : proba Poisson
+    # le signal fictif existe bien sur l'ensemble des candidats : plus la valeur est grande, plus le CLV l'est
+    allr = [r for m in ms for r in bootstrap.match_rows(m, None)]
+    xs, ys = [r[3] for r in allr], [r[2] for r in allr]
+    mx_, my_ = sum(xs) / len(xs), sum(ys) / len(ys)
+    corr = sum((x - mx_) * (y - my_) for x, y in zip(xs, ys)) / math.sqrt(
+        sum((x - mx_) ** 2 for x in xs) * sum((y - my_) ** 2 for y in ys))
+    assert len(allr) > 3 * len(rows) and corr > 0.5, (len(allr), corr)
+    # plafond de lignes : éclaircissement régulier, ordre conservé
+    small = bootstrap.build(ms, cap=100)["rows"]
+    assert len(small) == 100 and [r[0] for r in small] == sorted(r[0] for r in small)
+    # cote aberrante ou sans consensus distinct de la cote prise : ignorée
+    odd = dict(ms[200], odds={"1x2": {"open": {"max": [2.0, 3.0, 4.0]}, "close": {"max": [1.9, 3.0, 4.2]}}})
+    assert bootstrap.match_rows(odd, None) == []
+    # lecture par learn : lignes marquées, poids réduit, variables nommées
+    boot = learn.boot_rows(obj)
+    assert len(boot) == len(rows) and all(b["boot"] and b["w"] == C.BOOT_WEIGHT and b["features"]["bootstrap"] == 1.0 for b in boot)
+    assert any("gap_goals" in b["features"] and b["features"]["has_pm"] == 1.0 for b in boot) and boot[0]["market"] in ("h2h", "totals")
+    assert learn.boot_rows({"rows": [["2025-01-01", 5, 0.1], ["x"], None]}) == [] and learn.boot_rows(None) == []
+
+    # ensure() : télécharge les saisons passées une fois, fichier petit dans data/, relecture sans requête
+    assert not os.path.exists(store.path("bootstrap.json"))
+    out = bootstrap.ensure(["soccer_epl", "soccer_uefa_champs_league"])
+    assert out["rows"] and out["seasons"] == ["2223", "2324", "2425", "2526"] and out["current"] == "2526", out["seasons"]
+    assert os.path.getsize(store.path("bootstrap.json")) < 100_000
+    assert {u.split("/")[-2] for u, _, _ in net.log if u.endswith("E0.csv")} == {"2223", "2324", "2425", "2526"}
+    n = len(net.log)
+    assert bootstrap.ensure(["soccer_epl"])["built"] == out["built"] and len(net.log) == n          # < 7 jours : relu
+    CLOCK.t += 8 * 24 * HOUR
+    again = bootstrap.ensure(["soccer_epl"])
+    assert again["built"] != out["built"]                                                          # reconstruit
+    old = store.load("bootstrap.json", {})
+    # échec réseau : l'ancien fichier reste ; division inconnue : rien ; jamais d'exception
+    CLOCK.t += 8 * 24 * HOUR
+    shutil.rmtree(os.path.join(TMP, "cache"), ignore_errors=True)
+    http.reset()
+    for sn in ("2223", "2324", "2425", "2526", "2627"):
+        net.routes[f"https://football-data.co.uk/mmz4281/{sn}/E0.csv"] = Resp(500)
+    assert bootstrap.ensure(["soccer_epl"], force=True)["built"] == old["built"]
+    assert bootstrap.ensure(["tennis_atp"], force=True)["built"] == old["built"]
+    bootstrap.store = None                                                                         # bug interne : avalé
+    try:
+        assert bootstrap.ensure(["soccer_epl"]) == {}
+    finally:
+        bootstrap.store = store
+
+
+def test_probe_sources_report():
+    """tools/probe.py --sources : refresh_all + amorçage pour de bon (ici sur un faux réseau), rapport JSON court,
+    aucun secret, dossier de données temporaire (data/ du bot intact)."""
+    old_env = {k: os.environ.get(k) for k in ("ODDS_API_KEY", "DATA_DIR", "SOURCES_CACHE_DIR")}
+    os.environ["ODDS_API_KEY"] = "sekret-odds-key"                                           # avant l'import : probe.SECRETS
+    from tools import probe
+    net = history_net()
+    net.routes[API_US] = Resp(200, fixture("understat_api_epl_2025.json"))
+    net.routes[EPL_FB.format("shooting")] = Resp(403, b"", {"Cf-Mitigated": "challenge"})     # FBref : Cloudflare
+    outdir = os.path.join(TMP, "probe-out")
+    real_out, real_data = probe.OUT, store.DATA_DIR
+    probe.OUT = outdir
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert probe.main_sources() == 0
+        txt = open(os.path.join(outdir, "sources_report.json"), encoding="utf-8").read()
+        rep = json.loads(txt)
+        assert store.DATA_DIR != real_data and not os.path.exists(real_data)                  # dossier temporaire
+        assert rep["sources"]["footballdata"]["ok"] and rep["sources"]["footballdata"]["rows"] > 100
+        assert rep["sources"]["understat"]["ok"] and rep["sources"]["fbref"]["ok"] is False and rep["sources"]["fbref"]["blocked_until"]
+        assert "Cloudflare" in rep["sources"]["fbref"]["error"]
+        assert rep["profiles"]["src_footballdata.json"]["teams"] == 20 and rep["profiles"]["src_footballdata.json"]["bytes"] > 1000
+        assert rep["profiles"]["src_understat.json"]["players"] > 0 and rep["bootstrap"]["rows"] > 100
+        assert rep["bootstrap"]["seasons"] == ["2223", "2324", "2425", "2526"]
+        assert rep["cache"]["files"] > 5 and rep["leagues"] and rep["seconds"] >= 0
+        assert rep["sample_match"]["sources"] and "exp_corners" in rep["sample_match"] and "fd" in rep["sample_team"]
+        assert "sekret-odds-key" not in txt and len(txt) < 4000, len(txt)
+    finally:
+        probe.OUT, store.DATA_DIR = real_out, real_data
+        for k, v in old_env.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
 
 
 def test_refresh_never_raises():

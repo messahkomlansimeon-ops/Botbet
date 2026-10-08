@@ -17,7 +17,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15      # le premier passage du jour, cache froid, télécharge ~20 CSV football-data (3 s entre requêtes)
     permissions:
       contents: write
     steps:
@@ -36,6 +36,19 @@ jobs:
             *) m="${{ github.event.inputs.mode || 'daily' }}" ;;
           esac
           echo "mode=$m" >> "$GITHUB_OUTPUT"
+      - name: Date du jour (clé du cache des sources)
+        id: day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      # Téléchargements bruts de kelly.sources (CSV football-data, JSON Understat) : conservés d'un passage à l'autre pour ne
+      # redemander que ce qui a changé (requêtes conditionnelles). Une clé par jour ; sinon le cache le plus récent.
+      # Les petits profils calculés (data/src_*.json, bootstrap.json) sont commités avec le reste de data/.
+      - name: Restaurer le cache des sources
+        if: ${{ steps.mode.outputs.mode == 'daily' }}
+        uses: actions/cache@v4
+        with:
+          path: .cache/sources
+          key: sources-${{ steps.day.outputs.day }}
+          restore-keys: sources-
       - name: Lancer Kelly
         env:
           MODE: ${{ steps.mode.outputs.mode }}

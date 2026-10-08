@@ -6,10 +6,10 @@ URL : https://www.football-data.co.uk/mmz4281/{saison ex. 2526}/{div}.csv
 import csv
 import io
 import re
-from datetime import date
+from datetime import date, timedelta
 
 from .. import store
-from . import http, state
+from . import http, names, state
 
 NAME = "footballdata"
 LABEL = "football-data"
@@ -230,6 +230,53 @@ def load_history(divs=None, seasons=None):
         return _load(list(divs or DEFAULT_DIVS), seasons)[0]
     except Exception:
         return []
+
+
+def cached_history(divs=None, seasons=None):
+    """Matchs des CSV déjà en cache disque (même périmés) : AUCUNE requête réseau. Sert au règlement
+    gratuit des paris (le fichier est actualisé le matin par refresh_all)."""
+    out = []
+    for div in divs or DEFAULT_DIVS:
+        for s in seasons or default_seasons():
+            res = http.cached(url(div, str(s)))
+            if res:
+                out += parse_csv(res.text, div, str(s))[0]
+    return out
+
+
+def find_match(matches, home, away, day):
+    """Match joué (à ±1 jour de `day`, « AAAA-MM-JJ ») dont les équipes ressemblent à home / away
+    (noms The Odds API), ou None. Même seuil de confiance que stats.find_fixture."""
+    try:
+        d = date.fromisoformat(str(day)[:10])
+    except ValueError:
+        return None
+    wanted = {(d + timedelta(days=k)).isoformat(): abs(k) for k in (-1, 0, 1)}
+    best, best_key = None, None
+    for m in matches:
+        gap = wanted.get(m["date"])
+        if gap is None:
+            continue
+        sh, sa = names.team_sim(m["home"], home), names.team_sim(m["away"], away)
+        if sh < 0.8 or sa < 0.8 or sh + sa < 1.75:
+            continue
+        key = (round(sh + sa, 2), -gap)
+        if best_key is None or key > best_key:
+            best, best_key = m, key
+    return best
+
+
+def match_stats(m):
+    """Totaux du match pour le règlement : seules les clés disponibles. Cartons = jaunes + rouges
+    (comme API-Football ; certains books comptent un rouge double : à vérifier)."""
+    out = {"players": {}}
+    pairs = {"corners": ("hc", "ac"), "shots": ("hs", "as"), "fouls": ("hf", "af")}
+    for k, (h, a) in pairs.items():
+        if m.get(h) is not None and m.get(a) is not None:
+            out[k] = m[h] + m[a]
+    if m.get("hy") is not None and m.get("ay") is not None:
+        out["cards"] = m["hy"] + m["ay"] + (m.get("hr") or 0) + (m.get("ar") or 0)
+    return out
 
 
 # --- Profils -----------------------------------------------------------------

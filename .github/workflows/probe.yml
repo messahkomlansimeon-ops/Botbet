@@ -2,7 +2,7 @@ name: Kelly — sonde des sources
 # Récupère un échantillon réel de chaque source (aucun crédit payant) pour valider les lecteurs.
 on:
   push:
-    paths: ["tools/probe.py", ".github/workflows/probe.yml"]
+    paths: ["tools/probe.py", ".github/workflows/probe.yml", "kelly/sources/**", "kelly/bootstrap.py"]
   workflow_dispatch:
 concurrency:
   group: botbet-data
@@ -10,7 +10,7 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -23,6 +23,9 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      # Test de bout en bout de kelly.sources en conditions réelles (dossier temporaire, aucun secret) : probe/sources_report.json
+      - if: ${{ !cancelled() }}
+        run: python tools/probe.py --sources
       - if: ${{ !cancelled() }}
         run: |
           git config user.name github-actions

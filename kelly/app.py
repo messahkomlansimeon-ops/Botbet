@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import bankroll, budget, combos as CB, config as C, learn, odds, settle, stats, store, telegram, track
+from . import bankroll, bootstrap, budget, combos as CB, config as C, learn, odds, settle, sources, stats, store, telegram, track
 
 DISCLAIMER = ("Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
               "mise petit. 18+")
@@ -55,7 +55,7 @@ def build_day(picks, day):
                         + (f'\nPourquoi : {top["why"]}' if top["why"] else ""))
         sent_picks.append(top)
     for title, lo, hi in C.COMBOS:
-        combo = CB.make_combo(pool, lo, hi)
+        combo = CB.make_combo(CB.pool_for(title, picks, pool), lo, hi)
         if combo:
             text, st = fmt_combo(title, combo, bank)
             sent_picks += combo[0]
@@ -96,6 +96,37 @@ def morning_report(now):
     return msgs, model
 
 
+def refresh_sources():
+    """Actualise les stats gratuites (football-data, Understat, FBref) et l'amorçage historique avant de bâtir les
+    paris. Téléchargements polis et mis en cache ; ne casse JAMAIS le run (erreur = message dans les logs)."""
+    if not C.SOURCES_REFRESH:
+        return {}
+    out = {}
+    try:
+        out = sources.refresh_all(C.SPORTS)
+        print("[sources] " + ", ".join(f"{k} : {v.get('rows', 0)} lignes" for k, v in out.items()), file=sys.stderr)
+    except Exception as e:                          # noqa: BLE001 - les stats sont facultatives
+        print(f"[sources] actualisation ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+    try:
+        boot = bootstrap.ensure(C.SPORTS)
+        print(f"[sources] amorçage : {len(boot.get('rows', []))} lignes historiques", file=sys.stderr)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[sources] amorçage ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+    return out
+
+
+def sources_message(picks):
+    """📡 État des sources (une ligne chacune) + couverture des stats d'avant-match du jour."""
+    lines = [sources.report()]
+    events = {c["id"] for c in picks if c.get("group") == "soccer"}
+    if events:
+        covered = {c["id"] for c in picks if c.get("pm")}
+        adjusted = sum(1 for c in picks if "pgap" in (c.get("pm") or {}))
+        lines.append(f"Stats d'avant-match : {len(covered)}/{len(events)} matchs couverts, "
+                     f"{adjusted} paris ajustés par le modèle")
+    return "\n".join(lines)
+
+
 def run_daily(sample=False):
     now = now_utc()
     if sample:
@@ -104,6 +135,7 @@ def run_daily(sample=False):
         after, report, model = None, [], learn.load()
         now = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
     else:
+        refresh_sources()                           # avant le bilan : le règlement gratuit lit les CSV à jour
         report, model = morning_report(now)
         day, after = now.date(), now
         events = odds.fetch_events(day, after=now)
@@ -114,11 +146,15 @@ def run_daily(sample=False):
     picks = odds.build_picks(events, day, after, history=store.load("odds_history.json", {}), model=model)
     if not sample:
         try:
-            picks = stats.enrich(picks, day)
+            picks = odds.rescore(stats.enrich(picks, day), model)       # modèle appris : après les stats d'avant-match
         except Exception as e:                      # noqa: BLE001 - les stats sont facultatives
             print(f"[stats] ignorées : {e}", file=sys.stderr)
         if picks:
             store.save("odds_history.json", odds.snapshot(picks))
+        try:
+            report.append(sources_message(picks))
+        except Exception as e:                      # noqa: BLE001
+            print(f"[sources] rapport ignoré : {e}", file=sys.stderr)
     messages, sent_picks, sent_combos = build_day(picks, day)
     track.record(picks, {c["key"] for c in sent_picks}, day, now)
     settle.record_combos(sent_combos, day)
@@ -280,8 +316,101 @@ HELP = """🤖 Kelly — commandes :
 /match <nom> : paris intéressants sur un match du jour
 /combi <cote> : combiné sur mesure à la cote visée
 /top : les 10 meilleurs paris du jour
+/analyse <match> : chiffres d'avant-match (corners, cartons, tirs, xG) d'un match du jour + ses meilleurs paris
+/stats <équipe> : corners, cartons, tirs, fautes et xG des 10 derniers matchs
 /bank [montant] : voir ou régler la bankroll
 /aide : ce message"""
+
+
+LEAGUES = {"E0": "Premier League", "SP1": "Liga", "I1": "Serie A", "D1": "Bundesliga", "F1": "Ligue 1",
+           "EPL": "Premier League", "La_liga": "Liga", "Serie_A": "Serie A", "Ligue_1": "Ligue 1"}
+
+
+def _pair(v, k, label, fmt="{:.1f}"):
+    f, a = v.get(k + "_for"), v.get(k + "_against")
+    return f"{label} {fmt.format(f)} pour / {fmt.format(a)} contre" if f is not None and a is not None else None
+
+
+def fmt_team(p, query):
+    """Texte de /stats : profil d'une équipe (derniers matchs, football-data et Understat)."""
+    if not query:
+        return "Exemple : /stats Arsenal"
+    if not p:
+        return (f"Aucune stat pour « {query} » (équipe inconnue ou sources pas encore actualisées : "
+                "elles le sont chaque matin à 08:00).")
+    if "many" in p:
+        return f"Plusieurs équipes correspondent à « {query} » : {', '.join(p['many'])}. Précise le nom."
+    lines = [f"📈 {p['team']} ({LEAGUES.get(p['div'], p['div'])})"]
+    fd = p.get("fd") or {}
+    allv = fd.get("all") or {}
+    if allv.get("n"):
+        lines.append(f"{allv['n']} derniers matchs (football-data) :")
+        lines += [x for x in (_pair(allv, "corners", "• Corners :"), _pair(allv, "cards", "• Cartons (jaunes + rouges) :"),
+                              _pair(allv, "shots", "• Tirs :"), _pair(allv, "sot", "• Tirs cadrés :"),
+                              _pair(allv, "fouls", "• Fautes :"), _pair(allv, "goals", "• Buts :")) if x]
+        for venue, label in (("home", "À domicile"), ("away", "À l'extérieur")):
+            v = fd.get(venue) or {}
+            bits = [x for x in (_pair(v, "corners", "corners", "{:.1f}"), _pair(v, "cards", "cartons")) if x]
+            if v.get("n") and bits:
+                lines.append(f"{label} ({v['n']} matchs) : " + " ; ".join(b.replace(" pour / ", "/").replace(" contre", "")
+                                                                         for b in bits))
+    us = p.get("us") or {}
+    if (us.get("all") or {}).get("xg") is not None:
+        u = us["all"]
+        txt = f"xG (Understat, {u['n']} derniers) : {u['xg']:.2f} pour / {u.get('xga', 0):.2f} contre"
+        for venue, label in (("home", "domicile"), ("away", "extérieur")):
+            v = us.get(venue) or {}
+            if v.get("xg") is not None and v.get("xga") is not None:
+                txt += f" ; {label} {v['xg']:.2f}/{v['xga']:.2f}"
+        lines.append(txt)
+    if len(lines) == 1:
+        lines.append("Pas assez de matchs récents dans les sources.")
+    if p.get("updated"):
+        lines.append(f"(sources actualisées le {p['updated'][8:10]}/{p['updated'][5:7]})")
+    return "\n".join(lines)
+
+
+def pm_note(c):
+    pm = c.get("pm") or {}
+    return f" [modèle {pm['exp']:.1f} vs ligne {c['point']}]" if pm.get("exp") is not None and c.get("point") is not None else ""
+
+
+def analyse(picks, query):
+    """Texte de /analyse : chiffres d'avant-match d'un match du jour + ses meilleurs paris avec leur « pourquoi »."""
+    if not query:
+        return "Exemple : /analyse Arsenal"
+    found = [c for c in picks if query.lower() in c["event"].lower()]
+    events = list(dict.fromkeys(c["event"] for c in found))
+    if not found:
+        return f"Aucun match du jour ne contient « {query} »."
+    if len(events) > 1:
+        return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
+    first = found[0]
+    lines = [f"🔬 {first['event']} ({first['start']} UTC) [{first['league']}]"]
+    f = sources.match_features(first["home"], first["away"], first["sport_key"]) if first["group"] == "soccer" else {"sources": []}
+    if f["sources"]:
+        n = lambda k: f.get(k)                                  # noqa: E731
+        def two(k, label, unit=""):
+            t, h, a = n("exp_" + k), n(f"exp_{k}_home"), n(f"exp_{k}_away")
+            if t is None and h is None:
+                return None
+            split = f" ({h:.1f} + {a:.1f})" if h is not None and a is not None else ""
+            return f"• {label} : {t if t is not None else h + a:.1f}{unit}{split}"
+        lines.append(f"Chiffres d'avant-match ({', '.join(f['sources'])}, {f.get('n_home', '?')} et {f.get('n_away', '?')} matchs) :")
+        lines += [x for x in (two("corners", "Corners attendus"), two("cards", "Cartons attendus"),
+                              two("fouls", "Fautes attendues"), two("shots", "Tirs attendus"),
+                              two("sot", "Tirs cadrés attendus"), two("goals", "Buts attendus (moyennes)")) if x]
+        if f.get("exp_xg_total") is not None:
+            lines.append(f"• xG attendus : {f['exp_xg_total']:.2f} ({f['exp_xg_home']:.2f} - {f['exp_xg_away']:.2f})")
+        if f.get("ref_cards") is not None:
+            lines.append(f"• Arbitre {f['referee']} : {f['ref_cards']:.1f} cartons par match")
+    else:
+        lines.append("Pas de stats réelles pour ce match (équipes inconnues des sources ou sources indisponibles).")
+    best = sorted(found, key=lambda c: c["score"], reverse=True)[:6]
+    lines.append("Meilleurs paris :")
+    lines += [f'• {c["pick"]} @ {c["odds"]:.2f} (proba {c["prob"]*100:.0f}%){pm_note(c)}{" — " + c["why"] if c["why"] else ""}'
+              for c in best]
+    return "\n".join(lines)
 
 
 def handle_command(text):
@@ -308,8 +437,12 @@ def handle_command(text):
             bankroll.save(b)
             return f"Bankroll réglée à {amount:.2f} unités. Les mises conseillées s'adaptent dès demain."
         return f"💼 Bankroll : {b['bankroll']:.2f} unités (départ {b['initial']:.2f})"
+    if cmd == "/stats":
+        return fmt_team(sources.team_profile(" ".join(args)) if args else None, " ".join(args))
     if not picks:
         return "Kelly n'a pas encore analysé la journée (ça arrive à 08:00)."
+    if cmd == "/analyse":
+        return analyse(picks, " ".join(args))
     if cmd == "/top":
         best = sorted(CB.per_event(picks, k=1), key=lambda c: c["score"], reverse=True)[:10]
         return "🔝 TOP 10 DU JOUR\n" + "\n".join(fmt_pick(c) for c in best)
@@ -471,8 +604,9 @@ def run_check():
     print("🔎 KELLY — DIAGNOSTIC")
     ok_odds, l_odds = _check_odds()
     ok_stats, l_stats = _check_stats()
+    l_src = sources.report().splitlines()           # facultatif : n'influe pas sur le verdict
     ok_bot, l_bot, chat_ok = _check_telegram_bot()
-    lines = l_odds + l_stats + l_bot
+    lines = l_odds + l_stats + l_src + l_bot
     ok_send = False
     if chat_ok:
         summary = "\n".join(lines)

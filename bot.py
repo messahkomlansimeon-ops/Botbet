@@ -1,6 +1,6 @@
 """Kelly : point d'entrée.
 
-  python bot.py --daily      matin : règle hier, bilan, combinés du jour (Telegram)
+  python bot.py --daily      matin : actualise les stats gratuites, règle hier, bilan, combinés du jour (Telegram)
   python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote
   python bot.py --snapshot   relevé des cotes du lendemain (désactivé sur forfait gratuit : budget 0)
   python bot.py --alert      balayage large pour alertes (désactivé sur forfait gratuit : budget 0)

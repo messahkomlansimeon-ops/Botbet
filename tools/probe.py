@@ -1,14 +1,21 @@
 """Sonde : récupère un petit échantillon réel de chaque source (sans crédit payant)
-et l'enregistre dans probe/ pour valider les lecteurs hors ligne. Aucun secret écrit."""
+et l'enregistre dans probe/ pour valider les lecteurs hors ligne. Aucun secret écrit.
+
+  python tools/probe.py            échantillons Understat (endpoint JSON)
+  python tools/probe.py --full     + football-data, FBref, The Odds API (gratuit), API-Football, Telegram
+  python tools/probe.py --sources  test de bout en bout de kelly.sources (refresh_all + amorçage) -> probe/sources_report.json"""
 import json
 import os
 import re
 import sys
+import tempfile
 import time
+from datetime import datetime, timezone
 
 import requests
 
-OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "probe")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.environ.get("PROBE_OUT") or os.path.join(ROOT, "probe")
 UA = {"User-Agent": "KellyBot/1.0 (usage personnel)"}
 SECRETS = [v for k, v in os.environ.items() if k in ("ODDS_API_KEY", "STATS_API_KEY", "TELEGRAM_TOKEN") and v]
 
@@ -54,6 +61,63 @@ def main():
     if r is not None and r.ok:
         save("understat_EPL.scripts.json", json.dumps(re.findall(r"<script[^>]*>(.{0,300})", r.text, re.S), indent=1))
         save("understat_EPL.js_srcs.json", json.dumps(re.findall(r'<script[^>]*src="([^"]+)"', r.text), indent=1))
+    return 0
+
+
+def _count(obj, *path):
+    """Nombre d'éléments d'un dict imbriqué (0 si absent)."""
+    for k in path:
+        obj = obj.get(k) if isinstance(obj, dict) else None
+    return len(obj) if isinstance(obj, (dict, list)) else 0
+
+
+def main_sources():
+    """Test de bout en bout EN CONDITIONS RÉELLES (GitHub Actions) du paquet kelly.sources : actualise les sources
+    gratuites (football-data, Understat, FBref) et l'amorçage historique dans un dossier temporaire (aucune donnée
+    du bot touchée, aucun secret lu), puis écrit probe/sources_report.json : lignes par source, nombre d'équipes /
+    joueurs / arbitres, erreurs, tailles, un exemple de chiffres d'avant-match. Court par construction."""
+    tmp = tempfile.mkdtemp(prefix="kelly-probe-")
+    os.environ["DATA_DIR"], os.environ["SOURCES_CACHE_DIR"] = os.path.join(tmp, "data"), os.path.join(tmp, "cache")
+    sys.path.insert(0, ROOT)
+    from kelly import bootstrap, config, sources, store                      # import après DATA_DIR
+    from kelly.sources import features
+    store.DATA_DIR = os.environ["DATA_DIR"]
+    t0 = time.time()
+    leagues = sources.soccer_leagues(config.SPORTS)
+    health = sources.refresh_all(leagues)
+    boot = bootstrap.ensure(leagues, force=True)
+    features.reload()
+    cut = lambda x: (x or "")[:300]                                          # noqa: E731
+    rep = {"when": datetime.now(timezone.utc).isoformat(timespec="seconds"), "seconds": round(time.time() - t0, 1),
+           "leagues": leagues,
+           "sources": {n: {"ok": h["ok"], "rows": h["rows"], "error": cut(h["last_error"]), "blocked_until": h["blocked_until"]}
+                       for n, h in health.items()}}
+    prof = {}
+    for fn, keys in (("src_footballdata.json", ("teams", "referees", "leagues")), ("src_understat.json", ("leagues",)),
+                     ("src_fbref.json", ("leagues",))):
+        data = store.load(fn, {})
+        prof[fn] = {"bytes": os.path.getsize(store.path(fn)) if os.path.exists(store.path(fn)) else 0} | {
+            k: _count(data, k) for k in keys} | ({"matches": data.get("matches")} if data.get("matches") else {})
+    us = (store.load("src_understat.json", {}).get("leagues") or {})
+    prof["src_understat.json"]["teams"] = sum(_count(d, "teams") for d in us.values())
+    prof["src_understat.json"]["players"] = sum(sum(len(p) for p in (d.get("players") or {}).values()) for d in us.values())
+    rep["profiles"] = prof
+    rep["bootstrap"] = {"rows": len(boot.get("rows", [])), "seasons": boot.get("seasons"), "matches": boot.get("matches"),
+                        "bytes": os.path.getsize(store.path("bootstrap.json")) if os.path.exists(store.path("bootstrap.json")) else 0}
+    files = [os.path.join(d, f) for d, _, fs in os.walk(os.environ["SOURCES_CACHE_DIR"]) for f in fs]
+    rep["cache"] = {"files": len(files), "bytes": sum(os.path.getsize(f) for f in files)}
+    teams = sorted(t for t, v in (store.load("src_footballdata.json", {}).get("teams") or {}).items() if v.get("div") == "E0")
+    if len(teams) >= 2:
+        f = features.match_features(teams[0], teams[1], "soccer_epl")
+        rep["sample_match"] = {"match": f"{teams[0]} - {teams[1]}", "sources": f["sources"], "fields": len(f),
+                               **{k: f[k] for k in ("exp_corners", "exp_cards", "exp_fouls", "exp_shots_home", "exp_xg_total") if k in f}}
+        rep["sample_team"] = sorted((features.team_profile(teams[0]) or {}).keys())
+    first = next(((t, next(iter(ps))) for d in us.values() for t, ps in (d.get("players") or {}).items() if ps), None)
+    if first:
+        pf = features.player_features(first[1], first[0])
+        rep["sample_player"] = sorted(pf) if pf else None
+    save("sources_report.json", json.dumps(rep, ensure_ascii=False, indent=1))
+    print(json.dumps({k: rep[k] for k in ("seconds", "sources", "bootstrap")}, ensure_ascii=False))
     return 0
 
 
@@ -122,4 +186,4 @@ def main_full():
 
 
 if __name__ == "__main__":
-    sys.exit(main_full() if "--full" in sys.argv else main())
+    sys.exit(main_full() if "--full" in sys.argv else main_sources() if "--sources" in sys.argv else main())

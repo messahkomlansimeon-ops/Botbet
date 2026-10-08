@@ -334,6 +334,17 @@ def build_picks(events, day, after=None, history=None, model=None):
     return picks
 
 
+def rescore(picks, model):
+    """Recalcule le score des sélections avec le modèle appris (s'il est adopté) APRÈS les estimations d'avant-match
+    (stats.enrich) : leurs écarts modèle-ligne sont des variables du modèle."""
+    if model and model.get("adopted"):
+        now = datetime.now(timezone.utc)
+        for c in picks:
+            c["heuristic"] = c.get("heuristic", c["score"])
+            c["score"] = learn.predict(model, learn.features(c, now))
+    return picks
+
+
 def snapshot(picks):
     now = datetime.now(timezone.utc).isoformat(timespec="minutes")
     return {c["key"]: {"p": round(c["prob"], 4), "o": c["odds"], "t": now} for c in picks}

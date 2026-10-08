@@ -2,6 +2,7 @@
 import itertools
 
 from . import config as C
+from .prematch import mispriced
 
 
 def soft_market(c):
@@ -25,6 +26,17 @@ def make_pool(picks, n=C.POOL_SIZE):
     soft = [c for c in ranked if soft_market(c)][:int(n * C.SOFT_SHARE)]
     rest = [c for c in ranked if c not in soft][:n - len(soft)]
     return soft + rest
+
+
+def make_special_pool(picks, n=C.POOL_SIZE):
+    """Pool du combiné spécial : uniquement les marchés mal pricés (corners, cartons, stats joueurs), 2 paris
+    max par match, meilleurs scores."""
+    return sorted(per_event([c for c in picks if mispriced(c)], k=2), key=lambda c: c["score"], reverse=True)[:n]
+
+
+def pool_for(title, picks, pool):
+    """Pool d'un palier : le spécial a le sien, les autres le pool commun."""
+    return make_special_pool(picks) if title == C.SPECIAL else pool
 
 
 def make_combo(pool, min_odds, max_odds=None, max_legs=C.MAX_LEGS):

@@ -4,7 +4,8 @@ STATS_API_KEY, tout renvoie None et le bot fonctionne avec les cotes seules.
 Sert à deux choses :
 1. régler les paris corners / cartons / stats joueurs (résultats réels) ;
 2. estimer les lignes corners/cartons avant le match (moyennes récentes des
-   deux équipes) pour repérer les lignes mal placées par les bookmakers.
+   deux équipes) pour repérer les lignes mal placées par les bookmakers : en repli
+   seulement, les sources gratuites (kelly/sources, voir enrich) passent d'abord.
 
 Plan gratuit : 100 appels/jour. Garde-fous : plafond par exécution
 (STATS_BUDGET), plafond par jour UTC (STATS_DAILY_CAP, défaut 90, compteur dans
@@ -417,31 +418,29 @@ def expected_totals(day, home, away, kickoff=None):
 
 
 def enrich(picks, day, max_events=8):
-    """Mélange l'estimation « vraies stats » à la proba des books sur les
-    corners/cartons : 60 % books, 40 % modèle. Ajoute un signal lisible."""
-    if not enabled():
-        return picks
-    done = {}
+    """Estimations d'avant-match, mélangées à la proba des books (60 % books, 40 % modèle ; buts : 80/20).
+    1. Sources gratuites d'abord (kelly/sources : football-data, Understat, FBref) : corners, cartons, tirs et
+       tirs cadrés des joueurs (par 90 min), buts attendus (totals, les 2 marquent) ; aucune requête.
+    2. Repli API-Football pour les corners/cartons seulement si les sources n'ont rien (`max_events` matchs :
+       économise le quota).
+    Ajoute un signal lisible (« pourquoi ») et c["pm"] (voir kelly/prematch.py). Donnée absente = pari inchangé."""
+    from . import prematch, sources            # import tardif : sources importe stats
+    feats, api = {}, {}
     for c in picks:
-        if c["group"] != "soccer" or c["market"] not in ("alternate_totals_corners", "alternate_totals_cards"):
+        if c.get("group") != "soccer" or "market" not in c:
             continue
-        if c["id"] not in done:
-            if len(done) >= max_events:
-                continue
-            done[c["id"]] = expected_totals(day, c["home"], c["away"], c.get("commence"))
-        exp = done[c["id"]]
-        if not exp:
-            continue
-        kind = "corners" if "corners" in c["market"] else "cards"
-        p_model = poisson_over(exp[kind], c["point"])
-        if c["name"] == "Under":
-            p_model = 1 - p_model
-        old = c["prob"]
-        c["prob"] = 0.6 * old + 0.4 * p_model
-        c["edge"] = c["prob"] * c["odds"] - 1
-        c["score"] += (c["edge"] - (old * c["odds"] - 1)) * c["weight"]
-        if abs(p_model - old) > 0.08:
-            unit = "corners" if kind == "corners" else "cartons"
-            tag = f"stats réelles : {exp[kind]:.1f} {unit} attendus vs ligne {c['point']}"
-            c["why"] = ", ".join(filter(None, [c["why"], tag]))
+        a = None
+        try:
+            if c["id"] not in feats:
+                feats[c["id"]] = sources.match_features(c["home"], c["away"], c["sport_key"])
+            a = prematch.assess(c, feats[c["id"]], sources)
+        except Exception as e:                  # noqa: BLE001 - une source cassée ne doit jamais bloquer
+            _warn(f"sources ignorées pour {c.get('event', '?')} : {type(e).__name__}")
+        src = "sources"
+        if a is None and enabled() and c["market"] in (prematch.CORNERS, prematch.CARDS):
+            if c["id"] not in api and len(api) < max_events:
+                api[c["id"]] = expected_totals(day, c["home"], c["away"], c.get("commence"))
+            a, src = prematch.api_assess(c, api.get(c["id"])), "api"
+        if a is not None:
+            prematch.apply(c, a, src)
     return picks

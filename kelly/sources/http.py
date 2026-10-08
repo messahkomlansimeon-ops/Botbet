@@ -119,6 +119,12 @@ def is_cached(url, ttl, headers=None):
     return bool(c) and _fresh(c[0], ttl)
 
 
+def cached(url, headers=None):
+    """Contenu déjà en cache disque, périmé ou non, SANS aucune requête : Result ou None (règlement gratuit)."""
+    c = _read(_key(url, headers))
+    return Result(url, c[1], c[0].get("status", 200), from_cache=True) if c else None
+
+
 def _fresh(meta, ttl):
     return ttl is None or state.clock() - meta.get("fetched_at", 0) < ttl
 
