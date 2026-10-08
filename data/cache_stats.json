@@ -1,0 +1,29 @@
+{
+"day": "2026-10-08",
+"sources": {
+"footballdata": {
+"hit": 0,
+"miss": 50,
+"saved": 0,
+"spent": 50
+},
+"events": {
+"hit": 0,
+"miss": 47,
+"saved": 0,
+"spent": 47
+},
+"odds": {
+"hit": 0,
+"miss": 3,
+"saved": 0,
+"spent": 5
+},
+"api-football": {
+"hit": 3,
+"miss": 1,
+"saved": 3,
+"spent": 1
+}
+}
+}

@@ -1,6 +1,6 @@
 {
 "day": "2026-10-08",
-"at": "13:04",
+"at": "13:58",
 "brk": 1,
 "complete": 1,
 "act": [
@@ -53,9 +53,7 @@
 ],
 "paid": [
 "soccer_finland_veikkausliiga",
-"soccer_league_of_ireland",
-"soccer_brazil_campeonato",
-"soccer_brazil_serie_b"
+"soccer_league_of_ireland"
 ],
 "leagues": {
 "soccer_finland_veikkausliiga": [
@@ -247,7 +245,5 @@
 "Raja Casablanca",
 "20:00"
 ]
-],
-"spent": 8,
-"allow": 20
+]
 }
