@@ -1,6 +1,6 @@
 {
- "when": "2026-10-08T16:01:53+00:00",
- "seconds": 332.8,
+ "when": "2026-10-08T16:08:54+00:00",
+ "seconds": 339.6,
  "leagues": [
   "soccer_epl",
   "soccer_spain_la_liga",
@@ -52,8 +52,8 @@
   "fbref": {
    "ok": false,
    "rows": 0,
-   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 15:59 UTC",
-   "blocked_until": "2026-10-09T15:59:30+00:00"
+   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 16:06 UTC",
+   "blocked_until": "2026-10-09T16:06:33+00:00"
   }
  },
  "profiles": {
