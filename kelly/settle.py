@@ -74,7 +74,7 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
             if stats_for:
                 fstats = stats_for(b)
             elif stats.enabled() and b["group"] == "soccer":
-                fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"])
+                fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
                 fstats = stats.fixture_stats(fx["id"]) if fx else None
         b["result"] = settle_pick(b, ev, fstats)
         if b["result"] is None and old:
