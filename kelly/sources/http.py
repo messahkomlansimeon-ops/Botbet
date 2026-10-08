@@ -15,7 +15,7 @@ from . import state
 UA = "KellyBot/1.0 (usage personnel)"
 ROBOTS_TOKEN = "KellyBot"
 DEFAULT_DELAY = 3.0
-MIN_DELAY = {"fbref.com": 6.0}
+MIN_DELAY = {"fbref.com": 6.0, "fotmob.com": 6.0, "betexplorer.com": 5.0}     # sites les plus sollicités : plus lents
 FLOOR = {"fbref.com": 6.0}
 TIMEOUT = (10, 30)
 HOUR = 3600

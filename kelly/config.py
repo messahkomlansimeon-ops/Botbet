@@ -152,7 +152,7 @@ STATS_DATE_WINDOW = _int("STATS_DATE_WINDOW", 1)  # jours demandés autour d'auj
 # ---- Stats de match FotMob (kelly/sources/fmmatch.py) : touches, hors-jeu, fautes, corners, tirs, cartons par équipe ----
 # Une page de match (~1 Mo) par match lu, jamais gardée brute ; remplissage étalé sur les passages horaires (pas celui de 08:00).
 FM_PAGES_PER_RUN = _int("FM_PAGES_PER_RUN", 15)   # pages de match lues par passage horaire (0 = désactivé)
-FM_SECONDS = _int("FM_SECONDS", 80)               # durée maximale du remplissage d'un passage
+FM_SECONDS = _int("FM_SECONDS", 150)              # durée maximale du remplissage d'un passage (6 s entre deux pages FotMob)
 FM_KEEP_MATCHES = 12                              # derniers matchs gardés par équipe
 FM_KEEP_DAYS = 150                                # matchs plus anciens ignorés ; équipe oubliée sans mise à jour depuis
 FM_RECENT_DAYS = 10                               # matchs gardés en entier pour le règlement des paris
