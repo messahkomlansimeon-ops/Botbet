@@ -28,12 +28,14 @@ PREFIX = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 # Clés The Odds API -> id FotMob (tous vérifiés : pays + nom lus sur la page de la ligue).
 SPORT_TO_LEAGUE = {
     "soccer_epl": 47, "soccer_efl_champ": 123, "soccer_england_league1": 108, "soccer_england_league2": 109,
-        "soccer_spain_la_liga": 87, "soccer_germany_bundesliga": 54, "soccer_france_ligue_one": 53,
+    "soccer_spain_la_liga": 87, "soccer_italy_serie_a": 55, "soccer_germany_bundesliga": 54, "soccer_france_ligue_one": 53,
     "soccer_netherlands_eredivisie": 57, "soccer_belgium_first_div": 40, "soccer_turkey_super_league": 71,
     "soccer_greece_super_league": 135, "soccer_austria_bundesliga": 38, "soccer_poland_ekstraklasa": 196,
     "soccer_denmark_superliga": 46, "soccer_sweden_allsvenskan": 67, "soccer_norway_eliteserien": 59,
     "soccer_finland_veikkausliiga": 51, "soccer_league_of_ireland": 126, "soccer_usa_mls": 130,
-    "soccer_argentina_primera_division": 112, "soccer_brazil_campeonato": 268, "soccer_china_superleague": 120,
+    "soccer_argentina_primera_division": 112, "soccer_brazil_campeonato": 268, "soccer_brazil_serie_b": 8814,
+    "soccer_mexico_ligamx": 230, "soccer_chile_campeonato": 273, "soccer_conmebol_copa_libertadores": 45,
+    "soccer_conmebol_copa_sudamericana": 299, "soccer_china_superleague": 120,
     "soccer_korea_kleague1": 9080, "soccer_australia_aleague": 113, "soccer_japan_j_league": 223,
     "soccer_uefa_champs_league": 42, "soccer_uefa_europa_league": 73,
     "soccer_uefa_europa_conference_league": 10216, "soccer_international_friendlies": 114,
@@ -48,6 +50,7 @@ EXTRA_LEAGUES = {
     "soccer_caf_champions_league": 526, "soccer_african_football_league": 10508,
     "soccer_african_nations_championship": 9428, "soccer_can_qualification": 10608,
     "soccer_world_cup_qualifiers_caf": 10196,
+    "africa_egypt_premier_league": 519, "africa_morocco_botola_pro": 530,     # stats de match (fmmatch) : touches, fautes... (Égypte)
 }
 LEAGUES = {k for k in SPORT_TO_LEAGUE if not k.endswith("_")} | set(EXTRA_LEAGUES)
 _QUALIF = (("africa", 10196), ("afc", 10197), ("concacaf", 10198), ("south_america", 10199), ("europe", 10195))

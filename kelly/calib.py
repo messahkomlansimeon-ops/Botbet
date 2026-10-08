@@ -17,7 +17,8 @@ SHOW_MIN = 20              # pronostics réglés minimum pour afficher une famil
 FAMILIES = {"totals": "goals", "btts": "btts", "double_chance": "dc", "h2h": "h2h",
             "alternate_totals_corners": "corners", "alternate_totals_cards": "cards"}
 LABELS = {"goals": "buts", "btts": "les 2 marquent", "dc": "double chance", "h2h": "1N2", "corners": "corners",
-          "cards": "cartons", "shots": "tirs", "sot": "tirs cadrés", "player": "stats joueurs"}
+          "cards": "cartons", "shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu",
+          "player": "stats joueurs"}
 
 _memo = {}
 
@@ -25,10 +26,8 @@ _memo = {}
 def family(market):
     if market in FAMILIES:
         return FAMILIES[market]
-    if market.startswith("team_sot_"):
-        return "sot"
-    if market.startswith("team_shots_"):
-        return "shots"
+    if market.startswith("team_"):                 # team_sot_total -> sot, team_throws_home -> throws
+        return market.split("_")[1]
     return "player" if market.startswith("player_") else market
 
 

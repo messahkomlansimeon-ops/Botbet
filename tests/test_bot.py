@@ -1935,10 +1935,11 @@ def test_fair_stat_markets():
                                                                                       "exp_sot_home", "exp_sot_away", "exp_corners"], "aps_q": 0.45}
     opts = fair.options(f, "Alpha", "Bravo")
     markets = {o[0] for o in opts}
-    assert set(fair.STAT_MARKETS) <= markets and prematch.CORNERS in markets, markets
+    shots = [m for m in fair.STAT_MARKETS if m.startswith(("team_shots_", "team_sot_"))]
+    assert set(shots) <= markets and prematch.CORNERS in markets and not markets & {"team_fouls_total", "team_throws_total"}, markets
     assert "stats réelles : 8.4 tirs cadrés attendus (8 derniers matchs seulement)" in {o[4] for o in opts if o[0] == "team_sot_total"}
     # chaque ligne : proba du côté « plus » + proba du côté « moins » = 1, plus la ligne est haute moins « plus » est probable
-    for m in fair.STAT_MARKETS:
+    for m in shots:
         by = {(o[1], o[2]): o[3] for o in opts if o[0] == m}
         pts = sorted({pt for _, pt in by})
         assert len(pts) >= 3 and all(abs(by[("Over", pt)] + by[("Under", pt)] - 1) < 1e-9 for pt in pts), m
@@ -1947,11 +1948,11 @@ def test_fair_stat_markets():
     assert not {o[0] for o in fair.options(dict(f, exp_sot=40.0), "A", "B")} & {"team_sot_total"}
     assert fair.options(dict(f, n_home=2), "A", "B") == []                                   # sous 3 matchs, jamais
     short = dict(f, n_home=3, n_away=4, aps_q=0.2)                                           # profil API-Football utilisable (3 matchs) : admis, qualité réduite
-    assert {o[0] for o in fair.options(short, "A", "B")} >= set(fair.STAT_MARKETS)
+    assert {o[0] for o in fair.options(short, "A", "B")} >= set(shots)
     assert fair.options({k: v for k, v in short.items() if k not in ("aps_keys", "aps_q")}, "A", "B") == []   # autres sources : 5 matchs minimum
     ev = {"id": "m1", "sport_key": "soccer_brazil_campeonato", "home_team": "Alpha", "away_team": "Bravo", "commence_time": f"{WDAY}T22:30:00Z"}
     picks = {c["market"]: c for c in (fair.make_pick(ev, *b, "API-Football") for b in fair.best_per_family(opts, set(fair.ALL_FAMILIES)))}
-    assert set(fair.STAT_MARKETS) <= set(picks)
+    assert set(shots) <= set(picks)
     home, away, tot = picks["team_sot_home"], picks["team_shots_away"], picks["team_sot_total"]
     assert home["who"] == "Alpha" and away["who"] == "Bravo" and tot["who"] is None
     assert re.fullmatch(r"Alpha : (plus|moins) de \d,5 tirs cadrés", home["pick"]), home["pick"]

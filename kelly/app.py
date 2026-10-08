@@ -10,7 +10,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, combos as CB, config as C, fair, fmt, learn, monde,
                odds, played, settle, sources, stats, store, strength, telegram, track)
-from .sources import http
+from .sources import fmmatch, http
 from .telegram import Html
 
 DISCLAIMER = Html("<i>Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
@@ -437,6 +437,18 @@ def run_track(events_for=None, now=None):
         telegram.send(alert_text(alerts))
     cache.flush()
     return n, alerts
+
+
+def fill_match_stats():
+    """Passage horaire : quelques pages de match FotMob (touches, hors-jeu, fautes, tirs...) pour les profils d'équipe. Jamais à 08:00 :
+    la page des ligues, lue le matin, est relue depuis le cache. Ne casse jamais le passage."""
+    try:
+        rep = fmmatch.fill()
+        print("[fmmatch] " + fmmatch.report_line(rep), file=sys.stderr)
+        return rep
+    except Exception as e:                          # noqa: BLE001 - facultatif
+        print(f"[fmmatch] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
 
 
 def run_snapshot():

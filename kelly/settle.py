@@ -3,11 +3,11 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import calib, config as C, fair, fmt, learn, odds, played, stats, store, track
-from .sources import footballdata as fd
+from .sources import fmmatch, footballdata as fd
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
-SHOT_MARKETS = ("team_shots_total", "team_sot_total", "team_shots_home", "team_shots_away", "team_sot_home", "team_sot_away")
+SHOT_MARKETS = tuple(f"team_{k}_{s}" for k in ("shots", "sot", "fouls", "throws", "offsides") for s in ("total", "home", "away"))
 
 
 def _side_value(sd, fld):
@@ -19,7 +19,7 @@ def _side_value(sd, fld):
 
 def shot_value(market, fstats):
     """Valeur réelle d'un marché de tirs / tirs cadrés (total du match ou une équipe) d'après fstats, ou None."""
-    fld = "sot" if market.startswith("team_sot_") else "shots"
+    fld = fmt.TEAM_MARKET.match(market)[1]
     side = fstats.get("side") or {}
     if market.endswith("_total"):
         vals = [_side_value(side.get(s), fld) for s in ("home", "away")]
@@ -85,7 +85,7 @@ def final_text(b, ev, fstats=None):
         return f"{fstats['corners' if 'corners' in m else 'cards']:g} {'corners' if 'corners' in m else 'cartons'}"
     if m in SHOT_MARKETS:
         v = shot_value(m, fstats)
-        return f"{v:g} {'tirs cadrés' if m.startswith('team_sot_') else 'tirs'}" if v is not None else ""
+        return f"{v:g} {fmt.TEAM_UNITS[fmt.TEAM_MARKET.match(m)[1]]}" if v is not None else ""
     if m.startswith("player_"):
         field = {"player_shots": "shots", "player_shots_on_target": "shots_on_target", "player_fouls": "fouls"}.get(m)
         v = stats.player_stat(fstats, b.get("who") or "", field) if field else None
@@ -154,6 +154,12 @@ def match_stats(b, fdata, stats_for=None):
         fstats = fdata.stats(b) or fstats              # API-Football absent ou quota épuisé : football-data
     elif soccer and b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None:
         fstats = fdata.stats(b) or fstats
+    if soccer and (b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None
+                   or b["market"] in FD_MARKETS and (fstats or {}).get(need) is None):
+        try:                                           # touches, hors-jeu (FotMob seul les a), ou rien ailleurs : page du match FotMob
+            fstats = fmmatch.match_stats(b) or fstats
+        except Exception as e:                         # noqa: BLE001 - facultatif
+            print(f"[settle] FotMob ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     return fstats
 
 

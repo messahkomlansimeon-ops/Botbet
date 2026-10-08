@@ -17,7 +17,7 @@ os.environ.pop("FBREF_MAX_PAGES", None)
 import requests  # noqa: E402
 
 from kelly import bootstrap, config as C, learn, sources, store  # noqa: E402
-from kelly.sources import betexplorer, fbref, features, footballdata as fd, fotmob, http, names, state, understat  # noqa: E402
+from kelly.sources import betexplorer, fbref, features, fmmatch, footballdata as fd, fotmob, http, names, state, understat  # noqa: E402
 
 from tests import synth  # noqa: E402
 
@@ -876,6 +876,78 @@ def _fotmob_html():
             "</body></html>").encode()
 
 
+def _fm_match_html(m=None, throws=None):
+    """Page de match FotMob (fixture réelle Fulham - Man Utd, réduite) ; `m` : match de la page de ligue dont elle prend l'id, les
+    équipes et la date ; `throws` : touches à mettre à la place des vraies."""
+    data = json.loads(fixture("fotmob_match.json"))
+    if m:
+        st = m["status"]
+        hg, ag = (int(x) for x in st["scoreStr"].replace(" ", "").split("-"))
+        data["general"].update(matchId=m["id"], matchTimeUTCDate=st["utcTime"])
+        data["header"]["teams"] = [{"name": m["home"]["name"], "id": int(m["home"]["id"]), "score": hg},
+                                   {"name": m["away"]["name"], "id": int(m["away"]["id"]), "score": ag}]
+    if throws is not None:
+        for grp in data["content"]["stats"]["Periods"]["All"]["stats"]:
+            for x in grp["stats"]:
+                if x["key"] == "player_throws":
+                    x["stats"] = throws
+    inner = json.dumps({"props": {"pageProps": data}}, ensure_ascii=False).replace("</", "<\\/")
+    return f'<html><script id="__NEXT_DATA__" type="application/json">{inner}</script></html>'.encode()
+
+
+def test_fmmatch_stats():
+    """Pages de match FotMob : touches, hors-jeu, fautes... lues par passage horaire, profils, chiffres d'avant-match, pronostics sur
+    touches / hors-jeu / fautes, règlement."""
+    from kelly import fair, fmt, settle
+    m = fmmatch.parse_match(_fm_match_html().decode())
+    assert m["home"] == "Fulham" and m["s"]["throws"] == [11, 20] and m["s"]["offsides"] == [1, 2] and m["s"]["fouls"] == [9, 5]
+    assert m["s"]["sot"] == [6, 6] and m["s"]["shots"] == [12, 29] and m["s"]["corners"] == [3, 13] and m["s"]["cards"] == [3, 0]
+    assert m["s"]["goals"] == [1, 1] and m["d"] == "2026-09-20"
+    assert "throws" not in fmmatch.parse_match(_fm_match_html(throws=[0, 0]).decode())["s"]       # 0-0 = non suivi
+    assert fmmatch.parse_match("<html>rien</html>") is None
+    # cartons : le fil du match fait foi (FotMob laisse parfois la stat à 0-0, au Brésil)
+    data = json.loads(fixture("fotmob_match.json"))
+    data["content"]["matchFacts"] = {"events": {"events": [{"type": "Card", "card": "Yellow", "isHome": False},
+                                                           {"type": "Card", "card": "Red", "isHome": True}, {"type": "Goal", "isHome": True}]}}
+    page = '<script id="__NEXT_DATA__">' + json.dumps({"props": {"pageProps": data}}) + "</script>"
+    assert fmmatch.parse_match(page)["s"]["cards"] == [1, 1]
+    net = fresh()
+    league = json.loads(fixture("fotmob_league47.json"))["fixtures"]["allMatches"]
+    done = [x for x in league if x["status"].get("finished")]
+    for x in done:
+        net.routes[f"https://{FM}{x['pageUrl'].split('#')[0]}"] = Resp(200, _fm_match_html(x))
+    assert fmmatch.fill()["pages"] == 0                               # sans page de ligue en cache : rien à lire
+    fotmob.refresh(["soccer_epl"])                                    # le matin : page de la ligue (en cache)
+    rep = fmmatch.fill(max_pages=5, seconds=600)
+    assert rep["pages"] == 5 and rep["added"] == 5 and rep["left"] > 0, rep
+    rep = fmmatch.fill(max_pages=200, seconds=6000)
+    assert rep["added"] == len(done) - 5 and rep["left"] == 0, rep
+    assert fmmatch.fill(max_pages=200, seconds=6000)["pages"] == 0              # jamais une page deux fois
+    assert not os.listdir(os.path.join(TMP, "cache")) or all(
+        os.path.getsize(os.path.join(TMP, "cache", f)) < 2_000_000 for f in os.listdir(os.path.join(TMP, "cache")))
+    prof = fmmatch.profiles()["teams"]
+    ars = prof["Arsenal"]
+    assert ars["all"]["n"] == 5 and ars["all"]["throws_for"] == 16.4 and "offsides_for" in ars["all"], ars["all"]
+    features.reload()
+    f = sources.match_features("Arsenal", "Manchester City", "soccer_epl")
+    assert "FotMob (matchs)" in f["sources"] and f["exp_throws"] > 20 and f["exp_offsides"] > 1, f
+    assert {"exp_throws", "exp_offsides"} <= set(f["aps_keys"]) and f["aps_q"] > 0
+    markets = {o[0] for o in fair.options(f, "Arsenal", "Manchester City")}
+    assert {"team_throws_total", "team_offsides_total", "team_fouls_total", "team_sot_total"} <= markets, markets
+    assert fmt.label("team_throws_total", "Over", 30.5, None, "soccer") == "Plus de 30,5 touches au total"
+    assert fmt.label("team_fouls_home", "Under", 12.5, "Arsenal", "soccer") == "Arsenal : moins de 12,5 fautes"
+    # règlement : le match est déjà accumulé (aucune page de plus)
+    x = done[-1]
+    b = {"home": x["home"]["name"], "away": x["away"]["name"], "commence": x["status"]["utcTime"], "sport_key": "soccer_epl",
+         "market": "team_throws_total", "name": "Over", "point": 30.5, "group": "soccer", "who": None, "id": "z"}
+    st = fmmatch.match_stats(b)
+    assert settle.shot_value("team_throws_total", st) == 31 and settle.shot_value("team_offsides_total", st) == 3
+    assert settle.shot_value("team_fouls_home", st) == 9 and settle.final_text(b, {}, st) == "31 touches"
+    ev = {"scores": [{"name": b["home"], "score": "1"}, {"name": b["away"], "score": "1"}]}
+    assert settle.settle_pick(b, ev, st) == "win" and settle.settle_pick(b | {"point": 31.5}, ev, st) == "loss"
+    assert fmmatch.match_stats(b | {"home": "Inconnu FC"}) is None
+
+
 def test_fotmob_parse_league():
     data, probs = fotmob.parse_league(_fotmob_html().decode())
     assert data and not probs, probs
@@ -900,7 +972,7 @@ def test_fotmob_refresh_and_features():
     fresh(serve=False)
     NET.routes[f"https://{FM}/robots.txt"] = ROBOTS_OK
     NET.routes["https://www.fotmob.com/leagues/47"] = Resp(200, _fotmob_html())
-    for kid in (526, 10508, 9428, 10608, 10196):                    # ligues africaines toujours actualisées
+    for kid in fotmob.EXTRA_LEAGUES.values():                       # ligues africaines toujours actualisées
         NET.routes[f"https://www.fotmob.com/leagues/{kid}"] = Resp(200, _fotmob_html())
     h = fotmob.refresh(["soccer_epl"])
     assert h["ok"] and h["rows"] > 0, h

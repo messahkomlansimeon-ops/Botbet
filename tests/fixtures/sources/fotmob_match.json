@@ -1,0 +1,514 @@
+{
+"general": {
+"matchId": "5795459",
+"matchTimeUTCDate": "2026-09-20T15:30:00.000Z",
+"leagueId": 47,
+"leagueName": "Premier League",
+"started": true,
+"finished": true,
+"homeTeam": {
+"name": "Fulham",
+"id": 9879
+},
+"awayTeam": {
+"name": "Manchester United",
+"id": 10260
+}
+},
+"header": {
+"teams": [
+{
+"name": "Fulham",
+"id": 9879,
+"score": 1
+},
+{
+"name": "Manchester United",
+"id": 10260,
+"score": 1
+}
+]
+},
+"content": {
+"stats": {
+"Periods": {
+"All": {
+"stats": [
+{
+"title": "Top stats",
+"stats": [
+{
+"title": "Ball possession",
+"key": "BallPossesion",
+"stats": [
+42,
+58
+]
+},
+{
+"title": "Expected goals (xG)",
+"key": "expected_goals",
+"stats": [
+"1.62",
+"1.60"
+]
+},
+{
+"title": "Total shots",
+"key": "total_shots",
+"stats": [
+12,
+29
+]
+},
+{
+"title": "Shots on target",
+"key": "ShotsOnTarget",
+"stats": [
+6,
+6
+]
+},
+{
+"title": "Touches in opposition box",
+"key": "touches_opp_box",
+"stats": [
+20,
+43
+]
+},
+{
+"title": "Big chances",
+"key": "big_chance",
+"stats": [
+3,
+2
+]
+},
+{
+"title": "Big chances missed",
+"key": "big_chance_missed_title",
+"stats": [
+3,
+2
+]
+},
+{
+"title": "Accurate passes",
+"key": "accurate_passes",
+"stats": [
+"400 (88%)",
+"545 (90%)"
+]
+},
+{
+"title": "Yellow cards",
+"key": "yellow_cards",
+"stats": [
+3,
+0
+]
+},
+{
+"title": "Corners",
+"key": "corners",
+"stats": [
+3,
+13
+]
+}
+]
+},
+{
+"title": "Shots",
+"stats": [
+{
+"title": "Shots",
+"key": "shots",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Total shots",
+"key": "total_shots",
+"stats": [
+12,
+29
+]
+},
+{
+"title": "Shots off target",
+"key": "ShotsOffTarget",
+"stats": [
+5,
+10
+]
+},
+{
+"title": "Shots on target",
+"key": "ShotsOnTarget",
+"stats": [
+6,
+6
+]
+},
+{
+"title": "Blocked shots",
+"key": "blocked_shots",
+"stats": [
+1,
+13
+]
+},
+{
+"title": "Hit woodwork",
+"key": "shots_woodwork",
+"stats": [
+0,
+2
+]
+},
+{
+"title": "Shots inside box",
+"key": "shots_inside_box",
+"stats": [
+11,
+17
+]
+},
+{
+"title": "Shots outside box",
+"key": "shots_outside_box",
+"stats": [
+1,
+12
+]
+}
+]
+},
+{
+"title": "Expected goals (xG)",
+"stats": [
+{
+"title": "Expected goals (xG)",
+"key": "expected_goals",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Expected goals (xG)",
+"key": "expected_goals",
+"stats": [
+"1.62",
+"1.60"
+]
+},
+{
+"title": "xG open play",
+"key": "expected_goals_open_play",
+"stats": [
+"1.62",
+"1.17"
+]
+},
+{
+"title": "xG set play",
+"key": "expected_goals_set_play",
+"stats": [
+"0.00",
+"0.43"
+]
+},
+{
+"title": "xG non-penalty",
+"key": "expected_goals_non_penalty",
+"stats": [
+"1.62",
+"1.60"
+]
+},
+{
+"title": "xG on target (xGOT)",
+"key": "expected_goals_on_target",
+"stats": [
+"1.49",
+"1.06"
+]
+}
+]
+},
+{
+"title": "Physical performance",
+"stats": [
+{
+"title": "Physical performance",
+"key": "physical_metrics",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Distance covered",
+"key": "physical_metrics_distance_covered",
+"stats": [
+116668,
+110235
+]
+},
+{
+"title": "Running distance",
+"key": "physical_metrics_running",
+"stats": [
+22945,
+20111
+]
+},
+{
+"title": "Sprinting distance",
+"key": "physical_metrics_sprinting",
+"stats": [
+2021,
+1882
+]
+},
+{
+"title": "Number of sprints",
+"key": "physical_metrics_number_of_sprints",
+"stats": [
+101,
+91
+]
+}
+]
+},
+{
+"title": "Passes",
+"stats": [
+{
+"title": "Passes",
+"key": "passes",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Passes",
+"key": "passes",
+"stats": [
+457,
+606
+]
+},
+{
+"title": "Accurate passes",
+"key": "accurate_passes",
+"stats": [
+"400 (88%)",
+"545 (90%)"
+]
+},
+{
+"title": "Own half",
+"key": "own_half_passes",
+"stats": [
+245,
+216
+]
+},
+{
+"title": "Opposition half",
+"key": "opposition_half_passes",
+"stats": [
+155,
+329
+]
+},
+{
+"title": "Accurate long balls",
+"key": "long_balls_accurate",
+"stats": [
+"9 (23%)",
+"26 (58%)"
+]
+},
+{
+"title": "Accurate crosses",
+"key": "accurate_crosses",
+"stats": [
+"3 (30%)",
+"7 (23%)"
+]
+},
+{
+"title": "Throws",
+"key": "player_throws",
+"stats": [
+11,
+20
+]
+},
+{
+"title": "Touches in opposition box",
+"key": "touches_opp_box",
+"stats": [
+20,
+43
+]
+},
+{
+"title": "Offsides",
+"key": "Offsides",
+"stats": [
+1,
+2
+]
+}
+]
+},
+{
+"title": "Defence",
+"stats": [
+{
+"title": "Defence",
+"key": "defense",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Tackles",
+"key": "matchstats.headers.tackles",
+"stats": [
+13,
+8
+]
+},
+{
+"title": "Interceptions",
+"key": "interceptions",
+"stats": [
+6,
+9
+]
+},
+{
+"title": "Blocks",
+"key": "shot_blocks",
+"stats": [
+13,
+1
+]
+},
+{
+"title": "Clearances",
+"key": "clearances",
+"stats": [
+38,
+13
+]
+},
+{
+"title": "Keeper saves",
+"key": "keeper_saves",
+"stats": [
+5,
+6
+]
+}
+]
+},
+{
+"title": "Duels",
+"stats": [
+{
+"title": "Duels",
+"key": "duels",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Duels won",
+"key": "duel_won",
+"stats": [
+34,
+35
+]
+},
+{
+"title": "Ground duels won",
+"key": "ground_duels_won",
+"stats": [
+"25 (52%)",
+"23 (48%)"
+]
+},
+{
+"title": "Aerial duels won",
+"key": "aerials_won",
+"stats": [
+"9 (43%)",
+"12 (57%)"
+]
+},
+{
+"title": "Successful dribbles",
+"key": "dribbles_succeeded",
+"stats": [
+"7 (54%)",
+"7 (50%)"
+]
+}
+]
+},
+{
+"title": "Discipline",
+"stats": [
+{
+"title": "Discipline",
+"key": "discipline",
+"stats": [
+null,
+null
+]
+},
+{
+"title": "Yellow cards",
+"key": "yellow_cards",
+"stats": [
+3,
+0
+]
+},
+{
+"title": "Red cards",
+"key": "red_cards",
+"stats": [
+0,
+0
+]
+},
+{
+"title": "Fouls committed",
+"key": "fouls",
+"stats": [
+9,
+5
+]
+}
+]
+}
+]
+}
+}
+}
+}
+}

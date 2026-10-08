@@ -513,7 +513,9 @@ def test_prematch_and_fair_use_the_model():
             # pronostics sans cote : lignes 0,5 à 4,5, références naïves, classement par avance x qualité
             opts, bases = fair._options(f, "Arsenal", "Manchester City")
             # tirs et tirs cadrés (total et par équipe) s'ajoutent aux familles de base quand le modèle les a
-            assert {o[0] for o in opts} == set(fair.ALL_FAMILIES) and bases, {o[0] for o in opts}
+            # (touches et hors-jeu : seulement avec des profils FotMob, absents ici)
+            assert {o[0] for o in opts} == set(fair.ALL_FAMILIES) - {"team_throws_total", "team_throws_home", "team_throws_away",
+                                                                      "team_offsides_total"} and bases, {o[0] for o in opts}
             assert {o[0] for o in opts if o[0].startswith("team_sot_")} == {"team_sot_total", "team_sot_home", "team_sot_away"}
             assert all(o[3] > 0 and 0 <= o[3] <= 1 for o in opts if o[0].startswith("team_s"))
             pts = {o[2] for o in opts if o[0] == "totals"}

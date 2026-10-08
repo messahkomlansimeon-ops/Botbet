@@ -1,7 +1,7 @@
 """Kelly : point d'entrée.
 
   python bot.py --daily      matin : actualise les stats gratuites, règle hier, bilan, combinés du jour (Telegram)
-  python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote
+  python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote, puis stats de match FotMob
   python bot.py --snapshot   relevé des cotes du lendemain (désactivé sur forfait gratuit : budget 0)
   python bot.py --alert      balayage large pour alertes (désactivé sur forfait gratuit : budget 0)
   python bot.py --commands   traite les commandes Telegram reçues (une passe)
@@ -34,6 +34,7 @@ def main(argv):
         app.run_snapshot()
     elif "--track" in argv:
         app.run_track()
+        app.fill_match_stats()
     elif "--alert" in argv:
         app.run_alert(sample)
     elif "--serve" in argv:

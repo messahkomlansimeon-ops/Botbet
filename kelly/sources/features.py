@@ -1,4 +1,4 @@
-from . import betexplorer, fbref, footballdata, fotmob, names, understat
+from . import betexplorer, fbref, fmmatch, footballdata, fotmob, names, understat
 from .. import apistats, catalogue, config as C
 
 MIN_N = 3
@@ -211,7 +211,49 @@ def _apistats(out, home, away, sport_key):
         out.setdefault("exp_cards_team", out["exp_cards"])
     n_h, n_a = ht["all"]["n"], at["all"]["n"]
     out["sources"].append("API-Football")
-    out["aps_keys"] = sorted(new)
+    q = aps_quality(min(n_h, n_a))
+    if out.get("aps_keys"):                           # déjà des stats FotMob : on garde la qualité la plus prudente
+        q, (n_h, n_a) = min(q, out.get("aps_q", q)), min((n_h, n_a), tuple(out.get("aps_n") or (n_h, n_a)))
+    out["aps_keys"] = sorted(set(out.get("aps_keys") or ()) | set(new))
+    out["aps_n"] = (n_h, n_a)
+    out["aps_q"] = q
+    out.setdefault("home_team", h)
+    out.setdefault("away_team", a)
+    out.setdefault("n_home", n_h)
+    out.setdefault("n_away", n_a)
+
+
+FM_STATS = ("corners", "goals", "shots", "sot", "fouls", "cards", "throws", "offsides")
+
+
+def _fm_candidates(prof, sport_key):
+    """Équipes FotMob de la ligue (toutes les ligues africaines pour un match « africa », nom de ligue inconnu)."""
+    if sport_key == "africa":
+        return {n: p for n, p in prof.items() if any(k.startswith("africa") for k in p.get("sk", []))}
+    return {n: p for n, p in prof.items() if sport_key in p.get("sk", [])}
+
+
+def _fmmatch(out, home, away, sport_key):
+    """Stats de match FotMob accumulées (fmmatch) : complètent ce que les sources précédentes n'ont pas, et sont seules à donner
+    touches et hors-jeu. Comme les profils API-Football, leurs clés vont dans aps_keys (qualité selon le nombre de matchs)."""
+    prof = _fm_candidates(_p("fmm", fmmatch).get("teams") or {}, sport_key)
+    h, a = names.best_team(home, prof), names.best_team(away, prof)
+    if not h or not a or prof[h] is prof[a]:
+        return
+    ht, at = prof[h], prof[a]
+    tmp = {}
+    for stat in FM_STATS:
+        hv, av = _expect(ht, at, stat)
+        _put_pair(tmp, stat, stat, hv, av, total=True)
+    new = {k: v for k, v in tmp.items() if k not in out}
+    if not new:
+        return
+    out.update(new)
+    if "exp_cards" in new:
+        out.setdefault("exp_cards_team", out["exp_cards"])
+    n_h, n_a = ht["all"]["n"], at["all"]["n"]
+    out["sources"].append("FotMob (matchs)")
+    out["aps_keys"] = sorted(set(out.get("aps_keys") or ()) | set(new))
     out["aps_n"] = (n_h, n_a)
     out["aps_q"] = aps_quality(min(n_h, n_a))
     out.setdefault("home_team", h)
@@ -223,11 +265,11 @@ def _apistats(out, home, away, sport_key):
 def match_features(home, away, sport_key, referee=None):
     out = {"sources": []}
     if sport_key.startswith("africa"):
-        steps = [(_apistats, (home, away, sport_key))]
+        steps = [(_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key))]
     else:
         steps = [(_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
                  (_fotmob, (home, away, sport_key)), (_fbref, (home, away, sport_key)),
-                 (_deep, (home, away, sport_key, referee)), (_apistats, (home, away, sport_key))]
+                 (_deep, (home, away, sport_key, referee)), (_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key))]
     for fn, args in steps:
         try:
             fn(out, *args)

@@ -149,6 +149,14 @@ APISTATS_MAX_TEAMS = 300                          # équipes gardées dans data/
 APISTATS_KEEP_DAYS = 120                          # équipe oubliée si elle n'a pas joué (ni été mise à jour) depuis
 APISTATS_SECONDS = _int("APISTATS_SECONDS", 150)  # durée maximale du remplissage du matin
 STATS_DATE_WINDOW = _int("STATS_DATE_WINDOW", 1)  # jours demandés autour d'aujourd'hui à /fixtures?date= (forfait gratuit : hier, aujourd'hui, demain)
+# ---- Stats de match FotMob (kelly/sources/fmmatch.py) : touches, hors-jeu, fautes, corners, tirs, cartons par équipe ----
+# Une page de match (~1 Mo) par match lu, jamais gardée brute ; remplissage étalé sur les passages horaires (pas celui de 08:00).
+FM_PAGES_PER_RUN = _int("FM_PAGES_PER_RUN", 15)   # pages de match lues par passage horaire (0 = désactivé)
+FM_SECONDS = _int("FM_SECONDS", 80)               # durée maximale du remplissage d'un passage
+FM_KEEP_MATCHES = 12                              # derniers matchs gardés par équipe
+FM_KEEP_DAYS = 150                                # matchs plus anciens ignorés ; équipe oubliée sans mise à jour depuis
+FM_RECENT_DAYS = 10                               # matchs gardés en entier pour le règlement des paris
+FM_SETTLE_PAGES = 15                              # pages lues au plus par passage pour régler un pari (match pas encore accumulé)
 # ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
 FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
@@ -275,7 +283,9 @@ MARKET_LABELS = {
     "player_points": "points joueur", "player_rebounds": "rebonds", "player_assists": "passes",
     "player_threes": "3 points", "team_shots_total": "tirs (total)", "team_sot_total": "tirs cadrés (total)",
     "team_shots_home": "tirs d'une équipe", "team_shots_away": "tirs d'une équipe", "team_sot_home": "tirs cadrés d'une équipe",
-    "team_sot_away": "tirs cadrés d'une équipe",
+    "team_sot_away": "tirs cadrés d'une équipe", "team_fouls_total": "fautes (total)", "team_fouls_home": "fautes d'une équipe",
+    "team_fouls_away": "fautes d'une équipe", "team_throws_total": "touches (total)", "team_throws_home": "touches d'une équipe",
+    "team_throws_away": "touches d'une équipe", "team_offsides_total": "hors-jeu (total)",
 }
 
 # ---- Caches (kelly/cache.py) : ne jamais redemander ce qu'on a déjà ----

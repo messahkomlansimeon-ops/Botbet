@@ -40,11 +40,19 @@ STAT_SPECS = {"team_shots_total": ("exp_shots", "tirs", (12.0, 45.0), 0.03),
               "team_shots_home": ("exp_shots_home", "tirs", (4.0, 26.0), 0.05),
               "team_shots_away": ("exp_shots_away", "tirs", (4.0, 26.0), 0.05),
               "team_sot_home": ("exp_sot_home", "tirs cadrés", (1.2, 10.0), 0.05),
-              "team_sot_away": ("exp_sot_away", "tirs cadrés", (1.2, 10.0), 0.05)}
+              "team_sot_away": ("exp_sot_away", "tirs cadrés", (1.2, 10.0), 0.05),
+              # Fautes (football-data, modèle approfondi, FotMob, API-Football), touches et hors-jeu (FotMob seulement)
+              "team_fouls_total": ("exp_fouls", "fautes", (12.0, 45.0), 0.03),
+              "team_fouls_home": ("exp_fouls_home", "fautes", (5.0, 25.0), 0.05),
+              "team_fouls_away": ("exp_fouls_away", "fautes", (5.0, 25.0), 0.05),
+              "team_throws_total": ("exp_throws", "touches", (20.0, 70.0), 0.03),
+              "team_throws_home": ("exp_throws_home", "touches", (8.0, 40.0), 0.05),
+              "team_throws_away": ("exp_throws_away", "touches", (8.0, 40.0), 0.05),
+              "team_offsides_total": ("exp_offsides", "hors-jeu", (1.0, 10.0), 0.10)}
 STAT_MARKETS = tuple(STAT_SPECS)
 ALL_FAMILIES = FAMILIES + STAT_MARKETS
 EXP_KEY = {prematch.CORNERS: "exp_corners", prematch.CARDS: "exp_cards"} | {m: v[0] for m, v in STAT_SPECS.items()}
-SIDE_MARKETS = {"team_shots": "shots", "team_sot": "sot"}         # marchés par équipe de strength.lines (côté dans l["side"])
+SIDE_MARKETS = {"team_shots": "shots", "team_sot": "sot", "team_fouls": "fouls"}         # marchés par équipe de strength.lines (côté dans l["side"])
 DEEP_LINES = {"corners": (6.5, 13.5), "cards": (1.5, 7.5)}      # lignes de corners / cartons proposées avec le modèle approfondi
 DEEP_MIN_Q = 0.35          # qualité des données minimale pour se fier au modèle approfondi
 EVAL_MAX = 250             # matchs examinés au plus (le calcul est local, mais les profils sont cherchés par noms approchés)

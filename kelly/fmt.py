@@ -94,11 +94,16 @@ SINGULAR = {"tirs cadrés": "tir cadré", "tirs": "tir", "fautes": "faute", "poi
             "passes": "passe", "paniers à 3 pts": "panier à 3 pts"}
 
 
+TEAM_MARKET = re.compile(r"^team_(shots|sot|fouls|throws|offsides)_(total|home|away)$")
+TEAM_UNITS = {"shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu"}
+
+
 def label(market, name, point, who, group):
     """« Plus de 2,5 buts », « Moins de 9,5 corners », « Total cartons : plus de 3,5 », « Mbappé : 2 tirs cadrés ou plus »,
     « Les deux équipes marquent : oui », « Double chance : Nul ou Flamengo », « Flamengo gagne »."""
-    if market.startswith(("team_shots_", "team_sot_")):          # tirs et tirs cadrés (pronostics sans cote) : total ou par équipe
-        u = "tirs cadrés" if market.startswith("team_sot_") else "tirs"
+    tm = TEAM_MARKET.match(market)
+    if tm:                                                         # tirs, tirs cadrés, fautes, touches, hors-jeu : total ou par équipe
+        u = TEAM_UNITS[tm[1]]
         if market.endswith("_total"):
             return f"{'Plus' if name == 'Over' else 'Moins'} de {trim(point)} {u} au total"
         return f"{who or ('Équipe à domicile' if market.endswith('_home') else 'Équipe extérieure')} : " \
