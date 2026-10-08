@@ -1,11 +1,20 @@
-name: Combinés du jour
+name: Botbet
 on:
   schedule:
-    - cron: "0 8 * * *"    # 08:00 Abidjan : envoi des combinés
-    - cron: "0 20 * * *"   # 20:00 : relevé des cotes du lendemain (pas d'envoi)
+    - cron: "0 8 * * *"    # 08:00 Abidjan : résultats d'hier + combinés du jour
+    - cron: "0 12 * * *"   # 12:00 : alerte cotes
+    - cron: "0 16 * * *"   # 16:00 : alerte cotes
+    - cron: "0 20 * * *"   # 20:00 : relevé des cotes du lendemain
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "daily | alert | snapshot"
+        default: daily
+concurrency:
+  group: botbet-data
+  cancel-in-progress: false
 jobs:
-  send:
+  run:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,19 +23,28 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt
-      - run: python bot.py
+      - name: Choisir le mode
+        id: mode
+        run: |
+          case "${{ github.event.schedule }}" in
+            "0 8 * * *") m=daily ;;
+            "0 12 * * *"|"0 16 * * *") m=alert ;;
+            "0 20 * * *") m=snapshot ;;
+            *) m="${{ github.event.inputs.mode || 'daily' }}" ;;
+          esac
+          echo "mode=$m" >> "$GITHUB_OUTPUT"
+      - run: python bot.py --${{ steps.mode.outputs.mode }}
         env:
-          # À 20:00 on relève seulement les cotes (pour voir les mouvements le matin).
-          SNAPSHOT_ONLY: ${{ github.event.schedule == '0 20 * * *' && '1' || '' }}
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
           MAX_SPORTS: "25"
           PROP_EVENTS: "8"
-      - name: Sauvegarder l'historique des cotes
+      - name: Sauvegarder les données (paris, historique, apprentissage)
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add data/odds_history.json
-          git diff --cached --quiet || git commit -m "Relevé des cotes"
-          git push
+          git add data
+          git diff --cached --quiet || git commit -m "Données du $(date -u +%Y-%m-%d) (${{ steps.mode.outputs.mode }})"
+          git pull --rebase origin ${{ github.ref_name }} && git push

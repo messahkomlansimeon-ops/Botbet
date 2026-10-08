@@ -462,7 +462,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "1",
@@ -927,7 +928,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "2",
@@ -1392,7 +1394,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "3",
@@ -1857,7 +1860,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "4",
@@ -2322,7 +2326,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "5",
@@ -2787,7 +2792,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "6",
@@ -3252,7 +3258,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "7",
@@ -3717,7 +3724,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "8",
@@ -4182,7 +4190,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "9",
@@ -4647,7 +4656,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "10",
@@ -5112,7 +5122,8 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  },
  {
   "id": "11",
@@ -5577,6 +5588,7 @@
      }
     ]
    }
-  ]
+  ],
+  "sport_key": "soccer_test_league"
  }
 ]
