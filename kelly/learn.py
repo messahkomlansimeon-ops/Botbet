@@ -216,9 +216,17 @@ def _sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 
+def _p_fit(r):
+    """Proba sur laquelle la calibration s'applique : la proba brute des bookmakers (`prob_book`), pas r["prob"] qui est déjà
+    calibrée puis mélangée au modèle d'avant-match (ajuster dessus ferait annuler chaque réentraînement par le précédent).
+    Anciennes lignes sans prob_book : r["prob"]."""
+    p = r.get("prob_book")
+    return r["prob"] if p is None else p
+
+
 def _platt(rows, iters=500, lr=0.05):
     a, b = 0.0, 1.0
-    xs = [_logit(r["prob"]) for r in rows]
+    xs = [_logit(_p_fit(r)) for r in rows]
     ys = [1.0 if r["result"] == "win" else 0.0 for r in rows]
     n = len(rows)
     for _ in range(iters):
@@ -231,7 +239,7 @@ def _platt(rows, iters=500, lr=0.05):
 
 
 def _brier(rows, a=0.0, b=1.0):
-    return sum((_sigmoid(a + b * _logit(r["prob"])) - (1.0 if r["result"] == "win" else 0.0)) ** 2 for r in rows) / len(rows)
+    return sum((_sigmoid(a + b * _logit(_p_fit(r))) -(1.0 if r["result"] == "win" else 0.0)) ** 2 for r in rows) / len(rows)
 
 
 def calibrate(rows):

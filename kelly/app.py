@@ -96,9 +96,15 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     return messages, sent_picks, sent_combos
 
 
+def single_key(sent_picks):
+    """Clé du pari du jour parmi les paris envoyés par build_day : toujours le premier (`top`, envoyé avant les combinés ; il y a
+    des combinés seulement s'il y a un `top`). Il peut aussi être une jambe d'un combiné : track.record le marque explicitement."""
+    return sent_picks[0]["key"] if sent_picks else None
+
+
 def leg_result_line(row):
     """« ✅ Flamengo gagne (2-0) » ; le match est rappelé quand le pari ne le nomme pas (« Plus de 2,5 buts »)."""
-    icon = {"win": "✅", "loss": "❌", "push": "↩️", "void": "⚪"}.get(row.get("result"), "⏳")
+    icon = {"win": "✅", "loss": "❌", "push": "↩️", "void": "⚪", "unknown": "❔"}.get(row.get("result"), "⏳")
     pick = fmt.esc(row["pick"])
     if row["market"] not in ("h2h", "double_chance", "spreads") or row.get("name") == "Draw":
         pick = f"{fmt.esc(row['home'])} – {fmt.esc(row['away'])} : {pick}"
@@ -120,6 +126,11 @@ def combo_result(c, by_key):
                          + [leg_result_line(r) for r in legs if r])
     if c["result"] == "void":
         return f"⚪ {fmt.b(fmt.esc(name) + ' annulé')} — les matchs n'ont pas eu lieu, mise rendue"
+    if c["result"] == "unknown":                    # jambe jouée mais stats introuvables : ni gagné ni perdu, bankroll inchangée
+        miss = ", ".join(f"{fmt.esc(r['home'])} – {fmt.esc(r['away'])} ({fmt.esc(r['pick'])})" for r in legs
+                         if r.get("result") == "unknown")
+        return "\n".join([f"❔ {fmt.b(fmt.esc(name) + ' non vérifiable')} : Kelly n'a pas trouvé les stats de {miss} (vérifie chez 1xBet)"]
+                         + [leg_result_line(r) for r in legs if r])
     missed = [r for r in legs if r.get("result") == "loss"]
     ok = sum(1 for r in legs if r.get("result") in ("win", "push", "void"))
     why = ", ".join(f"{fmt.esc(r['home'])} – {fmt.esc(r['away'])}" + (f" ({fmt.esc(r['final'])})" if r.get("final") else "")
@@ -131,23 +142,28 @@ def combo_result(c, by_key):
 def results_message(bets, rows, settled):
     """Résultats de la veille : un bloc par combiné (et le pari du jour), puis une ligne de bilan. None s'il n'y a rien de neuf."""
     by_key = {r["key"]: r for r in rows}
-    in_combo = {k for c in bets["combos"] for k in c["keys"]}
+    single_keys = {(r.get("date"), r["key"]) for r in played.single_rows(rows, bets["combos"])}   # pari du jour (marque r["single"])
     done = [c for c in bets["combos"] if c.get("result") and not c.get("reported")]
-    singles = [b for b in settled if b.get("sent") and b["key"] not in in_combo and b["result"] in ("win", "loss")]
+    singles = [b for b in settled if b.get("sent") and (b.get("date"), b["key"]) in single_keys
+               and b["result"] in ("win", "loss", "unknown")]
     if not done and not singles:
         return None
     blocks = []
     for b in singles:
+        if b["result"] == "unknown":
+            blocks.append(f"{fmt.b('❔ Pari du jour non vérifiable')} : Kelly n'a pas trouvé les stats de {fmt.esc(b['home'])} – "
+                          f"{fmt.esc(b['away'])} (vérifie chez 1xBet)\n{leg_result_line(b)}")
+            continue
         icon = "✅" if b["result"] == "win" else "❌"
         blocks.append(f"{fmt.b(f'{icon} Pari du jour — cote {fmt.odds_txt(b['odds'])}')}\n{leg_result_line(b)}")
     for c in done:
         c["reported"] = True
         blocks.append(combo_result(c, by_key))
-    played = [c for c in done if c["result"] in ("win", "loss")]
-    wins = sum(1 for c in played if c["result"] == "win")
+    played_ = [c for c in done if c["result"] in ("win", "loss")]       # « unknown » (non vérifiable) : hors des comptes
+    wins = sum(1 for c in played_ if c["result"] == "win")
     bank = bankroll.load()
-    summary = (f"Hier : {wins} combiné{'s' if wins > 1 else ''} gagné{'s' if wins > 1 else ''} sur {len(played)} · "
-               if played else "") + f"bankroll {fmt.trim(bank['bankroll'], 1)} u ({fmt.signed(bank['bankroll'] - bank['initial'], '')})"
+    summary = (f"Hier : {wins} combiné{'s' if wins > 1 else ''} gagné{'s' if wins > 1 else ''} sur {len(played_)} · "
+               if played_ else "") + f"bankroll {fmt.trim(bank['bankroll'], 1)} u ({fmt.signed(bank['bankroll'] - bank['initial'], '')})"
     if bankroll.streak(bets["combos"]) >= C.STREAK_WARNING:
         summary += f"\n⚠️ {bankroll.streak(bets['combos'])} combinés perdus d'affilée : lève le pied ou fais une pause."
     return Html(fmt.b("📋 Résultats d'hier") + "\n\n" + "\n\n".join(blocks) + "\n\n" + fmt.i(fmt.esc(summary)))
@@ -211,15 +227,16 @@ def fair_combos_report(now):
     if any(c.get("played") and not c.get("counted") for c in settled):
         bankroll.apply_results([c for c in rows if c.get("played")], played_only=True)
         store.save(fair.COMBOS_FILE, rows)
-    new = [c for c in settled if c["result"] in ("win", "loss") and not c.get("reported")]
+    new = [c for c in settled if c["result"] in ("win", "loss", "unknown") and not c.get("reported")]
     if not new:
         return []
     lines = [fmt.b("🎲 Combinés à vérifier chez 1xBet — résultats")]
     for c in new[:6]:
         legs = c["legs"]
         ok = sum(1 for r in legs if r.get("result") in ("win", "push", "void"))
-        icon = "✅" if c["result"] == "win" else "❌"
-        word = "gagné" if c["result"] == "win" else f"perdu — {ok} sur {len(legs)}"
+        icon = {"win": "✅", "loss": "❌"}.get(c["result"], "❔")
+        word = {"win": "gagné", "unknown": "non vérifiable (stats introuvables : vérifie chez 1xBet)"}.get(
+            c["result"], f"perdu — {ok} sur {len(legs)}")
         lines.append("\n" + fmt.b(f"{icon} Combiné à cote mini {fmt.odds_txt(c['min_odds'])} {word}"))
         lines += [leg_result_line(r) for r in legs if r.get("result")]
     summ = settle.fair_combo_line(rows)
@@ -342,7 +359,7 @@ def run_daily(sample=False):
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
     messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos)
-    track.record(picks, {c["key"] for c in sent_picks}, day, now)
+    track.record(picks, {c["key"] for c in sent_picks}, day, now, single_key=single_key(sent_picks))
     settle.record_combos(sent_combos, day)
     fair.record_combos([(t, c) for t, c in fair_combos if c], day)
     # /top, /match, /combi relisent ces pronostics : les 40 meilleurs + les autres assez solides pour un combiné à cote juste

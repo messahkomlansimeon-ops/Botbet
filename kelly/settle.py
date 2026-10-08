@@ -7,6 +7,7 @@ from .sources import fmmatch, footballdata as fd
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
+UNKNOWN = "unknown"                                        # match joué mais jambe invérifiable (« non vérifiable ») : ni gagné ni perdu
 SHOT_MARKETS = tuple(f"team_{k}_{s}" for k in ("shots", "sot", "fouls", "throws", "offsides") for s in ("total", "home", "away"))
 
 
@@ -167,9 +168,10 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     """Règle les paris suivis passés (envoyés d'abord). Le foot se règle gratuitement : API-Football d'abord,
     puis les CSV football-data en cache (buts, corners, cartons, quand API-Football est absent ou son quota
     épuisé) ; /scores de The Odds API (2 crédits par ligue, budgétés) ne sert que de dernier repli pour les
-    marchés de buts, sans STATS_API_KEY, ou pour un sport hors foot. Un pari sans résultat est annulé après
+    marchés de buts, sans STATS_API_KEY, ou pour un sport hors foot. Un pari sans score est annulé (« void ») après
     WAIT_DAYS jours (buts), WAIT_DAYS_STATS pour corners et cartons (football-data se met à jour ~2 fois par
-    semaine). `scores_by_sport` / `stats_for` : injectables (tests)."""
+    semaine) ; un pari dont le match a un score mais dont les stats restent introuvables devient « unknown » (non
+    vérifiable : jamais compté gagné ni perdu, et un combiné qui le contient devient « unknown » sans toucher la bankroll). `scores_by_sport` / `stats_for` : injectables (tests)."""
     now = now or datetime.now(timezone.utc)
     rows = track.load()
     bets = store.load("bets.json", {"picks": [], "combos": []})
@@ -204,7 +206,7 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
         if b["result"] in ("win", "loss", "push"):
             b["final"] = final_text(b, ev, fst)       # affiché dans le message de résultats : « 2-0 », « 11 corners »
         if b["result"] is None and old:
-            b["result"] = "void"                   # pas de stats disponibles
+            b["result"] = UNKNOWN                  # match joué mais stats introuvables : ni gagné ni annulé chez le bookmaker
         if b["result"]:
             settled.append(b)
     by_key = {r["key"]: r for r in rows}
@@ -214,6 +216,8 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
         results = [by_key.get(k, {}).get("result") for k in combo["keys"]]
         if any(r == "loss" for r in results):
             combo["result"] = "loss"
+        elif all(r in ("win", "push", "void", UNKNOWN) for r in results) and UNKNOWN in results:
+            combo["result"] = UNKNOWN              # une jambe jouée mais invérifiable : on ne sait pas si le combiné a passé
         elif all(r in ("win", "push", "void") for r in results):
             combo["result"] = "win"
             combo["odds_final"] = 1.0              # jambes annulées : cote recalculée
@@ -244,7 +248,7 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
         if b["result"] in ("win", "loss", "push"):
             b["final"] = final_text(full, ev, fst)
     if b.get("result") is None and old:
-        b["result"] = "void"
+        b["result"] = UNKNOWN if ev else "void"       # score connu mais stats introuvables : non vérifiable ; pas de score : annulé
     return bool(b.get("result"))
 
 
@@ -273,8 +277,8 @@ def settle_fair_combos(now=None, stats_for=None):
         results = [leg.get("result") for leg in c["legs"]]
         if "loss" in results:
             c["result"] = "loss"
-        elif all(r in ("win", "push", "void") for r in results):
-            c["result"] = "void" if all(r == "void" for r in results) else "win"
+        elif all(r in ("win", "push", "void", UNKNOWN) for r in results):
+            c["result"] = UNKNOWN if UNKNOWN in results else ("win" if "win" in results else "void")   # sans jambe gagnée : rien à payer
         if c.get("result"):
             settled.append(c)
     store.save(fair.COMBOS_FILE, rows)

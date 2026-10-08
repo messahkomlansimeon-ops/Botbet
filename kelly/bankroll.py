@@ -6,7 +6,7 @@ import math
 
 from . import config as C, store
 
-DONE = ("win", "loss", "push", "void")
+DONE = ("win", "loss", "push", "void")       # « unknown » (non vérifiable) n'en fait pas partie : jamais compté, ni en mode réel
 
 
 def load():
@@ -28,18 +28,20 @@ def played_gain(x):
     p = x["played"]
     if x["result"] == "loss":
         return -p["stake"]
-    if x["result"] != "win":
+    if x["result"] != "win":                        # push, void, unknown : mise rendue ou inconnue, rien ne bouge
         return 0.0
     if "legs" in x:                                 # combiné à vérifier chez 1xBet (data/fair_combos.json)
         won = [leg["min_odds"] for leg in x["legs"] if leg.get("result") == "win"]
-        ratio = math.prod(won) / x["min_odds"] if won else 1.0
+        if not won:                                 # aucune jambe gagnée (anciennes lignes « win » à tort) : rien à payer
+            return 0.0
+        ratio = math.prod(won) / x["min_odds"]
     else:
         ratio = x.get("odds_final", x["odds"]) / x["odds"]
     return p["stake"] * (p["odds"] * ratio - 1)
 
 def apply_results(items, played_only=False):
     """Met à jour la bankroll avec les paris réglés non encore comptés (marqués « counted »). Mode réel : seuls les paris notés
-    comptent (played_gain). Sinon : les combinés gagnés ou perdus, à la mise conseillée. `played_only` : éléments qui ne
+    comptent (played_gain). Sinon : les combinés gagnés ou perdus, à la mise conseillée. Un résultat « unknown » (non vérifiable) ne change rien. `played_only` : éléments qui ne
     comptent qu'en mode réel (pari du jour, combinés à vérifier chez 1xBet)."""
     b = load()
     real = b.get("real")
