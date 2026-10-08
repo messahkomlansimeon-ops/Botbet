@@ -8,9 +8,11 @@ Sert à deux choses :
    seulement, les sources gratuites (kelly/sources, voir enrich) passent d'abord.
 
 Statistiques de toute équipe du monde (tirs, tirs cadrés, corners, fautes, cartons) pour les profils de kelly/apistats.py :
-fixture_stats / fixture_stats_batch les gardent dans .cache/apistats/stats_cache.json (un match connu n'est jamais redemandé).
+fixture_stats les garde dans .cache/apistats/stats_cache.json (un match connu n'est jamais redemandé).
 
-Plan gratuit : 100 appels/jour. Garde-fous : plafond par exécution
+Plan gratuit : 100 appels/jour, et SEULEMENT hier, aujourd'hui et demain pour /fixtures?date= ; les paramètres « last » et « ids »
+sont refusés. get() ne les envoie donc jamais (voir refused) : un historique ne se rattrape pas, il s'accumule jour après jour.
+Garde-fous : plafond par exécution
 (STATS_BUDGET), plafond par jour UTC (STATS_DAILY_CAP, défaut 90, compteur dans
 data/stats_quota.json), en-tête x-ratelimit-requests-remaining, et arrêt net
 dès que l'API renvoie une erreur (HTTP 200 avec `errors` non vide).
@@ -27,16 +29,17 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import cache, catalogue, config as C, store
+from . import apileagues, cache, catalogue, config as C, store
 
 BASE = "https://v3.football.api-sports.io"
 BUDGET = int(os.environ.get("STATS_BUDGET", 90))     # appels max par exécution (le plafond du jour reste STATS_DAILY_CAP)
-LAST_N = 6                                           # matchs récents utilisés
-MIN_MATCHES = 3                                      # sous ce seuil : pas de moyenne
+MIN_MATCHES = C.APISTATS_MIN_N                       # sous ce seuil : pas de moyenne
 DONE = ("FT", "AET", "PEN")                          # matchs terminés
 _calls = 0
 _halted = False                                      # erreur API : plus aucun appel
 _neg = {}                                            # (chemin, paramètres) -> (instant, résultat) : erreurs et réponses vides, brièvement
+_refused = set()                                     # demandes écartées par refused() déjà signalées pendant cette exécution
+FORBIDDEN_PARAMS = ("last", "ids")                   # refusés par le forfait gratuit d'API-Football : jamais envoyés
 
 
 def enabled():
@@ -75,13 +78,37 @@ def _quota():
 PLAN_ERROR = re.compile(r"plan|season|saison|access|subscription|abonnement", re.I)
 
 
-def get(path, soft=False, **params):
+def refused(path, params):
+    """Raison (texte) pour laquelle le forfait gratuit refuserait cette demande, sinon None. Une demande refusée n'est JAMAIS envoyée
+    (elle coûterait une requête du quota et, pire, une erreur de plan arrêterait tous les appels de la journée) :
+    - les paramètres « last » et « ids » ;
+    - /fixtures?date= hors de la fenêtre hier..demain (C.STATS_DATE_WINDOW jours autour d'aujourd'hui)."""
+    bad = [k for k in FORBIDDEN_PARAMS if k in params]
+    if bad:
+        return f"paramètre {bad[0]} non inclus dans le forfait gratuit"
+    if path == "/fixtures" and "date" in params:
+        try:
+            gap = (datetime.fromisoformat(str(params["date"])[:10]).date() - datetime.fromisoformat(_today()).date()).days
+        except ValueError:
+            return "date illisible"
+        if abs(gap) > C.STATS_DATE_WINDOW:
+            return f"date {str(params['date'])[:10]} hors de la fenêtre du forfait gratuit (hier, aujourd'hui, demain)"
+    return None
+
+
+def get(path, **params):
     """Appel API-Football. Renvoie `response` (liste, éventuellement vide) ou
-    None (désactivé, quota atteint, erreur). Une erreur API stoppe tout, sauf avec `soft=True` (essai d'une méthode
-    facultative) quand l'erreur ne parle ni de plan ni de saison. L'erreur est gardée dans data/stats_quota.json
-    (clé « err ») : --check et le journal du matin la relisent."""
+    None (désactivé, demande refusée d'avance par refused(), quota atteint, erreur). Une erreur API stoppe tout. L'erreur est
+    gardée dans data/stats_quota.json (clé « err ») : --check et le journal du matin la relisent."""
     global _calls
     if not enabled() or _halted or _calls >= BUDGET or cache.OFFLINE:
+        return None
+    why = refused(path, params)
+    if why:
+        kind = (path, "date" if "date" in params else "paramètre")
+        if kind not in _refused:                       # signalé une fois par exécution et par sorte de demande
+            _refused.add(kind)
+            _warn(f"{path} non demandé : {why}.")
         return None
     nk = (path, tuple(sorted(params.items())))
     prev = _neg.get(nk)
@@ -131,10 +158,6 @@ def get(path, soft=False, **params):
         text = "; ".join(f"{k}: {v}" for k, v in errors.items()) if isinstance(errors, dict) else "; ".join(map(str, errors))
         q["err"] = {"path": path, "msg": text[:200], "plan": plan}
         store.save("stats_quota.json", q)
-        if soft and not plan:
-            _warn(f"{path} refusé ({str(errors)[:120]}), méthode ignorée.")
-            _neg[nk] = (time.monotonic(), None)
-            return None
         _halt(f"erreur API sur {path} ({errors}) : clé, quota ou saison non incluse dans le plan.")
         return None
     if q.get("remaining") == 0:
@@ -263,7 +286,8 @@ def african_league(f):
 
 def _entry(f):
     """Match du jour allégé : ids, statut et buts (temps réglementaire si fourni : les paris se
-    règlent sur 90 minutes, pas sur la prolongation). « lg » : ligue, seulement pour l'Afrique."""
+    règlent sur 90 minutes, pas sur la prolongation). « lg » : ligue, seulement pour l'Afrique. « lk » / « ln » : clé du catalogue
+    et nom de la ligue quand elle vaut des statistiques pour les profils (apileagues.classify, « africa » pour l'Afrique)."""
     ft = (f.get("score") or {}).get("fulltime") or {}
     goals = f.get("goals") or {}
     pick = lambda k: ft.get(k) if ft.get(k) is not None else goals.get(k)
@@ -274,7 +298,12 @@ def _entry(f):
          "gh": pick("home"), "ga": pick("away")}
     lg = african_league(f)
     if lg:
-        e["lg"] = lg
+        e["lg"], e["lk"] = lg, "africa"
+    else:
+        lgi = f.get("league") or {}
+        cl = apileagues.classify(lgi.get("country"), lgi.get("name"))
+        if cl:
+            e["lk"], e["ln"] = cl[0], cl[1]
     return e
 
 
@@ -305,7 +334,7 @@ def _day_fixtures(day):
         if not _stale(day, old):
             cache.hit("api-football", 1)
             return old
-        age_days = (datetime.now(timezone.utc).date() - datetime.fromisoformat(str(day)).date()).days
+        age_days = (datetime.fromisoformat(_today()).date() - datetime.fromisoformat(str(day)).date()).days
         since = time.time() - meta.get(str(day), 0)
         if str(day) in _refreshed or age_days > C.FIXTURES_STALE_DAYS or since < C.FIXTURES_RETRY_HOURS * 3600:
             cache.hit("api-football", 1)
@@ -315,7 +344,7 @@ def _day_fixtures(day):
     if not raw:                                 # erreur ou rien : on garde l'ancien cache
         return old or []
     lst = [_entry(f) for f in raw]
-    keep = str((datetime.now(timezone.utc) - timedelta(days=10)).date())
+    keep = str((datetime.fromisoformat(_today()) - timedelta(days=10)).date())
     cache_ = {d: v for d, v in cache_.items() if d >= keep}
     cache_[str(day)] = lst
     meta = {d: t for d, t in meta.items() if d in cache_} | {str(day): time.time()}
@@ -365,7 +394,7 @@ def find_fixture(day, home, away, kickoff=None):
         return None
     known[k] = {"id": best["id"], "home_id": best["home_id"], "away_id": best["away_id"],
                 "status": best["status"]}
-    cut = str((datetime.now(timezone.utc) - timedelta(days=14)).date())
+    cut = str((datetime.fromisoformat(_today()) - timedelta(days=14)).date())
     store.save("fixtures.json", {key: v for key, v in known.items() if key[:10] >= cut})     # le fichier ne grossit pas
     return known[k]
 
@@ -519,42 +548,6 @@ def fixture_stats(fixture_id, players=True):
     return out
 
 
-BATCH_MAX = 20                                       # /fixtures?ids= accepte 20 matchs au plus
-
-
-def fixture_stats_batch(ids):
-    """Statistiques de plusieurs matchs terminés en UNE requête (GET /fixtures?ids=a-b-c : chaque match revient avec son
-    tableau « statistics », comme /fixtures/statistics). Remplit le même cache que fixture_stats et ne demande jamais un
-    match déjà connu. -> nombre de matchs nouvellement connus (statistiques ou absence constatée), ou None si la méthode ne
-    marche pas (erreur, quota, réponse sans statistiques) : l'appelant se replie sur fixture_stats, un match par requête.
-    Un échec est mémorisé pour la journée (clé « nobatch » de stats_quota.json)."""
-    todo = [i for i in dict.fromkeys(ids) if not stats_known(i)][:BATCH_MAX]
-    if not todo:
-        return 0
-    if _quota().get("nobatch"):
-        return None
-    resp = get("/fixtures", soft=True, ids="-".join(str(i) for i in todo))
-    if resp is None:
-        return None
-    if not any("statistics" in f for f in resp):            # la méthode ne renvoie pas les statistiques : plus d'essai aujourd'hui
-        q = _quota()
-        q["nobatch"] = True
-        store.save("stats_quota.json", q)
-        return None
-    cache_, got = _stats_cache(), set()
-    for f in resp:
-        fid = (f.get("fixture") or {}).get("id")
-        if fid is None or str(fid) not in {str(i) for i in todo}:
-            continue
-        cache_[str(fid)] = _entry_from(f.get("statistics") or []) or {"missing": _today()}
-        got.add(str(fid))
-    for i in todo:                                    # demandé mais absent de la réponse : pas redemandé avant quelques jours
-        if str(i) not in got:
-            cache_[str(i)] = {"missing": _today()}
-    _save_stats_cache(cache_)
-    return len(todo)
-
-
 _SUFFIX = {"jr", "junior", "sr", "filho"}
 
 
@@ -591,42 +584,11 @@ def player_stat(stats, name, field):
 
 # --- Moyennes d'équipe ----------------------------------------------------
 
-def team_averages(team_id, day):
-    """Moyennes corners/cartons pour et contre sur les derniers matchs.
-    None si moins de MIN_MATCHES matchs avec stats (rien n'est mis en cache)."""
-    cache_ = store.load("team_avg.json", {})
-    k, day = str(team_id), str(day)[:10]
-    got = cache_.get(k)
-    if got and (datetime.fromisoformat(day) - datetime.fromisoformat(got.get("day", "2000-01-01"))).days <= C.STATS_TEAM_DAYS:
-        cache.hit("api-football", 1 + got.get("n", 0))      # les derniers matchs d'une équipe changent rarement : réutilisés quelques jours
-        return None if got.get("none") else got
-    # `last` seul (status filtré côté client : combinaison non garantie par l'API).
-    fixtures = get("/fixtures", team=team_id, last=LAST_N + 4) or []
-    fixtures = sorted((f for f in fixtures if f["fixture"]["status"]["short"] in DONE),
-                      key=lambda f: f["fixture"].get("timestamp") or 0, reverse=True)[:LAST_N]
-    tot = {"corners_for": 0, "corners_against": 0, "cards_for": 0, "cards_against": 0, "n": 0}
-    for f in fixtures:
-        st = fixture_stats(f["fixture"]["id"], players=False)
-        if not st or str(team_id) not in st["teams"]:
-            continue
-        mine = st["teams"][str(team_id)]
-        other = next((v for tid, v in st["teams"].items() if tid != str(team_id)), None)
-        if not other:
-            continue
-        tot["corners_for"] += mine["corners"]; tot["corners_against"] += other["corners"]
-        tot["cards_for"] += mine["cards"]; tot["cards_against"] += other["cards"]
-        tot["n"] += 1
-    if tot["n"] < MIN_MATCHES:
-        if fixtures:                                # des matchs existent mais sans statistiques : inutile de réessayer chaque jour
-            cache_[k] = {"day": day, "none": True}
-            store.save("team_avg.json", cache_)
-        return None
-    avg = {k2: v / tot["n"] for k2, v in tot.items() if k2 != "n"}
-    avg["n"] = tot["n"]
-    avg["day"] = day
-    cache_[k] = avg
-    store.save("team_avg.json", cache_)
-    return avg
+def team_averages(team_id, day=None):
+    """Moyennes corners/cartons pour et contre d'une équipe, lues dans l'historique que kelly/apistats.py accumule jour après
+    jour : AUCUNE requête (le forfait gratuit refuse « last »). None si moins de MIN_MATCHES matchs avec statistiques."""
+    from . import apistats
+    return apistats.averages(team_id)
 
 
 def poisson_over(mean, point):

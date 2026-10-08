@@ -1,38 +1,50 @@
-"""Stats mondiales via API-Football : profils d'équipe pour les championnats que football-data ne couvre pas
-(Brésil, Argentine, MLS, Afrique...).
+"""Stats mondiales via API-Football : historique d'équipe pour les championnats que football-data ne couvre pas (Brésil, Argentine,
+MLS, Asie, Afrique, sélections...), accumulé jour après jour avec le FORFAIT GRATUIT.
 
-Chaque matin (avant l'achat des cotes), Kelly fait la liste des matchs du jour dont les équipes n'ont pas de vraies stats
-(corners, cartons, tirs : football-data n'a que les buts hors grands championnats) et remplit leurs profils, dans cet ordre :
-ligues du catalogue (région, ligues majeures), puis championnats africains. Une équipe coûte 1 requête (ses derniers
-matchs) + 1 requête pour leurs statistiques (méthode groupée /fixtures?ids=, voir stats.fixture_stats_batch) ou, si elle ne
-marche pas, 1 requête par match (6 au plus pour une équipe inconnue). Un match dont les statistiques sont connues n'est
-jamais redemandé (stats.fixture_stats, cache du disque) ; un profil récent n'est pas recalculé (APISTATS_REFRESH_DAYS).
+Le forfait gratuit d'API-Football refuse « last » et « ids » et ne donne que hier, aujourd'hui et demain pour /fixtures?date= :
+impossible d'aller chercher les derniers matchs d'une équipe. Kelly fait donc l'inverse, chaque matin :
 
-Budget : au plus C.APISTATS_DAILY requêtes par jour pour les profils, et jamais en dessous de C.FAIR_API_RESERVE requêtes
-restantes sur le plafond du jour (stats.STATS_DAILY_CAP) : elles sont gardées pour le règlement des paris. Une erreur de
-plan ou de saison (forfait gratuit) arrête tous les appels de la journée (stats.get) : le remplissage s'arrête sans rien
-casser et le dit une fois, en français (journal du matin, --check).
+1. il lit la liste de TOUS les matchs d'hier (une requête, ~230 matchs dans le monde, celle du règlement : stats._day_fixtures ne la
+   télécharge jamais deux fois) et celle d'aujourd'hui (les matchs terminés dans la nuit : Amériques, Asie) ;
+2. il choisit les matchs terminés qui valent une requête (apileagues : ligues du catalogue sans corners ni cartons chez football-data,
+   Afrique, sélections, ligues hors catalogue en dernier), dans l'ordre : catégorie de ligue (une équipe « saturée », avec déjà
+   APISTATS_SAT_N matchs, passe après), puis équipes qui rejouent aujourd'hui, puis équipes les moins fournies ;
+3. il demande /fixtures/statistics?fixture=ID un match à la fois (jamais /fixtures/players), dans la limite de APISTATS_DAILY requêtes
+   par jour et jamais sous la réserve FAIR_API_RESERVE du règlement ; les statistiques d'un match sont gardées pour toujours
+   (stats.fixture_stats, cache du disque) et un match déjà ajouté n'est jamais redemandé (clé « seen ») ;
+4. il ajoute le match à l'historique compact des DEUX équipes (buts, tirs, tirs cadrés, corners, fautes, cartons pour et contre,
+   domicile / extérieur, date, ligue), garde les APISTATS_KEEP_MATCHES derniers matchs par équipe.
 
-Stockage compact : data/apistats_profiles.json, une ligne par équipe. Chaque vue (all / home / away, sur les C.APISTATS_LAST
-derniers matchs) est un tableau [n, buts pour, contre, tirs, tirs cadrés, corners, fautes, cartons, jaunes ...] ; profiles()
-le redonne au format de football-data (n, goals_for, goals_against, shots_for ...) que sources.features consomme.
-Une équipe n'est « couverte » qu'avec au moins C.APISTATS_MIN_N matchs avec statistiques.
+Une équipe est « utilisable » dès APISTATS_MIN_N (3) matchs, avec une confiance réduite (features.aps_quality, poids du modèle
+atténué dans prematch, pronostics seuls), et « bonne » dès APISTATS_GOOD_N (6) : confiance pleine, admise dans les combinés à cote
+juste. Les profils servis (profiles()) ont le format de football-data (n, goals_for, goals_against, shots_for ...), moyennes sur les
+APISTATS_LAST derniers matchs, et sources.features les consomme tels quels.
+
+Si le forfait refuse les statistiques (erreur de plan), tous les appels de la journée s'arrêtent (stats.get), le journal du matin et
+--check le disent une fois, en français, et le bot continue avec football-data et les cotes.
+
+Stockage compact : data/apistats_profiles.json, < 300 Ko. Une ligne de match = [jour AAMMJJ, ligue, domicile (1/0), buts pour, contre,
+tirs pour, contre, tirs cadrés, corners, fautes, cartons (chaque fois pour, contre)] ; None quand l'API n'a pas la statistique.
 """
 import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import cache, catalogue, config as C, stats, store
+from . import apileagues, catalogue, config as C, stats, store
 
 FILE = "apistats_profiles.json"
-KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")        # ordre des tableaux compacts
-FIELD = {"shots": "shots", "sot": "sot", "corners": "corners", "fouls": "fouls", "cards": "cards", "yellow": "yel"}
-LAST_LIST = 12                      # matchs demandés à /fixtures?team=..&last= (les 10 derniers terminés servent)
-EVAL_MAX = 150                      # matchs du relevé examinés au plus pour la file
+KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards")        # ordre des paires dans une ligne de match
+FIELD = {"shots": "shots", "sot": "sot", "corners": "corners", "fouls": "fouls", "cards": "cards"}
+R_DAY, R_LG, R_HOME, R_STATS = 0, 1, 2, 3                            # indices d'une ligne ; les paires (pour, contre) suivent
+SEEN_DAYS = 5                                                        # un match ne reste visible que 2 jours dans les listes de l'API
+SOON_BONUS = 15                                                      # par équipe qui rejoue aujourd'hui
+SAT_PENALTY = 60                                                     # priorité retirée aux matchs de deux équipes saturées
+MISS_STOP = 3                                                        # matchs d'une ligue sans statistiques (sans aucun succès) avant d'abandonner la ligue
+EVAL_MAX = 150                                                       # matchs du relevé examinés au plus pour la couverture du jour
 
 
 def active():
-    """Vrai si le remplissage des profils est possible (clé API-Football et budget APISTATS_DAILY non nul)."""
+    """Vrai si l'accumulation des profils est possible (clé API-Football et budget APISTATS_DAILY non nul)."""
     return stats.enabled() and C.APISTATS_DAILY > 0
 
 
@@ -42,59 +54,111 @@ def _today():
 
 # ---------- stockage ----------
 
-def _pack(v):
-    return [v.get("n", 0)] + [v.get(f"{k}_{s}") for k in KEYS for s in ("for", "against")]
+def _d2i(iso):
+    return int(iso[2:4] + iso[5:7] + iso[8:10])
 
 
-def _unpack(a):
-    out = {"n": a[0]}
-    i = 1
-    for k in KEYS:
-        for s in ("for", "against"):
-            if a[i] is not None:
-                out[f"{k}_{s}"] = a[i]
-            i += 1
-    return out
+def _i2d(i):
+    return f"20{i // 10000:02d}-{i // 100 % 100:02d}-{i % 100:02d}"
+
+
+def _num(x):
+    return None if x is None else (int(x) if float(x) == int(x) else round(float(x), 1))
 
 
 def load():
     d = store.load(FILE, {})
     d = d if isinstance(d, dict) else {}
-    if not isinstance(d.get("teams"), dict):
-        d["teams"] = {}
+    teams = d.get("teams")
+    d["teams"] = {k: t for k, t in teams.items() if isinstance(t, dict) and isinstance(t.get("m"), list)} if isinstance(teams, dict) else {}
+    if not isinstance(d.get("lg"), list):
+        d["lg"] = []
+    if not isinstance(d.get("seen"), dict):
+        d["seen"] = {}
     return d
 
 
 def save(d):
-    """Écrit le fichier en oubliant les équipes non renouvelées depuis APISTATS_KEEP_DAYS jours, puis les plus anciennes
-    au-delà de APISTATS_MAX_TEAMS (le fichier reste sous 300 Ko)."""
-    cut = str((datetime.fromisoformat(_today()) - timedelta(days=C.APISTATS_KEEP_DAYS)).date())
-    teams = {k: v for k, v in d["teams"].items() if v.get("d", "0") >= cut}
+    """Écrit le fichier en oubliant les équipes qui n'ont pas été mises à jour depuis APISTATS_KEEP_DAYS jours, puis les moins récentes
+    au-delà de APISTATS_MAX_TEAMS (le fichier reste sous 300 Ko), et les matchs « déjà vus » trop anciens pour revenir dans une liste."""
+    today = datetime.fromisoformat(_today())
+    cut = str((today - timedelta(days=C.APISTATS_KEEP_DAYS)).date())
+    teams = {k: v for k, v in d["teams"].items() if v.get("d", "0") >= cut and v.get("m")}
     if len(teams) > C.APISTATS_MAX_TEAMS:
-        keep = sorted(teams, key=lambda k: teams[k].get("d", ""), reverse=True)[:C.APISTATS_MAX_TEAMS]
+        keep = sorted(teams, key=lambda k: (teams[k].get("d", ""), len(teams[k]["m"])), reverse=True)[:C.APISTATS_MAX_TEAMS]
         teams = {k: teams[k] for k in keep}
-    d["teams"], d["v"] = teams, 1
+    d["teams"] = teams
+    floor = _d2i(str((today - timedelta(days=SEEN_DAYS)).date()))
+    d["seen"] = {k: v for k, v in d.get("seen", {}).items() if v >= floor}
+    d["v"] = 2
     store.save(FILE, d, compact=True)
 
 
 def n_matches(t):
-    return (t.get("all") or [0])[0] if not t.get("none") else 0
+    return len((t or {}).get("m") or [])
 
 
 def covered_team(t):
-    return bool(t) and n_matches(t) >= C.APISTATS_MIN_N
+    """Équipe « utilisable » : au moins APISTATS_MIN_N matchs avec statistiques."""
+    return n_matches(t) >= C.APISTATS_MIN_N
+
+
+def _league_index(d, label):
+    if label not in d["lg"]:
+        d["lg"].append(label)
+    return d["lg"].index(label)
+
+
+def record(d, e, st):
+    """Ajoute le match `e` (entrée de stats._day_fixtures, terminé) dont `st` donne les statistiques (stats.fixture_stats) à l'historique
+    des deux équipes, et le note « vu ». -> nombre d'équipes mises à jour. Un match déjà vu n'est jamais ajouté deux fois."""
+    fid = str(e["id"])
+    if fid in d["seen"]:
+        return 0
+    ts = e.get("ts")
+    day = _d2i(datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat() if ts else _today())
+    d["seen"][fid] = day
+    teams = (st or {}).get("teams") or {}
+    label = e.get("ln") or e.get("lg") or "?"
+    lgi, n = _league_index(d, label), 0
+    for tid, opp, home, name in ((e["home_id"], e["away_id"], 1, e["home"]), (e["away_id"], e["home_id"], 0, e["away"])):
+        mine, other = teams.get(str(tid)), teams.get(str(opp))
+        if not mine or not other:
+            continue
+        pairs = [(e.get("gh"), e.get("ga")) if home else (e.get("ga"), e.get("gh"))]
+        for k in KEYS[1:]:
+            f = FIELD[k]
+            ok = f in mine and f in other and f not in (mine.get("nul") or []) and f not in (other.get("nul") or [])
+            pairs.append((mine[f], other[f]) if ok else (None, None))
+        if all(p == (None, None) for p in pairs[1:]):
+            continue                                  # match sans aucune statistique utilisable
+        row = [day, lgi, home] + [_num(x) for p in pairs for x in p]
+        t = d["teams"].setdefault(str(tid), {"m": []})
+        lk = e.get("lk")
+        t.update(nm=name, lg=label, d=_today(), sk=list(dict.fromkeys([k for k in t.get("sk", []) if k != lk] + ([lk] if lk else [])))[-4:])
+        t["m"] = sorted(t["m"] + [row], key=lambda r: r[R_DAY])[-C.APISTATS_KEEP_MATCHES:]
+        n += 1
+    return n
+
+
+def _views(rows):
+    from .sources import footballdata as fd
+    recs = lambda rs: [{k: (r[R_STATS + 2 * i], r[R_STATS + 2 * i + 1]) for i, k in enumerate(KEYS)} for r in rs]      # noqa: E731
+    view = lambda rs: fd._avg_view(recs(rs), keys=KEYS)                                                                  # noqa: E731
+    n = C.APISTATS_LAST
+    return {"all": view(rows[-n:]), "home": view([r for r in rows if r[R_HOME]][-n:]), "away": view([r for r in rows if not r[R_HOME]][-n:])}
 
 
 def profiles():
     """Profils au format de football-data : {"teams": {nom: {id, sk, lg, last, all/home/away: {n, goals_for...}}}, "updated"}.
-    Une équipe par nom (et par alias : le nom donné par The Odds API) ; seules les équipes couvertes sont servies."""
+    Une équipe par nom (et par alias : le nom donné par The Odds API) ; seules les équipes utilisables (3+ matchs) sont servies."""
     d = load()
     teams, updated = {}, ""
     for tid, t in d["teams"].items():
         if not covered_team(t):
             continue
-        p = {"id": int(tid), "nm": t.get("nm"), "sk": t.get("sk", []), "lg": t.get("lg"), "last": t.get("l"), "d": t.get("d"),
-             "all": _unpack(t["all"]), "home": _unpack(t["home"]), "away": _unpack(t["away"])}
+        p = {"id": int(tid), "nm": t.get("nm"), "sk": t.get("sk", []), "lg": t.get("lg"), "last": _i2d(t["m"][-1][R_DAY]),
+             "d": t.get("d")} | _views(t["m"])
         updated = max(updated, t.get("d", ""))
         for name in [t.get("nm")] + list(t.get("al") or []):
             if name and (name not in teams or n_matches(t) > teams[name]["all"]["n"]):
@@ -102,18 +166,39 @@ def profiles():
     return {"teams": teams, "updated": updated}
 
 
+def averages(tid):
+    """Moyennes corners / cartons pour et contre d'une équipe sur ses APISTATS_LAST derniers matchs (stats.team_averages) ; None
+    sous APISTATS_MIN_N matchs avec ces statistiques. Lecture du fichier : aucune requête."""
+    rows = (load()["teams"].get(str(tid)) or {}).get("m") or []
+    ic, ik = R_STATS + 2 * KEYS.index("corners"), R_STATS + 2 * KEYS.index("cards")
+    rows = [r for r in rows if None not in (r[ic], r[ic + 1], r[ik], r[ik + 1])][-C.APISTATS_LAST:]
+    if len(rows) < C.APISTATS_MIN_N:
+        return None
+    n = len(rows)
+    return {"corners_for": sum(r[ic] for r in rows) / n, "corners_against": sum(r[ic + 1] for r in rows) / n,
+            "cards_for": sum(r[ik] for r in rows) / n, "cards_against": sum(r[ik + 1] for r in rows) / n, "n": n,
+            "day": _i2d(rows[-1][R_DAY])}
+
+
+def summary(d=None):
+    """Avancement de l'accumulation : équipes suivies, utilisables (3+ matchs), bonnes (6+), dernière mise à jour."""
+    d = d or load()
+    ns = [n_matches(t) for t in d["teams"].values()]
+    return {"tracked": len(ns), "usable": sum(1 for n in ns if n >= C.APISTATS_MIN_N), "good": sum(1 for n in ns if n >= C.APISTATS_GOOD_N),
+            "last": max((t.get("d", "") for t in d["teams"].values()), default="")}
+
+
 def counts():
-    """(équipes en mémoire, équipes couvertes, dernière mise à jour)."""
-    d = load()
-    cov = [t for t in d["teams"].values() if covered_team(t)]
-    return len(d["teams"]), len(cov), max((t.get("d", "") for t in d["teams"].values()), default="")
+    """(équipes suivies, équipes utilisables, dernière mise à jour)."""
+    s = summary()
+    return s["tracked"], s["usable"], s["last"]
 
 
 # ---------- budget ----------
 
 class Budget:
     """Requêtes API-Football encore permises pour les profils aujourd'hui : APISTATS_DAILY moins ce qui a déjà servi aux
-    profils (clé « aps » de stats_quota.json), et jamais sous la réserve du règlement."""
+    profils (clé « aps » de stats_quota.json, listes de matchs comprises), et jamais sous la réserve du règlement."""
 
     def __init__(self):
         q = stats._quota()
@@ -123,7 +208,7 @@ class Budget:
         return self.aps0 + max(0, stats._quota()["n"] - self.n0)
 
     def left(self):
-        if stats._halted:
+        if stats._halted or stats._calls >= stats.BUDGET:
             return 0
         return max(0, min(C.APISTATS_DAILY - self.spent(), stats.left_today() - C.FAIR_API_RESERVE))
 
@@ -133,103 +218,41 @@ class Budget:
         store.save("stats_quota.json", q)
 
 
-# ---------- profil d'une équipe ----------
+# ---------- choix des matchs ----------
 
-def _records(tid, fixtures, cache_):
-    """[(date, côté, {stat: (pour, contre)})] des matchs de l'équipe dont les statistiques sont connues."""
-    from .sources import footballdata as fd
-    out = []
-    for f in fixtures:
-        st = cache_.get(str(f["id"]))
-        if not st or st.get("missing") or not st.get("teams"):
-            continue
-        side = "home" if f["home_id"] == tid else "away"
-        opp = f["away_id"] if side == "home" else f["home_id"]
-        mine, other = st["teams"].get(str(tid)), st["teams"].get(str(opp))
-        if not mine or not other:
-            continue
-        rec = {"goals": ((f["gh"], f["ga"]) if side == "home" else (f["ga"], f["gh"])) if f.get("gh") is not None else (None, None)}
-        for k, fld in FIELD.items():
-            ok = fld not in (mine.get("nul") or []) and fld not in (other.get("nul") or [])
-            rec[k] = (mine.get(fld), other.get(fld)) if ok and fld in mine and fld in other else (None, None)
-        if all(v == (None, None) for k, v in rec.items() if k != "goals"):
-            continue                                  # match sans aucune statistique utilisable
-        out.append((f["ts"] or 0, side, rec))
-    out.sort(key=lambda r: r[0])
-    return out
+def gain(n):
+    """Ce qu'un match de plus apporte à une équipe de `n` matchs : beaucoup jusqu'à la qualité « bonne », peu ensuite."""
+    return 4 * max(0, C.APISTATS_GOOD_N - n) + max(0, C.APISTATS_SAT_N - n)
 
 
-def build_profile(tid, fixtures, cache_):
-    """Vues all / home / away (format compact) sur les C.APISTATS_LAST derniers matchs avec statistiques, ou None."""
-    from .sources import footballdata as fd
-    recs = _records(tid, fixtures, cache_)[-C.APISTATS_LAST:]
-    if not recs:
-        return None
-    view = lambda rs: _pack(fd._avg_view([r[2] for r in rs], keys=KEYS))          # noqa: E731
-    last = datetime.fromtimestamp(recs[-1][0], tz=timezone.utc).date().isoformat() if recs[-1][0] else None
-    return {"all": view(recs), "home": view([r for r in recs if r[1] == "home"]),
-            "away": view([r for r in recs if r[1] == "away"]), "l": last}
+def rank(d, e, soon):
+    """Clé de tri d'un match terminé à payer (plus petit = d'abord) : catégorie de ligue (saturé = plus bas), puis équipes qui rejouent
+    aujourd'hui et équipes les moins fournies, puis l'heure."""
+    n_h, n_a = n_matches(d["teams"].get(str(e["home_id"]))), n_matches(d["teams"].get(str(e["away_id"])))
+    pri = apileagues.priority(e.get("lk")) - (SAT_PENALTY if min(n_h, n_a) >= C.APISTATS_SAT_N else 0)
+    worth = SOON_BONUS * sum(1 for t in (e["home_id"], e["away_id"]) if t in soon) + gain(n_h) + gain(n_a)
+    return (-pri, -worth, e.get("ts") or 0)
 
 
-def refresh_team(d, tid, name, ctx, budget):
-    """Met à jour le profil de l'équipe `tid` (nom donné par The Odds API ou API-Football) : 1 requête pour ses derniers
-    matchs + les statistiques manquantes (groupées en 1 requête si possible, sinon un match par requête). `ctx` : {sk, lg}.
-    -> True si l'équipe a été traitée, False si le budget ou l'API s'arrête avant."""
-    if budget.left() < 2:
-        return False
-    fx = stats.get("/fixtures", team=tid, last=LAST_LIST)
-    if fx is None:
-        return False
-    fixtures = sorted((stats._entry(f) for f in fx if (f.get("fixture", {}).get("status") or {}).get("short") in stats.DONE),
-                      key=lambda e: e.get("ts") or 0, reverse=True)[:C.APISTATS_LAST]
-    old = d["teams"].get(str(tid)) or {}
-    api_name = next((e["home"] if e["home_id"] == tid else e["away"] for e in fixtures if tid in (e["home_id"], e["away_id"])), name)
-    target = C.APISTATS_LAST if covered_team(old) else C.APISTATS_TARGET
+def candidates(d, lists, today):
+    """Matchs terminés des listes `lists` {jour: matchs} (hier, aujourd'hui) à ajouter : ligue retenue (« lk »), pas encore vus.
+    -> (à coûter une requête triés, à ajouter gratuitement car leurs statistiques sont déjà en cache, nombre sans statistiques connues)."""
+    soon = {t for f in lists.get(today, []) if f.get("status") in stats.PENDING for t in (f["home_id"], f["away_id"])}
     cache_ = stats._stats_cache()
-    have = lambda: sum(1 for e in fixtures if (cache_.get(str(e["id"])) or {}).get("teams"))      # noqa: E731
-    todo = [e for e in fixtures if not stats.stats_known(e["id"])]
-    cache.hit("api-football", len(fixtures) - len(todo))        # statistiques déjà connues : zéro requête
-    want = target - have()
-    if want > 0 and todo and budget.left() >= 1:
-        batch = stats.fixture_stats_batch([e["id"] for e in todo[:want + 2]])
-        if batch is None:                             # méthode groupée indisponible : un match par requête
-            tries = 0
-            for e in todo:
-                cache_ = stats._stats_cache()
-                if budget.left() < 1 or tries >= want + 2 or have() >= target:
-                    break
-                stats.fixture_stats(e["id"], players=False)
-                tries += 1
-    cache_ = stats._stats_cache()
-    prof = build_profile(tid, fixtures, cache_)
-    n = prof["all"][0] if prof else 0
-    pending = [e for e in fixtures if not stats.stats_known(e["id"])]
-    absent = sum(1 for e in fixtures if (cache_.get(str(e["id"])) or {}).get("missing"))
-    t = {"nm": api_name, "sk": list(dict.fromkeys(old.get("sk", []) + [ctx["sk"]]))[-4:], "lg": ctx.get("lg") or old.get("lg"),
-         "d": _today(), "al": list(dict.fromkeys(([name] if name != api_name else []) + (old.get("al") or [])))[:2]}
-    empty = [0] + [None] * 14
-    t.update(prof or {"all": empty, "home": empty, "away": empty})
-    if n < C.APISTATS_MIN_N:
-        if not pending or absent >= 4:
-            t["none"] = 1                              # rien (ou trop peu) à tirer de l'API pour cette équipe : pas avant quelques jours
-        else:
-            t["p"] = 1                                 # incomplet (budget épuisé en route) : repris au prochain passage
-    d["teams"][str(tid)] = t
-    return True
+    paid, free, none = [], [], 0
+    for day in sorted(lists):
+        for e in lists[day]:
+            if e.get("status") not in stats.DONE or not e.get("lk") or str(e["id"]) in d["seen"]:
+                continue
+            e = dict(e, day=day)
+            if (cache_.get(str(e["id"])) or {}).get("teams"):
+                free.append(e)
+            elif stats.stats_known(e["id"]):          # l'API n'a pas de statistiques pour ce match (mémorisé quelques jours)
+                none += 1
+            else:
+                paid.append(e)
+    return sorted(paid, key=lambda e: rank(d, e, soon)), free, none
 
-
-def _fresh(d, tid):
-    """L'équipe n'a pas besoin d'être revue : profil récent, ou échec récent (rien à tirer de l'API pour elle)."""
-    t = d["teams"].get(str(tid))
-    if not t or t.get("p"):
-        return False
-    age = (datetime.fromisoformat(_today()) - datetime.fromisoformat(t.get("d", "2000-01-01"))).days
-    if t.get("none"):
-        return age < C.STATS_NO_DATA_DAYS
-    return covered_team(t) and age < C.APISTATS_REFRESH_DAYS
-
-
-# ---------- la file du matin ----------
 
 def rich(f):
     """Vrai si les chiffres d'avant-match `f` ont déjà corners ET cartons d'une autre source que ce module."""
@@ -237,16 +260,13 @@ def rich(f):
     return all(k in f and k not in own for k in ("exp_corners", "exp_cards"))
 
 
-def queue(day, scan, fixtures, now=None):
-    """Matchs du jour sans vraies stats, dans l'ordre : ligues du catalogue (région, ligues majeures, nombre de matchs), puis
-    Afrique. -> (file, non retrouvés) ; chaque élément : {home, away, hid, aid, sk, lg, ts}. Les sélections nationales sont
-    ignorées (leurs noms ressemblent trop à des clubs), comme les matchs déjà terminés."""
+def today_matches(day, scan, fixtures):
+    """Matchs du jour sans vraies stats gratuites : ceux du relevé gratuit des ligues (hors matchs déjà détaillés par football-data) et les
+    matchs africains de la liste du jour. -> (liste, non retrouvés) ; chaque élément : {home, away, hid, aid, sk, lg, ts}."""
     from . import odds
     items, missing, seen = [], 0, 0
     counts_ = {k: len(v) for k, v in (scan or {}).get("leagues", {}).items()}
     for key in catalogue.prioritise(counts_, C.SPORTS):
-        if catalogue.region(key) == "monde":
-            continue
         for ev in sorted(scan["leagues"][key], key=lambda e: e["commence_time"]):
             if seen >= EVAL_MAX:
                 break
@@ -265,15 +285,31 @@ def queue(day, scan, fixtures, now=None):
     return items, missing
 
 
+def _alias(d, items):
+    """Retient le nom donné par The Odds API (« Nautico PE ») et la ligue du catalogue sur les équipes déjà suivies."""
+    for it in items:
+        for tid, nm in ((it["hid"], it["home"]), (it["aid"], it["away"])):
+            t = d["teams"].get(str(tid))
+            if not t:
+                continue
+            if nm != t.get("nm") and nm not in (t.get("al") or []):
+                t["al"] = ([nm] + (t.get("al") or []))[:2]
+            if it["sk"] not in t.get("sk", []):
+                t["sk"] = (t.get("sk", []) + [it["sk"]])[-4:]
+
+
+# ---------- le passage du matin ----------
+
 def fill(day, scan, deadline=None):
-    """Remplissage progressif du matin (voir l'en-tête du module). Ne lève jamais. -> rapport {enabled, queued, covered,
-    unmatched, teams, requests, aps_today, used_today, stop, err} pour report_lines()."""
-    rep = {"enabled": active(), "queued": 0, "covered": 0, "unmatched": 0, "teams": 0, "requests": 0, "stop": None}
+    """Accumulation du matin (voir l'en-tête du module). Ne lève jamais. -> rapport {enabled, added, requests, tracked, usable, good, cov, tot,
+    unmatched, lost, nostats, stop, err, used_today, aps_today} pour report_lines()."""
+    rep = {"enabled": active(), "added": 0, "requests": 0, "tracked": 0, "usable": 0, "good": 0, "cov": 0, "tot": 0, "unmatched": 0,
+           "lost": 0, "nostats": 0, "stop": None}
     if not rep["enabled"]:
         rep["stop"] = "off" if stats.enabled() else "nokey"
         return rep
     try:
-        _fill(day, scan, deadline or time.monotonic() + C.APISTATS_SECONDS, rep)
+        _fill(str(day)[:10], scan, deadline or time.monotonic() + C.APISTATS_SECONDS, rep)
     except Exception as e:                            # noqa: BLE001 - les stats mondiales sont facultatives
         print(f"[apistats] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
         rep["stop"] = "error"
@@ -283,47 +319,66 @@ def fill(day, scan, deadline=None):
 
 
 def _fill(day, scan, deadline, rep):
-    budget = Budget()
-    if budget.left() < 2:
-        rep["stop"] = "halt" if stats._halted else "budget"
-        return
-    fixtures = stats._day_fixtures(str(day))
-    if stats._halted or not fixtures:
-        rep["stop"] = "halt" if stats._halted else "empty"
-        return
-    items, rep["unmatched"] = queue(day, scan, fixtures)
-    rep["queued"] = len(items)
-    d = load()
-    stopped, done = None, set()
-    for stage in ("new", "stale"):                    # d'abord les équipes inconnues, puis le renouvellement des profils
-        for it in items:
-            for tid, nm in ((it["hid"], it["home"]), (it["aid"], it["away"])):
-                known = covered_team(d["teams"].get(str(tid)))
-                if tid in done or _fresh(d, tid) or (stage == "stale") != known:
-                    continue
-                if time.monotonic() > deadline:
-                    stopped = "time"
-                elif not refresh_team(d, tid, nm, it, budget):
-                    stopped = "halt" if stats._halted else "budget"
-                if stopped:
-                    break
-                done.add(tid)
-                rep["teams"] += 1
-                save(d)
-            if stopped:
-                break
-        if stopped:
-            break
-    save(d)
-    budget.commit()
-    rep["requests"] = budget.spent() - budget.aps0
-    rep["covered"] = sum(1 for it in items if covered_team(d["teams"].get(str(it["hid"]))) and covered_team(d["teams"].get(str(it["aid"]))))
-    rep["stop"] = stopped
+    budget, d = Budget(), load()
+    yday = str((datetime.fromisoformat(day) - timedelta(days=1)).date())
     try:
-        from .sources import features
-        features.reload()                             # les profils neufs servent tout de suite aux pronostics et aux cotes
-    except Exception:                                 # noqa: BLE001
-        pass
+        if plan_error():                              # refus de plan déjà constaté aujourd'hui : on ne réessaie pas avant demain
+            rep["stop"] = "halt"
+            return
+        lists = {}
+        for dd in (yday, day):                        # une requête chacune au plus (celle du règlement, en cache), jamais hors hier..demain
+            lists[dd] = stats._day_fixtures(dd) if budget.left() >= 1 else stats._fx_load()[0].get(dd) or []
+        if stats._halted:
+            rep["stop"] = "halt"
+            return
+        if not lists.get(yday) and not lists.get(day):
+            rep["stop"] = "budget" if budget.left() < 1 else "empty"
+        else:
+            _accumulate(d, lists, day, budget, deadline, rep)
+        items, rep["unmatched"] = today_matches(day, scan, lists[day]) if lists.get(day) else ([], 0)      # sans liste du jour : aucune requête de plus
+        rep["tot"] = len(items)
+        rep["cov"] = sum(1 for it in items if covered_team(d["teams"].get(str(it["hid"]))) and covered_team(d["teams"].get(str(it["aid"]))))
+        _alias(d, items)
+    finally:
+        s = summary(d)
+        rep.update(tracked=s["tracked"], usable=s["usable"], good=s["good"], requests=budget.spent() - budget.aps0)
+        d["rep"] = {"day": day, "added": rep["added"], "requests": rep["requests"], "cov": rep["cov"], "tot": rep["tot"], "stop": rep["stop"]}
+        save(d)
+        budget.commit()
+        try:
+            from .sources import features
+            features.reload()                         # les profils neufs servent tout de suite aux pronostics et aux cotes
+        except Exception:                             # noqa: BLE001
+            pass
+
+
+def _accumulate(d, lists, day, budget, deadline, rep):
+    paid, free, _ = candidates(d, lists, day)
+    cache_ = stats._stats_cache()
+    for e in free:                                    # statistiques déjà en cache (règlement, passage précédent) : zéro requête
+        if record(d, e, cache_.get(str(e["id"]))):
+            rep["added"] += 1
+    miss, ok = {}, {}                                 # par ligue : matchs sans statistiques / avec
+    dead = lambda lk: miss.get(lk, 0) >= MISS_STOP and not ok.get(lk)        # noqa: E731 - ligue sans statistiques chez l'API aujourd'hui
+    for i, e in enumerate(paid):
+        stop = "time" if time.monotonic() > deadline else "halt" if stats._halted else "budget" if budget.left() < 1 else None
+        if stop:
+            rep["stop"] = stop
+            if stop != "halt":                        # les matchs d'hier ne reviendront pas demain (ceux d'aujourd'hui, si)
+                rep["lost"] = sum(1 for x in paid[i:] if x["day"] != day and not dead(x["lk"]))
+            return
+        if dead(e["lk"]):
+            continue
+        st = stats.fixture_stats(e["id"], players=False)
+        if st and record(d, e, st):
+            rep["added"] += 1
+            ok[e["lk"]] = ok.get(e["lk"], 0) + 1
+        elif stats._halted:
+            rep["stop"] = "halt"
+            return
+        else:
+            rep["nostats"] += 1
+            miss[e["lk"]] = miss.get(e["lk"], 0) + 1
 
 
 # ---------- messages (journal du matin, --check) ----------
@@ -334,39 +389,64 @@ def plan_error(q=None):
     return err["msg"] if err and err.get("plan") else None
 
 
+def _plural(n, one, many):
+    return f"{n} {one if n == 1 else many}"
+
+
+def _levels(tracked, usable, good):
+    return (f"{tracked} équipes suivies, {usable} avec {C.APISTATS_MIN_N}+ matchs (utilisables), "
+            f"{good} avec {C.APISTATS_GOOD_N}+ (bonnes)")
+
+
+def progress_line(rep):
+    """Ligne d'avancement honnête : matchs ajoutés aujourd'hui, requêtes, équipes suivies / utilisables / bonnes, couverture du jour."""
+    added = rep["added"]
+    got = "aucun nouveau match d'hier" if not added else _plural(added, "match d'hier ajouté", "matchs d'hier ajoutés")
+    line = (f"🌍 Stats mondiales (accumulation jour après jour, forfait gratuit) : {got} ({_plural(rep['requests'], 'requête', 'requêtes')}"
+            + (f", {rep['nostats']} sans statistiques chez l'API" if rep.get("nostats") else "") + ") · "
+            + _levels(rep["tracked"], rep["usable"], rep["good"]) + " · "
+            + (f"couverture des matchs du jour : {rep['cov']}/{rep['tot']}" if rep["tot"] else "aucun match du jour à couvrir"))
+    if rep.get("unmatched"):
+        line += f" ({rep['unmatched']} introuvables chez API-Football)"
+    line += {"budget": f" — budget du jour atteint ({C.APISTATS_DAILY} requêtes), suite demain", "time": " — délai atteint, suite demain",
+             "halt": " — API arrêtée pour aujourd'hui", "empty": " — liste des matchs vide"}.get(rep.get("stop"), "")
+    if rep.get("lost"):
+        line += (f" ; {_plural(rep['lost'], 'match d’hier perdu', 'matchs d’hier perdus')} faute de budget (le forfait gratuit ne "
+                 "remonte pas plus loin)")
+    return line
+
+
 def report_lines(rep):
-    """Lignes françaises du journal du matin : couverture du jour, requêtes, et l'erreur de plan (une seule fois)."""
+    """Lignes françaises du journal du matin : avancement de l'accumulation, requêtes, seuils de qualité, et l'erreur de plan (une fois)."""
     if rep.get("stop") in ("nokey", "off"):
         return ["⚪ Stats mondiales : " + ("pas de clé STATS_API_KEY" if rep["stop"] == "nokey" else "désactivées (APISTATS_DAILY=0)")]
-    lines = []
     err = plan_error() if rep.get("err") is None else (rep["err"]["msg"] if rep["err"].get("plan") else None)
     if err:
-        lines.append(f"⚠️ API-Football : ton forfait ne donne pas accès à ces données ({err[:140]}). Les stats mondiales "
-                     "(Brésil, Afrique...) sont suspendues : Kelly continue avec football-data et les cotes. Un forfait "
-                     "payant ou une autre saison les débloquerait.")
-    total = rep["queued"]
-    if err and not total:                             # arrêt avant même d'avoir la liste des matchs : le message d'erreur suffit
-        return lines
-    lines.append(f"🌍 Stats mondiales : {rep['teams']} équipe(s) mise(s) à jour ({rep['requests']} requêtes ; {rep.get('aps_today', 0)}/"
-                 f"{C.APISTATS_DAILY} aujourd'hui pour les profils, {rep.get('used_today', '?')}/{stats._cap()} en tout, "
-                 f"{C.FAIR_API_RESERVE} gardées pour le règlement) ; matchs du jour sans stats gratuites : "
-                 f"{rep['covered']}/{total} couverts"
-                 + (f", {rep['unmatched']} introuvables chez API-Football" if rep.get("unmatched") else "")
-                 + {"budget": " — budget du jour atteint, suite demain", "time": " — délai atteint, suite demain",
-                    "halt": " — API arrêtée pour aujourd'hui"}.get(rep.get("stop"), ""))
-    return lines
+        path = (rep.get("err") or stats._quota().get("err") or {}).get("path") or ""
+        what = "aux statistiques de match" if "statistics" in path else "à ces données"
+        return [f"⚠️ API-Football : ton forfait n'a pas accès {what} ({err[:140]}). L'accumulation des stats mondiales (Brésil, Afrique...) "
+                "s'arrête pour aujourd'hui : Kelly continue avec football-data et les cotes. Un forfait payant la débloquerait.",
+                f"🌍 Stats mondiales suspendues : {_levels(rep['tracked'], rep['usable'], rep['good'])}, rien d'ajouté aujourd'hui"]
+    return [progress_line(rep),
+            f"   Qualité : {C.APISTATS_MIN_N} à {C.APISTATS_GOOD_N - 1} matchs = utilisable (confiance réduite, pronostics seuls), "
+            f"{C.APISTATS_GOOD_N}+ = bon (confiance pleine, combinés à cote juste) ; API-Football aujourd'hui : {rep.get('used_today', '?')}/"
+            f"{stats._cap()} requêtes (profils {rep.get('aps_today', 0)}/{C.APISTATS_DAILY}, {C.FAIR_API_RESERVE} gardées pour le règlement)"]
 
 
 def check_lines():
-    """Lignes de --check : profils en mémoire, requêtes du jour, erreur de plan éventuelle."""
-    n, cov, last = counts()
-    q = stats._quota()
+    """Lignes de --check : avancement de l'accumulation, dernier passage du matin, requêtes du jour, erreur de plan éventuelle."""
+    d = load()
+    s, q = summary(d), stats._quota()
     lines = []
     err = plan_error(q)
     if err:
         lines.append(f"   ⚠️ Stats mondiales suspendues : API-Football refuse ({err[:140]}). Forfait ou saison non inclus.")
     if not stats.enabled():
         return ["   Stats mondiales : inactives (STATS_API_KEY absente)"] + lines
-    lines.insert(0, f"   Stats mondiales : {cov} équipes couvertes sur {n} suivies (maj {last or '?'}), "
-                    f"{q.get('aps', 0)}/{C.APISTATS_DAILY} requêtes de profils aujourd'hui, {C.FAIR_API_RESERVE} gardées pour le règlement")
+    rp = d.get("rep")
+    last = (f" · dernier passage du matin ({rp['day']}) : {rp['added']} matchs ajoutés ({rp['requests']} requêtes), couverture des matchs du "
+            f"jour {rp['cov']}/{rp['tot']}") if rp else " · aucun passage du matin enregistré"
+    lines.insert(0, f"   Stats mondiales (accumulation jour après jour, forfait gratuit) : {_levels(s['tracked'], s['usable'], s['good'])}"
+                    f"{last}")
+    lines.insert(1, f"   {q.get('aps', 0)}/{C.APISTATS_DAILY} requêtes de profils aujourd'hui, {C.FAIR_API_RESERVE} gardées pour le règlement")
     return lines

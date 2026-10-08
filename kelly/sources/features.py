@@ -1,5 +1,5 @@
 from . import fbref, footballdata, names, understat
-from .. import apistats, catalogue
+from .. import apistats, catalogue, config as C
 
 MIN_N = 3
 REF_MIN_N = 3
@@ -161,7 +161,14 @@ def _aps_candidates(prof, sport_key):
 
 
 def aps_quality(n):
-    return round(min(0.6, 0.35 + 0.05 * max(0, n - 5)), 2)
+    """Qualité (0 à 1) d'un profil API-Football de `n` matchs : 0 sous APISTATS_MIN_N (non servi) ; « utilisable » de MIN_N à GOOD_N - 1
+    (0,20 à 0,30 : poids du modèle atténué, pronostics seuls) ; « bon » dès GOOD_N (0,40 à 6 matchs, 0,60 à 10) : 0,40 est aussi le seuil
+    des combinés à cote juste (C.FAIR_COMBO_MIN_Q)."""
+    if n < C.APISTATS_MIN_N:
+        return 0.0
+    if n < C.APISTATS_GOOD_N:
+        return round(0.20 + 0.05 * (n - C.APISTATS_MIN_N), 2)
+    return round(min(0.6, 0.40 + 0.05 * (n - C.APISTATS_GOOD_N)), 2)
 
 
 def _apistats(out, home, away, sport_key):

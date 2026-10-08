@@ -232,7 +232,9 @@ def model_covered(ev):
     """Vrai si Kelly a un modèle corners/cartons pour ce match : profils football-data des deux équipes (c'est là que
     l'écart modèle-ligne existe, donc là que les marchés détaillés valent leurs crédits)."""
     f = match_numbers(ev["home_team"], ev["away_team"], ev.get("sport_key", ""))
-    return "exp_corners" in f or "exp_cards" in f
+    # un profil API-Football encore « utilisable » (3 à 5 matchs, features.aps_quality) ne vaut pas des crédits : il faut « bon » (6 matchs)
+    thin = f.get("aps_q", 1.0) < C.FAIR_COMBO_MIN_Q
+    return any(k in f and not (thin and k in (f.get("aps_keys") or ())) for k in ("exp_corners", "exp_cards"))
 
 
 def covered_leagues(scan, sample=6):

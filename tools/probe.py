@@ -78,31 +78,38 @@ def probe_bookmaker():
 
 
 def probe_apif_world():
-    """API-Football gratuit : liste d'un jour passé, puis statistiques groupées par ids (2 requêtes)."""
+    """API-Football gratuit (3 requêtes) : la liste d'HIER (seule date passée permise), les ligues qu'elle contient avec leur classement
+    par kelly/apileagues, puis /fixtures/statistics d'un match terminé de ligue retenue (les paramètres « last » et « ids » sont refusés
+    par le forfait gratuit : on ne les sonde plus)."""
     key = os.environ.get("STATS_API_KEY")
     if not key:
         return 0
+    from datetime import timedelta
+    from kelly import apileagues
     h = {"x-apisports-key": key}
     out = {}
-    r = fetch("apif_day_past", "https://v3.football.api-sports.io/fixtures", headers=h,
-              params={"date": "2026-10-07", "timezone": "UTC"})
-    ids = []
+    yday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    r = fetch("apif_day_past", "https://v3.football.api-sports.io/fixtures", headers=h, params={"date": yday, "timezone": "UTC"})
+    pick = None
     if r is not None:
         body = r.json() if r.ok else {}
         resp = body.get("response") or []
         fin = [f for f in resp if (f.get("fixture", {}).get("status") or {}).get("short") in ("FT", "AET", "PEN")]
-        big = [f for f in fin if f.get("league", {}).get("country") in ("Brazil", "England", "Spain", "Argentina")]
-        ids = [f["fixture"]["id"] for f in (big or fin)][:3]
-        out["day_past"] = {"status": r.status_code, "errors": body.get("errors"), "n": len(resp), "finished": len(fin),
-                           "sample": [(f["league"]["name"], f["teams"]["home"]["name"], f["teams"]["away"]["name"]) for f in (big or fin)[:3]]}
-    if ids:
-        r = fetch("apif_ids", "https://v3.football.api-sports.io/fixtures", headers=h, params={"ids": "-".join(map(str, ids))})
+        kept = [f for f in fin if apileagues.classify(f["league"].get("country"), f["league"].get("name"))]
+        pick = (kept or fin or [None])[0]
+        leagues = {}
+        for f in fin:
+            k = f"{f['league'].get('country')} | {f['league'].get('name')}"
+            leagues[k] = leagues.get(k, 0) + 1
+        out["day_past"] = {"date": yday, "status": r.status_code, "errors": body.get("errors"), "n": len(resp), "finished": len(fin),
+                           "kept_by_apileagues": len(kept), "leagues": dict(sorted(leagues.items(), key=lambda kv: -kv[1])[:80])}
+    if pick:
+        r = fetch("apif_stats", "https://v3.football.api-sports.io/fixtures/statistics", headers=h, params={"fixture": pick["fixture"]["id"]})
         if r is not None:
             body = r.json() if r.ok else {}
             resp = body.get("response") or []
-            out["ids"] = {"status": r.status_code, "errors": body.get("errors"), "n": len(resp),
-                          "with_statistics": sum(1 for f in resp if f.get("statistics")),
-                          "stat_types": sorted({s["type"] for f in resp for t in (f.get("statistics") or []) for s in t.get("statistics", [])})[:20]}
+            out["statistics"] = {"status": r.status_code, "errors": body.get("errors"), "league": pick["league"].get("name"), "teams": len(resp),
+                                 "types": sorted({s["type"] for t in resp for s in t.get("statistics", [])})[:20]}
     save("apif_world.json", json.dumps(out, indent=1, ensure_ascii=False))
     return 0
 
@@ -231,8 +238,10 @@ def main_full():
         r = fetch("apif_status", "https://v3.football.api-sports.io/status", headers=h)
         if r is not None:
             save("apif_status.json", r.text, limit=4000)
+        from datetime import timedelta
+        yday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()           # forfait gratuit : hier, aujourd'hui, demain seulement
         r = fetch("apif_fixtures", "https://v3.football.api-sports.io/fixtures",
-                  headers=h, params={"date": "2026-10-04", "league": 39, "season": 2026, "timezone": "UTC"})
+                  headers=h, params={"date": yday, "league": 39, "season": 2026, "timezone": "UTC"})
         if r is not None:
             save("apif_fixtures.json", r.text, limit=8000)
 

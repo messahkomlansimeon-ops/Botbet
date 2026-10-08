@@ -782,8 +782,8 @@ def custom_combo(picks, pronos, target, day):
                 f"{fmt.trim(sf['best_total'], 1)} seulement, il en faudrait environ {sf['need']} pour viser {t}." if sf["matches"] else
                 f"• Pronostics Kelly sans cote : aucun pari assez solide aujourd'hui ({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou "
                 "plus, assez de matchs récents).")
-    return "\n".join([first, fair_txt, f"Kelly complète ses statistiques mondiales (Brésil, Afrique...) chaque matin : {n_cov} équipes "
-                       "déjà couvertes. Réessaie demain, ou demande une cote plus basse (/combi 10)."])
+    return "\n".join([first, fair_txt, f"Kelly accumule ses statistiques mondiales (Brésil, Afrique...) un peu plus chaque matin : {n_cov} équipes "
+                       f"déjà couvertes ({C.APISTATS_MIN_N} matchs ou plus). Réessaie demain, ou demande une cote plus basse (/combi 10)."])
 
 
 def run_commands(serve=False):

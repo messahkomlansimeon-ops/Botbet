@@ -21,7 +21,7 @@ from kelly import (app, bankroll, bootstrap, budget, cache, combos as CB, fmt, c
                    stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
 from tests import make_sample, synth  # noqa: E402
-from tests.fake_api import FakeFootballAPI  # noqa: E402
+from tests.fake_api import FakeFootballAPI, match as fake_match, seed_history, ts_of  # noqa: E402
 
 
 def fake_scores(rows):
@@ -174,7 +174,7 @@ class Sandbox:
     def __enter__(self):
         self.saved = (requests_get(), dict(odds.CREDITS), budget._now, app.now_utc, os.environ.get("ODDS_API_KEY"),
                       os.environ.get("STATS_API_KEY"), C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS,
-                      dict(C.BUDGET_SHARES), C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH)
+                      dict(C.BUDGET_SHARES), C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH, stats._today)
         wipe()
         odds.CREDITS.update(remaining=None, used=None)
         odds._warned.clear()
@@ -192,6 +192,7 @@ class Sandbox:
 
     def set_now(self, now):
         budget._now = app.now_utc = lambda: now
+        stats._today = lambda: now.date().isoformat()         # l'horloge d'API-Football (fenêtre hier..demain du forfait gratuit) suit celle du test
 
     def serve(self, fake):
         odds.requests.get = fake
@@ -199,7 +200,7 @@ class Sandbox:
 
     def __exit__(self, *exc):
         (g, cr, bn, an, ok, sk, C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS, shares,
-         C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH) = self.saved
+         C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH, stats._today) = self.saved
         odds.requests.get = g
         odds.CREDITS.update(cr)
         budget._now, app.now_utc = bn, an
@@ -486,7 +487,7 @@ def age_fixture_cache(hours=24):
 
 def test_free_settlement():
     """Foot réglé via API-Football (aucun appel /scores, aucun crédit) ; /scores seulement en repli."""
-    day = date.fromisoformat(stats._today()) - timedelta(days=1)
+    day = date(2026, 10, 7)
     ts = int(datetime.fromisoformat(f"{day}T19:00:00+00:00").timestamp())
     ko = f"{day}T19:00:00Z"
     phase = {"s": "NS"}
@@ -521,9 +522,11 @@ def test_free_settlement():
         stats._calls, stats._halted = 0, False
         stats._refreshed.clear()
         track.save(rows)
+        sb.set_now(datetime.combine(day, datetime.min.time(), tzinfo=UTC) + timedelta(hours=8))
         # le matin du match : cache du jour avec statut NS (1 requête)
         assert stats.find_fixture(str(day), "Alpha", "Bravo", kickoff=ko) and len(football) == 1
         # le lendemain (autre exécution) : le cache NS d'un jour passé est re-téléchargé, puis tout est réglé gratuitement
+        sb.set_now(datetime.combine(day + timedelta(days=1), datetime.min.time(), tzinfo=UTC) + timedelta(hours=8))
         phase["s"] = "FT"
         stats._refreshed.clear()
         age_fixture_cache()                                                    # « le lendemain matin » : le relevé NS date de 24 h
@@ -1394,7 +1397,8 @@ def test_africa_and_fair_settlement():
         w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
         assert "🌍 Afrique : 2 match(s) (API-Football, sans cotes" in w, w
         assert "• Ligue 1 (Ivory-Coast) (1) : 15:00 ASEC Mimosas - Africa Sports" in w and "• CAF Champions League (1) : 15:00 Al Ahly - Wydad" in w
-        assert "Lyon" not in w and "Women" not in w and len([p for p in football if p.get("date")]) == 1   # une seule liste pour tout le jour
+        assert "Lyon" not in w and "Women" not in w
+        assert sorted(p["date"] for p in football if p.get("date")) == ["2026-10-07", "2026-10-08"]       # hier et aujourd'hui, une fois chacun
         cached = store.load("fixtures_day.json", {})[WDAY]
         assert sum(1 for f in cached if f.get("lg")) == 2 and len(cached) == 4         # seul l'Afrique garde sa ligue : cache léger
         assert "Al Ahly" in app.handle_command("/monde") and "Al Ahly" in app.handle_command("/monde afrique")
@@ -1878,13 +1882,41 @@ def test_messages_human():
 REAL = os.path.join(os.path.dirname(__file__), "fixtures", "real_2026-10-08")
 
 
+LEAGUES8 = {1492398: ("Serie A", "Brazil"), 1492390: ("Serie A", "Brazil"), 1520912: ("Serie B", "Brazil"), 1520915: ("Serie B", "Brazil"),
+            1638102: ("Veikkausliiga", "Finland"), 1638103: ("Veikkausliiga", "Finland"), 1492780: ("Premier Division", "Ireland")}
+
+
 def real_world():
-    """Vraies données du 8 octobre 2026 : (matchs d'API-Football, tour du monde, paris du jour, ligues pour FakeOdds)."""
-    entries = json.load(open(os.path.join(REAL, "fixtures_day.json")))[WDAY]
+    """Vraies données du 8 octobre 2026 : (matchs d'API-Football, tour du monde, paris du jour, ligues pour FakeOdds). Les ligues du
+    Brésil, de la Finlande et de l'Irlande sont nommées comme chez API-Football (le fichier d'époque ne les gardait pas)."""
+    entries = [dict(e, league=LEAGUES8[e["id"]]) if e["id"] in LEAGUES8 else e
+               for e in json.load(open(os.path.join(REAL, "fixtures_day.json")))[WDAY]]
     monde = json.load(open(os.path.join(REAL, "monde.json")))
     today = json.load(open(os.path.join(REAL, "today.json")))
     leagues = {k: [(f"{k[7:13]}{i}", h, a, f"{WDAY}T{t}:00Z") for i, (h, a, t) in enumerate(v)] for k, v in monde["leagues"].items()}
     return entries, monde, today, leagues
+
+
+def accumulated_world(api, entries):
+    """Ce que Kelly aurait accumulé les jours précédents (forfait gratuit : jour après jour) : 6 matchs (profil « bon ») pour les clubs
+    brésiliens, finlandais, irlandais et africains du jour, sauf Tanzanie et Ouganda : 4 (« utilisable », confiance réduite) ; la veille (7 octobre), Santos et Flamengo ont encore joué (2 matchs à compter)."""
+    from kelly import apileagues
+    teams = {}
+    for e in entries:
+        for side in ("home", "away"):
+            t = (e[side + "_id"], e[side])
+            if e["id"] in LEAGUES8:
+                lk, ln, _ = apileagues.classify(*reversed(LEAGUES8[e["id"]]))
+                teams[t] = (6, LEAGUES8[e["id"]], lk, ln)
+            elif e.get("lg"):
+                name, _, country = e["lg"].rpartition(" (")
+                teams[t] = (4 if country.rstrip(")") in ("Tanzania", "Uganda") else 6, (name, country.rstrip(")")), "africa", e["lg"])
+    for t, (n, league, lk, ln) in teams.items():
+        seed_history(api, t, n, league, lk, ln)
+    api.add_day("2026-10-07", [fake_match(9_100_001, (128, "Santos"), (9001, "Vitoria"), ts_of("2026-10-07", 22)),
+                               fake_match(9_100_002, (9002, "Bahia"), (127, "Flamengo"), ts_of("2026-10-07", 22))])
+    features.reload()
+    return teams
 
 
 def free_scan(leagues):
@@ -1911,7 +1943,10 @@ def test_fair_stat_markets():
         assert all(by[("Over", a)] > by[("Over", b)] for a, b in zip(pts, pts[1:])), m
     # une valeur attendue hors bornes (donnée suspecte) ou un profil trop court : rien
     assert not {o[0] for o in fair.options(dict(f, exp_sot=40.0), "A", "B")} & {"team_sot_total"}
-    assert fair.options(dict(f, n_home=3), "A", "B") == []
+    assert fair.options(dict(f, n_home=2), "A", "B") == []                                   # sous 3 matchs, jamais
+    short = dict(f, n_home=3, n_away=4, aps_q=0.2)                                           # profil API-Football utilisable (3 matchs) : admis, qualité réduite
+    assert {o[0] for o in fair.options(short, "A", "B")} >= set(fair.STAT_MARKETS)
+    assert fair.options({k: v for k, v in short.items() if k not in ("aps_keys", "aps_q")}, "A", "B") == []   # autres sources : 5 matchs minimum
     ev = {"id": "m1", "sport_key": "soccer_brazil_campeonato", "home_team": "Alpha", "away_team": "Bravo", "commence_time": f"{WDAY}T22:30:00Z"}
     picks = {c["market"]: c for c in (fair.make_pick(ev, *b, "API-Football") for b in fair.best_per_family(opts, set(fair.ALL_FAMILIES)))}
     assert set(fair.STAT_MARKETS) <= set(picks)
@@ -2002,9 +2037,10 @@ def test_fair_combos():
 
 def test_replay_oct8():
     """Rejoue le 8 octobre 2026 avec les vrais fichiers de la journée (tour du monde : 7 matchs de ligues du catalogue, dont le
-    Brésil, + 24 matchs africains ; vrais paris de Finlande et d'Irlande) et un faux API-Football : Kelly remplit les profils
-    (60 requêtes au plus), le Brésil est couvert en pronostics, un combiné à cote juste est envoyé en plus des combinés réels,
-    et /combi 25 en propose un (ou explique ce qui manque)."""
+    Brésil, + 24 matchs africains ; vrais paris de Finlande et d'Irlande) et un faux API-Football du FORFAIT GRATUIT (ni « last », ni
+    « ids », ni date hors hier..demain) : l'historique des équipes est celui que Kelly a accumulé les jours précédents, le matin il ajoute
+    les matchs d'hier (55 requêtes au plus), le Brésil est couvert en pronostics, un combiné à cote juste est envoyé en plus des combinés
+    réels, et /combi 25 en propose un (ou explique ce qui manque)."""
     from kelly import apistats, fair
     entries, monde, today, leagues = real_world()
     picks = today["picks"]
@@ -2013,24 +2049,28 @@ def test_replay_oct8():
         C.SPORTS = list(C.LEAGUE_KEYS)
         sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
         bankroll.save({"bankroll": 100.0, "initial": 100.0})
-        api = FakeFootballAPI(entries)
+        api = FakeFootballAPI(entries, today=WDAY)
         stats.requests.get = api
         os.environ["STATS_API_KEY"] = "test-stats-key"
         stats._calls, stats._halted = 0, False
         stats._refreshed.clear()
-        features.reload()
+        accumulated_world(api, entries)
         scan = free_scan(leagues)
         day = datetime(2026, 10, 8).date()
-        # --- le matin : remplissage des profils, dans la limite du quota
+        # --- le matin : les matchs d'hier s'ajoutent à l'historique, dans la limite du quota (listes de matchs comprises)
         rep = apistats.fill(day, scan)
         q = store.load("stats_quota.json", {})
         assert q["n"] == len(api.calls) <= C.APISTATS_DAILY and q["aps"] == q["n"] and stats.left_today() >= C.FAIR_API_RESERVE
-        assert rep["queued"] == 31 and rep["covered"] >= 14 and rep["unmatched"] == 0, rep
+        assert api.refused == [] and api.count("/fixtures/players") == 0, api.refused           # jamais « last », « ids » ni date interdite
+        assert rep["added"] == 3 and rep["requests"] == 5 and rep["tot"] == 30 and rep["cov"] == 30 and rep["unmatched"] == 0, rep
         log = apistats.report_lines(rep)
-        assert len(log) == 1 and "29 équipe(s) mise(s) à jour" in log[0] and "30 gardées pour le règlement" in log[0], log
+        assert len(log) == 2 and log[0] == ("🌍 Stats mondiales (accumulation jour après jour, forfait gratuit) : 3 matchs d'hier ajoutés (5 requêtes) · "
+                                            "64 équipes suivies, 62 avec 3+ matchs (utilisables), 50 avec 6+ (bonnes) · couverture des matchs du jour : 30/30"), log
+        assert "30 gardées pour le règlement" in log[1] and f"profils 5/{C.APISTATS_DAILY}" in log[1], log
         prof = apistats.profiles()["teams"]
-        assert all(prof[t]["all"]["n"] >= 5 for t in ("Santos", "Flamengo", "Ceará", "Criciuma", "Nautico PE", "Grêmio Novorizontino",
-                                                      "Atletico Paranaense", "Atletico Mineiro")), "le Brésil est couvert"
+        assert all(prof[t]["all"]["n"] >= C.APISTATS_GOOD_N for t in ("Santos", "Flamengo", "Ceará", "Criciuma", "Nautico PE", "Grêmio Novorizontino",
+                                                                      "Atletico Paranaense", "Atletico Mineiro")), "le Brésil est couvert"
+        assert prof["Santos"]["all"]["n"] == 7 and "Vitoria" not in prof, "1 seul match : suivi mais pas encore utilisable"
         # --- pronostics : le Brésil a désormais corners, cartons, tirs ; l'Afrique commence
         africa = stats.africa_matches(day)
         assert len(africa) == 24
@@ -2044,6 +2084,12 @@ def test_replay_oct8():
         fair_combos = CB.fair_plan(pronos)
         built = [(t, c) for t, c in fair_combos if c]
         assert len(built) >= 2, fair_combos
+        # profils « utilisables » (3 à 5 matchs : Tanzanie, Ouganda) : pronostics seuls, confiance réduite, jamais dans un combiné à cote juste
+        short = [c for c in pronos if c["sport_key"] == "africa" and ("Tanzania" in c["league"] or "Uganda" in c["league"])]
+        assert short and all(c["conf"] < C.FAIR_COMBO_MIN_Q for c in short), [(c["event"], c["conf"]) for c in short]
+        assert not {leg["id"] for _, combo in built for leg in combo[0]} & {c["id"] for c in short}
+        good = [c for c in pronos if c["sport_key"] == "africa" and c not in short]
+        assert good and all(c["conf"] >= C.FAIR_COMBO_MIN_Q for c in good)
         from kelly import monde as M
         world = M.build(scan, day, datetime(2026, 10, 8, 8, tzinfo=UTC), paid=monde["paid"], africa=africa)
         msgs, sent_picks, sent_combos = app.build_day(picks, day, world, pronos, None, fair_combos)
@@ -2074,9 +2120,11 @@ def test_replay_oct8():
         mini = float(re.search(r"cote mini (\d+),(\d+)", reply).group(0).split()[-1].replace(",", "."))
         assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and "joue si la cote est au moins" in reply and "mise indicative" in reply
         assert "SUR MESURE" not in reply and "mise conseillée" not in reply
-        # --- /combi 5000 : impossible, on dit précisément ce qui manque
-        reply = app.handle_command("/combi 5000")
-        assert reply.startswith("Impossible de monter un combiné à la cote 5000 aujourd'hui.\n• Avec les cotes réelles, les 3 paris de qualité") and "ne permettent pas d'atteindre la cote 5000" in reply, reply
+        # --- une cote hors de portée de TOUS les pronostics solides du jour : impossible, on dit précisément ce qui manque
+        huge = int(CB.fair_shortfall(keep, 25)["best_total"] * 5)
+        reply = app.handle_command(f"/combi {huge}")
+        assert reply.startswith(f"Impossible de monter un combiné à la cote {huge} aujourd'hui.\n• Avec les cotes réelles, les 3 paris de qualité") \
+            and f"ne permettent pas d'atteindre la cote {huge}" in reply, reply
         assert "Pronostics Kelly sans cote" in reply and "il en faudrait environ" in reply and "équipes déjà couvertes" in reply, reply
         # --- sans aucune cote réelle : /combi 25 propose quand même un combiné à cote juste
         store.save("today.json", {"day": str(day), "picks": [], "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
@@ -2102,13 +2150,15 @@ def test_run_daily_world():
         C.SPORTS = list(C.LEAGUE_KEYS)
         sb.set_now(datetime(2026, 10, 8, 8, tzinfo=UTC))
         bankroll.save({"bankroll": 100.0, "initial": 100.0})
-        api = FakeFootballAPI(entries)
+        api = FakeFootballAPI(entries, today=WDAY)
         odds_fake = FakeOdds(500, leagues, sports=list(leagues))
+        accumulated_world(api, entries)
 
         order = []                                                      # journal des appels, tous services confondus
 
         def net(url, **kw):
-            order.append(("football", kw.get("params") or {}) if "api-sports.io" in url else ("odds", url.split("/v4")[1]))
+            order.append(("football", url.split("api-sports.io")[1], kw.get("params") or {}) if "api-sports.io" in url
+                         else ("odds", url.split("/v4")[1]))
             return api(url, **kw) if "api-sports.io" in url else odds_fake(url, **kw)
         sb.serve(net)
         os.environ["STATS_API_KEY"] = "test-stats-key"
@@ -2127,9 +2177,12 @@ def test_run_daily_world():
         log = buf.getvalue()
         q = store.load("stats_quota.json", {})
         assert q["n"] == len(api.calls) and q["aps"] <= C.APISTATS_DAILY and stats.left_today() >= C.FAIR_API_RESERVE, q
-        assert "🌍 Stats mondiales : 29 équipe(s) mise(s) à jour" in log and "30 gardées pour le règlement" in log, log
+        assert api.refused == [] and api.count("/fixtures/players") == 0, api.refused       # forfait gratuit : jamais « last », « ids », ni date interdite
+        assert not any(p.keys() & {"last", "ids", "team"} for o in order if o[0] == "football" for p in [o[2]])
+        assert "🌍 Stats mondiales (accumulation jour après jour, forfait gratuit) : 3 matchs d'hier ajoutés (5 requêtes)" in log, log
+        assert "couverture des matchs du jour : 30/30" in log and "30 gardées pour le règlement" in log, log
         # les profils précèdent l'achat des cotes : les ligues payées sont celles où Kelly a des profils (ici le Brésil compte)
-        last_profile = max(i for i, o in enumerate(order) if o[0] == "football" and "team" in o[1])
+        last_profile = max(i for i, o in enumerate(order) if o[0] == "football" and o[1] == "/fixtures/statistics")
         first_paid = min(i for i, o in enumerate(order) if o[0] == "odds" and o[1].endswith("/odds"))
         assert last_profile < first_paid, "les profils sont remplis avant l'achat des cotes"
         fair_msgs = [m for m in sent if m.startswith("<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini")]
@@ -2157,19 +2210,15 @@ def test_run_daily_world():
         for e in entries:
             api.results[e["id"]] = (2, 1)
         api.new_day()
-        sb.set_now(datetime(2026, 10, 9, 8, tzinfo=UTC))
+        sb.set_now(datetime(2026, 10, 9, 8, tzinfo=UTC))                          # l'horloge d'API-Football suit celle du test
         d = store.load("fixtures_day.json", {})
         d["_fetched"] = {k: t - 48 * 3600 for k, t in d.get("_fetched", {}).items()}
         store.save("fixtures_day.json", d)
         stats._refreshed.clear()
         stats._neg.clear()
         stats._calls, stats._halted = 0, False
-        real_today = stats._today
-        stats._today = lambda: "2026-10-09"                                      # l'horloge d'API-Football suit celle du test
-        try:
-            msgs = app.fair_combos_report(datetime(2026, 10, 9, 8, tzinfo=UTC))
-        finally:
-            stats._today = real_today
+        msgs = app.fair_combos_report(datetime(2026, 10, 9, 8, tzinfo=UTC))
+        assert api.refused == [], api.refused                                       # la liste d'hier (8 octobre) est dans la fenêtre du forfait gratuit
         rows = store.load("fair_combos.json", [])
         assert all(r["result"] in ("win", "loss", None) for r in rows) and any(r["result"] for r in rows), rows
         assert msgs and msgs[0].startswith("<b>🎲 Combinés à vérifier chez 1xBet — résultats</b>")
@@ -2193,14 +2242,18 @@ def test_paid_ranking_favours_profiles():
         ["soccer_epl", "soccer_argentina_primera_division", "soccer_usa_mls"]
     assert catalogue.prioritise({"soccer_epl": 1, "soccer_usa_mls": 9}, covered={"soccer_usa_mls"})[0] == "soccer_epl"   # la région passe avant
     with Sandbox():
-        view = [8, 1.2, 1.1, 12.0, 11.0, 4.0, 4.0, 5.0, 5.0, 13.0, 13.0, 2.0, 2.0, 2.0, 2.0]
-        apistats.save({"teams": {str(i): {"nm": n, "sk": ["soccer_argentina_primera_division"], "d": stats._today(), "all": view, "home": view,
-                                          "away": view} for i, n in ((1, "Boca Juniors"), (2, "River Plate"))}})
+        rows = [[261001 + k, 0, k % 2, 1, 1, 12, 11, 4, 4, 5, 5, 13, 13, 2, 2] for k in range(8)]           # 8 matchs (format de apistats.record)
+        apistats.save({"teams": {str(i): {"nm": n, "sk": ["soccer_argentina_primera_division"], "d": stats._today(), "lg": "Primera argentine",
+                                          "m": rows} for i, n in ((1, "Boca Juniors"), (2, "River Plate"))}, "lg": ["Primera argentine"]})
         features.reload()
         ev = lambda k, h, a: {"id": h, "sport_key": k, "home_team": h, "away_team": a, "commence_time": f"{WDAY}T22:00:00Z"}     # noqa: E731
         scan = {"leagues": {"soccer_argentina_primera_division": [ev("soccer_argentina_primera_division", "Boca Juniors", "River Plate")],
                             "soccer_usa_mls": [ev("soccer_usa_mls", "Inter Miami", "LA Galaxy")], "soccer_epl": [{"id": "x"}]}}
         assert odds.covered_leagues(scan) == {"soccer_argentina_primera_division"}
+        apistats.save({"teams": {str(i): {"nm": n, "sk": ["soccer_argentina_primera_division"], "d": stats._today(), "lg": "Primera argentine",
+                                          "m": rows[:4]} for i, n in ((1, "Boca Juniors"), (2, "River Plate"))}, "lg": ["Primera argentine"]})
+        features.reload()
+        assert odds.covered_leagues(scan) == set(), "4 matchs : profil utilisable mais pas assez bon pour dépenser des crédits"
     features.reload()
     print("classement des ligues payées : OK")
 

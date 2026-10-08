@@ -92,7 +92,8 @@ def deep_options(f, home, away):
 
 def _options(f, home, away):
     """(options à 5 éléments, références naïves {(marché, côté, ligne): proba}) ; voir options()."""
-    if min(f.get("n_home") or 0, f.get("n_away") or 0) < C.FAIR_MIN_N:
+    # profils API-Football courts (accumulation jour après jour) : dès APISTATS_MIN_N matchs, avec la qualité réduite de features.aps_quality
+    if min(f.get("n_home") or 0, f.get("n_away") or 0) < (C.APISTATS_MIN_N if f.get("aps_keys") else C.FAIR_MIN_N):
         return [], {}
     deep = deep_options(f, home, away)
     if deep:

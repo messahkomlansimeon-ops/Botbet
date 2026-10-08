@@ -129,18 +129,23 @@ FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'e
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
 FAIR_SHRINK = 0.9                                 # la proba du modèle est rapprochée de 50 % (le modèle de Poisson est trop sûr de lui)
 FAIR_MARGIN = 0.05                                # « joue si la cote >= cote juste x 1.05 » : marge de sécurité du modèle
-FAIR_API_EVENTS = _int("FAIR_API_EVENTS", 2)      # ancien repli (~14 requêtes par match) : inutilisé quand les profils API-Football (apistats) sont actifs
+FAIR_API_EVENTS = _int("FAIR_API_EVENTS", 2)      # repli corners/cartons d'API-Football (historique des profils, aucune requête de plus) : inutilisé quand apistats est actif
 FAIR_API_RESERVE = 30                             # requêtes API-Football du jour gardées pour le règlement
 FAIR_KEEP_DAYS = 10                               # historique gardé dans data/fair.json
-# ---- Stats mondiales API-Football (kelly/apistats.py) : profils d'équipe remplis progressivement, cache gardé ----
-APISTATS_DAILY = _int("APISTATS_DAILY", 60)       # requêtes API-Football par jour pour remplir les profils (0 = désactivé)
-APISTATS_LAST = 10                                # derniers matchs terminés d'une équipe dans son profil
-APISTATS_TARGET = 6                               # matchs avec statistiques cherchés pour une équipe encore inconnue
-APISTATS_MIN_N = 5                                # matchs avec statistiques minimum pour qu'une équipe soit « couverte »
-APISTATS_REFRESH_DAYS = _int("APISTATS_REFRESH_DAYS", 6)    # un profil plus récent n'est pas recalculé
-APISTATS_MAX_TEAMS = 700                          # équipes gardées dans data/apistats_profiles.json (< 300 Ko)
-APISTATS_KEEP_DAYS = 120                          # équipe oubliée si son profil n'a pas été renouvelé depuis
+# ---- Stats mondiales API-Football (kelly/apistats.py) : accumulation jour après jour (forfait gratuit) ----
+# Le forfait gratuit refuse « last », « ids » et toute date hors hier..demain : Kelly ne peut pas aller chercher l'historique d'une
+# équipe. Chaque matin il lit la liste des matchs d'hier (et celle d'aujourd'hui), demande les statistiques des matchs terminés
+# des ligues utiles (1 requête par match) et les ajoute à l'historique compact de chaque équipe.
+APISTATS_DAILY = _int("APISTATS_DAILY", 55)       # requêtes API-Football par jour pour les profils (0 = désactivé), listes de matchs comprises
+APISTATS_LAST = 10                                # derniers matchs d'une équipe dans les moyennes de son profil
+APISTATS_KEEP_MATCHES = 15                        # matchs gardés par équipe (les plus anciens sont oubliés) : sert aux vues domicile / extérieur
+APISTATS_MIN_N = 3                                # matchs minimum pour qu'un profil serve : « utilisable », confiance réduite (features.aps_quality)
+APISTATS_GOOD_N = 6                               # à partir de là le profil est « bon » : confiance pleine, admis dans les combinés à cote juste
+APISTATS_SAT_N = 10                               # équipe « saturée » : au moins autant de matchs que la fenêtre des moyennes (APISTATS_LAST)
+APISTATS_MAX_TEAMS = 300                          # équipes gardées dans data/apistats_profiles.json (< 300 Ko avec 15 matchs chacune)
+APISTATS_KEEP_DAYS = 120                          # équipe oubliée si elle n'a pas joué (ni été mise à jour) depuis
 APISTATS_SECONDS = _int("APISTATS_SECONDS", 150)  # durée maximale du remplissage du matin
+STATS_DATE_WINDOW = _int("STATS_DATE_WINDOW", 1)  # jours demandés autour d'aujourd'hui à /fixtures?date= (forfait gratuit : hier, aujourd'hui, demain)
 # ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
 FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
@@ -273,10 +278,8 @@ MARKET_LABELS = {
 ODDS_CACHE_HOURS = _float("ODDS_CACHE_HOURS", 12)
 EVENTS_CACHE_HOURS = _float("EVENTS_CACHE_HOURS", 6)     # /sports et /events (gratuits : on ménage surtout le temps du run)
 # API-Football : listes de matchs d'un jour passé déjà terminé = pour toujours ; liste encore incomplète = au plus toutes les
-# FIXTURES_RETRY_HOURS et seulement pendant FIXTURES_STALE_DAYS jours ; moyennes d'équipe réutilisées STATS_TEAM_DAYS jours ;
-# une réponse en erreur ou vide n'est pas redemandée pendant STATS_NEG_MINUTES (anti-boucle de requêtes).
+# FIXTURES_RETRY_HOURS et seulement pendant FIXTURES_STALE_DAYS jours ; une réponse en erreur ou vide n'est pas redemandée pendant STATS_NEG_MINUTES (anti-boucle de requêtes).
 FIXTURES_RETRY_HOURS = _float("FIXTURES_RETRY_HOURS", 6)
 FIXTURES_STALE_DAYS = _int("FIXTURES_STALE_DAYS", 3)
-STATS_TEAM_DAYS = _int("STATS_TEAM_DAYS", 3)
 STATS_NO_DATA_DAYS = _int("STATS_NO_DATA_DAYS", 3)       # match terminé sans statistiques : on ne le redemande pas avant
 STATS_NEG_MINUTES = _float("STATS_NEG_MINUTES", 20)
