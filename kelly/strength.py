@@ -824,13 +824,17 @@ def predict(model, home, away, on=None, referee=None, ctx=True):
 # ---------- grille de marchés ----------
 
 def _lines_near(mean, alpha, lo=1, step_sd=1.35):
+    """Demi-lignes de mean - step_sd x sd à mean + step_sd x sd, 9 au plus, centrées sur floor(mean) + 0,5 (pas de coupure par le
+    bas : à forte dispersion les lignes au-dessus de la moyenne, donc les Under, doivent exister aussi) ; jamais sous 0,5 ni sous `lo`."""
     sd = math.sqrt(mean + alpha * mean * mean)
-    a, b = max(lo - 0.5, math.floor(mean - step_sd * sd) + 0.5), math.floor(mean + step_sd * sd) + 0.5
+    c = math.floor(mean) + 0.5
+    a = max(lo - 0.5, 0.5, math.floor(mean - step_sd * sd) + 0.5, c - 4)
+    b = min(math.floor(mean + step_sd * sd) + 0.5, c + 4)
     pts, x = [], a
-    while x <= b + 1e-9 and len(pts) < 9:
+    while x <= b + 1e-9:
         pts.append(round(x, 1))
         x += 1
-    return pts or [round(math.floor(mean) + 0.5, 1)]
+    return pts or [round(max(c, 0.5), 1)]
 
 
 def _both(pmf, pts):

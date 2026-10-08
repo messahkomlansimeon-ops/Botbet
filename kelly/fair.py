@@ -51,6 +51,14 @@ def shrink(p):
     return 0.5 + (p - 0.5) * C.FAIR_SHRINK
 
 
+def stat_q(f, market):
+    """Qualité (0 à 1) du modèle approfondi pour la statistique d'un marché : celle des corners, cartons, tirs... (d["qs"]) ; celle
+    du modèle de buts pour buts, les 2 marquent et double chance."""
+    d = f.get("deep") or {}
+    stat = {prematch.CORNERS: "corners", prematch.CARDS: "cards"}.get(market) or (market.split("_")[1] if market in STAT_SPECS else "goals")
+    q = (d.get("qs") or {}).get(stat)
+    return d.get("q", 0.0) if q is None else q
+
 def deep_options(f, home, away):
     """Options du modèle approfondi (f["deep"]) : [(marché, côté, ligne, proba brute, justification, référence naïve)] pour
     les familles réglables (buts 0,5-4,5, les 2 marquent, double chance, corners, cartons, tirs et tirs cadrés). [] si la
@@ -78,6 +86,8 @@ def deep_options(f, home, away):
             s = d["stats"].get(kinds[mk])
             lo, hi = DEEP_LINES[kinds[mk]]
             if not s or not lo <= pt <= hi or not prematch.BOUNDS[kinds[mk]][0] <= s["h"] + s["a"] <= prematch.BOUNDS[kinds[mk]][1]:
+                continue
+            if l.get("q", 0) < DEEP_MIN_Q:                      # qualité de CETTE statistique (couverture, équipes), pas celle des buts
                 continue
         elif mk in STAT_SPECS:
             s = d["stats"].get(l["stat"])
@@ -259,13 +269,12 @@ def make(scan, picks=(), day=None, deadline=None, africa=()):
                 src = "api"
         if f.get("aps_keys") and src == "football-data":
             src = "API-Football"
-        q = (f.get("deep") or {}).get("q")
         picks_ = []
         for b in best_per_family(opts, families, bases):
             c = make_pick(ev, *b, src)
             base = bases.get((b[0], b[1], b[2]))
             if base is not None:
-                _with_base(c, base, q)
+                _with_base(c, base, stat_q(f, b[0]))          # qualité de la statistique du pari (pas celle des buts)
             else:
                 c["conf"] = round(simple_q(f, b[0]), 2)
             picks_.append(c)
