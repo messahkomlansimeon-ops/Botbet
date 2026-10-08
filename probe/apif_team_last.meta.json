@@ -1,0 +1,10 @@
+{
+ "url": "https://v3.football.api-sports.io/fixtures?team=127&last=12",
+ "status": 200,
+ "headers": {
+  "Content-Type": "application/json",
+  "Server": "cloudflare",
+  "cf-cache-status": "DYNAMIC",
+  "CF-RAY": "a47614344f2e7232-YYZ"
+ }
+}

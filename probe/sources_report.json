@@ -1,6 +1,6 @@
 {
- "when": "2026-10-08T13:03:49+00:00",
- "seconds": 319.0,
+ "when": "2026-10-08T15:17:15+00:00",
+ "seconds": 332.9,
  "leagues": [
   "soccer_epl",
   "soccer_spain_la_liga",
@@ -52,8 +52,8 @@
   "fbref": {
    "ok": false,
    "rows": 0,
-   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 13:01 UTC",
-   "blocked_until": "2026-10-09T13:01:34+00:00"
+   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 15:14 UTC",
+   "blocked_until": "2026-10-09T15:14:52+00:00"
   }
  },
  "profiles": {
@@ -88,20 +88,22 @@
  },
  "cache": {
   "files": 178,
-  "bytes": 17162801
+  "bytes": 17162792
  },
  "sample_match": {
   "match": "Arsenal - Aston Villa",
   "sources": [
-   "football-data"
+   "football-data",
+   "modèle Kelly"
   ],
-  "fields": 24,
-  "exp_corners": 9.65,
-  "exp_cards": 3.3,
-  "exp_fouls": 22.25,
-  "exp_shots_home": 15.85
+  "fields": 25,
+  "exp_corners": 9.14,
+  "exp_cards": 4.0,
+  "exp_fouls": 22.81,
+  "exp_shots_home": 15.76
  },
  "sample_team": [
+  "aps",
   "div",
   "fd",
   "team",
