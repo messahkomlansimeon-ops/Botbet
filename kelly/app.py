@@ -1,5 +1,6 @@
 """Orchestration : journée type, relevés, alertes, commandes."""
 import json
+import math
 import os
 import re
 import sys
@@ -689,6 +690,12 @@ def analyse(picks, query, pronos=()):
     return Html(comma("\n".join(lines)))
 
 
+def upcoming(items, now=None):
+    """Paris dont le match n'a pas encore commencé (on ne peut plus jouer les autres)."""
+    t = (now or now_utc()).isoformat()[:16]
+    return [c for c in items if (c.get("commence") or "9")[:16] > t]
+
+
 def _todays_usage(day, picks):
     """Réutilisation des matchs par les combinés déjà envoyés aujourd'hui (voir combos.Usage)."""
     combos = [c for c in store.load("bets.json", {"combos": []})["combos"] if c.get("date") == str(day)]
@@ -743,9 +750,10 @@ def _handle_command(text):
     if cmd == "/analyse":
         return analyse(picks, " ".join(args), pronos)
     if cmd == "/top":
-        if not picks:
-            return fmt.pronos(pronos, 10)
-        best = sorted(CB.per_event(CB.make_pool(picks), k=1), key=lambda c: c["score"], reverse=True)[:10]
+        live, live_pronos = upcoming(picks), upcoming(pronos)
+        if not live:
+            return fmt.pronos(live_pronos, 10) if live_pronos else "Tous les matchs du jour ont commencé : rendez-vous demain à 08:00."
+        best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10]
         if not best:
             return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
                     "ou une forte probabilité. /match <équipe> montre tout ce qui existe pour un match.")
@@ -773,15 +781,18 @@ def _handle_command(text):
             target = float(args[0].replace(",", "."))
         except (IndexError, ValueError):
             return "Exemple : /combi 30"
-        return custom_combo(picks, pronos, target, today.get("day"))
+        live = upcoming(picks)
+        return custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live)
     return "Commande inconnue. /aide pour la liste."
 
 
-def custom_combo(picks, pronos, target, day):
+def custom_combo(picks, pronos, target, day, started=False):
     """/combi <cote> : combiné à cotes réelles d'abord ; s'il est impossible, combiné à cote juste (pronostics Kelly, annoncé
-    « à vérifier chez 1xBet » et sans mise de bankroll) ; sinon l'explication précise de ce qui manque."""
+    « à vérifier chez 1xBet » et sans mise de bankroll) ; sinon l'explication précise de ce qui manque et une cote atteignable.
+    `picks` et `pronos` : matchs pas encore commencés seulement ; `started` : il y en avait d'autres, déjà commencés."""
     t = fmt.trim(target, 1)
-    real = "Pas de cotes réelles aujourd'hui"
+    real = "Pas de cotes réelles aujourd'hui" if not started else "Plus de cotes réelles jouables aujourd'hui (matchs commencés)"
+    reach = []                                      # cotes les plus hautes atteignables (réelles, puis cote mini des pronostics)
     if picks:
         usage, n_sent = _todays_usage(day, picks)
         combo = CB.custom(picks, target, usage)
@@ -797,7 +808,13 @@ def custom_combo(picks, pronos, target, day):
                 msg = Html(msg + "\n\n" + fmt.i(f"Les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs "
                                                 f"({fmt.pct(C.LEG_SAFE_PROB)} de chances ou plus, {C.LEG_REUSE_MAX} combinés au plus)."))
             return msg
-        real = (f"Avec les cotes réelles, les {len(usage.filter(pool))} paris de qualité encore disponibles (sur {len(pool)}) ne "
+        free = usage.filter(pool)
+        best = {}
+        for c in free:
+            best[c["id"]] = max(best.get(c["id"], 1.0), c["odds"])
+        if len(best) >= 2:
+            reach.append(math.prod(best.values()))
+        real = (f"Avec les cotes réelles, les {len(free)} paris de qualité encore jouables (sur {len(pool)}) ne "
                 f"permettent pas d'atteindre la cote {t} (les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs)")
     fc = CB.fair_custom(pronos, target)
     if fc:
@@ -805,7 +822,9 @@ def custom_combo(picks, pronos, target, day):
         head = f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier chez 1xBet."
         return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total)))
     sf = CB.fair_shortfall(pronos, target)
-    n_cov = apistats.counts()[1]
+    if sf["matches"] >= 2:
+        reach.append(sf["best_total"])
+    n_cov = apistats.counts()[1] + fmmatch.summary()["usable"]
     first = (f"Impossible de monter un combiné à la cote {t} aujourd'hui.\n• {real}." if picks else
              f"{real} et pas assez de pronostics solides pour un combiné à la cote {t}.")
     fair_txt = (f"• Pronostics Kelly sans cote : {sf['matches']} match{'s' if sf['matches'] > 1 else ''} avec un pari solide "
@@ -813,8 +832,11 @@ def custom_combo(picks, pronos, target, day):
                 f"{fmt.trim(sf['best_total'], 1)} seulement, il en faudrait environ {sf['need']} pour viser {t}." if sf["matches"] else
                 f"• Pronostics Kelly sans cote : aucun pari assez solide aujourd'hui ({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou "
                 "plus, assez de matchs récents).")
-    return "\n".join([first, fair_txt, f"Kelly accumule ses statistiques mondiales (Brésil, Afrique...) un peu plus chaque matin : {n_cov} équipes "
-                       f"déjà couvertes ({C.APISTATS_MIN_N} matchs ou plus). Réessaie demain, ou demande une cote plus basse (/combi 10)."])
+    ok = [x for x in reach if 2.0 <= x < target]
+    tip = (f"Réessaie demain, ou demande au plus /combi {fmt.trim(math.floor(max(ok) * 10) / 10, 1)} (le plus haut atteignable aujourd'hui)."
+           if ok else "Réessaie demain : aujourd'hui, même une petite cote n'est pas atteignable.")
+    return "\n".join([first, fair_txt, f"Kelly accumule ses statistiques mondiales (Brésil, Afrique...) un peu plus chaque jour : {n_cov} équipes "
+                       f"déjà couvertes ({C.APISTATS_MIN_N} matchs ou plus). {tip}"])
 
 
 def run_commands(serve=False):

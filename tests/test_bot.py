@@ -21,6 +21,11 @@ from kelly import (app, bankroll, bootstrap, budget, cache, calib, combos as CB,
                    settle, sources, stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
 from tests import make_sample, synth  # noqa: E402
+
+# Les matchs fictifs sont datés de la journée de test : on ne les écarte pas comme « déjà commencés » selon l'heure réelle
+# (le filtre lui-même est testé dans test_started_matches_excluded).
+_real_upcoming = app.upcoming
+app.upcoming = lambda items, now=None: list(items)
 from tests.fake_api import FakeFootballAPI, match as fake_match, seed_history, ts_of  # noqa: E402
 
 
@@ -2406,6 +2411,21 @@ def test_combo_expectation():
     print("espérance des combinés : OK")
 
 
+def test_started_matches_excluded():
+    """/combi et /top n'utilisent que les matchs pas encore commencés ; la suggestion de cote est atteignable et plus basse que la demande."""
+    now = datetime(2026, 10, 8, 18, 0, tzinfo=timezone.utc)
+    items = [{"commence": "2026-10-08T17:00:00Z"}, {"commence": "2026-10-08T18:00:00Z"}, {"commence": "2026-10-08T20:30:00Z"}]
+    assert _real_upcoming(items, now) == items[2:]
+    with saved_files("bets.json"):
+        store.save("bets.json", {"picks": [], "combos": []})
+        legs = [mkleg(i, 1.8, 0.62, edge=0.05, commence="2026-10-08T20:00:00Z") for i in range(3)]
+        msg = app.custom_combo(legs, [], 30, "2026-10-08")
+        assert "jouables" in msg and "/combi 5,8" in msg and "/combi 10" not in msg, msg
+        msg = app.custom_combo([], [], 10, "2026-10-08", started=True)
+        assert msg.startswith("Plus de cotes réelles jouables") and "Réessaie demain : aujourd'hui" in msg, msg
+    print("matchs commencés écartés de /combi et /top : OK")
+
+
 def main():
     bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
     events = app.load_sample()
@@ -2531,6 +2551,7 @@ def main():
     test_played_bets()
     test_calibration_tracking()
     test_combo_expectation()
+    test_started_matches_excluded()
     test_paid_ranking_favours_profiles()
     test_replay_oct8()
     test_run_daily_world()
