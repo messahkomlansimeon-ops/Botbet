@@ -51,7 +51,10 @@ def stats_signal(c):
 def leg_reason(c):
     """« value » | « stats » | « safe » : la raison d'être de la jambe ; None si elle n'en a aucune (ou si un garde-fou la
     refuse : cote trop mal payée, modèle d'avant-match contre)."""
-    if c.get("edge", 0) < C.LEG_EDGE_FLOOR or (c.get("pm") or {}).get("pgap", 0) <= -C.LEG_PM_GAP:
+    # Garde-fou de marge : une jambe sûre a une petite cote, où la marge du bookmaker pèse plus lourd en pourcentage
+    # (1,35 au lieu de 1,44 juste = -6 %) ; elle a donc droit à un plancher plus bas que les autres.
+    floor = C.LEG_SAFE_EDGE_FLOOR if is_safe(c) else C.LEG_EDGE_FLOOR
+    if c.get("edge", 0) < floor or (c.get("pm") or {}).get("pgap", 0) <= -C.LEG_PM_GAP:
         return None
     if c["edge"] >= C.LEG_MIN_EDGE * O.few_books_factor(c.get("n_books", 10)):
         return "value"

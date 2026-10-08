@@ -192,6 +192,7 @@ DISAGREE_FULL_BOOKS = 14
 # (proba du modèle inférieure de LEG_PM_GAP ou plus à celle des books).
 LEG_MIN_EDGE = _float("LEG_MIN_EDGE", 0.03)
 LEG_EDGE_FLOOR = -0.05
+LEG_SAFE_EDGE_FLOOR = _float("LEG_SAFE_EDGE_FLOOR", -0.09)   # jambes sûres : la marge pèse plus sur les petites cotes
 LEG_PM_GAP = 0.04
 LEG_XGD = 0.5
 LEG_SAFE_PROB = _float("LEG_SAFE_PROB", 0.68)

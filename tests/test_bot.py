@@ -1517,7 +1517,8 @@ def test_quality_floor():
     assert CB.leg_reason(mkleg(2, 4.40, 0.25, edge=0.06)) == "value"
     assert CB.leg_reason(mkleg(3, 4.60, 0.2305, edge=0.014)) is None   # le nul « Coolbet » de la journée type : valeur trop mince
     assert CB.leg_reason(mkleg(4, 1.39, 0.70, edge=-0.03)) == "safe"
-    assert CB.leg_reason(mkleg(5, 1.39, 0.70, edge=-0.09)) is None     # sûr, mais payé trop cher
+    assert CB.leg_reason(mkleg(5, 1.39, 0.70, edge=-0.10)) is None     # sûr, mais payé trop cher (marge > 9 %)
+    assert CB.leg_reason(mkleg(5, 1.35, 0.70, edge=-0.055)) == "safe"   # sûr à petite cote : la marge seule ne l'exclut pas
     assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, pm={"kind": "goals", "pgap": 0.07})) == "stats"
     assert CB.leg_reason(mkleg(7, 1.74, 0.55, edge=-0.04, pm={"kind": "goals", "pgap": -0.07})) is None   # le modèle est contre
     assert CB.leg_reason(mkleg(8, 1.49, 0.72, edge=0.0, pm={"kind": "goals", "pgap": -0.06})) is None     # même une jambe sûre
