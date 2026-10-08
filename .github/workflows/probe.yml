@@ -2,7 +2,7 @@ name: Kelly — sonde des sources
 # Récupère un échantillon réel de chaque source (aucun crédit payant) pour valider les lecteurs.
 on:
   push:
-    paths: ["tools/probe.py", ".github/workflows/probe.yml", "kelly/sources/**", "kelly/bootstrap.py"]
+    paths: [".env", "kelly/envfile.py", "tools/probe.py", ".github/workflows/probe.yml", "kelly/sources/**", "kelly/bootstrap.py"]
   workflow_dispatch:
 concurrency:
   group: botbet-data
@@ -24,6 +24,14 @@ jobs:
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       # Test de bout en bout de kelly.sources en conditions réelles (dossier temporaire, aucun secret) : probe/sources_report.json
+      - name: Diagnostic Kelly (aucun crédit dépensé, message de test Telegram)
+        if: ${{ !cancelled() }}
+        run: python bot.py --check | tee probe/check.txt
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       - if: ${{ !cancelled() }}
         run: python tools/probe.py --sources
       - if: ${{ !cancelled() }}

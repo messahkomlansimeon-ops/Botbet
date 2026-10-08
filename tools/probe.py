@@ -14,6 +14,11 @@ from datetime import datetime, timezone
 
 import requests
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from kelly import envfile  # noqa: E402
+
+envfile.load()
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.environ.get("PROBE_OUT") or os.path.join(ROOT, "probe")
 UA = {"User-Agent": "KellyBot/1.0 (usage personnel)"}
