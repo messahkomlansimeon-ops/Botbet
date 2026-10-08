@@ -1,10 +1,9 @@
 # Botbet
 
-Bot Telegram personnel : chaque matin (08:00 Abidjan), il envoie deux combinés du jour :
-- **SÛR** : 3 sélections à plus forte probabilité estimée ;
-- **VALEUR** : 3 sélections à meilleure valeur, cote totale >= 3.
+Bot Telegram personnel : chaque matin (08:00 Abidjan), il envoie le pari du jour et trois combinés :
+- **SÛR** (3 matchs, proba max), **ÉQUILIBRÉ** (4 matchs, cote >= 4), **GROS COUP** (5 matchs, cote >= 8) ;
 
-Les probabilités viennent du consensus de plusieurs bookmakers (marge retirée). Ce sont des estimations : aucun gain n'est garanti.
+Marchés : 1N2 et plus/moins de buts. Les probabilités viennent du consensus de plusieurs bookmakers (marge retirée). Ce sont des estimations : aucun gain n'est garanti.
 
 ## Installation
 1. Clé gratuite sur https://the-odds-api.com -> `ODDS_API_KEY`.

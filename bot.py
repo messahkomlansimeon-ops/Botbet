@@ -14,17 +14,23 @@ import requests
 
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/upcoming/odds/"
 MIN_BOOKMAKERS = 3
-ODDS_RANGE = (1.20, 2.50)
+ODDS_RANGE = (1.15, 3.50)
 
 
 def fetch_events(api_key):
     r = requests.get(
         ODDS_URL,
-        params={"apiKey": api_key, "regions": "eu", "markets": "h2h", "oddsFormat": "decimal"},
+        params={"apiKey": api_key, "regions": "eu", "markets": "h2h,totals", "oddsFormat": "decimal"},
         timeout=30,
     )
     r.raise_for_status()
     return r.json()
+
+
+def label(market, name, point, home, away):
+    if market == "totals":
+        return f'{"Plus" if name == "Over" else "Moins"} de {point} buts'
+    return "Match nul" if name == "Draw" else name
 
 
 def build_picks(events, today=None):
@@ -35,42 +41,38 @@ def build_picks(events, today=None):
         start = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00"))
         if start.date() != today:
             continue
-        probs, best = {}, {}
-        books = 0
+        probs, best, books = {}, {}, {}
         for bk in ev.get("bookmakers", []):
-            market = next((m for m in bk["markets"] if m["key"] == "h2h"), None)
-            if not market:
+            for m in bk["markets"]:
+                groups = {}
+                for o in m["outcomes"]:
+                    groups.setdefault(o.get("point"), []).append(o)
+                for point, outs in groups.items():
+                    total = sum(1 / o["price"] for o in outs)
+                    for o in outs:
+                        k = (m["key"], point, o["name"])
+                        probs.setdefault(k, []).append(1 / o["price"] / total)
+                        best[k] = max(best.get(k, 0), o["price"])
+        for k, ps in probs.items():
+            if len(ps) < MIN_BOOKMAKERS:
                 continue
-            books += 1
-            inv = {o["name"]: 1 / o["price"] for o in market["outcomes"]}
-            total = sum(inv.values())
-            for name, v in inv.items():
-                probs.setdefault(name, []).append(v / total)
-            for o in market["outcomes"]:
-                best[o["name"]] = max(best.get(o["name"], 0), o["price"])
-        if books < MIN_BOOKMAKERS:
-            continue
-        for name, ps in probs.items():
-            p = sum(ps) / len(ps)
-            odds = best[name]
+            market, point, name = k
+            p, odds = sum(ps) / len(ps), best[k]
             if not ODDS_RANGE[0] <= odds <= ODDS_RANGE[1]:
                 continue
             picks.append({
                 "event": f'{ev["home_team"]} - {ev["away_team"]}',
                 "league": ev.get("sport_title", ""),
                 "start": start.strftime("%H:%M UTC"),
-                "pick": name if name != "Draw" else "Match nul",
-                "prob": p,
-                "odds": odds,
-                "edge": p * odds - 1,
-                "id": ev["id"],
+                "pick": label(market, name, point, ev["home_team"], ev["away_team"]),
+                "prob": p, "odds": odds, "edge": p * odds - 1, "id": ev["id"],
             })
     return picks
 
 
 def make_combo(picks, size, key, min_odds=0.0):
     """Meilleur combiné de `size` matchs différents selon `key`."""
-    pool = sorted(picks, key=key, reverse=True)[:12]
+    pool = sorted(picks, key=key, reverse=True)[:14]
     best = None
     for combo in itertools.combinations(pool, size):
         if len({c["id"] for c in combo}) < size:
@@ -100,15 +102,21 @@ def fmt_combo(title, combo):
 
 
 def build_message(picks):
-    safe = make_combo(picks, 3, key=lambda c: c["prob"])
-    value = make_combo(picks, 3, key=lambda c: c["edge"], min_odds=3.0)
     today = datetime.now(timezone.utc).strftime("%d/%m/%Y")
-    return "\n\n".join([
-        f"Combinés du {today}",
-        fmt_combo("SÛR (probabilité maximale)", safe),
-        fmt_combo("VALEUR (meilleure valeur, cote >= 3)", value),
+    parts = [f"🔥 COMBINÉS DU {today} 🔥"]
+    if picks:
+        top = max(picks, key=lambda c: c["edge"])
+        parts.append(
+            f'⭐ PARI DU JOUR\n{top["start"]} {top["event"]}\n→ {top["pick"]} @ {top["odds"]:.2f} '
+            f'(proba {top["prob"]*100:.0f}%)'
+        )
+    parts += [
+        fmt_combo("🛡️ SÛR (3 matchs, proba max)", make_combo(picks, 3, key=lambda c: c["prob"])),
+        fmt_combo("⚖️ ÉQUILIBRÉ (4 matchs, cote >= 4)", make_combo(picks, 4, key=lambda c: c["edge"], min_odds=4.0)),
+        fmt_combo("🚀 GROS COUP (5 matchs, cote >= 8)", make_combo(picks, 5, key=lambda c: c["edge"], min_odds=8.0)),
         "Probabilités estimées, aucun gain garanti. Ne mise que ce que tu peux perdre. 18+",
-    ])
+    ]
+    return "\n\n".join(parts)
 
 
 def send_telegram(text, token, chat_id):
