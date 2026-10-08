@@ -490,7 +490,12 @@ def find_alerts(picks, history):
         if not isinstance(prev, dict):
             continue
         drop = (prev["o"] - c["odds"]) / prev["o"]
-        rise = (c["prob"] - prev["p"]) / prev["p"] if prev["p"] else 0
+        # proba brute des bookmakers des deux côtés (« pb ») : l'ancienne « p » mêlait le modèle de Kelly et créait de fausses hausses
+        if prev.get("pb") is None:
+            rise = 0.0
+        else:
+            now_p = c.get("prob_book", c["prob"])
+            rise = (now_p - prev["pb"]) / prev["pb"] if prev["pb"] else 0.0
         if drop >= C.ALERT_ODDS_DROP or rise >= C.ALERT_PROB_RISE:
             alerts.append((max(drop, rise), c, prev))
     alerts.sort(key=lambda a: -a[0])

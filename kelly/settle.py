@@ -26,7 +26,10 @@ def shot_value(market, fstats):
         vals = [_side_value(side.get(s), fld) for s in ("home", "away")]
         if side and all(v is not None for v in vals):
             return sum(vals)
-        return None if side else fstats.get(fld)
+        # par équipe, la source n'a que tirs / tirs cadrés (football-data) : le total du match (fautes...) fait foi ; une stat laissée à
+        # null par API-Football (« nul ») reste inconnue, son total compterait les null comme 0
+        absent = all(fld not in (side.get(s) or {}) and fld not in ((side.get(s) or {}).get("nul") or []) for s in ("home", "away"))
+        return fstats.get(fld) if not side or absent else None
     return _side_value(side.get("home" if market.endswith("_home") else "away"), fld)
 
 
@@ -288,8 +291,8 @@ def settle_fair_combos(now=None, stats_for=None):
 def record_combos(combos_sent, day):
     bets = store.load("bets.json", {"picks": [], "combos": []})
     for combo in combos_sent:
-        if any(c["date"] == str(day) and c["tier"] == combo["tier"] and c["keys"] == combo["keys"] for c in bets["combos"]):
-            continue                                # relance du matin avec les mêmes cotes (cache) : pas de doublon
+        if any(c["date"] == str(day) and c["tier"] == combo["tier"] for c in bets["combos"]):
+            continue                                # relance du matin : un seul combiné par palier et par jour (le premier envoyé)
         bets["combos"].append(combo | {"date": str(day), "result": None})
     store.save("bets.json", bets)
 

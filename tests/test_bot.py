@@ -1405,7 +1405,7 @@ def test_africa_and_fair_settlement():
         assert "🌍 Afrique <i>(sans cotes)</i></b> · 2 matchs" in w, w
         assert "⚽ Ligue 1 (Ivory-Coast)\n      15h00  ASEC Mimosas – Africa Sports" in w and "⚽ CAF Champions League\n      15h00  Al Ahly – Wydad" in w, w
         assert "Lyon" not in w and "Women" not in w
-        assert sorted(p["date"] for p in football if p.get("date")) == ["2026-10-07", "2026-10-08"]       # hier et aujourd'hui, une fois chacun
+        assert sorted(p["date"] for p in football if p.get("date")) == ["2026-10-07", "2026-10-08", "2026-10-09"]   # hier, aujourd'hui et demain (matchs avant 08:00), une fois chacun
         cached = store.load("fixtures_day.json", {})[WDAY]
         assert sum(1 for f in cached if f.get("lg")) == 2 and len(cached) == 4         # seul l'Afrique garde sa ligue : cache léger
         assert "Al Ahly" in app.handle_command("/monde") and "Al Ahly" in app.handle_command("/monde afrique")

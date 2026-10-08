@@ -248,6 +248,13 @@ def africa_event(f):
             "commence_time": ko}
 
 
+def same_match(a, b):
+    """Même match vu par deux sources (relevé des cotes et liste API-Football) : coup d'envoi à 3 h près, les deux équipes reconnues."""
+    ta, tb = (datetime.fromisoformat(x["commence_time"].replace("Z", "+00:00")) for x in (a, b))
+    return (abs((ta - tb).total_seconds()) <= 3 * 3600 and stats.team_sim(a["home_team"], b["home_team"]) >= 0.8
+            and stats.team_sim(a["away_team"], b["away_team"]) >= 0.8)
+
+
 def make(scan, picks=(), day=None, deadline=None, africa=()):
     """Pronostics du jour, du meilleur au moins bon (au plus 2 par match). `scan` : relevé gratuit (odds.scan_today),
     `picks` : sélections avec cotes réelles (leurs marchés ne sont pas refaits : seulement corners/cartons des matchs
@@ -261,7 +268,9 @@ def make(scan, picks=(), day=None, deadline=None, africa=()):
     api_left, out, seen = (0 if apistats.active() else C.FAIR_API_EVENTS), [], 0
     events = [(key, ev) for key in catalogue.prioritise(counts, C.SPORTS) for ev in
               sorted(scan["leagues"][key], key=lambda e: e["commence_time"])]
-    events += [("africa", africa_event(f)) for f in africa if f.get("status") not in stats.DONE]
+    # un match africain déjà dans le relevé des cotes (qualifications CAF...) n'est pas analysé deux fois : deux jambes d'un même combiné
+    events += [("africa", ev) for ev in (africa_event(f) for f in africa if f.get("status") not in stats.DONE)
+               if not any(same_match(ev, e) for _, e in events)]
     for key, ev in events:
         if seen >= EVAL_MAX or (deadline and time.monotonic() > deadline):
             return _rank(out)

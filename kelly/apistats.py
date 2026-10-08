@@ -154,7 +154,7 @@ def record(d, e, st):
 def _views(rows):
     from .sources import footballdata as fd
     recs = lambda rs: [{k: (r[R_STATS + 2 * i], r[R_STATS + 2 * i + 1]) for i, k in enumerate(KEYS)} for r in rs]      # noqa: E731
-    view = lambda rs: fd._avg_view(recs(rs), keys=KEYS)                                                                  # noqa: E731
+    view = lambda rs: fd._avg_view(recs(rs), keys=KEYS, min_count=min(C.APISTATS_MIN_N, len(rs)))                         # noqa: E731
     n = C.APISTATS_LAST
     return {"all": view(rows[-n:]), "home": view([r for r in rows if r[R_HOME]][-n:]), "away": view([r for r in rows if not r[R_HOME]][-n:])}
 

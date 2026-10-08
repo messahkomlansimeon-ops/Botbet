@@ -299,14 +299,16 @@ def _side(m, side):
     return pair
 
 
-def _avg_view(recs, keys=("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")):
+def _avg_view(recs, keys=("goals", "shots", "sot", "corners", "fouls", "cards", "yellow"), min_count=1):
+    """Moyennes pour / contre sur les matchs `recs` ; une stat relevée sur moins de `min_count` matchs n'est pas donnée (la qualité du
+    profil se juge sur n, le nombre de matchs : une moyenne de touches sur 1 ou 2 matchs sur 10 la tromperait)."""
     out = {"n": len(recs)}
     for k in keys:
         f = [r[k][0] for r in recs if r[k][0] is not None]
         a = [r[k][1] for r in recs if r[k][1] is not None]
-        if f:
+        if len(f) >= min_count:
             out[k + "_for"] = round(sum(f) / len(f), 2)
-        if a:
+        if len(a) >= min_count:
             out[k + "_against"] = round(sum(a) / len(a), 2)
     return out
 

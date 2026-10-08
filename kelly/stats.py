@@ -395,11 +395,16 @@ def _day_fixtures(day):
 
 
 def africa_matches(day):
-    """Matchs africains du jour (entrées de _day_fixtures avec « lg »), triés par heure. Une seule requête pour tous
-    les matchs du monde ce jour-là, la même que celle du règlement (mise en cache) ; [] sans clé API-Football."""
+    """Matchs africains de la « journée Kelly » (du jour `day` jusqu'au lendemain C.DAY_END_HOUR h UTC), entrées de _day_fixtures
+    avec « lg », triés par heure. Une requête par date (celle du jour sert aussi au règlement ; celle du lendemain n'est demandée
+    que s'il est encore dans la fenêtre du forfait gratuit), mises en cache ; [] sans clé API-Football."""
     if not enabled():
         return []
-    return sorted((f for f in _day_fixtures(str(day)) if f.get("lg")), key=lambda f: f.get("ts") or 0)
+    d = datetime.fromisoformat(str(day)[:10])
+    end = (d + timedelta(days=1, hours=C.DAY_END_HOUR)).replace(tzinfo=timezone.utc).timestamp()
+    nxt = [f for f in _day_fixtures(str((d + timedelta(days=1)).date())) if f.get("lg") and (f.get("ts") or 0) < end]
+    both = {f["id"]: f for f in [f for f in _day_fixtures(str(day)[:10]) if f.get("lg")] + nxt}       # un match n'est listé qu'une fois
+    return sorted(both.values(), key=lambda f: f.get("ts") or 0)
 
 
 def left_today():
@@ -415,7 +420,9 @@ def find_fixture(day, home, away, kickoff=None):
     `kickoff` (ISO) facultatif ; sinon un `day` plus long que AAAA-MM-JJ sert d'horaire."""
     if kickoff is None and len(str(day)) > 10:
         kickoff = day
-    day = str(day)[:10]
+    # La liste d'API-Football est rangée par date UTC du coup d'envoi : un match de la « journée Kelly » joué après minuit UTC
+    # (Amériques, 00:30) est dans la liste du lendemain, pas dans celle du jour d'analyse.
+    day = str(kickoff)[:10] if kickoff else str(day)[:10]
     known = store.load("fixtures.json", {})
     k = f"{day}|{home}|{away}"
     if k in known:

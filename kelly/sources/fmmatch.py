@@ -167,7 +167,7 @@ def _views(rows):
     from . import footballdata as fd
     recs = [{k: (r[R_STATS + 2 * i], r[R_STATS + 2 * i + 1]) for i, k in enumerate(KEYS)} for r in rows]
     n = C.APISTATS_LAST
-    view = lambda rs: fd._avg_view(rs, keys=KEYS)                                       # noqa: E731
+    view = lambda rs: fd._avg_view(rs, keys=KEYS, min_count=min(C.APISTATS_MIN_N, len(rs)))      # noqa: E731
     return {"all": view(recs[-n:]), "home": view([x for x, r in zip(recs, rows) if r[R_HOME]][-n:]),
             "away": view([x for x, r in zip(recs, rows) if not r[R_HOME]][-n:])}
 
