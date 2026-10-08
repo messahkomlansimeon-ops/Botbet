@@ -1,0 +1,681 @@
+[
+ {
+  "id": "0",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T15:00:00Z",
+  "home_team": "PSG",
+  "away_team": "Lyon",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "PSG",
+        "price": 2.3
+       },
+       {
+        "name": "Draw",
+        "price": 3.68
+       },
+       {
+        "name": "Lyon",
+        "price": 2.81
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "PSG",
+        "price": 2.34
+       },
+       {
+        "name": "Draw",
+        "price": 3.59
+       },
+       {
+        "name": "Lyon",
+        "price": 2.76
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "PSG",
+        "price": 2.39
+       },
+       {
+        "name": "Draw",
+        "price": 3.73
+       },
+       {
+        "name": "Lyon",
+        "price": 2.75
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "PSG",
+        "price": 2.35
+       },
+       {
+        "name": "Draw",
+        "price": 3.57
+       },
+       {
+        "name": "Lyon",
+        "price": 2.89
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "1",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T16:00:00Z",
+  "home_team": "Real Madrid",
+  "away_team": "Getafe",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Real Madrid",
+        "price": 1.82
+       },
+       {
+        "name": "Draw",
+        "price": 3.77
+       },
+       {
+        "name": "Getafe",
+        "price": 4.04
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Real Madrid",
+        "price": 1.84
+       },
+       {
+        "name": "Draw",
+        "price": 3.98
+       },
+       {
+        "name": "Getafe",
+        "price": 4.13
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Real Madrid",
+        "price": 1.74
+       },
+       {
+        "name": "Draw",
+        "price": 3.9
+       },
+       {
+        "name": "Getafe",
+        "price": 4.21
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Real Madrid",
+        "price": 1.79
+       },
+       {
+        "name": "Draw",
+        "price": 3.98
+       },
+       {
+        "name": "Getafe",
+        "price": 4.21
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "2",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T17:00:00Z",
+  "home_team": "Arsenal",
+  "away_team": "Everton",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Arsenal",
+        "price": 1.83
+       },
+       {
+        "name": "Draw",
+        "price": 4.47
+       },
+       {
+        "name": "Everton",
+        "price": 3.69
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Arsenal",
+        "price": 1.8
+       },
+       {
+        "name": "Draw",
+        "price": 4.46
+       },
+       {
+        "name": "Everton",
+        "price": 3.73
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Arsenal",
+        "price": 1.76
+       },
+       {
+        "name": "Draw",
+        "price": 4.38
+       },
+       {
+        "name": "Everton",
+        "price": 3.59
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Arsenal",
+        "price": 1.83
+       },
+       {
+        "name": "Draw",
+        "price": 4.27
+       },
+       {
+        "name": "Everton",
+        "price": 3.55
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "3",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T18:00:00Z",
+  "home_team": "Inter",
+  "away_team": "Torino",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Inter",
+        "price": 2.34
+       },
+       {
+        "name": "Draw",
+        "price": 4.82
+       },
+       {
+        "name": "Torino",
+        "price": 2.25
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Inter",
+        "price": 2.38
+       },
+       {
+        "name": "Draw",
+        "price": 4.79
+       },
+       {
+        "name": "Torino",
+        "price": 2.29
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Inter",
+        "price": 2.4
+       },
+       {
+        "name": "Draw",
+        "price": 4.86
+       },
+       {
+        "name": "Torino",
+        "price": 2.26
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Inter",
+        "price": 2.32
+       },
+       {
+        "name": "Draw",
+        "price": 4.88
+       },
+       {
+        "name": "Torino",
+        "price": 2.3
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "4",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T19:00:00Z",
+  "home_team": "Bayern",
+  "away_team": "Mainz",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Bayern",
+        "price": 2.55
+       },
+       {
+        "name": "Draw",
+        "price": 5.22
+       },
+       {
+        "name": "Mainz",
+        "price": 2.12
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Bayern",
+        "price": 2.59
+       },
+       {
+        "name": "Draw",
+        "price": 5.13
+       },
+       {
+        "name": "Mainz",
+        "price": 2.05
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Bayern",
+        "price": 2.61
+       },
+       {
+        "name": "Draw",
+        "price": 5.22
+       },
+       {
+        "name": "Mainz",
+        "price": 2.07
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Bayern",
+        "price": 2.55
+       },
+       {
+        "name": "Draw",
+        "price": 5.19
+       },
+       {
+        "name": "Mainz",
+        "price": 2.09
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "5",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T20:00:00Z",
+  "home_team": "Roma",
+  "away_team": "Lazio",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Roma",
+        "price": 1.78
+       },
+       {
+        "name": "Draw",
+        "price": 6.06
+       },
+       {
+        "name": "Lazio",
+        "price": 3.05
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Roma",
+        "price": 1.72
+       },
+       {
+        "name": "Draw",
+        "price": 6.17
+       },
+       {
+        "name": "Lazio",
+        "price": 3.21
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Roma",
+        "price": 1.73
+       },
+       {
+        "name": "Draw",
+        "price": 5.96
+       },
+       {
+        "name": "Lazio",
+        "price": 3.09
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Roma",
+        "price": 1.72
+       },
+       {
+        "name": "Draw",
+        "price": 6.0
+       },
+       {
+        "name": "Lazio",
+        "price": 3.19
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "6",
+  "sport_title": "Football",
+  "commence_time": "2026-10-08T15:00:00Z",
+  "home_team": "Porto",
+  "away_team": "Braga",
+  "bookmakers": [
+   {
+    "key": "b0",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Porto",
+        "price": 1.69
+       },
+       {
+        "name": "Draw",
+        "price": 3.45
+       },
+       {
+        "name": "Braga",
+        "price": 5.61
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b1",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Porto",
+        "price": 1.69
+       },
+       {
+        "name": "Draw",
+        "price": 3.35
+       },
+       {
+        "name": "Braga",
+        "price": 5.7
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b2",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Porto",
+        "price": 1.67
+       },
+       {
+        "name": "Draw",
+        "price": 3.38
+       },
+       {
+        "name": "Braga",
+        "price": 5.4
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "b3",
+    "markets": [
+     {
+      "key": "h2h",
+      "outcomes": [
+       {
+        "name": "Porto",
+        "price": 1.67
+       },
+       {
+        "name": "Draw",
+        "price": 3.38
+       },
+       {
+        "name": "Braga",
+        "price": 5.52
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]
