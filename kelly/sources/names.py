@@ -1,17 +1,14 @@
-"""Rapprochement des noms d'équipes, de joueurs et d'arbitres entre sources
-(football-data, Understat, FBref, The Odds API). Réutilise kelly.stats.team_sim."""
 import difflib
 import re
 import unicodedata
 
 try:
     from ..stats import team_sim as _team_sim
-except Exception:                     # stats.py absent ou cassé : repli minimal
+except Exception:
     _team_sim = None
 
 _TRANSLIT = str.maketrans({"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "ł": "l", "Ł": "L",
                            "đ": "d", "Đ": "D", "ß": "ss", "ı": "i"})
-# Variantes propres aux sources (clés normalisées) vers un nom que stats.team_sim comprend.
 _EXTRA = {
     "nott m forest": "nottingham forest", "man city": "manchester city", "man united": "manchester united",
     "ath madrid": "atletico madrid", "ath bilbao": "athletic bilbao", "espanol": "espanyol",
@@ -49,7 +46,6 @@ def _fallback_sim(a, b):
 
 
 def team_sim(a, b):
-    """Similarité 0..1 entre deux noms d'équipes, tous formats confondus."""
     a, b = _pre(a), _pre(b)
     if _team_sim:
         try:
@@ -60,7 +56,6 @@ def team_sim(a, b):
 
 
 def best_team(name, candidates, min_sim=0.8):
-    """Candidat (parmi `candidates`, itérable de noms) le plus proche de `name`, ou None."""
     best, best_s = None, 0.0
     for c in candidates:
         s = team_sim(name, c)
@@ -77,8 +72,6 @@ def _pkey(name):
 
 
 def player_match(name, candidates):
-    """Nom unique de `candidates` désignant le même joueur (« K. Mbappé » ~ « Kylian Mbappe »,
-    « Heung-Min Son » ~ « Son Heung-Min »), sinon None (absent ou ambigu)."""
     qi, qs, qall = _pkey(name)
     if not qs:
         return None

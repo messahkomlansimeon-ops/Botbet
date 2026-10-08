@@ -1,11 +1,3 @@
-"""Téléchargement poli pour les sources publiques (football-data, Understat, FBref).
-
-Règles : User-Agent honnête, délai minimal par domaine (FBref >= 6 s, autres >= 3 s, ou le
-Crawl-delay de robots.txt s'il est plus grand), robots.txt respecté, timeouts, un seul nouvel
-essai (5xx / timeout), requêtes conditionnelles (ETag / If-Modified-Since), cache disque.
-AUCUN contournement : sur 403 / 429 / page de vérification anti-robot, la source est bloquée
-24 h (état dans data/) et le bot continue avec les autres.
-"""
 import hashlib
 import json
 import os
@@ -23,27 +15,25 @@ from . import state
 UA = "KellyBot/1.0 (usage personnel)"
 ROBOTS_TOKEN = "KellyBot"
 DEFAULT_DELAY = 3.0
-MIN_DELAY = {"fbref.com": 6.0}          # délais par domaine (suffixe) ; jamais sous FLOOR
+MIN_DELAY = {"fbref.com": 6.0}
 FLOOR = {"fbref.com": 6.0}
 TIMEOUT = (10, 30)
 HOUR = 3600
-TTL_CSV_CURRENT = 12 * HOUR              # saison en cours (football-data)
+TTL_CSV_CURRENT = 12 * HOUR
 TTL_UNDERSTAT = 12 * HOUR
 TTL_FBREF = 24 * HOUR
-FOREVER = None                           # saisons passées : jamais rafraîchies
+FOREVER = None
 ROBOTS_TTL = 24 * HOUR
 MAX_CRAWL_DELAY = 60.0
 
-_sleep = time.sleep                      # remplaçables dans les tests
-_last = {}                               # domaine -> instant de la dernière réponse
-_crawl = {}                              # domaine -> Crawl-delay de robots.txt
-_robots = {}                             # domaine -> (instant, RobotFileParser | None)
-_deadline = None                         # instant (time.monotonic) au-delà duquel on ne lance plus de téléchargement
+_sleep = time.sleep
+_last = {}
+_crawl = {}
+_robots = {}
+_deadline = None
 
 
 def set_deadline(seconds=None):
-    """Plus aucun nouveau téléchargement après `seconds` secondes (le cache disque reste lu) ; None = pas de limite.
-    Tient le passage du matin sous la durée maximale du workflow quand le cache est froid."""
     global _deadline
     _deadline = time.monotonic() + seconds if seconds else None
 
@@ -54,7 +44,6 @@ def cache_dir():
 
 
 def reset():
-    """Oublie l'état mémoire (délais, robots) : tests."""
     _last.clear(), _crawl.clear(), _robots.clear()
 
 
@@ -64,7 +53,7 @@ class Result:
     content: bytes = None
     status: int = None
     from_cache: bool = False
-    stale: bool = False                  # contenu périmé servi faute de mieux
+    stale: bool = False
     blocked: bool = False
     error: str = None
 
@@ -81,8 +70,6 @@ class Result:
         except UnicodeDecodeError:
             return self.content.decode("latin-1")
 
-
-# --- Cache disque ----------------------------------------------------------
 
 def _key(url, headers=None):
     raw = url + "|" + json.dumps(sorted((headers or {}).items()))
@@ -109,11 +96,10 @@ def _write(key, meta, body):
                 f.write(data)
             os.replace(base + ext + ".tmp", base + ext)
     except OSError:
-        pass                              # cache indisponible : on travaille sans
+        pass
 
 
 def invalidate(url, headers=None):
-    """Oublie un téléchargement (contenu inexploitable : ne pas le garder en cache)."""
     base = os.path.join(cache_dir(), _key(url, headers))
     for ext in (".json", ".bin"):
         try:
@@ -123,13 +109,11 @@ def invalidate(url, headers=None):
 
 
 def is_cached(url, ttl, headers=None):
-    """Vrai si un téléchargement frais est déjà en cache (aucune requête nécessaire)."""
     c = _read(_key(url, headers))
     return bool(c) and _fresh(c[0], ttl)
 
 
 def cached(url, headers=None):
-    """Contenu déjà en cache disque, périmé ou non, SANS aucune requête : Result ou None (règlement gratuit)."""
     c = _read(_key(url, headers))
     return Result(url, c[1], c[0].get("status", 200), from_cache=True) if c else None
 
@@ -137,8 +121,6 @@ def cached(url, headers=None):
 def _fresh(meta, ttl):
     return ttl is None or state.clock() - meta.get("fetched_at", 0) < ttl
 
-
-# --- Politesse -------------------------------------------------------------
 
 def delay_for(domain):
     domain = domain.lower().split(":")[0]
@@ -156,7 +138,6 @@ def _wait(domain):
 
 
 def _request(url, headers=None):
-    """GET poli avec un seul nouvel essai. (réponse, None) ou (None, message d'erreur)."""
     domain = urlparse(url).netloc.lower()
     h = {"User-Agent": UA, "Accept": "*/*"} | (headers or {})
     r, err = None, None
@@ -177,7 +158,6 @@ def _request(url, headers=None):
 
 
 def _load_robots(scheme, domain):
-    """(RobotFileParser | None, bloqué) ; None = injoignable (on ne télécharge pas)."""
     url = f"{scheme}://{domain}/robots.txt"
     cached = _read(_key(url))
     text, code = None, None
@@ -203,7 +183,6 @@ def _load_robots(scheme, domain):
 
 
 def allowed(url):
-    """(autorisé, raison, bloqué) selon robots.txt (mis en cache 24 h)."""
     p = urlparse(url)
     domain = p.netloc.lower()
     ent = _robots.get(domain)
@@ -219,8 +198,6 @@ def allowed(url):
     return False, f"robots.txt interdit {p.path or '/'} sur {domain}", False
 
 
-# --- Page de vérification anti-robot (détectée, jamais contournée) ----------
-
 _CHALLENGE_TITLE = re.compile(r"<title>[^<]*(just a moment|attention required|access denied|are you a robot|"
                               r"verify(ing)? you are human|captcha)", re.I)
 _CHALLENGE_BODY = ("cf_chl_opt", "cf-browser-verification", "verify you are human", "captcha-delivery")
@@ -232,25 +209,21 @@ def is_challenge(body):
     return bool(_CHALLENGE_TITLE.search(head)) or (len(body) < 150000 and any(m in low for m in _CHALLENGE_BODY))
 
 
-# --- Point d'entrée ----------------------------------------------------------
-
 def _fail(url, cached, msg, blocked=False, status=None):
-    if cached:                            # mieux vaut des données anciennes que rien
+    if cached:
         return Result(url, cached[1], status, from_cache=True, stale=True, blocked=blocked, error=msg)
     return Result(url, None, status, blocked=blocked, error=msg)
 
 
 def fetch(url, source, ttl, headers=None, check_robots=True):
-    """Télécharge `url` pour la source `source` (cache disque, robots, délais, blocage).
-    `ttl` en secondes (FOREVER = jamais périmé). Ne lève jamais : voir Result.ok / .error."""
     key = _key(url, headers)
     cached = _read(key)
     if state.is_blocked(source):
         return _fail(url, cached, state.health(source)["last_error"] or "source bloquée", blocked=True)
     if cached and _fresh(cached[0], ttl):
-        kcache.hit(source, 1)                       # frais : aucune requête
+        kcache.hit(source, 1)
         return Result(url, cached[1], cached[0].get("status", 200), from_cache=True)
-    if kcache.OFFLINE:                              # commandes Telegram : le disque seulement
+    if kcache.OFFLINE:
         return Result(url, cached[1], cached[0].get("status", 200), from_cache=True, stale=True) if cached else Result(
             url, None, error="hors ligne : pas de téléchargement en dehors des passages programmés")
     if _deadline is not None and time.monotonic() > _deadline:
@@ -277,7 +250,7 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
         _write(key, meta, cached[1])
         return Result(url, cached[1], 200, from_cache=True)
     h = getattr(r, "headers", None) or {}
-    if any(str(k).lower() == "cf-mitigated" for k in h):          # Cloudflare exige un défi : on n'insiste pas
+    if any(str(k).lower() == "cf-mitigated" for k in h):
         state.block(source, f"HTTP {code}, Cloudflare", cloudflare=True)
         return _fail(url, cached, "Cloudflare bloque les robots", blocked=True, status=code)
     if code in (403, 429):

@@ -1,11 +1,3 @@
-"""Understat : xG par équipe (forme glissante) et par joueur (tirs, xG, xA pour 90 min).
-
-Source principale : GET https://understat.com/getLeagueData/{ligue}/{année} (JSON simple ; en-têtes
-X-Requested-With et Referer, comme le fait la page elle-même). Repli : les anciennes pages
-https://understat.com/league/{EPL}/{année} embarquaient `var teamsData = JSON.parse('\\x7B...')`
-(échappements hexadécimaux / unicode) : regex, décodage, json. Pages match : shotsData, rostersData.
-Si rien ne marche : erreur claire, jamais d'exception.
-"""
 import json
 import re
 import warnings
@@ -17,9 +9,8 @@ NAME = "understat"
 LABEL = "Understat"
 BASE = "https://understat.com"
 PROFILE_FILE = "src_understat.json"
-MIN_MINUTES = 450                      # joueurs gardés dans le profil (bruit sous ce seuil)
+MIN_MINUTES = 450
 
-# Clés The Odds API -> ligue Understat.
 SPORT_TO_LEAGUE = {
     "soccer_epl": "EPL", "soccer_spain_la_liga": "La_liga", "soccer_italy_serie_a": "Serie_A",
     "soccer_germany_bundesliga": "Bundesliga", "soccer_france_ligue_one": "Ligue_1",
@@ -37,11 +28,10 @@ def season_year(today=None):
 
 
 def decode_js(s):
-    """Décode le contenu d'une chaîne JS (\\xNN, \\uNNNN, \\', \\\\...) en texte."""
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")                     # \/ n'est pas un échappement Python
+        warnings.simplefilter("ignore")
         t = s.encode("latin-1", "backslashreplace").decode("unicode_escape")
-    if "Ã" in t or "Â" in t:                                # UTF-8 lu comme latin-1
+    if "Ã" in t or "Â" in t:
         try:
             t = t.encode("latin-1").decode("utf-8")
         except (UnicodeError, ValueError):
@@ -50,7 +40,6 @@ def decode_js(s):
 
 
 def extract_vars(html):
-    """{nom: objet JSON} de toutes les `var xxx = JSON.parse('...')` d'une page ; + problèmes."""
     out, problems = {}, []
     for m in _VAR.finditer(html or ""):
         name, raw = m.group(1), m.group(2) if m.group(2) is not None else m.group(3)
@@ -75,7 +64,6 @@ def _as_list(x):
 
 
 def normalize_league(teams, players, dates):
-    """teamsData / playersData / datesData (formes diverses) -> ({équipe: historique}, joueurs, matchs)."""
     hist = {}
     for t in _as_list(teams):
         if isinstance(t, dict) and t.get("title") and isinstance(t.get("history"), list):
@@ -84,7 +72,6 @@ def normalize_league(teams, players, dates):
 
 
 def parse_league(html):
-    """Page ligue -> ({"teams": {équipe: historique}, "players": [...], "dates": [...]}, problèmes)."""
     vs, problems = extract_vars(html)
     if "teamsData" not in vs:
         return None, problems + ["structure de la page modifiée : variable teamsData introuvable"]
@@ -93,13 +80,12 @@ def parse_league(html):
 
 
 def parse_league_json(text):
-    """Réponse JSON de /getLeagueData/{ligue}/{année}."""
     try:
         d = json.loads(text)
     except ValueError:
         return None, ["structure de la page modifiée : réponse JSON illisible"]
     if isinstance(d, dict):
-        d = {k.replace("Data", ""): v for k, v in d.items()}      # teams / teamsData
+        d = {k.replace("Data", ""): v for k, v in d.items()}
     if not isinstance(d, dict) or "teams" not in d:
         return None, ["structure de la page modifiée : clé teams absente de la réponse JSON"]
     teams, players, dates = normalize_league(d["teams"], d.get("players"), d.get("dates"))
@@ -121,15 +107,12 @@ def _check_league(teams, players, dates, problems):
 
 
 def parse_match(html):
-    """Page match -> ({"shots": {"h": [...], "a": [...]}, "rosters": {...}}, problèmes)."""
     vs, problems = extract_vars(html)
     miss = [k for k in ("shotsData", "rostersData") if k not in vs]
     if miss:
         return None, problems + [f"structure de la page modifiée : {', '.join(miss)} introuvable"]
     return {"shots": vs["shotsData"], "rosters": vs["rostersData"]}, problems
 
-
-# --- Forme des équipes et des joueurs -------------------------------------------
 
 def _mean(vals):
     vals = [v for v in vals if v is not None]
@@ -151,7 +134,6 @@ def _form(rows):
 
 
 def team_form(history, last_n=6):
-    """Moyennes xG / xGA... sur les `last_n` derniers matchs (all) et par lieu (home / away)."""
     rows = sorted(history, key=lambda r: str(r.get("date")))
     return {"all": _form(rows[-last_n:]),
             "home": _form([r for r in rows if r.get("h_a") == "h"][-last_n:]),
@@ -159,7 +141,6 @@ def team_form(history, last_n=6):
 
 
 def player_per90(players, min_minutes=MIN_MINUTES):
-    """{équipe: {joueur: stats pour 90 min}} depuis playersData (valeurs en chaînes)."""
     out = {}
     for p in players:
         name, minutes = p.get("player_name"), _f(p.get("time"))
@@ -183,21 +164,16 @@ def build_league(data, last_n=6):
             "players": player_per90(data["players"])}
 
 
-# --- Téléchargement --------------------------------------------------------------
-
 def api_url(league, year):
     return f"{BASE}/getLeagueData/{league}/{year}"
 
 
 def api_headers(league):
-    """En-têtes du point d'accès JSON que la page du site appelle elle-même (XHR normal)."""
     return {"X-Requested-With": "XMLHttpRequest", "Referer": f"{BASE}/league/{league}",
             "Accept": "application/json, text/javascript, */*; q=0.01"}
 
 
 def fetch_league(league, year):
-    """(données brutes | None, erreurs) d'une ligue et d'une année.
-    1) /getLeagueData/{ligue}/{année} (JSON, utilisé par le site) ; 2) repli : page HTML + JSON.parse."""
     tag = f"{league} {year}"
     hdr = api_headers(league)
     res = http.fetch(api_url(league, year), NAME, http.TTL_UNDERSTAT, headers=hdr)
@@ -228,7 +204,6 @@ def _has_matches(data):
 
 
 def fetch_match(match_id):
-    """Stats d'un match (tirs, compositions) ; None + erreurs si indisponible."""
     res = http.fetch(f"{BASE}/match/{match_id}", NAME, http.TTL_UNDERSTAT)
     if not res.ok:
         return None, [f"match {match_id} : {res.error}"]
@@ -243,8 +218,6 @@ def leagues_for(sport_keys=None):
 
 
 def refresh(sport_keys=None, year=None):
-    """Télécharge les ligues demandées, enregistre forme des équipes et stats joueurs.
-    Ne lève jamais ; renvoie health()."""
     try:
         leagues = leagues_for(sport_keys)
         if not leagues:
@@ -258,7 +231,7 @@ def refresh(sport_keys=None, year=None):
             if state.is_blocked(NAME):
                 break
             data, errs = None, []
-            for y in (year, year - 1):                     # début de saison : repli sur la précédente
+            for y in (year, year - 1):
                 data, e = fetch_league(lg, y)
                 errs += e
                 if _has_matches(data):

@@ -1,15 +1,3 @@
-"""FBref : tirs, tirs cadrés, fautes commises / subies, cartons (joueurs et équipes).
-
-Les pages https://fbref.com/en/comps/{id}/{type}/{Slug}-Stats contiennent des tableaux dont
-beaucoup sont enveloppés dans des commentaires HTML ; les cellules portent `data-stat`.
-Analyse avec html.parser (stdlib). Politique de FBref : au plus une requête toutes les 6 s
-(imposé par http.py) et peu de pages par exécution (FBREF_MAX_PAGES, défaut 6 ; les pages déjà
-en cache ne comptent pas : les ligues suivantes se complètent aux exécutions suivantes).
-Attention : FBref est protégé par Cloudflare (HTTP 403 + en-tête Cf-Mitigated: challenge sur les
-robots) : la source est alors bloquée 7 jours, sans aucun contournement, et le bot continue sans elle.
-FBref a aussi retiré une partie de ses données avancées en 2026 ; les tableaux manquants
-sont signalés (« structure de la page modifiée »), jamais une exception.
-"""
 import os
 import re
 from html.parser import HTMLParser
@@ -21,10 +9,9 @@ NAME = "fbref"
 LABEL = "FBref"
 BASE = "https://fbref.com/en/comps"
 PROFILE_FILE = "src_fbref.json"
-MIN_90S = 3.0                            # joueurs gardés : au moins 3 matchs complets
+MIN_90S = 3.0
 KINDS = tuple(k for k in re.split(r"[,\s]+", os.environ.get("FBREF_KINDS") or "shooting,misc") if k)
 
-# Clés The Odds API -> (id de compétition FBref, slug).
 SPORT_TO_COMP = {
     "soccer_epl": (9, "Premier-League"), "soccer_spain_la_liga": (12, "La-Liga"),
     "soccer_italy_serie_a": (11, "Serie-A"), "soccer_germany_bundesliga": (20, "Bundesliga"),
@@ -32,13 +19,11 @@ SPORT_TO_COMP = {
     "soccer_portugal_primeira_liga": (32, "Primeira-Liga"), "soccer_efl_champ": (10, "Championship"),
     "soccer_uefa_champs_league": (8, "Champions-League"),
 }
-# Colonnes attendues par type de page : leur absence signale un changement de structure.
 EXPECTED = {"shooting": ("shots", "shots_on_target"), "misc": ("fouls", "cards_yellow"),
             "passing_types": ("corner_kicks",)}
 
 
 def enabled():
-    """FBREF_ENABLED=0 coupe la source (FBref bloque les robots via Cloudflare : voir http.fetch)."""
     return (os.environ.get("FBREF_ENABLED") or "1").strip().lower() not in ("0", "false", "non", "no")
 
 
@@ -54,11 +39,7 @@ def url(comp, kind):
     return f"{BASE}/{cid}/{kind}/{slug}-Stats"
 
 
-# --- Analyse HTML --------------------------------------------------------------
-
 class _Tables(HTMLParser):
-    """Collecte {id du tableau: [ {data-stat: texte, "_id": id joueur}, ... ]} ; entre aussi dans
-    les commentaires HTML contenant un <table>."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -114,12 +95,11 @@ class _Tables(HTMLParser):
 
 
 def parse_tables(html):
-    """{id: lignes} de tous les tableaux d'une page, commentés ou non."""
     p = _Tables()
     try:
         p.feed(html or "")
         p.close()
-    except Exception:                       # HTML cassé : on garde ce qui a été lu
+    except Exception:
         pass
     return p.tables
 
@@ -137,14 +117,12 @@ def _team(row):
 
 
 def _tables_of(tables, kind, squads):
-    """Lignes des tableaux d'un type : squads_{kind}_for / _against, ou stats_{kind}."""
     if squads:
         return {side: tables.get(f"stats_squads_{kind}_{side}", []) for side in ("for", "against")}
     return tables.get(f"stats_{kind}", [])
 
 
 def player_rows(tables, kind):
-    """Lignes joueur (avec nom) du tableau stats_{kind}."""
     return [r for r in _tables_of(tables, kind, False) if r.get("player")]
 
 
@@ -153,7 +131,6 @@ def _per(total, base):
 
 
 def build_players(pages):
-    """pages = {type: tables}. -> {équipe: {joueur: {min90, shots90, sot90, fouls90, fouled90, cards90, yc90}}}."""
     merged = {}
     for kind, tables in pages.items():
         for r in player_rows(tables, kind):
@@ -184,7 +161,6 @@ _SQUAD_STATS = {"shooting": (("shots", "shots"), ("sot", "shots_on_target")),
 
 
 def build_squads(pages):
-    """-> {équipe: {"games", "for": {shots_pm, sot_pm, fouls_pm, cards_pm...}, "against": {...}}}."""
     acc = {}
     for kind, tables in pages.items():
         for side, rows in _tables_of(tables, kind, True).items():
@@ -207,7 +183,6 @@ def build_squads(pages):
 
 
 def check_structure(kind, tables):
-    """Problèmes de structure d'une page de type `kind` (liste de messages)."""
     exp = EXPECTED.get(kind, ())
     if not tables:
         return [f"structure de la page modifiée : aucun tableau trouvé ({kind})"]
@@ -219,10 +194,7 @@ def check_structure(kind, tables):
     return [f"structure de la page modifiée : colonne(s) {', '.join(miss)} absente(s) ({kind})"] if miss else []
 
 
-# --- Téléchargement --------------------------------------------------------------
-
 def fetch_page(comp, kind):
-    """(tableaux | None, erreurs, réseau) ; réseau = True si une requête a été consommée."""
     u = url(comp, kind)
     res = http.fetch(u, NAME, http.TTL_FBREF)
     tag = f"{comp[1]} {kind}"
@@ -243,8 +215,6 @@ def comps_for(sport_keys=None):
 
 
 def refresh(sport_keys=None):
-    """Télécharge (au plus max_pages() pages réseau) et enregistre joueurs et équipes par ligue.
-    Ne lève jamais ; renvoie health()."""
     try:
         keys = comps_for(sport_keys)
         if not keys or not enabled():
@@ -261,7 +231,7 @@ def refresh(sport_keys=None):
                 if state.is_blocked(NAME):
                     break
                 if budget <= 0 and not http.is_cached(url(comp, kind), http.TTL_FBREF):
-                    continue                                   # plafond de pages atteint
+                    continue
                 tables, errs, used = fetch_page(comp, kind)
                 budget -= 1 if used else 0
                 errors += errs

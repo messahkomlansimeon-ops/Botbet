@@ -1,18 +1,13 @@
-"""Sources de stats gratuites (football-data, Understat, FBref) : téléchargement poli, profils
-compacts dans data/, auto-diagnostic. Points d'entrée : refresh_all(leagues), report(),
-features.match_features(home, away, sport_key), features.player_features(name, team),
-features.team_profile(équipe)."""
 from datetime import datetime
 
 from . import fbref, features, footballdata, state, understat
 from .features import match_features, player_features, team_profile
 
-SOURCES = (footballdata, understat, fbref)       # FBref en dernier : la plus lente (6 s entre requêtes)
+SOURCES = (footballdata, understat, fbref)
 SOCCER_PREFIX = "soccer_"
 
 
 def soccer_leagues(leagues=None):
-    """Clés The Odds API de football à actualiser (par défaut : celles de config.SPORTS)."""
     if leagues is None:
         try:
             from .. import config
@@ -27,8 +22,6 @@ def soccer_leagues(leagues=None):
 
 
 def refresh_all(leagues=None):
-    """Actualise toutes les sources (jamais d'exception ; une source bloquée n'arrête pas les autres).
-    Renvoie {source: health}."""
     keys = soccer_leagues(leagues)
     out = {}
     for mod in SOURCES:
@@ -52,7 +45,6 @@ def _short(iso):
 
 
 def report():
-    """Statut court en français, une ligne par source (message du matin, --check)."""
     lines = ["📡 Sources de stats"]
     for m in SOURCES:
         h = m.health()
