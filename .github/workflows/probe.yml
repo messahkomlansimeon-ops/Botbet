@@ -29,7 +29,7 @@ jobs:
         run: python tools/probe.py --apif-world || true
       - name: Diagnostic Kelly (aucun crédit dépensé, message de test Telegram)
         if: ${{ !cancelled() }}
-        run: python bot.py --check | tee probe/check.txt
+        run: DATA_DIR="$(mktemp -d)" python bot.py --check | tee probe/check.txt
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
@@ -43,4 +43,5 @@ jobs:
           git config user.email github-actions@github.com
           git add probe
           git diff --cached --quiet || git commit -m "Sonde des sources $(date -u +%Y-%m-%dT%H:%M)"
+          git stash --include-untracked || true
           git pull --rebase origin ${{ github.ref_name }} && git push
