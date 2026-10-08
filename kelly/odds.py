@@ -149,12 +149,26 @@ def _iso(d):
     return d.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def day_end(day):
+    """Fin (exclue) du « jour Kelly » `day` : le lendemain à C.DAY_END_HOUR h UTC. Le run du matin (08:00 UTC) couvre ainsi
+    les matchs du soir des Amériques (00:30 UTC = 21:30 locale), qui sinon tomberaient entre deux runs."""
+    return datetime(day.year, day.month, day.day, tzinfo=timezone.utc) + timedelta(days=1, hours=C.DAY_END_HOUR)
+
+
+def in_day(start, day, after=None):
+    """Vrai si le coup d'envoi `start` (datetime UTC) est dans le jour Kelly `day` : de 00:00 UTC (ou `after`, matchs déjà
+    commencés exclus) jusqu'au lendemain C.DAY_END_HOUR h UTC (exclu)."""
+    lo = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    return start >= lo and start < day_end(day) and not (after and start <= after)
+
+
 def day_window(day, after=None):
-    """Fenêtre commenceTimeFrom/To du jour UTC `day` (début = `after` si plus tard : matchs à venir)."""
+    """Fenêtre commenceTimeFrom/To du jour Kelly `day` (début = `after` si plus tard : matchs à venir ; fin = lendemain
+    C.DAY_END_HOUR h UTC, voir day_end ; l'API compte la borne incluse, d'où la seconde de moins)."""
     start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
     if after is not None and after > start:
         start = after
-    return {"commenceTimeFrom": _iso(start), "commenceTimeTo": f"{day}T23:59:59Z"}
+    return {"commenceTimeFrom": _iso(start), "commenceTimeTo": _iso(day_end(day) - timedelta(seconds=1))}
 
 
 def league_events(sport_key, window):
@@ -167,7 +181,7 @@ def league_events(sport_key, window):
 
 
 def scan_today(day, after=None, sports=None, seconds=None):
-    """Relevé GRATUIT (0 crédit) des matchs du jour `day` dans toutes les ligues suivies et en saison : /sports puis
+    """Relevé GRATUIT (0 crédit) des matchs du jour Kelly `day` (voir day_window) dans toutes les ligues suivies et en saison : /sports puis
     /events de chaque ligue, dans l'ordre de priorité de C.SPORTS (le plus important d'abord), au plus `seconds`
     (C.SCAN_SECONDS) pour tenir le passage du matin. Une ligue en erreur est sautée.
     -> {day, sports: [clés en saison], leagues: {clé: [matchs]}, complete, error}."""
@@ -197,9 +211,9 @@ def scan_today(day, after=None, sports=None, seconds=None):
 
 
 def scan_ahead(day, sports, days=7, seconds=None):
-    """Matchs des `days` jours suivant `day` (gratuit), pour dire quand les ligues reprennent un jour sans match :
+    """Matchs des `days` jours suivant le jour Kelly `day` (gratuit), pour dire quand les ligues reprennent un jour sans match :
     {« AAAA-MM-JJ »: {clé de ligue: nombre de matchs}}. Même limite de durée que scan_today."""
-    window = {"commenceTimeFrom": f"{day + timedelta(days=1)}T00:00:00Z",
+    window = {"commenceTimeFrom": _iso(day_end(day)),            # là où s'arrête le jour Kelly (pas de doublon avec scan_today)
               "commenceTimeTo": f"{day + timedelta(days=days)}T23:59:59Z"}
     out, limit, t0 = {}, C.SCAN_SECONDS if seconds is None else seconds, time.monotonic()
     for key in sports:
@@ -270,7 +284,7 @@ def _prepaid_today(day, after, scan=None):
 
 
 def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=None):
-    """Matchs du jour `day` (date UTC) + marchés détaillés, dans la limite du budget `use`.
+    """Matchs du jour Kelly `day` (de 00:00 UTC ou `after` au lendemain C.DAY_END_HOUR h UTC, voir day_window) + marchés détaillés, dans la limite du budget `use`.
     1. relevé gratuit (scan_today ; `scan` : relevé déjà fait) : seules les ligues qui ont des matchs sont payées,
        dans l'ordre de catalogue.prioritise (région, ligues majeures, nombre de matchs), au plus C.MAX_SPORTS ;
     2. marchés vedettes en bulk (1 appel par ligue ; au plus C.FEATURED_SHARE du budget quand des marchés détaillés
@@ -430,6 +444,29 @@ def typical_price(prices):
     return ranked[rank - 1]
 
 
+def half_line(point):
+    """Vrai pour une ligne en .5 (2,5 ; -1,5) : la seule que le règlement et les probas de Poisson gèrent. Les lignes
+    entières (remboursement) et les quarts asiatiques (2,25 ; 2,75 : demi-gain ou demi-perte) sont écartés."""
+    try:
+        x = float(point) * 2
+    except (TypeError, ValueError):
+        return False
+    return abs(x - round(x)) < 1e-9 and round(x) % 2 != 0
+
+
+def complete(market, group, outs):
+    """Vrai si le book affiche TOUTES les issues du groupe (même ligne, même joueur) : 3 pour le 1X2 du foot (avec Draw) et
+    la double chance, 2 pour les autres marchés. Sinon la normalisation sans marge gonflerait les probas (> 1 en cumulé)."""
+    names = {o["name"] for o in outs}
+    if market == "double_chance" or "3_way" in market:
+        need = 3
+    elif market == "h2h":
+        need = 3 if group == "soccer" or "Draw" in names else 2
+    else:
+        need = 2
+    return len(outs) == need and len(names) == need and all(o.get("price") and o["price"] > 1 for o in outs)
+
+
 def build_picks(events, day, after=None, history=None, model=None):
     """Toutes les sélections : proba de consensus, cote typique, valeur et flair.
 
@@ -450,7 +487,7 @@ def build_picks(events, day, after=None, history=None, model=None):
     picks = []
     for ev in events:
         start = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00"))
-        if start.date() != day or (after and start <= after):
+        if not in_day(start, day, after):                   # jour Kelly : jusqu'au lendemain C.DAY_END_HOUR h UTC
             continue
         group = sport_group(ev.get("sport_key", "soccer_"))
         probs, prices = {}, {}
@@ -459,14 +496,16 @@ def build_picks(events, day, after=None, history=None, model=None):
                 groups = {}
                 for o in m["outcomes"]:
                     pt = o.get("point")
+                    if pt is not None and not half_line(pt):
+                        continue                        # ligne entière ou quart (Asie) : ni règlement ni Poisson ne les gèrent
                     if m["key"] == "spreads" and pt is not None:
                         pt = abs(pt)                    # handicap : -1.5 / +1.5 forment une paire
                     groups.setdefault((o.get("description"), pt), []).append(o)
                 # double chance : 3 issues dont les probas somment à 2 (pas 1)
                 mass = 2.0 if m["key"] == "double_chance" else 1.0
                 for (who, _), outs in groups.items():
-                    if len(outs) < 2:
-                        continue
+                    if not complete(m["key"], group, outs):
+                        continue                        # un book qui n'affiche pas toutes les issues fausserait le sans-marge
                     total = sum(1 / o["price"] for o in outs)
                     for o in outs:
                         k = (m["key"], who, o.get("point"), o["name"])
@@ -485,7 +524,7 @@ def build_picks(events, day, after=None, history=None, model=None):
             edge = p * odds - 1
             spread = (max(ps) - min(ps)) / p
             prev = history.get(key)
-            prev_p = prev["p"] if isinstance(prev, dict) else prev
+            prev_p = prev.get("pb") if isinstance(prev, dict) else None      # « pb » seul : les anciens relevés (« p » mêlé au modèle) sont ignorés
             steam = (p - prev_p) / prev_p if prev_p else 0.0
             weight = market_weight(market)
             signals = []
@@ -531,4 +570,9 @@ def rescore(picks, model):
 
 def snapshot(picks):
     now = datetime.now(timezone.utc).isoformat(timespec="minutes")
-    return {c["key"]: {"p": round(c["prob"], 4), "o": c["odds"], "t": now} for c in picks}
+    # « p » = consensus des books sans marge (prob_book), jamais la proba calibrée / mêlée au modèle (c["prob"]) : sinon le
+    # moindre écart modèle-books ressemble à un mouvement de cote (faux steam, fausses alertes). « pb » (même valeur) est la
+    # seule clé que build_picks lit pour le steam : les anciens relevés, sans « pb », ne comptent plus (pas de migration) ;
+    # find_alerts (app.py) lit encore « p ».
+    return {c["key"]: {"p": round(c.get("prob_book", c["prob"]), 4), "pb": round(c.get("prob_book", c["prob"]), 4),
+                       "o": c["odds"], "t": now} for c in picks}
