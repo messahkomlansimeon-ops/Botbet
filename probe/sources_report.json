@@ -1,0 +1,84 @@
+{
+ "when": "2026-10-08T11:49:13+00:00",
+ "seconds": 79.1,
+ "leagues": [
+  "soccer_epl",
+  "soccer_spain_la_liga",
+  "soccer_italy_serie_a",
+  "soccer_germany_bundesliga",
+  "soccer_france_ligue_one",
+  "soccer_uefa_champs_league"
+ ],
+ "sources": {
+  "footballdata": {
+   "ok": true,
+   "rows": 2002,
+   "error": "",
+   "blocked_until": null
+  },
+  "understat": {
+   "ok": false,
+   "rows": 0,
+   "error": "EPL 2026 : robots.txt interdit /getLeagueData/EPL/2026 sur understat.com ; EPL 2026 : robots.txt interdit /league/EPL/2026 sur understat.com ; EPL 2025 : robots.txt interdit /getLeagueData/EPL/2025 sur understat.com (+17)",
+   "blocked_until": null
+  },
+  "fbref": {
+   "ok": false,
+   "rows": 0,
+   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 11:48 UTC",
+   "blocked_until": "2026-10-09T11:48:34+00:00"
+  }
+ },
+ "profiles": {
+  "src_footballdata.json": {
+   "bytes": 108728,
+   "teams": 110,
+   "referees": 25,
+   "leagues": 5,
+   "matches": 2002
+  },
+  "src_understat.json": {
+   "bytes": 0,
+   "leagues": 0,
+   "teams": 0,
+   "players": 0
+  },
+  "src_fbref.json": {
+   "bytes": 0,
+   "leagues": 0
+  }
+ },
+ "bootstrap": {
+  "rows": 1200,
+  "seasons": [
+   "2324",
+   "2425",
+   "2526",
+   "2627"
+  ],
+  "matches": 5506,
+  "bytes": 94284
+ },
+ "cache": {
+  "files": 46,
+  "bytes": 2713292
+ },
+ "sample_match": {
+  "match": "Arsenal - Aston Villa",
+  "sources": [
+   "football-data"
+  ],
+  "fields": 24,
+  "exp_corners": 9.65,
+  "exp_cards": 3.3,
+  "exp_fouls": 22.25,
+  "exp_shots_home": 15.85
+ },
+ "sample_team": [
+  "div",
+  "fd",
+  "team",
+  "updated",
+  "us"
+ ]
+}
