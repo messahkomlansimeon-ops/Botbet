@@ -1,4 +1,60 @@
 {
 "picks": [],
-"combos": []
+"combos": [
+{
+"tier": "🛡️ SÛR (cote 5 à 7)",
+"keys": [
+"73589bfa5d97346dc0b833839589516c|totals||2.5|Over",
+"65167d69030e2ecfb1f3b2c78ca2469b|h2h|||KuPS Kuopio",
+"61d9f8c88fe17a59b75af74b21f7e8c8|totals||2.5|Under"
+],
+"odds": 5.12,
+"prob": 0.18594,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+},
+{
+"tier": "⚖️ COSTAUD (cote 12 à 20)",
+"keys": [
+"73589bfa5d97346dc0b833839589516c|h2h|||Shamrock Rovers",
+"055608e42ed7fe0f48179452daa64b42|totals||2.5|Under",
+"61d9f8c88fe17a59b75af74b21f7e8c8|h2h|||Atletico Mineiro"
+],
+"odds": 12.01,
+"prob": 0.08717,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+},
+{
+"tier": "🔥 MÉCHANT (cote 40 à 80)",
+"keys": [
+"055608e42ed7fe0f48179452daa64b42|totals||2.5|Under",
+"0730f5688a304703da1240d69f1e5cc4|totals||2.5|Over",
+"61d9f8c88fe17a59b75af74b21f7e8c8|h2h|||Atletico Mineiro",
+"87416e0fc86513494d5993fb8bb340fe|h2h|||Ceará"
+],
+"odds": 40.45,
+"prob": 0.02629,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+},
+{
+"tier": "💀 MONSTRE (cote 150+)",
+"keys": [
+"73589bfa5d97346dc0b833839589516c|totals||2.5|Over",
+"65167d69030e2ecfb1f3b2c78ca2469b|h2h|||Draw",
+"0730f5688a304703da1240d69f1e5cc4|h2h|||Flamengo",
+"61d9f8c88fe17a59b75af74b21f7e8c8|h2h|||Atletico Mineiro",
+"87416e0fc86513494d5993fb8bb340fe|h2h|||Ceará"
+],
+"odds": 156.7,
+"prob": 0.00691,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+}
+]
 }
