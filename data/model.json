@@ -1,7 +1,7 @@
 {
 "n": 0,
 "adopted": true,
-"trained_at": "2026-10-08T13:07+00:00",
+"trained_at": "2026-10-08T14:02+00:00",
 "oos_model": 0.0706,
 "oos_heuristic": 0.0266,
 "test_rows": 239,
