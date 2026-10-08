@@ -1,11 +1,34 @@
 {
  "day_past": {
   "status": 200,
+  "errors": [],
+  "n": 233,
+  "finished": 225,
+  "sample": [
+   [
+    "Serie B",
+    "Ponte Preta",
+    "Juventude"
+   ],
+   [
+    "Segunda División RFEF - Group 5",
+    "Real Madrid III",
+    "Guadalajara"
+   ],
+   [
+    "Reserve League",
+    "Aldosivi Res.",
+    "Tigre Res."
+   ]
+  ]
+ },
+ "ids": {
+  "status": 200,
   "errors": {
-   "plan": "Free plans do not have access to this date, try from 2026-10-07 to 2026-10-09."
+   "plan": "Free plans do not have access to the Ids parameter."
   },
   "n": 0,
-  "finished": 0,
-  "sample": []
+  "with_statistics": 0,
+  "stat_types": []
  }
 }

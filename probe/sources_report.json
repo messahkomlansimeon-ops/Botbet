@@ -1,6 +1,6 @@
 {
- "when": "2026-10-08T15:24:23+00:00",
- "seconds": 352.7,
+ "when": "2026-10-08T15:30:33+00:00",
+ "seconds": 319.7,
  "leagues": [
   "soccer_epl",
   "soccer_spain_la_liga",
@@ -52,8 +52,8 @@
   "fbref": {
    "ok": false,
    "rows": 0,
-   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 15:21 UTC",
-   "blocked_until": "2026-10-09T15:21:54+00:00"
+   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 15:28 UTC",
+   "blocked_until": "2026-10-09T15:28:17+00:00"
   }
  },
  "profiles": {
@@ -88,7 +88,7 @@
  },
  "cache": {
   "files": 178,
-  "bytes": 17162799
+  "bytes": 17162795
  },
  "sample_match": {
   "match": "Arsenal - Aston Villa",

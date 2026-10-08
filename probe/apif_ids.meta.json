@@ -1,0 +1,10 @@
+{
+ "url": "https://v3.football.api-sports.io/fixtures?ids=1520917-1573272-1612073",
+ "status": 200,
+ "headers": {
+  "Content-Type": "application/json",
+  "Server": "cloudflare",
+  "cf-cache-status": "DYNAMIC",
+  "CF-RAY": "a476280bbeab0fbe-IAD"
+ }
+}

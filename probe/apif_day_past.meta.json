@@ -1,10 +1,14 @@
 {
- "url": "https://v3.football.api-sports.io/fixtures?date=2026-10-04&timezone=UTC",
+ "url": "https://v3.football.api-sports.io/fixtures?date=2026-10-07&timezone=UTC",
  "status": 200,
  "headers": {
   "Content-Type": "application/json",
   "Server": "cloudflare",
+  "x-ratelimit-limit": "10",
+  "x-ratelimit-remaining": "9",
+  "x-ratelimit-requests-limit": "100",
+  "x-ratelimit-requests-remaining": "97",
   "cf-cache-status": "DYNAMIC",
-  "CF-RAY": "a4761e0c7ffd6a14-SEA"
+  "CF-RAY": "a476280acb84c64f-IAD"
  }
 }
