@@ -1,0 +1,8 @@
+{
+ "url": "https://understat.com/getLeagueData/EPL/2025",
+ "status": 200,
+ "headers": {
+  "Server": "Apache/2.4.29 (Ubuntu)",
+  "Content-Type": "text/javascript;charset=UTF-8"
+ }
+}
