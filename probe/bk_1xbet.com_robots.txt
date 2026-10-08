@@ -1,0 +1,25 @@
+User-agent: *
+Disallow: /*subcategory=*
+Disallow: /*products=*
+Disallow: /*game=*
+Disallow: /*product=*
+Disallow: */toto-frame/*
+Disallow: */games-frame/*
+Disallow: */statisticpopup/*
+Disallow: */statistic/*
+Disallow: /*paysystems*
+Disallow: /*version.json
+Disallow: *?return-url=*
+Disallow: /*search-events?*
+Disallow: /*taxservice-api*
+Disallow: /*platform_type=*
+Disallow: */assetmapdtos/*
+Disallow: */assetMapDTOs/*
+Disallow: */team/*
+Disallow: /*toto/*/draw*
+Disallow: /*toto/*/coupons/*
+Disallow: /*whn=*
+Disallow: /*app_mode=*
+Disallow: /*page=*
+
+Sitemap: https://1xbet.com/sitemap.xml

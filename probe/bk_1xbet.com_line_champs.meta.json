@@ -1,0 +1,12 @@
+{
+ "url": "https://1xbet.com/en/block?sport=1&lng=fr&country=1&partner=1",
+ "status": 203,
+ "headers": {
+  "Content-Type": "text/html;charset=utf-8",
+  "Server": "cloudflare",
+  "server-timing": "dt_total;dur=0.048, dt_total;dur=0.006, total;dur=1;desc=\"MF\"",
+  "x-dt": "285, 285",
+  "cf-cache-status": "DYNAMIC",
+  "CF-RAY": "a4750bb329662972-ORD"
+ }
+}

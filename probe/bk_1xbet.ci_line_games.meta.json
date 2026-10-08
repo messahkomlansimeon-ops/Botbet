@@ -1,0 +1,10 @@
+{
+ "url": "https://1xbet.ci/en/block?sports=1&count=20&lng=fr&mode=4&country=1&partner=1&getEmpty=true",
+ "status": 203,
+ "headers": {
+  "Server": "Angie",
+  "Content-Type": "text/html;charset=utf-8",
+  "Server-Timing": "dt_total;dur=0.092, dt_total;dur=0.005, total;dur=1;desc=\"MF\"",
+  "X-Dt": "673, 673"
+ }
+}

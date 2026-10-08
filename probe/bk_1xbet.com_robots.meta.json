@@ -1,0 +1,12 @@
+{
+ "url": "https://1xbet.com/robots.txt",
+ "status": 200,
+ "headers": {
+  "Content-Type": "text/plain; charset=utf-8",
+  "Server": "cloudflare",
+  "x-time-ng": "0.002, 0.003",
+  "server-timing": "wf-uht;dur=0.051",
+  "cf-cache-status": "REVALIDATED",
+  "CF-RAY": "a4750b5b1ec8e06f-ORD"
+ }
+}

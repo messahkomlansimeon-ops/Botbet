@@ -1,0 +1,39 @@
+{
+ "1xbet.com": {
+  "robots_status": 200,
+  "final_url": "https://1xbet.com/robots.txt",
+  "line_sports": {
+   "status": 203,
+   "type": "text/html;charset=utf-8",
+   "bytes": 2554
+  },
+  "line_champs": {
+   "status": 203,
+   "type": "text/html;charset=utf-8",
+   "bytes": 2554
+  },
+  "line_games": {
+   "status": 203,
+   "type": "text/html;charset=utf-8",
+   "bytes": 2554
+  }
+ },
+ "1xbet.ci": {
+  "robots_status": 200,
+  "final_url": "https://1xbet.ci/robots.txt",
+  "line_champs": {
+   "status": 203,
+   "type": "text/html;charset=utf-8",
+   "bytes": 2787
+  },
+  "line_games": {
+   "status": 203,
+   "type": "text/html;charset=utf-8",
+   "bytes": 2787
+  }
+ },
+ "1xbet.ng": {
+  "robots_status": 200,
+  "final_url": "https://1xbet.ng/robots.txt"
+ }
+}
