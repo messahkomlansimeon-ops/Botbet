@@ -85,7 +85,7 @@ def probe_apif_world():
     h = {"x-apisports-key": key}
     out = {}
     r = fetch("apif_day_past", "https://v3.football.api-sports.io/fixtures", headers=h,
-              params={"date": "2026-10-04", "timezone": "UTC"})
+              params={"date": "2026-10-07", "timezone": "UTC"})
     ids = []
     if r is not None:
         body = r.json() if r.ok else {}
