@@ -216,4 +216,6 @@ def main_full():
 
 
 if __name__ == "__main__":
+    if "--bookmaker" in sys.argv:
+        sys.exit(probe_bookmaker())
     sys.exit(main_full() if "--full" in sys.argv else main_sources() if "--sources" in sys.argv else main())
