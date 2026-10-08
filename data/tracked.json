@@ -41,10 +41,10 @@
 "book=Betfair": 1.0,
 "xg_diff": 0.85
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.35,
+"close_prob": 0.7006,
+"closed_at": "2026-10-08T18:48+00:00",
+"clv": 0.0292,
 "result": null
 },
 {
@@ -91,7 +91,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -186,7 +186,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -473,7 +473,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -521,10 +521,10 @@
 "has_pm": 1.0,
 "gap_goals": 0.35
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.65,
+"close_prob": 0.5687,
+"closed_at": "2026-10-08T18:48+00:00",
+"clv": 0.0531,
 "result": null
 },
 {
@@ -620,7 +620,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -956,10 +956,10 @@
 "has_pm": 1.0,
 "gap_goals": -0.35
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 2.2,
+"close_prob": 0.4313,
+"closed_at": "2026-10-08T18:48+00:00",
+"clv": 0.0445,
 "result": null
 },
 {
@@ -1059,7 +1059,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 }
