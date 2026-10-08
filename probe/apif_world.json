@@ -1,10 +1,11 @@
 {
- "team_last": {
+ "day_past": {
   "status": 200,
   "errors": {
-   "plan": "Free plans do not have access to the Last parameter."
+   "plan": "Free plans do not have access to this date, try from 2026-10-07 to 2026-10-09."
   },
   "n": 0,
-  "finished_ids": []
+  "finished": 0,
+  "sample": []
  }
 }
