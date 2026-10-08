@@ -109,6 +109,16 @@ def _league_index(d, label):
     return d["lg"].index(label)
 
 
+def _usable(side, f):
+    """La statistique `f` d'une équipe (stats._team_values) est-elle connue ? Un « nul » est une donnée absente, sauf corners et cartons
+    quand l'équipe a d'autres statistiques (tirs ou fautes) : API-Football envoie null pour zéro. Les entrées de cache écrites avant
+    cette règle marquaient ces zéros « nul » : les écarter faisait perdre le match entier à l'équipe qui n'avait aucun carton."""
+    if f not in side:
+        return False
+    nul = side.get("nul") or []
+    return f not in nul or (f in ("corners", "cards") and any(k not in nul for k in ("shots", "fouls")))
+
+
 def record(d, e, st):
     """Ajoute le match `e` (entrée de stats._day_fixtures, terminé) dont `st` donne les statistiques (stats.fixture_stats) à l'historique
     des deux équipes, et le note « vu ». -> nombre d'équipes mises à jour. Un match déjà vu n'est jamais ajouté deux fois."""
@@ -128,7 +138,7 @@ def record(d, e, st):
         pairs = [(e.get("gh"), e.get("ga")) if home else (e.get("ga"), e.get("gh"))]
         for k in KEYS[1:]:
             f = FIELD[k]
-            ok = f in mine and f in other and f not in (mine.get("nul") or []) and f not in (other.get("nul") or [])
+            ok = _usable(mine, f) and _usable(other, f)
             pairs.append((mine[f], other[f]) if ok else (None, None))
         if all(p == (None, None) for p in pairs[1:]):
             continue                                  # match sans aucune statistique utilisable

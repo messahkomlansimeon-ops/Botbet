@@ -199,7 +199,7 @@ def test_fixture_stats_and_averages():
             return Resp({"errors": [], "response": stat_resp((10, 20), 6, 4)})
         if path == "/fixtures/players":
             return Resp({"errors": [], "response": [{"players": [
-                {"player": {"name": "K. Mbappé"}, "statistics": [{"shots": {"total": None, "on": 2}, "fouls": {}}]}]}]})
+                {"player": {"name": "K. Mbappé"}, "statistics": [{"games": {"minutes": 90}, "shots": {"total": None, "on": 2}, "fouls": {}}]}]}]})
         return Resp({"errors": [], "response": []})
     calls = reset(fake)
     st = stats.fixture_stats(7)
@@ -988,7 +988,7 @@ def test_fixture_stats_new_fields():
     e = stats._entry_from(teams)
     a, b = e["teams"]["1"], e["teams"]["2"]
     assert a["sot"] == 0 and "sot" not in a["nul"] and a["nul"] == ["fouls"] and a["cards"] == 2 and a["yel"] == 2
-    assert b["nul"] == ["corners", "cards", "yel"] and b["sot"] == 4
+    assert b["nul"] == [] and b["corners"] == 0 and b["cards"] == 0 and b["yel"] == 0 and b["sot"] == 4   # null corners/jaunes/rouges + autres stats = 0
     assert e["shots"] == 23 and e["sot"] == 4
     assert stats._entry_from([]) is None and stats._entry_from([{"team": {"id": 1}, "statistics": [{"type": "Fouls", "value": 3}]}] * 2) is None
 

@@ -171,7 +171,7 @@ def get(path, **params):
 # --- Noms d'équipes -------------------------------------------------------
 
 _STOP = {"fc", "afc", "cf", "sc", "ac", "as", "de", "the", "club", "ssc", "fk", "sk", "cd", "ud",
-         "rc", "calcio", "sv", "vfb", "vfl", "tsg", "1", "cp", "ca", "of", "and", "e", "y", "1899"}
+         "rc", "calcio", "sv", "vfb", "vfl", "tsg", "1", "cp", "ca", "of", "and", "e", "y", "1899", "bk", "if", "ik"}
 # Écarts fréquents Odds API / API-Football (clés et valeurs déjà normalisées).
 _ALIAS = {
     "inter milan": "inter", "internazionale": "inter", "internazionale milano": "inter",
@@ -181,8 +181,8 @@ _ALIAS = {
     "man city": "manchester city", "wolves": "wolverhampton wanderers",
     "tottenham hotspur": "tottenham", "spurs": "tottenham",
     "brighton and hove albion": "brighton", "brighton hove albion": "brighton",
-    "nottm forest": "nottingham forest", "athletic bilbao": "athletic", "athletic club": "athletic",
-    "atletico madrid": "atletico", "sporting lisbon": "sporting", "sporting lisboa": "sporting",
+    "nottm forest": "nottingham forest", "athletic club": "athletic bilbao", "atletico de madrid": "atletico madrid",
+    "sporting lisbon": "sporting", "sporting lisboa": "sporting",
     "rb leipzig": "leipzig", "rasenballsport leipzig": "leipzig", "bayer leverkusen": "leverkusen",
     "bayer 04 leverkusen": "leverkusen", "borussia monchengladbach": "monchengladbach",
     "borussia m gladbach": "monchengladbach", "gladbach": "monchengladbach",
@@ -200,6 +200,14 @@ _ALIAS = {
 # Sigles d'États brésiliens en fin de nom (« Nautico PE », « Atletico MG ») : retirés pour comparer, jamais pour confondre deux
 # États (« Atletico MG » n'est pas « Atletico GO »).
 _STATES = {"pe", "mg", "sp", "rj", "rs", "pr", "ba", "ce", "go", "pb", "rn", "df", "mt", "ms"}
+# Mots trop courants pour porter seuls un rapprochement : « Atlético » n'est ni « Atlético Madrid » ni « Atlético-GO », « Independiente »
+# n'est pas « Independiente Rivadavia ». Un nom dont les seuls mots communs avec l'autre sont dans cette liste ne lui ressemble pas.
+GENERIC = {"atletico", "athletic", "athletico", "independiente", "inter", "sporting", "sport", "sports", "club", "america", "nacional",
+           "united", "city", "town", "county", "real", "royal", "deportivo", "deportes", "deportiva", "union", "racing", "dinamo",
+           "olympic", "rovers", "wanderers", "albion", "rangers", "juniors", "central", "universidad", "academico", "al", "el", "la",
+           "los", "las", "san", "santa", "sao", "saint", "st", "new", "north", "south", "east", "west", "young", "boys", "athletics",
+           "olympique", "internacional", "internazionale", "alianza", "libertad"}
+_TOKEN_ALIAS = {"utd": "united", "dynamo": "dinamo", "jrs": "juniors", "rvs": "rovers"}
 _MARK = re.compile(r"^(w|women|fem|ii|iii|b|u\d\d|youth|reserves|res)$")
 
 
@@ -214,16 +222,42 @@ def _state(name):
     return toks[-1] if len(toks) >= 2 and toks[-1] in _STATES else None
 
 
+def _initials(toks):
+    """« Gimnasia L P » et « Gimnasia LP » sont le même nom : les initiales isolées qui se suivent sont collées."""
+    out, run = [], []
+    for t in toks + [""]:
+        if len(t) == 1 and t.isalpha() and t not in _STOP and not _MARK.match(t):
+            run.append(t)
+            continue
+        out += ["".join(run)] if len(run) > 1 else run
+        run = []
+        if t:
+            out.append(t)
+    return out
+
+
 def _team_key(name):
     """(nom canonique, marqueurs femmes/jeunes/réserve) d'une équipe."""
     n = _norm(name)
     n = _ALIAS.get(n, n)
-    toks = n.split()
+    toks = _initials(n.split())
     if len(toks) >= 2 and toks[-1] in _STATES:
         toks = toks[:-1]
     marks = frozenset(t for t in toks if _MARK.match(t))
-    kept = " ".join(t for t in toks if t not in _STOP and t not in marks)
+    kept = " ".join(_TOKEN_ALIAS.get(t, t) for t in toks if t not in _STOP and t not in marks)
     return _ALIAS.get(kept, kept), marks
+
+
+def _same_word(x, y):
+    """Deux mots différents désignent-ils le même ? Abréviation de 3-4 lettres d'un mot bien plus long (« ind » / « independiente », mais
+    pas « como » / « comoros ») ou variante d'orthographe d'un long mot. Jamais pour un mot court : « gremio » / « remo », « nasr » /
+    « masry », « uts » / « fus » sont des équipes différentes ; ni pour des mots longs seulement voisins (« america » / « almeria »)."""
+    s, l = sorted((x, y), key=len)
+    if 3 <= len(s) <= 4 and len(l) - len(s) >= 4 and l.startswith(s):
+        return True
+    if len(s) >= 6 and len(l) - len(s) <= 3 and l.startswith(s):       # « Hamburg » / « Hamburger », « Halmstad » / « Halmstads »
+        return True
+    return len(s) >= 5 and difflib.SequenceMatcher(None, x, y).ratio() >= 0.9
 
 
 def team_sim(a, b):
@@ -234,12 +268,20 @@ def team_sim(a, b):
     sa, sb = _state(a), _state(b)
     if sa and sb and sa != sb:
         return 0.0
-    if na == nb:
-        return 1.0 if sa == sb else 0.88
     ta, tb = set(na.split()), set(nb.split())
-    if ta <= tb or tb <= ta:                    # « Tottenham » ~ « Tottenham Hotspur »
-        return 0.88
-    return difflib.SequenceMatcher(None, na, nb).ratio()
+    if na == nb:
+        return 1.0 if sa == sb else (0.88 if ta - GENERIC else 0.0)      # « Atletico GO » n'est pas « Atletico » tout court
+    if ta <= tb or tb <= ta:                    # « Tottenham » ~ « Tottenham Hotspur », mais pas « Inter » ~ « Inter Miami »
+        if (ta if len(ta) <= len(tb) else tb) - GENERIC:
+            return 0.88
+    ratio = difflib.SequenceMatcher(None, na, nb).ratio()
+    da, db = sorted(ta - tb), sorted(tb - ta)       # les mots qui distinguent chaque nom doivent se retrouver de l'autre côté
+    for x in list(da):
+        y = next((y for y in db if _same_word(x, y)), None)
+        if y is not None:
+            da.remove(x)
+            db.remove(y)
+    return max(ratio, 0.9) if not da and not db else min(ratio, 0.7)
 
 
 def similar(a, b):
@@ -437,10 +479,15 @@ STATS_KEEP_DAYS = 45                                 # statistiques brutes : les
 def _team_values(t):
     """Totaux d'une équipe pour un match d'après la réponse /fixtures/statistics : corners, cartons (jaunes + rouges), tirs,
     tirs cadrés, fautes (0 si absent, compatibilité du règlement) + « nul » : statistiques que l'API a laissées à null (jamais
-    comptées comme 0 dans les profils). Un null de tirs cadrés ou de rouges avec des tirs connus est un vrai zéro."""
+    comptées comme 0 dans les profils). Un null de tirs cadrés avec des tirs connus, ou de jaunes, rouges et corners avec d'autres
+    statistiques de l'équipe, est un vrai zéro."""
     st = {s["type"]: _numn(s.get("value")) for s in t.get("statistics") or [] if s.get("type")}
-    shots, y, r = st.get("Total Shots"), st.get("Yellow Cards"), st.get("Red Cards")
-    vals = {"corners": st.get("Corner Kicks"), "shots": shots, "fouls": st.get("Fouls"),
+    shots, y, r, c = st.get("Total Shots"), st.get("Yellow Cards"), st.get("Red Cards"), st.get("Corner Kicks")
+    # API-Football envoie null pour un compteur à zéro : dès que l'équipe a d'autres statistiques (tirs, fautes, possession...), un null de
+    # jaunes, rouges ou corners est un vrai zéro. Sans aucune autre statistique, la donnée manque (nul) : jamais comptée comme 0.
+    if any(v is not None for k, v in st.items() if k not in ("Yellow Cards", "Red Cards", "Corner Kicks")):
+        y, r, c = (0.0 if v is None else v for v in (y, r, c))
+    vals = {"corners": c, "shots": shots, "fouls": st.get("Fouls"),
             "sot": st.get("Shots on Goal") if st.get("Shots on Goal") is not None else (0.0 if shots is not None else None),
             "cards": None if y is None and r is None else (y or 0.0) + (r or 0.0), "yel": y if y is not None else (0.0 if r is not None else None)}
     out = {k: (v if v is not None else 0.0) for k, v in vals.items()}
@@ -537,6 +584,8 @@ def fixture_stats(fixture_id, players=True):
             for team in resp:
                 for p in team.get("players") or []:
                     s = (p.get("statistics") or [{}])[0]
+                    if not (s.get("games") or {}).get("minutes"):      # remplaçant jamais entré (minutes null ou 0) : pas de stats, pas un « 0 tir »
+                        continue
                     out["players"][p["player"]["name"]] = {
                         "shots": _num((s.get("shots") or {}).get("total")),
                         "shots_on_target": _num((s.get("shots") or {}).get("on")),
