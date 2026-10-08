@@ -41,6 +41,23 @@ def fetch(name, url, **kw):
 
 
 def main():
+    present = {k: bool(os.environ.get(k)) for k in ("ODDS_API_KEY", "STATS_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")}
+    save("secrets_presence.json", json.dumps(present, indent=1))     # noms seulement, jamais les valeurs
+
+    # Understat : la page ne contient plus les données ; endpoints JSON utilisés par le site
+    for name, url in (("understat_api_league", "https://understat.com/getLeagueData/EPL/2025"),):
+        r = fetch(name, url, headers=UA | {"X-Requested-With": "XMLHttpRequest", "Referer": "https://understat.com/league/EPL"})
+        if r is not None:
+            save(name + ".json", r.text, limit=6000)
+        time.sleep(3)
+    r = fetch("understat_EPL_full", "https://understat.com/league/EPL", headers=UA)
+    if r is not None and r.ok:
+        save("understat_EPL.scripts.json", json.dumps(re.findall(r"<script[^>]*>(.{0,300})", r.text, re.S), indent=1))
+        save("understat_EPL.js_srcs.json", json.dumps(re.findall(r'<script[^>]*src="([^"]+)"', r.text), indent=1))
+    return 0
+
+
+def main_full():
     # football-data.co.uk : CSV de la saison en cours (Premier League) et d'une saison passée
     for season in ("2526", "2425"):
         r = fetch(f"fd_E0_{season}", f"https://www.football-data.co.uk/mmz4281/{season}/E0.csv", headers=UA)
@@ -105,4 +122,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main_full() if "--full" in sys.argv else main())
