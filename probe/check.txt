@@ -1,0 +1,15 @@
+🔎 KELLY — DIAGNOSTIC
+✅ The Odds API : clé valide
+   Crédits : 500 restants, 0 utilisés
+   Sports suivis (6, au plus 6 ligues avec matchs payées par jour) : soccer_epl, soccer_spain_la_liga, soccer_italy_serie_a, soccer_germany_bundesliga, soccer_france_ligue_one, soccer_uefa_champs_league
+   Allocation du jour : 20 crédits (matin 12, clôture 8), 24 jour(s) avant la remise à zéro (jour 1 du mois ; forfait 500/mois)
+   Ligues avec matchs aujourd'hui (gratuit) : aucune
+✅ API-Football : plan Free, requêtes aujourd'hui 0/100 (Kelly s'arrête à 90)
+📡 Sources de stats
+⚪ football-data : pas encore lancée
+⚪ Understat : pas encore lancée
+⚪ FBref : pas encore lancée
+✅ Telegram : bot @kelly001_bot joignable
+✅ Telegram : message de test envoyé à ton chat
+
+✅ Tout est prêt.
