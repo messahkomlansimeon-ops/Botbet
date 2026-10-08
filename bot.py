@@ -16,7 +16,8 @@ import tempfile
 # Clés : secrets GitHub / variables d'environnement d'abord, sinon le fichier .env.
 from kelly import envfile  # noqa: E402
 
-envfile.load()
+if "--sample" not in sys.argv:          # le mode test n'utilise jamais les vraies clés (pas d'envoi Telegram)
+    envfile.load()
 
 # Mode test : données fictives dans un dossier temporaire, jamais dans data/.
 if "--sample" in sys.argv and not os.environ.get("DATA_DIR"):

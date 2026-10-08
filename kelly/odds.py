@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import budget, catalogue, config as C, learn
+from . import budget, cache, catalogue, config as C, fmt, learn
 
 
 def sport_group(sport_key):
@@ -79,9 +79,13 @@ def get(path, use=None, **params):
     (rien n'est envoyé) ; réussi -> crédits décomptés dans data/budget.json. Sans `use` : pas de budget
     (appels gratuits : /sports, /events)."""
     key = os.environ.get("ODDS_API_KEY")
+    if cache.OFFLINE:
+        raise OddsError("réseau interdit hors des passages programmés (commandes Telegram)", code="OFFLINE")
     if not key:
         raise OddsError("ODDS_API_KEY absente", code="NO_KEY")
-    n = cost(path, params) if use else 0
+    n = cost(path, params)
+    if n and not use:                               # un appel payant sans usage budgété passerait outre le budget
+        raise BudgetError(f"appel payant ({n} crédit(s)) sans usage budgété : refusé", code="BUDGET")
     why = budget.why_not(n, use) if n else None
     if why:
         raise BudgetError(f"budget « {use} » : {n} crédit(s) refusé(s), {why}", code="BUDGET")
@@ -107,6 +111,7 @@ def get(path, use=None, **params):
         budget.sync()
         raise OddsError(f"HTTP {r.status_code} {code or ''} {_scrub(msg)}".strip(), r.status_code, code)
     budget.spend(n, use) if n else budget.sync()
+    cache.miss("odds" if n else "events", n or 1)
     return r.json()
 
 
@@ -123,8 +128,21 @@ def select_sports(sports, limit=True):
     return out[:C.MAX_SPORTS] if limit else out
 
 
+def cached_get(key, hours, call, src="events", saved=1, frm=None):
+    """`call()` (un appel d'API) avec cache disque : la réponse du cache est relue si elle a moins de `hours` heures (et, si
+    `frm` est donné, si elle couvrait au moins cette période). Compteurs : relu = `saved` crédits / requêtes évités."""
+    got = cache.load(key, hours)
+    if got is not None and (frm is None or got[1].get("frm", "~") <= frm):
+        cache.hit(src, saved)
+        return got[0]
+    data = call()
+    cache.save(key, data, frm=frm)
+    return data
+
+
 def list_sports(limit=True):
-    return select_sports(get("/sports"), limit)         # gratuit (0 crédit)
+    """Sports en saison : /sports gratuit (0 crédit), mis en cache EVENTS_CACHE_HOURS (tous les modes le relisent)."""
+    return select_sports(cached_get("sports", C.EVENTS_CACHE_HOURS, lambda: get("/sports")), limit)
 
 
 def _iso(d):
@@ -140,8 +158,12 @@ def day_window(day, after=None):
 
 
 def league_events(sport_key, window):
-    """Matchs d'une ligue dans la fenêtre : endpoint GRATUIT /events (0 crédit)."""
-    return get(f"/sports/{sport_key}/events", dateFormat="iso", **window) or []
+    """Matchs d'une ligue dans la fenêtre : endpoint GRATUIT /events (0 crédit), mis en cache EVENTS_CACHE_HOURS (clé :
+    ligue + fin de fenêtre ; une fenêtre qui commence plus tard est servie par filtrage du cache)."""
+    frm = window["commenceTimeFrom"]
+    evs = cached_get(f"events|{sport_key}|{window['commenceTimeTo']}", C.EVENTS_CACHE_HOURS,
+                     lambda: get(f"/sports/{sport_key}/events", dateFormat="iso", **window) or [], frm=frm)
+    return [e for e in evs if e.get("commence_time", frm) >= frm]
 
 
 def scan_today(day, after=None, sports=None, seconds=None):
@@ -213,6 +235,25 @@ def model_covered(ev):
     return "exp_corners" in f or "exp_cards" in f
 
 
+def _bulk_key(day, key, markets):
+    return f"odds|{day}|{key}|{markets}"
+
+
+def _cached_bulk(day, key, markets, frm):
+    """Réponse payante du jour déjà en cache (relevé du matin) : relue sans crédit si elle couvre la période, sinon None."""
+    got = cache.load(_bulk_key(day, key, markets), C.ODDS_CACHE_HOURS)
+    if got is None or got[1].get("frm", "~") > frm:
+        return None
+    return [e for e in got[0] if e.get("commence_time", frm) >= frm]
+
+
+def _prepaid_today(day, after, scan=None):
+    """Vrai si au moins une ligue a déjà été payée aujourd'hui (cache) : même sans budget restant, on peut la relire."""
+    frm = day_window(day, after)["commenceTimeFrom"]
+    keys = list(scan["leagues"]) if scan and scan.get("leagues") else [k for k in C.SPORTS if not k.endswith("_")]
+    return any(_cached_bulk(day, k, C.FEATURED.get(sport_group(k), "h2h"), frm) is not None for k in keys)
+
+
 def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=None):
     """Matchs du jour `day` (date UTC) + marchés détaillés, dans la limite du budget `use`.
     1. relevé gratuit (scan_today ; `scan` : relevé déjà fait) : seules les ligues qui ont des matchs sont payées,
@@ -225,7 +266,7 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
     que les matchs à venir. Une ligue, un match ou un marché refusé ou en erreur est sauté (log stderr).
     Les clés des ligues payées sont ajoutées à scan["paid"]."""
     events = []
-    if budget.left(use) <= 0:
+    if budget.left(use) <= 0 and not (C.BUDGET_SHARES.get(use) and _prepaid_today(day, after, scan)):
         why = f"allocation du jour : {budget.allowance()} crédits, déjà utilisée" if C.BUDGET_SHARES.get(use) else "aucune part dans BUDGET_SHARES"
         print(f"[budget] « {use} » n'a pas de budget aujourd'hui ({why}) : aucun appel payant.", file=sys.stderr)
         return events
@@ -241,10 +282,12 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
     print(f"[odds] ligues avec matchs : {', '.join(leagues) or 'aucune'} "
           f"(budget « {use} » : {budget.left(use)} crédits)", file=sys.stderr)
     used = 0
+    frm = window["commenceTimeFrom"]
+    cached_bulk = lambda key, markets: _cached_bulk(day, key, markets, frm)         # noqa: E731
 
     def buy(keys, cap):
-        """Marchés vedettes en bulk (1 appel par ligue) tant que `cap` crédits ne sont pas dépassés. -> True si le budget
-        lui-même a refusé (inutile d'insister)."""
+        """Marchés vedettes en bulk (1 appel par ligue, ou relecture du cache du jour) tant que `cap` crédits ne sont pas
+        dépassés. -> True si le budget lui-même a refusé (inutile d'insister)."""
         nonlocal used
         for key in keys:
             markets = C.FEATURED.get(sport_group(key), "h2h")
@@ -252,13 +295,24 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
             if used and used + n > cap:                 # au moins une ligue ; le reste va aux marchés détaillés
                 print(f"[budget] part des marchés vedettes atteinte ({used}/{cap}) : {key} ignorée.", file=sys.stderr)
                 return False
+            data = cached_bulk(key, markets)
+            if data is not None:                        # déjà payé aujourd'hui : zéro crédit
+                cache.hit("odds", n)
+                for ev in data:
+                    ev["sport_key"] = key
+                    ev.setdefault("bookmakers", [])
+                    events.append(ev)
+                used += n
+                scan["paid"].append(key)
+                continue
             why = budget.why_not(n, use)
             if why:
                 print(f"[budget] {key} ignorée ({why}).", file=sys.stderr)
                 return True
             try:
-                for ev in get(f"/sports/{key}/odds", use=use, regions="eu", oddsFormat="decimal",
-                              markets=markets, **window) or []:
+                raw = get(f"/sports/{key}/odds", use=use, regions="eu", oddsFormat="decimal", markets=markets, **window) or []
+                cache.save(_bulk_key(day, key, markets), raw, frm=frm)
+                for ev in raw:
                     ev["sport_key"] = key
                     ev.setdefault("bookmakers", [])
                     events.append(ev)
@@ -267,7 +321,11 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
             except Exception as e:                      # noqa: BLE001
                 print(f"[{key}] ignoré : {e}", file=sys.stderr)
         return False
-    left = budget.left(use)
+    # Les ligues déjà payées aujourd'hui (cache) ne comptent pas contre le budget restant : on les ajoute à `left`
+    # pour qu'une relance fasse exactement les mêmes choix que le premier passage (et ne dépense rien de plus).
+    prepaid = sum(len(C.FEATURED.get(sport_group(k), "h2h").split(",")) for k in leagues
+                  if cached_bulk(k, C.FEATURED.get(sport_group(k), "h2h")) is not None)
+    left = budget.left(use) + prepaid
     refused = buy(leagues, int(left * C.FEATURED_SHARE + 1e-9) if props else left)
     # Aucun match acheté n'a de profil de stats : les marchés détaillés (corners, cartons) n'auraient pas d'écart modèle-ligne
     # à exploiter. La moitié mise de côté pour eux va alors à d'autres ligues, une par une, jusqu'à en trouver une dont les
@@ -285,16 +343,25 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
     # marché par marché (priorité), sur tous les matchs : corners partout avant les cartons.
     jobs = [(ev, ms[i]) for i in range(max(map(len, lists), default=0)) for ev, ms in zip(top, lists) if i < len(ms)]
     for k, (ev, market) in enumerate(jobs):
-        why = budget.why_not(1, use)
-        if why:
-            print(f"[budget] {len(jobs) - k} marché(s) détaillé(s) ignoré(s) ({why}).", file=sys.stderr)
-            break
-        try:
-            data = get(f"/sports/{ev['sport_key']}/events/{ev['id']}/odds", use=use, regions="eu",
-                       markets=market, oddsFormat="decimal")
-        except Exception as e:                          # noqa: BLE001 - 422 = marché inconnu pour ce sport/match
-            print(f"[{ev['sport_key']}] {market} ignoré : {e}", file=sys.stderr)
-            continue
+        ck = f"odds|{day}|{ev['sport_key']}|{ev['id']}|{market}"
+        got = cache.load(ck, C.ODDS_CACHE_HOURS)
+        if got is not None:                             # déjà demandé aujourd'hui (même un refus 422) : zéro crédit
+            cache.hit("odds", 1)
+            data = got[0]
+        else:
+            why = budget.why_not(1, use)
+            if why:
+                print(f"[budget] {len(jobs) - k} marché(s) détaillé(s) ignoré(s) ({why}).", file=sys.stderr)
+                break
+            try:
+                data = get(f"/sports/{ev['sport_key']}/events/{ev['id']}/odds", use=use, regions="eu",
+                           markets=market, oddsFormat="decimal")
+            except Exception as e:                      # noqa: BLE001 - 422 = marché inconnu pour ce sport/match
+                print(f"[{ev['sport_key']}] {market} ignoré : {e}", file=sys.stderr)
+                if getattr(e, "status", None) == 422:
+                    cache.save(ck, {"bookmakers": []})
+                continue
+            cache.save(ck, data)
         for bk in (data or {}).get("bookmakers", []):
             mine = next((b for b in ev["bookmakers"] if b["key"] == bk["key"]), None)
             if mine is None:
@@ -308,23 +375,14 @@ def fetch_scores(sport_key, days=3, use="daily"):
     """Scores terminés des `days` derniers jours (1 à 3, max de l'API ; 2 crédits, budgétés).
     `scores` vaut null tant que le match n'a pas commencé, sinon [{name, score}] (texte).
     Repli du règlement : le foot se règle gratuitement via API-Football (settle.py)."""
-    return get(f"/sports/{sport_key}/scores", use=use, daysFrom=min(max(int(days), 1), 3), dateFormat="iso") or []
+    d = min(max(int(days), 1), 3)
+    return cached_get(f"scores|{sport_key}|{d}", 6, lambda: get(f"/sports/{sport_key}/scores", use=use, daysFrom=d,
+                                                                 dateFormat="iso") or [], src="odds", saved=2)
 
 
 def label(market, name, point, who, group):
-    unit = C.UNITS.get(market)
-    if isinstance(unit, dict):
-        unit = unit.get(group, "")
-    if unit:
-        side = "Plus" if name == "Over" else "Moins"
-        return f"{who + ' : ' if who else ''}{side} de {point} {unit}"
-    if market == "btts":
-        return "Les 2 équipes marquent : " + ("Oui" if name == "Yes" else "Non")
-    if market == "spreads":
-        return f"{name} {point:+g} (handicap)"
-    if market == "double_chance":
-        return "Double chance : " + name.replace(" or ", " ou ").replace("Draw", "Nul")
-    return "Match nul" if name == "Draw" else name
+    """Libellé du pari tel qu'on le lit chez le bookmaker (voir fmt.label)."""
+    return fmt.label(market, name, point, who, group)
 
 
 def league_name(ev):
@@ -337,11 +395,35 @@ def market_weight(market):
     return C.PLAYER_WEIGHT if market.startswith("player_") else C.MARKET_WEIGHT.get(market, 1.2)
 
 
-def build_picks(events, day, after=None, history=None, model=None):
-    """Toutes les sélections : proba de consensus, meilleure cote, valeur et flair.
+def few_books_factor(n):
+    """Facteur (>= 1) qui durcit un seuil quand il y a peu de books : un écart y est plus souvent du bruit."""
+    return 1 + C.FEW_BOOKS / max(1, n)
 
-    score = valeur (meilleure cote vs consensus)
-          + désaccord entre bookmakers (un book en retard = opportunité)
+
+def disagree_threshold(n):
+    """Écart (max - min des probas) / proba à partir duquel « les bookmakers ne sont pas d'accord » : plus haut avec peu
+    de books (DISAGREE_BASE x facteur)."""
+    return C.DISAGREE_BASE * few_books_factor(n)
+
+
+def typical_price(prices):
+    """(cote typique, book) d'une liste [(cote, book)] : le prix du (n // 4 + 1)-ième meilleur book, au moins le 2e (75e
+    centile). Un seul prix aberrant (exchange sans commission, book en retard) ne la déplace pas ; au moins un book sur
+    quatre la propose ou mieux. Voir config.TYPICAL_*."""
+    ranked = sorted(prices, key=lambda x: -x[0])
+    rank = min(len(ranked), max(C.TYPICAL_MIN_RANK, int(len(ranked) * C.TYPICAL_RANK_SHARE) + 1))
+    return ranked[rank - 1]
+
+
+def build_picks(events, day, after=None, history=None, model=None):
+    """Toutes les sélections : proba de consensus, cote typique, valeur et flair.
+
+    La cote d'un pari est la cote TYPIQUE (75e centile des books, voir typical_price), pas le maximum : l'écart de valeur,
+    les combinés et les mises la prennent comme référence. La meilleure cote reste dans c["best_odds"] (et c["book"]) pour
+    la note « jusqu'à 4,60 chez Coolbet ».
+
+    score = valeur (cote typique vs proba de consensus)
+          + désaccord entre bookmakers (au prorata du nombre de books : peu de books = signal faible)
           + mouvement de la cote depuis le dernier relevé (argent des pros)
           x poids du marché (secondaires = mal pricés)
     Si un modèle appris est adopté (learn.train_clv), le score devient le CLV
@@ -356,7 +438,7 @@ def build_picks(events, day, after=None, history=None, model=None):
         if start.date() != day or (after and start <= after):
             continue
         group = sport_group(ev.get("sport_key", "soccer_"))
-        probs, best, bests_book = {}, {}, {}
+        probs, prices = {}, {}
         for bk in ev.get("bookmakers", []):
             for m in bk["markets"]:
                 groups = {}
@@ -374,13 +456,14 @@ def build_picks(events, day, after=None, history=None, model=None):
                     for o in outs:
                         k = (m["key"], who, o.get("point"), o["name"])
                         probs.setdefault(k, []).append(mass / o["price"] / total)
-                        if o["price"] > best.get(k, 0):
-                            best[k], bests_book[k] = o["price"], bk.get("title", bk["key"])
+                        prices.setdefault(k, []).append((o["price"], bk.get("title", bk["key"])))
         for k, ps in probs.items():
             if len(ps) < C.MIN_BOOKMAKERS:
                 continue
             market, who, point, name = k
-            p, odds = sum(ps) / len(ps), best[k]
+            p = sum(ps) / len(ps)
+            odds, _ = typical_price(prices[k])
+            best, best_book = max(prices[k], key=lambda x: x[0])
             if not C.ODDS_RANGE[0] <= odds <= C.ODDS_RANGE[1]:
                 continue
             key = f'{ev["id"]}|{market}|{who or ""}|{point if point is not None else ""}|{name}'
@@ -391,12 +474,13 @@ def build_picks(events, day, after=None, history=None, model=None):
             steam = (p - prev_p) / prev_p if prev_p else 0.0
             weight = market_weight(market)
             signals = []
+            n_books = len(ps)
             if edge > 0.03:
-                signals.append(f"cote {odds:.2f} chez {bests_book[k]} > consensus {1/p:.2f}")
-            if spread > 0.12:
-                signals.append("books en désaccord")
+                signals.append(f"cote plus haute qu'ailleurs ({fmt.num(odds)} contre {fmt.num(1 / p)} en moyenne)")
+            if spread > disagree_threshold(n_books):
+                signals.append("les bookmakers ne sont pas d'accord entre eux")
             if steam > 0.04:
-                signals.append(f"cote en baisse ({steam*100:+.0f}% de proba)")
+                signals.append("la cote baisse depuis le dernier relevé : les parieurs pros misent dessus")
             p_cal = learn.calibrated(model, market, p)
             c = {
                 "key": key, "id": ev["id"], "sport_key": ev.get("sport_key", ""), "group": group,
@@ -406,9 +490,10 @@ def build_picks(events, day, after=None, history=None, model=None):
                 "commence": ev["commence_time"],
                 "market": market, "who": who, "point": point, "name": name,
                 "pick": label(market, name, point, who, group),
-                "prob": p_cal, "prob_book": p, "odds": odds, "book": bests_book[k], "edge": p_cal * odds - 1,
-                "spread": spread, "steam": steam, "n_books": len(ps), "weight": weight,
-                "score": (edge + 0.5 * spread + 2 * steam) * weight + (weight - 1) * 0.05,
+                "prob": p_cal, "prob_book": p, "odds": odds, "best_odds": best, "book": best_book,
+                "edge": p_cal * odds - 1, "spread": spread, "steam": steam, "n_books": n_books, "weight": weight,
+                "score": (edge + 0.5 * min(1.0, n_books / C.DISAGREE_FULL_BOOKS) * spread + 2 * steam) * weight
+                         + (weight - 1) * 0.05,
                 "why": ", ".join(signals),
             }
             if model and model.get("adopted"):

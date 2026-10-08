@@ -14,12 +14,13 @@ from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-test-")
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-cache-")
+os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import (app, bankroll, bootstrap, budget, combos as CB, config as C, learn, odds, settle, sources,  # noqa: E402
+from kelly import (app, bankroll, bootstrap, budget, cache, combos as CB, fmt, config as C, learn, odds, settle, sources,  # noqa: E402
                    stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
-from tests import synth  # noqa: E402
+from tests import make_sample, synth  # noqa: E402
 
 
 def fake_scores(rows):
@@ -38,7 +39,9 @@ def fake_stats(b):
     random.seed(hash(b["id"]) % 1000)
     return {"corners": random.randint(6, 13), "cards": random.randint(1, 6),
             "players": {"Kylian Mbappé": {"shots": 3, "shots_on_target": 2, "fouls": 1},
-                        "Casemiro": {"shots": 1, "shots_on_target": 0, "fouls": 3}}}
+                        "Casemiro": {"shots": 1, "shots_on_target": 0, "fouls": 3}}
+                       | {n: {"shots": random.randint(0, 5), "shots_on_target": random.randint(0, 3), "fouls": random.randint(0, 4)}
+                          for n in make_sample.PLAYERS}}
 
 
 def closing_events(events, tracked):
@@ -97,12 +100,13 @@ class FakeOdds:
         out = []
         for i, bk in enumerate(BOOKS):
             j = 1 + 0.01 * ((n + 3 * i) % 5 - 2)
+            k = 1.3 if i in (1, 3) else 1.0                 # deux books en retard paient 30 % de plus sur « plus de » / domicile
             ms = []
             for m in markets:
-                two = lambda point, a="Over", b="Under": [{"name": a, "price": round(1.9 * j, 2), "point": point},
+                two = lambda point, a="Over", b="Under": [{"name": a, "price": round(1.9 * j * k, 2), "point": point},
                                                           {"name": b, "price": round(1.95 / j, 2), "point": point}]
                 if m == "h2h":
-                    ms.append({"key": m, "outcomes": [{"name": ev["home_team"], "price": round(2.0 * j, 2)},
+                    ms.append({"key": m, "outcomes": [{"name": ev["home_team"], "price": round(2.0 * j * k, 2)},
                                                       {"name": ev["away_team"], "price": round(3.4 / j, 2)},
                                                       {"name": "Draw", "price": round(3.3 * j, 2)}]})
                 elif m == "totals":
@@ -154,6 +158,15 @@ class FakeOdds:
         return Resp(data, 200, hdr())
 
 
+def wipe():
+    """Données et caches vides (un nouveau « jour » : rien en cache, ni cotes, ni compteurs)."""
+    for f in os.listdir(store.DATA_DIR):
+        os.remove(os.path.join(store.DATA_DIR, f))
+    shutil.rmtree(cache.odds_dir(), ignore_errors=True)
+    cache.reset()
+    stats._neg.clear()
+
+
 class Sandbox:
     """Environnement isolé : faux The Odds API, horloge simulée, données vides, réglages par défaut."""
 
@@ -161,8 +174,7 @@ class Sandbox:
         self.saved = (requests_get(), dict(odds.CREDITS), budget._now, app.now_utc, os.environ.get("ODDS_API_KEY"),
                       os.environ.get("STATS_API_KEY"), C.MIN_CREDITS, C.MAX_SPORTS, C.PROP_EVENTS, C.CLOSE_GHOSTS,
                       dict(C.BUDGET_SHARES), C.ODDS_RESET_DAY, C.ODDS_MONTHLY_CREDITS, C.SPORTS, C.SOURCES_REFRESH)
-        for f in os.listdir(store.DATA_DIR):
-            os.remove(os.path.join(store.DATA_DIR, f))
+        wipe()
         odds.CREDITS.update(remaining=None, used=None)
         odds._warned.clear()
         os.environ["ODDS_API_KEY"] = "test-odds-key"
@@ -426,6 +438,7 @@ def test_budget_never_crashes():
         with contextlib.redirect_stderr(err):
             events = odds.fetch_events(datetime(2026, 10, 31).date())
         assert fake.remaining == 33 and events == []                           # aucun match le 31 : rien d'acheté
+        shutil.rmtree(cache.odds_dir(), ignore_errors=True)                    # le monde change : le cache du relevé gratuit aussi
         lg["soccer_epl"][:] = [("e1", "A", "B", ko_at("2026-10-31", 15)), ("e2", "C", "D", ko_at("2026-10-31", 16))]
         lg["soccer_spain_la_liga"][:] = [("s1", "E", "F", ko_at("2026-10-31", 17))]
         err = io.StringIO()
@@ -461,6 +474,13 @@ def test_budget_never_crashes():
             app.run_track(now=datetime(2026, 10, 31, 8, 5, tzinfo=UTC))
         assert fake.remaining == before and "sautée" in err.getvalue()
     print("budget refusé sans erreur : OK")
+
+
+def age_fixture_cache(hours=24):
+    """Vieillit le relevé d'API-Football de `hours` heures (simule le passage au lendemain)."""
+    fx = store.load("fixtures_day.json", {})
+    fx["_fetched"] = {d: t - hours * 3600 for d, t in fx.get("_fetched", {}).items()}
+    store.save("fixtures_day.json", fx)
 
 
 def test_free_settlement():
@@ -505,6 +525,7 @@ def test_free_settlement():
         # le lendemain (autre exécution) : le cache NS d'un jour passé est re-téléchargé, puis tout est réglé gratuitement
         phase["s"] = "FT"
         stats._refreshed.clear()
+        age_fixture_cache()                                                    # « le lendemain matin » : le relevé NS date de 24 h
         _, settled = settle.settle_pending(datetime.combine(day + timedelta(days=1), datetime.min.time(), tzinfo=UTC) + timedelta(hours=8))
         res = {r["key"]: r["result"] for r in track.load()}
         assert res == {"m1|h2h|||Alpha": "win", "m1|totals||2.5|Over": "win", "m1|btts|||Yes": "win",
@@ -557,6 +578,7 @@ def test_check_is_free():
         assert "soccer_epl (2)" in out and "spain" not in out.split("matchs aujourd'hui")[1].split("\n")[0], out
         assert "test-odds-key" not in out + "".join(sent) and "tok-secret" not in out + "".join(sent)
         assert "📡 Sources de stats" in out and "football-data : pas encore lancée" in out, out      # état des sources, sans réseau
+        assert "♻️ Cache :" in out, out                                                              # compteurs de cache dans --check
         assert "Sources de stats" in sent[0]
     print("--check gratuit : OK")
 
@@ -767,22 +789,24 @@ def test_bootstrap_training():
     print("amorçage de l'apprentissage : OK")
 
 
-def fixture_event(i, home, away, ko, stars=False):
-    """Match avec 1N2, corners (9,5), cartons (4,5) et tirs d'un joueur, chez 4 books."""
+def fixture_event(i, home, away, ko, stars=False, value=False):
+    """Match avec 1N2, corners (9,5), cartons (4,5) et tirs d'un joueur, chez 4 books. `value` : deux books paient 30 % de
+    plus sur les « plus de » des marchés détaillés (la cote typique dépasse alors le consensus)."""
     books = []
     for b in range(4):
         j = 1 + 0.01 * ((i + b) % 3 - 1)
+        k = 1.30 if value and b in (1, 3) else 1.0
         ms = [{"key": "h2h", "outcomes": [{"name": home, "price": round(2.0 * j, 2)}, {"name": away, "price": round(3.4 / j, 2)},
                                          {"name": "Draw", "price": round(3.3 * j, 2)}]},
               {"key": "totals", "outcomes": [{"name": "Over", "price": round(1.9 * j, 2), "point": 2.5},
                                              {"name": "Under", "price": round(1.95 / j, 2), "point": 2.5}]},
-              {"key": "alternate_totals_corners", "outcomes": [{"name": "Over", "price": round(1.9 * j, 2), "point": 9.5},
+              {"key": "alternate_totals_corners", "outcomes": [{"name": "Over", "price": round(1.9 * j * k, 2), "point": 9.5},
                                                                {"name": "Under", "price": round(1.95 / j, 2), "point": 9.5}]},
-              {"key": "alternate_totals_cards", "outcomes": [{"name": "Over", "price": round(1.9 * j, 2), "point": 4.5},
+              {"key": "alternate_totals_cards", "outcomes": [{"name": "Over", "price": round(1.9 * j * k, 2), "point": 4.5},
                                                              {"name": "Under", "price": round(1.95 / j, 2), "point": 4.5}]}]
         if stars:
             ms.append({"key": "player_shots", "outcomes": [
-                {"name": "Over", "description": "Bukayo Saka", "price": round(2.0 * j, 2), "point": 1.5},
+                {"name": "Over", "description": "Bukayo Saka", "price": round(2.0 * j * k, 2), "point": 1.5},
                 {"name": "Under", "description": "Bukayo Saka", "price": round(1.85 / j, 2), "point": 1.5}]})
         books.append({"key": f"b{b}", "title": f"B{b}", "markets": ms})
     return {"id": f"ev{i}", "sport_key": "soccer_epl", "sport_title": "EPL", "home_team": home, "away_team": away,
@@ -811,9 +835,9 @@ def test_stats_and_analyse_commands():
         assert "/stats" in app.handle_command("/aide") and "/analyse" in app.handle_command("/aide")
         t = app.handle_command("/stats arsenal")
         assert t.startswith("📈 Arsenal (Premier League)") and "10 derniers matchs (football-data)" in t, t
-        assert "Corners : 7.0 pour / 4.0 contre" in t and "Cartons (jaunes + rouges) : 1.5 pour / 2.0 contre" in t, t
-        assert "Tirs : 14.0 pour / 9.0 contre" in t and "Fautes" in t and "Buts : 2.0 pour / 0.8 contre" in t, t
-        assert "xG (Understat, 6 derniers) : 1.90 pour / 1.00 contre ; domicile 1.90/1.00" in t and "actualisées le 30/09" in t, t
+        assert "Corners : 7,0 pour / 4,0 contre" in t and "Cartons (jaunes + rouges) : 1,5 pour / 2,0 contre" in t, t
+        assert "Tirs : 14,0 pour / 9,0 contre" in t and "Fautes" in t and "Buts : 2,0 pour / 0,8 contre" in t, t
+        assert "xG (Understat, 6 derniers) : 1,90 pour / 1,00 contre ; domicile 1,90/1,00" in t and "actualisées le 30/09" in t, t
         assert "Corners" in app.handle_command("/stats Chelsea") and "xG" not in app.handle_command("/stats Liverpool")
         assert app.handle_command("/stats").startswith("Exemple") and "Aucune stat pour « Zzz »" in app.handle_command("/stats Zzz")
         # /stats fonctionne sans que la journée ait été analysée ; /analyse non
@@ -823,11 +847,11 @@ def test_stats_and_analyse_commands():
         picks = stats.enrich(odds.build_picks(events, day), day)
         store.save("today.json", {"day": str(day), "picks": picks})
         a = app.handle_command("/analyse arsenal")
-        assert a.startswith("🔬 Arsenal - Chelsea (18:00 UTC)"), a
-        assert "Corners attendus : 11.0 (6.5 + 4.5)" in a and "Cartons attendus : 3.8 (1.8 + 2.0)" in a, a
-        assert "xG attendus : 2.85 (1.70 - 1.15)" in a and "football-data, understat" in a, a
-        assert "Meilleurs paris :" in a and "[modèle 11.0 vs ligne 9.5]" in a and "stats réelles : 11.0 corners attendus" in a, a
-        assert "Bukayo Saka : Plus de 1.5 tirs" in a and "[modèle 2.7 vs ligne 1.5]" in a and "stats réelles : 2.9 tirs/90 vs ligne 1.5" in a, a
+        assert a.startswith("🔬 <b>Arsenal – Chelsea</b> · 18h00 · Premier League"), a
+        assert "Corners attendus : 11,0 (6,5 + 4,5)" in a and "Cartons attendus : 3,8 (1,8 + 2,0)" in a, a
+        assert "Buts attendus d'après les tirs : 2,85 (1,70 - 1,15)" in a and "football-data, understat" in a, a
+        assert "Meilleurs paris :" in a and "Kelly s'attend à 11,0 corners ; la ligne est à 9,5" in a, a
+        assert "Bukayo Saka : 2 tirs ou plus" in a and "Il fait 2,9 tirs par match en moyenne ; la ligne est à 1,5" in a, a
         assert a.count("• ") >= 7                                       # 6 paris + lignes de chiffres
         assert app.handle_command("/analyse xyz").startswith("Aucun match du jour")
         assert app.handle_command("/analyse").startswith("Exemple")
@@ -842,37 +866,39 @@ def test_stats_and_analyse_commands():
 
 
 def test_special_combo():
-    """Combiné spécial : uniquement corners, cartons et stats joueurs, cote 6 à 15, un pari par match."""
+    """Combiné spécial : uniquement corners, cartons et stats joueurs, cote 6 à 15, un pari par match, jambes de qualité."""
     day = date(2026, 10, 1)
-    pairs = [("A", "B"), ("C", "D"), ("E", "F"), ("G", "H"), ("I", "J"), ("K", "L")]
-    events = [fixture_event(i, h, a, "2026-10-01T1%d:00:00Z" % i, stars=i == 0) for i, (h, a) in enumerate(pairs)]
+    pairs = [(chr(65 + 2 * i), chr(66 + 2 * i)) for i in range(12)]
+    events = [fixture_event(i, h, a, "2026-10-01T%02d:00:00Z" % (10 + i), stars=i == 0, value=True) for i, (h, a) in enumerate(pairs)]
     with Sandbox():
         bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
         picks = odds.build_picks(events, day)
         assert any(c["market"] == "h2h" for c in picks)
         messages, sent, combos = app.build_day(picks, day)
-        assert C.SPECIAL in [t for t, _, _ in C.COMBOS] and [t for t, _, _ in C.COMBOS][2] == C.SPECIAL
-        msg = next(m for m in messages if m.startswith(C.SPECIAL))
-        assert "Pas assez" not in msg and "Mise conseillée" in msg, msg
+        assert [t for t, _, _ in C.COMBOS][2] == C.SPECIAL
+        msg = next(m for m in messages if m.startswith("<b>🎯 SPÉCIAL"))
+        assert "Pas assez" not in msg and "mise conseillée" in msg, msg
         sp = next(c for c in combos if c["tier"] == C.SPECIAL)
         legs = [next(c for c in picks if c["key"] == k) for k in sp["keys"]]
         assert 6.0 <= sp["odds"] <= 15.0 and len(legs) >= 2 and len({c["id"] for c in legs}) == len(legs)
         assert all(CB.soft_market(c) and (c["market"].startswith("player_") or c["market"] in
                    ("alternate_totals_corners", "alternate_totals_cards")) for c in legs), [c["market"] for c in legs]
+        assert all(CB.leg_reason(c) for c in legs)                                          # chaque jambe a une raison
         assert sp["stake"] <= 1000 * C.STAKE_CAP["🎯"] + 1e-9
         assert all(c["key"] in {x["key"] for x in sent} for c in legs)                       # suivis comme les autres combinés
         pool = CB.make_special_pool(picks)
-        assert pool and all(CB.pool_for(C.SPECIAL, picks, [])[i]["key"] == pool[i]["key"] for i in range(len(pool)))
+        assert pool and [c["key"] for c in CB.pool_for(C.SPECIAL, picks, [])] == [c["key"] for c in pool]
         assert CB.pool_for(C.COMBOS[0][0], picks, ["x"]) == ["x"]
         # priorité de clôture : après le Costaud, avant le Méchant
         rk = track.ranks([{"tier": C.SPECIAL, "keys": ["k1"], "stake": 1, "result": None},
                           {"tier": C.COMBOS[1][0], "keys": ["k2"], "stake": 1, "result": None},
                           {"tier": C.COMBOS[3][0], "keys": ["k3"], "stake": 1, "result": None}])
         assert rk["k2"] < rk["k1"] < rk["k3"], rk
-        # sans marché mal pricé : message « pas assez de matchs »
+        # sans marché mal pricé : pas de spécial, dit UNE fois en une ligne
         only_h2h = [c for c in picks if c["market"] in ("h2h", "totals")]
         out = app.build_day(only_h2h, day)[0]
-        assert next(m for m in out if m.startswith(C.SPECIAL)).endswith("Pas assez de matchs aujourd'hui pour ce combiné.")
+        assert not any(m.startswith("<b>🎯 SPÉCIAL") for m in out) and "Pas assez" not in "\n".join(out)
+        assert sum(m.count("Journée trop pauvre") for m in out) == 1 and "ni pari ni combiné de qualité" in "\n".join(out)
     print("combiné spécial corners/cartons : OK")
 
 
@@ -907,11 +933,13 @@ def test_run_daily_with_sources():
             real_refresh, real_settle = sources.refresh_all, settle.settle_pending
             sources.refresh_all = lambda keys=None: order.append(("refresh", keys)) or real_refresh(keys)
             settle.settle_pending = lambda *a, **k: order.append(("settle",)) or real_settle(*a, **k)
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            err1 = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err1):
                 msgs = app.run_daily()
             assert order[0] == ("refresh", ["soccer_epl"]) and order[1] == ("settle",), order       # CSV à jour avant le règlement
-            src = next(m for m in msgs if m.startswith("📡 Sources de stats"))
+            src = err1.getvalue()                                  # l'état des sources est technique : logs, pas Telegram
             assert "✅ football-data" in src and "Understat" in src and "2/2 matchs couverts" in src, src
+            assert not any(m.startswith("📡") for m in msgs)
             today = store.load("today.json", {})["picks"]
             cor = [c for c in today if c["market"] == "alternate_totals_corners"]
             assert cor and all(c["pm"]["src"] == "sources" and c["pm"]["kind"] == "corners" for c in cor), cor[:1]
@@ -944,8 +972,8 @@ def test_run_daily_with_sources():
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
                 msgs = app.run_daily()
             assert len(calls) == 2 and "actualisation ignorée" in err.getvalue() and "amorçage ignoré" in err.getvalue()
-            assert any(m.startswith("🔥 KELLY") for m in msgs) and any("PARI DU JOUR" in m for m in msgs) and track.load()
-            assert "pas encore lancée" in next(m for m in msgs if m.startswith("📡 Sources de stats"))
+            assert any("Kelly —" in m for m in msgs) and track.load()
+            assert "pas encore lancée" in sources.report()
             # kill-switch : SOURCES_REFRESH=0 n'appelle rien
             C.SOURCES_REFRESH = False
             calls.clear()
@@ -1065,11 +1093,14 @@ def test_catalogue_and_priority():
         assert asked == set(lg) | {"soccer_epl", "soccer_spain_la_liga"}, asked          # jamais les clés inconnues ni féminines
         assert "soccer_epl" not in scan["leagues"] and "soccer_epl" in scan["sports"] and "soccer_xyz_unknown" not in scan["sports"]
         # délai maximal : le relevé s'arrête (priorité d'abord) au lieu de dépasser le temps du workflow
+        # (le cache gratuit est vidé : on veut voir /sports repartir)
+        shutil.rmtree(cache.odds_dir(), ignore_errors=True)
         n = len(fake.log)
         part = odds.scan_today(datetime(2026, 10, 8).date(), seconds=-1)
         assert not part["complete"] and part["leagues"] == {} and len(fake.log) == n + 1                 # /sports seulement
         # /sports en panne : relevé vide avec l'erreur, jamais d'exception
         sb.serve(lambda url, **kw: Resp({"message": "boom", "error_code": "X"}, 500))
+        shutil.rmtree(cache.odds_dir(), ignore_errors=True)
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             bad = odds.scan_today(datetime(2026, 10, 8).date())
@@ -1153,14 +1184,14 @@ def test_fair_pronostics():
         assert top["market"] == "alternate_totals_corners" and (top["name"], top["point"]) == ("Over", 10.5), top
         assert abs(top["prob"] - exp_p) < 1e-3 and top["fair"] == round(1 / top["prob"], 2)
         assert top["min_odds"] == round(1 / top["prob"] * (1 + C.FAIR_MARGIN), 2) > top["fair"]
-        assert top["pick"] == "Plus de 10.5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
+        assert top["pick"] == "Plus de 10,5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
         assert top["key"] == "m1|alternate_totals_corners||10.5|Over" and top["why"].startswith("stats réelles : 12.0 corners attendus")
         for c in pronos:                                                   # proba utile : ni hasard ni évidence
             assert C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and c["min_odds"] >= c["fair"] >= 1 / C.FAIR_P_RANGE[1] - 0.01
-        text = fair.fmt_pronos(pronos)
-        assert text.startswith("🎲 PRONOSTICS KELLY (sans cote de bookmaker)") and "cote juste" in text and "1xBet" in text
-        assert "joue si la cote ≥" in text and "Hors combinés" in text and "Alpha - Bravo [Championship]" in text, text
-        assert f'proba Kelly {top["prob"]*100:.0f}%' in text and f'cote juste {top["fair"]:.2f}' in text
+        text = fmt.pronos(pronos)
+        assert text.startswith("<b>🎲 Pronostics sans cote (à vérifier chez 1xBet)</b>"), text
+        assert "Alpha – Bravo : Plus de 10,5 corners · joue si la cote est au moins <b>" in text, text
+        assert f'<b>{fmt.num(top["min_odds"])}</b>' in text and "cote juste" not in text
         # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
         f = {"n_home": 10, "n_away": 10, "exp_corners": 10.2, "exp_cards": 4.9, "exp_goals_home": 1.6, "exp_goals_away": 1.3}
         opts = fair.options(f, "Alpha", "Bravo")
@@ -1170,8 +1201,8 @@ def test_fair_pronostics():
         assert set(picks) == set(fair.FAMILIES), picks.keys()
         labels = {c["pick"] for c in picks.values()}
         assert any(x.startswith(("Plus de", "Moins de")) and x.endswith(" buts") for x in labels), labels
-        assert any(x.startswith("Les 2 équipes marquent : ") for x in labels) and any(x.startswith("Double chance : ") for x in labels)
-        assert any(x.endswith(" corners") for x in labels) and any(x.endswith(" cartons") for x in labels), labels
+        assert any(x.startswith("Les deux équipes marquent : ") for x in labels) and any(x.startswith("Double chance : ") for x in labels)
+        assert any(x.endswith(" corners") for x in labels) and any(x.startswith("Total cartons : ") for x in labels), labels
         assert "Double chance : Alpha ou Nul" in {fair.make_pick(ev("m9", "Alpha", "Bravo"), "double_chance", "Alpha or Draw", None, 0.7,
                                                                  "t", "x")["pick"]}
         # sous 5 matchs récents ou hors bornes : aucune option ; marchés déjà cotés chez les books : pas refaits
@@ -1242,10 +1273,10 @@ def test_morning_always_useful():
         order = [world.index(x) for x in ("🌐 International", "🇪🇺 Europe", "🌎 Amériques", "🌏 Asie / Océanie")]
         assert order == sorted(order), world                                   # sélections d'abord un jour de trêve
         assert "💳 Ligue des nations UEFA (4)" in world and "• MLS (3)" in world and "18:00 France - Italie" in world
-        assert "Cotes réelles aujourd'hui (12/20 crédits)" in world and "🎲" in world
-        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 PRONOSTICS KELLY (sans cote de bookmaker)" in txt
-        prono = next(m for m in sent if m.startswith("🎲 PRONOSTICS"))
-        assert "joue si la cote ≥" in prono and "chez 1xBet" in prono and "cote juste" in prono
+        assert "Cotes réelles aujourd'hui : " in world and "crédit" not in world and "🎲" in world
+        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 Pronostics sans cote (à vérifier chez 1xBet)" in txt
+        prono = next(m for m in sent if m.startswith("<b>🎲 Pronostics sans cote"))
+        assert "joue si la cote est au moins" in prono and "chez 1xBet" in prono and "cote juste" not in prono
         assert "Alpha" not in prono and "Ligue des nations" not in prono             # les sélections n'ont pas de profil de club
         paid_leagues = {c[0].split("/")[2] for c in fake.paid()}
         assert paid_leagues == {"soccer_uefa_nations_league", "soccer_international_friendlies",
@@ -1272,7 +1303,7 @@ def test_morning_always_useful():
         lig = app.handle_command("/ligues")
         assert lig.startswith(f"📚 LIGUES SUIVIES ({len(C.LEAGUE_KEYS)} dans le catalogue, au plus 6 payées par jour)")
         assert "💳 Ligue des nations UEFA (4)" in lig and "💳 Championship (5)" in lig and "⚽ MLS (3)" in lig
-        assert "💤 Serie A" in lig and "· Premier League" in lig and "Crédits du matin dépensés : 12" in lig
+        assert "💤 Serie A" in lig and "· Premier League" in lig and "rédit" not in lig
         for line in ("🇪🇺 Europe", "🌎 Amériques", "🌏 Asie / Océanie", "🌍 Afrique", "🌐 International"):
             assert line in lig
         aide = app.handle_command("/aide")
@@ -1280,7 +1311,7 @@ def test_morning_always_useful():
         fre = app.handle_command("/match Ajax")                              # match payé ? non : pronostic sans cote ou liste
         assert "Ajax" in fre or "Aucun match" in fre
         fr1 = app.handle_command("/match L1T3")
-        assert "cote juste" in fr1 and "joue si la cote ≥" in fr1, fr1
+        assert "joue si la cote est au moins" in fr1 and "cote juste" not in fr1, fr1
         # le cache d'un autre jour n'est pas servi
         sb.set_now(datetime(2026, 10, 9, 9, tzinfo=UTC))
         assert app.handle_command("/monde").startswith("Pas encore de relevé aujourd'hui")
@@ -1299,17 +1330,16 @@ def test_morning_always_useful():
         sent = run_morning(sb, fake)
         txt = "\n".join(sent)
         assert fake.paid() == [] and not track.load() and fake.remaining == 25
-        assert "🌍 TOUR DU MONDE" in txt and "Pas de cote payée aujourd'hui — budget de crédits : 25 crédits restants" in txt, txt
-        assert "🎲 PRONOSTICS KELLY" in txt and "joue si la cote ≥" in txt and "Brasileirão (2)" in txt
+        assert "🌍 TOUR DU MONDE" in txt and "Pas de cote payée aujourd'hui — budget de cotes du jour épuisé" in txt, txt
+        assert "🎲 Pronostics sans cote" in txt and "joue si la cote est au moins" in txt and "Brasileirão (2)" in txt
         assert "Pas assez de matchs" not in txt and "COMBINÉS DU" not in txt and "PARI DU JOUR" not in txt and "SÛR" not in txt
         assert "   💳" not in next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))          # aucune ligue payée
         assert not any(r["sent"] for r in track.load())                        # rien n'est suivi comme pari envoyé (pas de cote, pas de CLV)
         assert store.load("fair.json", []) and store.load("monde.json", {})["paid"] == []
-        assert "cote juste" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
+        assert "Pronostics sans cote" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
 
         # --- 3) aucun match nulle part aujourd'hui : on le dit en une ligne avec les prochains jours
-        for f in os.listdir(store.DATA_DIR):
-            os.remove(os.path.join(store.DATA_DIR, f))
+        wipe()
         odds.CREDITS.update(remaining=None, used=None)
         tomorrow = {"soccer_france_ligue_one": wevs("t", [("A1", "B1"), ("C1", "D1")], [20], "2026-10-09"),
                     "soccer_usa_mls": wevs("u", [("E1", "F1")], [23], "2026-10-10")}
@@ -1318,13 +1348,15 @@ def test_morning_always_useful():
         w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
         assert "😴 Aucun match aujourd'hui dans les 2 ligues en saison" in w, w
         assert "Prochains matchs : ven. 09/10 : 2 match(s) (Ligue 1) ; sam. 10/10 : 1 match(s) (MLS)" in w, w
-        assert fake.paid() == [] and len(sent) == 3 and sent[-1].startswith("Probabilités estimées")   # bilan + monde + avertissement
+        assert fake.paid() == [] and len(sent) == 2 and sent[-1].startswith("<i>Probabilités estimées"), sent    # monde + avertissement
         assert "Aucun match aujourd'hui." in app.handle_command("/monde") and "Prochains matchs" in app.handle_command("/monde")
         # --- 4) rien non plus les jours suivants
+        shutil.rmtree(cache.odds_dir(), ignore_errors=True)
         fake = sb.serve(FakeOdds(500, {}, sports=["soccer_epl"]))
         sent = run_morning(sb, fake)
         assert "Aucun match annoncé dans les 7 prochains jours" in next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
         # --- 5) The Odds API en panne : message clair, pas d'exception, pas de combiné vide
+        shutil.rmtree(cache.odds_dir(), ignore_errors=True)
         sb.serve(lambda url, **kw: Resp({"message": "service indisponible", "error_code": "DOWN"}, 503))
         sent = run_morning(sb, None)
         w = next(m for m in sent if m.startswith("🌍 TOUR DU MONDE"))
@@ -1398,15 +1430,445 @@ def test_africa_and_fair_settlement():
                        "nf": None, "old": "void"}, res
         assert len(odds.requests.get.log) == n                                          # aucun appel The Odds API, aucun crédit
         # message du matin : résultats + calibration, une seule fois
-        assert len(msgs) == 1 and msgs[0].startswith("🎲 PRONOSTICS KELLY — RÉSULTATS (sans cote)"), msgs
-        assert "✅ Manchester City - Arsenal : Plus de 10.5 corners (proba 64%, cote juste 1.56)" in msgs[0] and "❌" in msgs[0] and "5/8 gagnés (62%) pour une proba annoncée moyenne de 64%" in msgs[0]
+        assert len(msgs) == 1 and msgs[0].startswith("<b>🎲 Pronostics sans cote — résultats</b>"), msgs
+        assert "<b>Manchester City – Arsenal</b>\n✅ Plus de 10,5 corners (Kelly annonçait 64 % de chances)" in msgs[0] and "❌" in msgs[0]
+        assert "Pronostics sans cote : 5 gagnés sur 8 (62 %), Kelly en annonçait 64 % en moyenne." in msgs[0], msgs[0]
         assert app.fair_report(now) == []
         bil = settle.bilan({"picks": [], "combos": []})
         assert "Aucun pari réglé" in bil                                                   # sans paris réglés, le bilan reste inchangé
         track.save([dict(mk_row("x", "e9", "h2h", True, "2026-09-30T15:00:00Z"), result="win", prob=0.5, date="2026-09-30", closed_at="x",
                          clv=0.01)])
-        assert "🎲 Pronostics sans cote : 5/8 gagnés (62%)" in settle.bilan({"picks": [], "combos": []})
+        assert "Pronostics sans cote : 5 gagnés sur 8 (62 %)" in settle.bilan({"picks": [], "combos": []})
     print("Afrique et règlement des pronostics : OK")
+
+
+# ---------- cote typique, désaccord adaptatif, plancher de qualité, combinés à cote fixe ----------
+
+def book_event(i, home, away, ko, prices, who_title=None, market="h2h", name=None):
+    """Match dont le 1N2 « domicile » est coté `prices` par autant de books (nul et extérieur calés pour que la proba de
+    consensus reste ~ celle des prix)."""
+    books = []
+    for b, pr in enumerate(prices):
+        books.append({"key": f"b{b}", "title": (who_title or {}).get(b, f"Book{b}"), "markets": [
+            {"key": "h2h", "outcomes": [{"name": home, "price": pr}, {"name": "Draw", "price": 3.6}, {"name": away, "price": 2.9}]}]})
+    return {"id": f"bk{i}", "sport_key": "soccer_epl", "sport_title": "EPL", "home_team": home, "away_team": away,
+            "commence_time": ko, "bookmakers": books}
+
+
+def test_typical_price():
+    """Cote typique (75e centile des books) au lieu du maximum : un prix aberrant ne gonfle ni la cote ni la valeur."""
+    day = date(2026, 10, 1)
+    base = [4.20, 4.25, 4.30, 4.30, 4.35, 4.35, 4.40, 4.40, 4.25, 4.30, 4.20, 4.35, 4.30, 4.25, 4.40, 4.30]
+    ev = book_event(1, "KuPS", "Oulu", ko_at("2026-10-01", 17), base[:15] + [4.60], {15: "Coolbet"})
+    pick = next(c for c in odds.build_picks([ev], day) if c["name"] == "KuPS")
+    assert pick["best_odds"] == 4.60 and pick["book"] == "Coolbet", pick
+    assert abs(pick["odds"] - 4.35) < 1e-9 and pick["odds"] < pick["best_odds"], pick       # 5e meilleur sur 16 : (16 // 4) + 1
+    p = pick["prob_book"]
+    assert abs(pick["edge"] - (pick["prob"] * pick["odds"] - 1)) < 1e-9
+    assert pick["edge"] < p * pick["best_odds"] - 1 - 0.03, "la valeur ne doit plus se calculer sur le maximum"
+    # un seul prix aberrant ne déplace rien : sans lui, même cote typique
+    no_out = next(c for c in odds.build_picks([book_event(1, "KuPS", "Oulu", ko_at("2026-10-01", 17), base[:15])], day)
+                  if c["name"] == "KuPS")
+    assert abs(no_out["odds"] - pick["odds"]) < 0.06
+    assert odds.typical_price([(2.0, "a"), (1.9, "b"), (1.8, "c")]) == (1.9, "b")             # peu de books : au moins le 2e
+    assert odds.typical_price([(1.5, "a")] * 3 + [(9.0, "x")])[0] == 1.5                       # le maximum aberrant est ignoré
+    # la meilleure cote n'est qu'une note quand elle dépasse nettement la typique
+    pick["home"], pick["away"], pick["start"], pick["league"] = "KuPS", "Oulu", "17:00", "Veikkausliiga"
+    txt = fmt.leg(1, pick)
+    assert "<b>4,35</b>" in txt and "jusqu'à 4,60 chez Coolbet" in txt, txt
+    flat = dict(pick, best_odds=pick["odds"] * 1.02)
+    assert "jusqu'à" not in fmt.leg(1, flat)
+    print("cote typique : OK")
+
+
+def test_adaptive_disagreement():
+    """Seuil « les bookmakers ne sont pas d'accord » : plus haut avec peu de books ; poids du signal plus faible dans le score."""
+    assert odds.disagree_threshold(4) > odds.disagree_threshold(8) > odds.disagree_threshold(16) > C.DISAGREE_BASE
+    assert odds.few_books_factor(3) > odds.few_books_factor(20) > 1
+    day = date(2026, 10, 1)
+    wide = [3.2, 3.9, 3.0, 4.1] * 5                                   # écart de probas ~ 0,25 de la proba moyenne
+    many = book_event(1, "A", "B", ko_at("2026-10-01", 17), wide)
+    few = book_event(2, "C", "D", ko_at("2026-10-01", 17), wide[:4])
+    cm = next(c for c in odds.build_picks([many], day) if c["name"] == "A")
+    cf = next(c for c in odds.build_picks([few], day) if c["name"] == "C")
+    assert cm["n_books"] == 20 and cf["n_books"] == 4
+    assert cm["spread"] > odds.disagree_threshold(20) and "pas d'accord" in cm["why"], (cm["spread"], cm["why"])
+    mild = [3.5, 3.9, 3.35, 3.8] * 5                                  # écart modéré : suspect à 4 books, banal à 20
+    for n in (4, 20):
+        c = next(c for c in odds.build_picks([book_event(3, "E", "F", ko_at("2026-10-01", 17), mild[:n])], day) if c["name"] == "E")
+        assert (c["spread"] > odds.disagree_threshold(n)) == ("pas d'accord" in c["why"]), (n, c["spread"], c["why"])
+    # même écart brut : le désaccord pèse moins dans le score quand il y a peu de books
+    sc = lambda c: c["score"] - c["edge"] * c["weight"]                # noqa: E731 - part « désaccord » du score (steam nul)
+    assert sc(cf) / cf["spread"] < sc(cm) / cm["spread"]
+    print("désaccord adaptatif : OK")
+
+
+def mkleg(i, odds_, prob, ev=None, market="h2h", edge=None, **kw):
+    return {"key": f"k{i}", "id": ev or f"e{i}", "odds": odds_, "prob": prob, "edge": prob * odds_ - 1 if edge is None else edge,
+            "n_books": 14, "weight": 1.0, "score": 0.0, "market": market, "name": "Over", "why": "", "pm": None,
+            "commence": f"2026-10-01T{10 + i % 12:02d}:00:00Z", "home": f"H{i}", "away": f"A{i}", "event": f"H{i} - A{i}",
+            "league": "L", "start": f"{10 + i % 12}:00", "pick": f"Pari {i}"} | kw
+
+
+def test_quality_floor():
+    """Une jambe doit avoir une raison : valeur, stats d'avant-match ou probabilité élevée ; sinon elle n'entre pas dans un combiné."""
+    padding = mkleg(1, 1.74, 0.55, edge=-0.04)                          # Plus de 2,5 buts @1,74 sans aucun signal
+    assert CB.leg_reason(padding) is None
+    assert CB.leg_reason(mkleg(2, 4.40, 0.25, edge=0.06)) == "value"
+    assert CB.leg_reason(mkleg(3, 4.60, 0.2305, edge=0.014)) is None   # le nul « Coolbet » de la journée type : valeur trop mince
+    assert CB.leg_reason(mkleg(4, 1.39, 0.70, edge=-0.03)) == "safe"
+    assert CB.leg_reason(mkleg(5, 1.39, 0.70, edge=-0.09)) is None     # sûr, mais payé trop cher
+    assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, pm={"kind": "goals", "pgap": 0.07})) == "stats"
+    assert CB.leg_reason(mkleg(7, 1.74, 0.55, edge=-0.04, pm={"kind": "goals", "pgap": -0.07})) is None   # le modèle est contre
+    assert CB.leg_reason(mkleg(8, 1.49, 0.72, edge=0.0, pm={"kind": "goals", "pgap": -0.06})) is None     # même une jambe sûre
+    assert CB.leg_reason(mkleg(9, 1.9, 0.5, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Home")) == "stats"
+    assert CB.leg_reason(mkleg(10, 4.4, 0.23, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Draw")) is None
+    # peu de books : l'écart de valeur exigé est plus grand
+    thin = mkleg(11, 2.2, 0.47, edge=0.04, n_books=4)
+    assert CB.leg_reason(thin) is None and CB.leg_reason(dict(thin, n_books=20)) == "value"
+    # le plancher est dans la config
+    assert C.LEG_MIN_EDGE > 0 and 0.5 < C.LEG_SAFE_PROB < 0.9 and C.LEG_REUSE_MAX >= 1 and C.LEG_PM_GAP > 0
+    legs = [padding, mkleg(2, 4.40, 0.25, edge=0.06), mkleg(4, 1.39, 0.70, edge=-0.03)]
+    assert [c["key"] for c in CB.quality_legs(legs)] == ["k2", "k4"]
+    assert [c["key"] for c in CB.quality_legs(legs, special=True)] == []        # le spécial : seulement les marchés mal pricés
+    print("plancher de qualité : OK")
+
+
+def test_poor_day_and_tiers():
+    """Journée pauvre : une seule ligne compacte, jamais de bloc « Pas assez de matchs » ; seuls les paliers qui se
+    construisent avec des jambes de qualité sont envoyés."""
+    day = date(2026, 10, 8)
+    with Sandbox():
+        bankroll.save({"bankroll": 100.0, "initial": 100.0})
+        # 7 matchs, presque tout sans raison, quelques jambes de valeur/sûres : Sûr et Costaud sortent, pas le reste
+        legs = [mkleg(i, 1.74, 0.55, edge=-0.04) for i in range(7)]                                    # du remplissage
+        legs += [mkleg(20 + i, 2.5, 0.41, ev=f"e{i}", edge=0.025) for i in range(3)]                     # valeur trop mince
+        legs += [mkleg(30, 2.4, 0.45, ev="e0", edge=0.08), mkleg(31, 2.6, 0.42, ev="e1", edge=0.09),
+                 mkleg(32, 3.2, 0.33, ev="e2", edge=0.056)]
+        msgs, sent, combos = app.build_day(legs, day)
+        text = "\n".join(msgs)
+        assert text.count("Journée trop pauvre") == 1 and "Pas assez" not in text, text
+        built = [c["tier"] for c in combos]
+        assert built and all(t in [x[0] for x in C.COMBOS] for t in built)
+        assert "Journée trop pauvre : pas de " in text and "(7 matchs avec cotes)" in text
+        for t, _, _ in C.COMBOS:
+            assert (t in built) == (not any(fmt.tier_word(t) in line for line in text.splitlines() if "Journée trop pauvre" in line)), t
+        for c in combos:                                                 # chaque jambe d'un combiné a une raison
+            assert all(CB.leg_reason(next(l for l in legs if l["key"] == k)) for k in c["keys"])
+        # jour sans aucune jambe de qualité : ni pari du jour ni combiné, une ligne
+        msgs, sent, combos = app.build_day([mkleg(i, 1.74, 0.55, edge=-0.04) for i in range(7)], day)
+        text = "\n".join(msgs)
+        assert not sent and not combos and "PARI DU JOUR" not in text
+        assert text.count("Journée trop pauvre : ni pari ni combiné de qualité aujourd'hui (7 matchs avec cotes).") == 1, text
+        # le message d'exemple de la demande
+        assert CB.skip_line([C.COMBOS[3][0], C.COMBOS[4][0]], 7) == "Journée trop pauvre : pas de Méchant/Monstre aujourd'hui (7 matchs avec cotes)."
+    print("journée pauvre et paliers : OK")
+
+
+def test_leg_reuse():
+    """Une jambe sûre peut servir dans jusqu'à LEG_REUSE_MAX combinés ; une jambe risquée dans un seul."""
+    tiers = [(f"T{i}", lo, hi) for i, (lo, hi) in enumerate([(3.0, 4.0), (3.0, 4.0), (3.0, 4.0), (3.0, 4.0), (3.0, 4.0)])]
+    safe = [mkleg(i, 1.45, 0.72, edge=0.04) for i in range(3)]                  # 3 matchs sûrs
+    risky = [mkleg(10 + i, 2.0, 0.55, edge=0.1) for i in range(12)]
+    plan = CB.plan(safe + risky, tiers)
+    uses = {}
+    for _, combo in plan:
+        for c in (combo[0] if combo else []):
+            uses[c["id"]] = uses.get(c["id"], 0) + 1
+    assert any(combo for _, combo in plan)
+    assert all(n <= C.LEG_REUSE_MAX for i, n in uses.items() if i in {c["id"] for c in safe}), uses
+    assert all(n == 1 for i, n in uses.items() if i in {c["id"] for c in risky}), uses       # risqué : une fois par jour
+    assert max(uses.get(c["id"], 0) for c in safe) > 1                                       # le sûr est bien réutilisé
+    # sans réutilisation autorisée (un seul combiné par jambe), un 2e combiné avec les mêmes matchs est refusé
+    u = CB.Usage()
+    u.add([safe[0], risky[0]])
+    assert u.allowed(safe[0]) and not u.allowed(risky[0]) and not u.allowed(mkleg(99, 2.0, 0.5, ev=risky[0]["id"]))
+    for _ in range(C.LEG_REUSE_MAX - 1):
+        u.add([safe[0]])
+    assert not u.allowed(safe[0]), "au plus LEG_REUSE_MAX combinés pour une jambe sûre"
+    assert u.allowed(safe[1])
+    # une jambe sûre d'un match déjà pris avec une jambe risquée n'est pas réutilisable
+    mixed = CB.Usage()
+    mixed.add([mkleg(50, 2.0, 0.5, ev="m")])
+    assert not mixed.allowed(mkleg(51, 1.4, 0.75, ev="m"))
+    # /combi : mêmes règles, relativement aux combinés envoyés aujourd'hui
+    picks = safe + risky
+    sent = [{"keys": [risky[0]["key"], risky[1]["key"]], "date": "2026-10-01"},
+            {"keys": [safe[0]["key"], safe[1]["key"]], "date": "2026-10-01"}]
+    usage = CB.Usage.from_sent(sent, picks)
+    combo = CB.custom(picks, 4.0, usage)
+    assert combo and not ({c["id"] for c in combo[0]} & {risky[0]["id"], risky[1]["id"]})
+    assert 4.0 * 0.75 <= combo[1] <= 4.0 * 1.25
+    print("réutilisation des jambes : OK")
+
+
+def test_fixed_odds_optimiser():
+    """Seule la cote compte : 12 jambes à 1,30 pour un Costaud, 3 grosses jambes pour une cote équivalente, 200 candidats en
+    moins d'une seconde ; l'optimiseur égale la force brute ; un seul pari par match."""
+    import itertools
+    import time as _t
+    # beaucoup de jambes sûres à cote basse : le nombre de matchs n'est pas une contrainte
+    safe = [mkleg(i, 1.30, 0.80) for i in range(14)]
+    combo = CB.best_combo(safe, 12.0, 20.0)
+    assert combo and 12.0 <= combo[1] <= 20.0 and len(combo[0]) >= 9, (len(combo[0]) if combo else None)
+    assert abs(combo[2] - math.prod(c["prob"] for c in combo[0])) < 1e-12
+    # peu de jambes à grosse cote
+    big = [mkleg(100 + i, o, 0.9 / o) for i, o in enumerate((2.5, 2.6, 3.0, 1.2))]
+    c3 = CB.best_combo(big, 12.0, 20.0)
+    assert c3 and 12.0 <= c3[1] <= 20.0 and len(c3[0]) in (3, 4)
+    # 20 matchs pour un Monstre (cote 150 à 300) si c'est ce qu'il faut
+    many = [mkleg(200 + i, 1.30, 0.80) for i in range(30)]
+    mon = CB.best_combo(many, 150.0, 300.0)
+    assert mon and 150.0 <= mon[1] <= 300.0 and len(mon[0]) >= 19, len(mon[0]) if mon else None
+    # un pari par match, même si le même match propose des jambes très attractives
+    dup = [mkleg(300 + i, 2.0, 0.6, ev=f"m{i // 3}") for i in range(30)]
+    d = CB.best_combo(dup, 20.0, 40.0)
+    assert d and len({c["id"] for c in d[0]}) == len(d[0])
+    # égalité avec la force brute sur de petits cas
+    rng = random.Random(4)
+    for _ in range(40):
+        legs = [mkleg(400 + i, rng.choice((1.2, 1.5, 1.9, 2.4, 3.1, 4.5)) * rng.uniform(0.97, 1.03), rng.uniform(0.15, 0.8), ev=f"b{i // 2}")
+                for i in range(11)]
+        lo = rng.choice((3.0, 5.0, 9.0, 14.0))
+        hi = lo * 1.4
+        best = None
+        for k in range(2, 7):
+            for cb in itertools.combinations(legs, k):
+                if len({c["id"] for c in cb}) < k:
+                    continue
+                o = math.prod(c["odds"] for c in cb)
+                if lo <= o <= hi:
+                    pr = math.prod(c["prob"] for c in cb)
+                    best = pr if best is None or pr > best else best
+        got = CB.best_combo(legs, lo, hi, max_legs=6)
+        assert (got is None) == (best is None), (lo, hi, got and got[1], best)
+        assert got is None or got[2] >= best * (1 - 1e-9), (lo, hi, got[2], best)
+    # vitesse : ~200 jambes, cibles jusqu'à 150+
+    cand = [mkleg(1000 + i, rng.choice((1.25, 1.5, 1.9, 2.6, 3.8)) * rng.uniform(0.95, 1.05), rng.uniform(0.2, 0.8), ev=f"g{i // 2}")
+            for i in range(200)]
+    for lo, hi in ((5.0, 7.0), (12.0, 20.0), (40.0, 80.0), (150.0, 300.0)):
+        t0 = _t.perf_counter()
+        r = CB.best_combo(cand, lo, hi)
+        dt = _t.perf_counter() - t0
+        assert r and lo <= r[1] <= hi and dt < 1.0, (lo, hi, dt)
+    # borne de sécurité : jamais plus de MAX_LEGS jambes
+    r = CB.best_combo(many, 150.0, 300.0, max_legs=22)
+    assert r and len(r[0]) <= 22 and 150.0 <= r[1] <= 300.0
+    assert CB.best_combo(many[:1], 2.0, 3.0) is None and CB.best_combo([], 2.0, 3.0) is None
+    # /combi : cote visée +/- 25 %
+    cu = CB.custom(safe, 8.0)
+    assert cu and 8.0 * 0.75 <= cu[1] <= 8.0 * 1.25
+    assert C.COMBOS[-1][2] == 300.0 and all(lo < (hi or 1e9) for _, lo, hi in C.COMBOS)
+    print("optimiseur à cote fixe : OK")
+
+
+# ---------- caches ----------
+
+def test_odds_cache_and_zero_paid_calls():
+    """Cotes du jour payées une seule fois : un 2e passage (même exécution ou relance) et les commandes Telegram ne dépensent
+    aucun crédit ; les passages horaires ne rafraîchissent aucune source."""
+    day = "2026-10-01"
+    leagues = {"soccer_epl": [(f"c{i}", f"Ca{i}", f"Cb{i}", ko_at(day, 13 + i)) for i in range(4)]}
+    with Sandbox() as sb:
+        bankroll.save({"bankroll": 100.0, "initial": 100.0})
+        put_team_profiles({"E0": [t for e in leagues["soccer_epl"] for t in e[1:3]]})
+        fake = sb.serve(FakeOdds(500, leagues))
+        d = datetime(2026, 10, 1).date()
+        after = datetime(2026, 10, 1, 8, tzinfo=UTC)
+        with contextlib.redirect_stderr(io.StringIO()):
+            ev1 = odds.fetch_events(d, after=after)
+        paid1, log1 = fake.spent(), len(fake.log)
+        assert paid1 > 0 and cache.COUNTS["odds"]["miss"] == len(fake.paid())
+        with contextlib.redirect_stderr(io.StringIO()):
+            ev2 = odds.fetch_events(d, after=after)                          # 2e passage de la même exécution
+        assert fake.spent() == paid1 and len(fake.paid()) == len([c for c in fake.log if c[2]]), "aucun nouvel appel payant"
+        assert len(fake.log) == log1, "pas même un appel gratuit : /sports et /events sont relus du cache"
+        assert [e["id"] for e in ev2] == [e["id"] for e in ev1]
+        assert all("sport_key" in e and e["bookmakers"] for e in ev2)
+        assert cache.COUNTS["odds"]["hit"] >= 1 and cache.COUNTS["odds"]["saved"] >= 2 and cache.COUNTS["events"]["hit"] >= 1
+        ln = cache.line()
+        assert ln.startswith("♻️ Cache :") and "Odds API" in ln and "crédits évités" in ln, ln
+        # relance manuelle du matin (nouveau processus : compteurs à zéro) : mêmes combinés, zéro crédit, pas de doublon
+        for hour in (9, 10):
+            sb.set_now(datetime(2026, 10, 1, hour, tzinfo=UTC))
+            cache.reset()
+            n_paid = len(fake.paid())
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                app.run_daily()
+            assert len(fake.paid()) == n_paid and fake.spent() == paid1, (hour, fake.spent(), paid1)
+        n_combos = len(store.load("bets.json", {"combos": []})["combos"])
+        sb.set_now(datetime(2026, 10, 1, 11, tzinfo=UTC))
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            app.run_daily()
+        assert len(store.load("bets.json", {"combos": []})["combos"]) == n_combos, "une relance n'ajoute pas de doublons"
+        # Telegram : toutes les commandes sans le moindre appel réseau
+        calls = []
+
+        def boom(url, **kw):
+            calls.append(url)
+            raise AssertionError(f"requête réseau interdite : {url}")
+        sb.serve(boom)
+        stats_calls = []
+        real_post = telegram.requests.post
+        telegram.requests.post = boom
+        try:
+            for cmd in ("/top", "/match Ca0", "/combi 6", "/combi 30", "/analyse Ca1", "/stats Arsenal", "/bilan", "/bilan détail 7",
+                        "/monde", "/ligues", "/bank", "/aide"):
+                assert app.handle_command(cmd), cmd
+            # même appelé directement, un appel payant est refusé en mode hors ligne
+            with cache.offline():
+                try:
+                    odds.get("/sports/soccer_epl/odds", use="daily", regions="eu", markets="h2h")
+                    raise AssertionError("hors ligne : appel refusé")
+                except odds.OddsError as e:
+                    assert e.code == "OFFLINE"
+                assert stats.get("/fixtures", date="2026-10-01") is None
+        finally:
+            telegram.requests.post = real_post
+        assert calls == [] and stats_calls == []
+        # un appel payant sans « use » ne passe pas outre le budget
+        sb.serve(fake)
+        try:
+            odds.get("/sports/soccer_epl/odds", regions="eu", markets="h2h")
+            raise AssertionError("appel payant sans budget")
+        except odds.BudgetError:
+            pass
+        # passage horaire sans clôture due : zéro requête, aucune source rafraîchie
+        track.save([])
+        saved = (sources.refresh_all, bootstrap.ensure, http._request)
+        sources.refresh_all = bootstrap.ensure = lambda *a, **k: (_ for _ in ()).throw(AssertionError("les sources ne se rafraîchissent qu'à 08:00"))
+        http._request = lambda *a, **k: (_ for _ in ()).throw(AssertionError("aucun téléchargement"))
+        n = len(fake.log)
+        try:
+            sb.set_now(datetime(2026, 10, 1, 13, 5, tzinfo=UTC))
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                app.run_track()
+        finally:
+            sources.refresh_all, bootstrap.ensure, http._request = saved
+        assert len(fake.log) == n, "rien n'est dû : aucun appel"
+        # TTL : un cache périmé n'est pas relu
+        real_clock = cache.clock
+        cache.clock = lambda: real_clock() + C.ODDS_CACHE_HOURS * 3600 + 60
+        try:
+            assert cache.load("sports", C.EVENTS_CACHE_HOURS) is None
+        finally:
+            cache.clock = real_clock
+    print("cache des cotes et zéro appel payant hors 08:00 : OK")
+
+
+def test_sources_cache_counters():
+    """Sources : cache frais = zéro requête (compté), hors ligne = disque seulement."""
+    cache.reset()
+    with Sandbox():
+        calls = []
+        saved = (http._request, state.clock)
+        url = "https://football-data.co.uk/mmz4281/2526/E0.csv"
+        http._request = lambda u, h=None: (calls.append(u) or Raw(200, b"Div,Date\n"), None)
+        try:
+            shutil.rmtree(http.cache_dir(), ignore_errors=True)
+            http.reset()
+            http._robots["football-data.co.uk"] = (state.clock(), type("R", (), {"can_fetch": lambda *a: True})())
+            r1 = http.fetch(url, "footballdata", http.FOREVER)
+            r2 = http.fetch(url, "footballdata", http.FOREVER)
+            assert r1.ok and r2.ok and r2.from_cache and len(calls) == 1
+            c = cache.COUNTS["footballdata"]
+            assert c["miss"] == 1 and c["hit"] == 1, c
+            with cache.offline():                                   # périmé mais hors ligne : le disque, sans requête
+                r3 = http.fetch(url, "footballdata", 0)
+                assert r3.ok and r3.stale and len(calls) == 1
+                assert not http.fetch("https://football-data.co.uk/mmz4281/2526/D1.csv", "footballdata", 0).ok
+            assert "football-data 1 en cache / 1 appel" in cache.line()
+        finally:
+            http._request, state.clock = saved
+    print("compteurs du cache des sources : OK")
+
+
+# ---------- messages ----------
+
+def fake_rows_for_results():
+    mk = lambda k, h, a, pick, market, res, final, name="x": {   # noqa: E731
+        "key": k, "home": h, "away": a, "pick": pick, "market": market, "name": name, "result": res, "final": final,
+        "odds": 1.55, "sent": True}
+    return [mk("k1", "Flamengo", "Vasco", "Flamengo gagne", "h2h", "win", "2-0", "Flamengo"),
+            mk("k2", "Santos", "Gremio", "Plus de 2,5 buts", "totals", "win", "3-1"),
+            mk("k3", "Nautico", "Gremio & Co", "Nautico gagne", "h2h", "loss", "1-1", "Nautico"),
+            mk("k4", "Ajax", "PSV", "Match nul", "h2h", "win", "1-1", "Draw")]
+
+
+def test_messages_human():
+    """Messages Telegram : HTML échappé, virgule décimale, heures « 21h00 », layout des combinés et des résultats, pas de jargon."""
+    assert fmt.num(1.55) == "1,55" and fmt.odds_txt(156.66) == "156,7" and fmt.odds_txt(6.12) == "6,12"
+    assert fmt.pct(0.314) == "31 %" and fmt.pct(0.0069) == "0,7 %" and fmt.pct(0.5) == "50 %"
+    assert fmt.hhmm("21:00") == "21h00" and fmt.fr_day(date(2026, 10, 9)) == "vendredi 9 octobre"
+    assert fmt.units(2) == "2 u" and fmt.units(0.2) == "0,2 u" and fmt.signed(10.2) == "+10,2 u" and fmt.signed(-0.2) == "−0,2 u"
+    assert fmt.esc("Bayer & Co <1>") == "Bayer &amp; Co &lt;1&gt;"
+    # libellés comme chez le bookmaker
+    L = fmt.label
+    assert L("totals", "Over", 2.5, None, "soccer") == "Plus de 2,5 buts" and L("totals", "Under", 2.5, None, "soccer") == "Moins de 2,5 buts"
+    assert L("alternate_totals_corners", "Under", 9.5, None, "soccer") == "Moins de 9,5 corners"
+    assert L("alternate_totals_cards", "Over", 3.5, None, "soccer") == "Total cartons : plus de 3,5"
+    assert L("btts", "Yes", None, None, "soccer") == "Les deux équipes marquent : oui"
+    assert L("double_chance", "Draw or Flamengo", None, None, "soccer") == "Double chance : Nul ou Flamengo"
+    assert L("player_shots_on_target", "Over", 1.5, "Mbappé", "soccer") == "Mbappé : 2 tirs cadrés ou plus"
+    assert L("player_shots_on_target", "Over", 0.5, "Mbappé", "soccer") == "Mbappé : 1 tir cadré ou plus"
+    assert L("h2h", "Flamengo", None, None, "soccer") == "Flamengo gagne" and L("h2h", "Draw", None, None, "soccer") == "Match nul"
+    # un combiné : titre + cote, chances et mise, jambes numérotées séparées par une ligne vide
+    legs = [mkleg(1, 1.55, 0.7, edge=0.0, home="Flamengo", away="Vasco & Fils", league="Brasileirão", pick="Flamengo gagne",
+                  why="", start="21:00"),
+            mkleg(2, 1.90, 0.53, edge=0.07, home="Santos", away="Gremio", pick="Plus de 2,5 buts", start="22:30",
+                  why="cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)", best_odds=2.05, book="Betfair")]
+    msg = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"})
+    assert isinstance(msg, telegram.Html) and msg.startswith("<b>🛡️ SÛR — cote 2,95</b>\n<i>2 paris · 37 % de chances · mise conseillée : 2 u</i>\n\n1. <b>Flamengo – Vasco &amp; Fils</b> · 21h00 · Brasileirão")
+    assert "\n   Flamengo gagne — <b>1,55</b>\n   ↳ Très probable : 70 % de chances\n\n2. <b>Santos – Gremio</b> · 22h30" in msg, msg
+    assert "<b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n   ↳ Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)" in msg, msg
+    # résultats du lendemain
+    rows = fake_rows_for_results()
+    won = {"tier": C.COMBOS[0][0], "keys": ["k1", "k2"], "odds": 6.12, "stake": 2.0, "result": "win", "odds_final": 6.12, "date": "2026-10-07"}
+    lost = {"tier": C.COMBOS[4][0], "keys": ["k1", "k2", "k3", "k4"], "odds": 156.7, "stake": 0.2, "result": "loss", "date": "2026-10-07"}
+    by = {r["key"]: r for r in rows}
+    w, l_ = app.combo_result(won, by), app.combo_result(lost, by)
+    assert w.split("\n")[0] == "<b>✅ SÛR gagné — cote 6,12</b> · +10,2 u", w
+    assert w.split("\n")[1:] == ["✅ Flamengo gagne (2-0)", "✅ Santos – Gremio : Plus de 2,5 buts (3-1)"], w
+    assert l_ == "❌ <b>MONSTRE perdu</b> — 3 sur 4, raté : Nautico – Gremio &amp; Co (1-1) · −0,2 u", l_
+    with Sandbox():
+        bankroll.save({"bankroll": 104.3, "initial": 100.0})
+        bets = {"picks": [], "combos": [dict(won), dict(lost)]}
+        res = app.results_message(bets, rows, [])
+        assert res.startswith("<b>📋 Résultats d'hier</b>\n\n<b>✅ SÛR gagné") and res.rstrip().endswith("<i>Hier : 1 combiné gagné sur 2 · bankroll 104,3 u (+4,3)</i>"), res
+        assert all(c["reported"] for c in bets["combos"]) and app.results_message(bets, rows, []) is None
+    # le message du jour de l'échantillon : pas de jargon, HTML bien formé, virgules
+    bankroll.save({"bankroll": 100.0, "initial": 100.0})
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        out = app.run_daily(sample=True)
+    plain_all = "\n".join(fmt.plain(m) for m in out).lower()
+    for word in fmt.JARGON:
+        assert word not in plain_all, (word, plain_all[:3000])
+    assert not re.search(r"\d\.\d", plain_all.replace("2026", "")), re.findall(r".{20}\d\.\d.{10}", plain_all)[:3]
+    for m in out:
+        assert m.count("<b>") == m.count("</b>") and m.count("<i>") == m.count("</i>")
+    # Telegram refuse le HTML : le même message repart en texte brut
+    sent = []
+    real = (telegram.api, telegram.creds)
+
+    def api(method, **p):
+        sent.append(p)
+        if p.get("parse_mode") == "HTML":
+            raise telegram.TelegramError("Bad Request: can't parse entities", 400)
+        return {}
+    telegram.api, telegram.creds = api, lambda: ("tok", "42")
+    try:
+        assert telegram.send(telegram.Html("<b>Test &amp; co</b>")) is True
+        assert sent[0]["parse_mode"] == "HTML" and "parse_mode" not in sent[1] and sent[1]["text"] == "Test & co", sent
+        assert telegram.send("a < b & c") and "parse_mode" not in sent[-1]
+        long = telegram.Html("\n\n".join(f"<b>bloc {i}</b>" for i in range(900)))
+        sent.clear()
+        telegram.api = lambda method, **p: sent.append(p) or {}
+        telegram.send(long)
+        assert len(sent) >= 2 and all(len(p["text"]) <= 4000 and p["text"].count("<b>") == p["text"].count("</b>") for p in sent)
+    finally:
+        telegram.api, telegram.creds = real
+    # /bilan : simple par défaut, technique avec « détail »
+    print("messages lisibles : OK")
 
 
 def main():
@@ -1416,7 +1878,7 @@ def main():
 
     # --- Journée 1 : envoi + suivi (envoyés + fantômes)
     msgs = app.run_daily(sample=True)
-    assert any("KELLY" in m for m in msgs) and any("Mise conseillée" in m for m in msgs)
+    assert any("Kelly —" in m for m in msgs) and any("mise conseillée" in m for m in msgs)
     rows = track.load()
     assert len(rows) >= 30 and sum(r["sent"] for r in rows) >= 5, (len(rows))
     assert all(r["closed_at"] is None and "heuristic" in r["features"] for r in rows)
@@ -1467,8 +1929,10 @@ def main():
     assert settled and all(b["result"] in ("win", "loss", "push") for b in settled)
     assert all(c["result"] in ("win", "loss", "void") for c in bets["combos"])
     bankroll.apply_results(bets["combos"])
-    text = settle.bilan(bets)
+    text = settle.bilan(bets, detail=True)
     assert "Envoyés" in text and "Suivis en silence" in text and "Brier" in text and "CLV" in text, text
+    simple = settle.bilan(bets)
+    assert "Bilan" in simple and "Combinés :" in simple and not re.search(r"Brier|CLV|rendement", simple), simple
     print("\n" + text + "\n")
 
     # --- Calibration : 400 résultats synthétiques « corners/cartons » dont les
@@ -1493,10 +1957,10 @@ def main():
     d = learn.describe(model, track.load())
     assert d.startswith("🧠 KELLY APPREND"), d
     print(d, "\n")
-    assert "BILAN" in app.handle_command("/bilan")
+    assert "Bilan" in app.handle_command("/bilan") and "BILAN" in app.handle_command("/bilan détail")
     assert "PSG" in app.handle_command("/match psg")
     assert "COMBINÉ SUR MESURE" in app.handle_command("/combi 30")
-    assert "TOP 10" in app.handle_command("/top")
+    assert "meilleurs paris du jour" in app.handle_command("/top")
     assert "réglée" in app.handle_command("/bank 50000")
     assert "Kelly" in app.handle_command("/aide")
     test_build_picks_shapes()
@@ -1518,6 +1982,15 @@ def main():
     test_fair_pronostics()
     test_morning_always_useful()
     test_africa_and_fair_settlement()
+    test_typical_price()
+    test_adaptive_disagreement()
+    test_quality_floor()
+    test_poor_day_and_tiers()
+    test_leg_reuse()
+    test_fixed_odds_optimiser()
+    test_odds_cache_and_zero_paid_calls()
+    test_sources_cache_counters()
+    test_messages_human()
     shutil.rmtree(os.environ["DATA_DIR"], ignore_errors=True)
     print("OK : tout le flux passe hors ligne.")
 

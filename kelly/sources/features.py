@@ -4,6 +4,9 @@ match_features(home, away, sport_key, referee=None) -> dict (clés absentes si d
   exp_corners[_home|_away], exp_cards (+ exp_cards_team, ref_cards), exp_fouls, exp_shots_home/away,
   exp_sot_home/away, exp_goals_home/away, xg_home/xga_home/xg_away/xga_away, exp_xg_home/away/total,
   n_home / n_away (matchs utilisés), sources (liste), home_team / away_team (noms retenus).
+  Quand le modèle de force de la ligue (kelly/strength.py : Dixon-Coles pondéré, contexte, arbitre) existe et connaît les
+  deux équipes, il REMPLACE les moyennes glissantes pour exp_goals*, exp_corners*, exp_cards*, exp_shots*, exp_sot*,
+  exp_fouls* et ajoute : deep (la prévision complète : lh, la, rho, q, qs, stats, notes, why...), "modèle Kelly" dans sources.
 player_features(name, team=None, sport_key=None) -> dict ou None : shots90, sot90, fouls90, fouled90,
   cards90, xg90, xa90, minutes...
 Convention : l'espérance d'une équipe mêle sa production (vue domicile ou extérieur) et ce que
@@ -19,6 +22,11 @@ _cache = {}
 
 def reload():
     _cache.clear()
+    try:
+        from .. import strength
+        strength.reload()
+    except Exception:                       # noqa: BLE001
+        pass
 
 
 def _p(name, mod):
@@ -130,11 +138,40 @@ def _fbref(out, home, away, sport_key):
         _put_pair(out, stat, key, hv, av, total=key in ("cards", "fouls", "corners"))
 
 
+def _deep(out, home, away, sport_key, referee):
+    """Modèle de force (kelly/strength.py) : si la ligue a assez de matchs en cache, ses chiffres remplacent les moyennes
+    glissantes (même clés exp_*) et la prévision complète est jointe sous « deep »."""
+    from .. import strength
+    div = footballdata.SPORT_TO_DIV.get(sport_key)
+    model = strength.get(div) if div else None
+    pred = strength.predict(model, out.get("home_team") or home, out.get("away_team") or away, referee=referee) if model else None
+    if not pred:
+        return
+    st = pred["stats"]
+    out["sources"].append("modèle Kelly")
+    out["home_team"], out["away_team"] = pred["home"], pred["away"]
+    out["n_home"], out["n_away"] = pred["n"]
+    out["deep"] = pred
+    for stat, key in (("goals", "goals"), ("corners", "corners"), ("cards", "cards"), ("shots", "shots"), ("sot", "sot"),
+                      ("fouls", "fouls")):
+        if stat in st:
+            _put_pair(out, stat, key, st[stat]["h"], st[stat]["a"])
+    if "cards" in st:
+        out["exp_cards_team"] = _r((st["cards"]["h"] + st["cards"]["a"]) / st["cards"].get("ref", 1.0))
+    r = pred["info"].get("referee")
+    if r:
+        out["referee"], out["ref_cards"], out["ref_cards_factor"] = r["name"], r["cards"], _r(r["factor"])
+        out.pop("referee_unknown", None)
+    rf = pred["info"].get("referee_fouls")
+    if rf and "fouls" in st:
+        out["ref_fouls"] = rf["avg"]
+
+
 def match_features(home, away, sport_key, referee=None):
     """Chiffres d'avant-match fusionnés (voir l'en-tête du module). Dict avec au moins « sources »."""
     out = {"sources": []}
     for fn, args in ((_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
-                     (_fbref, (home, away, sport_key))):
+                     (_fbref, (home, away, sport_key)), (_deep, (home, away, sport_key, referee))):
         try:
             fn(out, *args)
         except Exception:                       # une source cassée ne doit jamais bloquer les autres

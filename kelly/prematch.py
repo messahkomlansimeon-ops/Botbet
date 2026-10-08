@@ -8,10 +8,14 @@ c["pm"] = {kind, src, exp?, gap?, pgap?, xgd?} :
   exp   valeur attendue (par match)   gap   exp - ligne, du côté du pari (+ = le modèle aime le pari)
   pgap  proba modèle - proba des books    xgd  buts attendus (domicile - extérieur), du côté du pari
 Cartons = jaunes + rouges (convention d'API-Football et de football-data) ; à vérifier selon le book.
+
+Modèle approfondi (kelly/strength.py) : quand f["deep"] existe, la proba vient de la matrice de scores de Dixon-Coles
+(buts, 2 équipes marquent) ou d'une binomiale négative (corners, cartons), le poids du modèle est celui de config
+multiplié par (0,5 + 0,5 x qualité des données) et le « pourquoi » cite les 2-3 moteurs (c["pm"]["q"] = qualité).
 """
 import math
 
-from . import config as C
+from . import config as C, strength
 from .stats import poisson_over
 
 CORNERS, CARDS = "alternate_totals_corners", "alternate_totals_cards"
@@ -36,7 +40,12 @@ def side(name):
 
 def goal_means(f):
     """(buts attendus domicile, extérieur, étiquette) : xG Understat si connus, sinon moyennes de buts
-    football-data ; None sinon."""
+    football-data ; None sinon. Avec le modèle approfondi (f["deep"]), ses buts attendus, mêlés à 30 % aux xG s'ils existent."""
+    d = f.get("deep")
+    if d and d.get("lh") is not None:
+        if f.get("exp_xg_home") is not None and f.get("exp_xg_away") is not None:
+            return 0.7 * d["lh"] + 0.3 * f["exp_xg_home"], 0.7 * d["la"] + 0.3 * f["exp_xg_away"], "modèle Kelly + xG"
+        return d["lh"], d["la"], "modèle Kelly"
     if f.get("exp_xg_home") is not None and f.get("exp_xg_away") is not None:
         return f["exp_xg_home"], f["exp_xg_away"], "xG"
     if f.get("exp_goals_home") is not None and f.get("exp_goals_away") is not None:
@@ -89,10 +98,65 @@ def player_stats(c, sources):
     return found[0] if len(found) == 1 else None
 
 
+def qscale(q):
+    """Poids du modèle selon la qualité des données (matchs pondérés des deux équipes, complétude des colonnes de la ligue)."""
+    return 0.5 + 0.5 * max(0.0, min(1.0, q))
+
+
+def deep_p(d, lh, la, market, point, name):
+    """Proba du côté choisi pour un total de buts ou « les 2 marquent » avec la matrice de Dixon-Coles du modèle `d`."""
+    m = strength.score_matrix(lh, la, d.get("rho", 0.0))
+    if market == "btts":
+        yes = 1 - sum(m[0]) - sum(row[0] for row in m) + m[0][0]
+        return yes if name == "Yes" else 1 - yes
+    return over_p(name, strength.p_over(strength.goal_pmf(m), point))
+
+
+def deep_assess(c, f, d):
+    """Évaluation par le modèle approfondi (f["deep"]) pour corners, cartons, buts, 2 équipes marquent, 1N2 ; None sinon."""
+    m, point = c["market"], c.get("point")
+    why = d.get("why") or {}
+    if m in (CORNERS, CARDS):
+        kind = "corners" if m == CORNERS else "cards"
+        s = (d.get("stats") or {}).get(kind)
+        if not s or point is None:
+            return None
+        exp = s["h"] + s["a"]
+        if not BOUNDS[kind][0] <= exp <= BOUNDS[kind][1]:
+            return None
+        q = d["qs"].get(kind, 0.0)
+        unit = "corners" if kind == "corners" else "cartons"
+        tag = strength.shorten(f"modèle Kelly : {exp:.1f} {unit} attendus vs ligne {point}" + (f" ; {why[kind]}" if why.get(kind) else ""), 200)
+        return {"kind": kind, "exp": exp, "p": strength.p_stat_total(d, kind, point, c["name"]),
+                "w": C.MODEL_WEIGHT[kind] * qscale(q), "tag": tag, "flag": C.PM_FLAG, "q": q}
+    gm = goal_means(f) if m in ("totals", "btts", "h2h") else None
+    if not gm or not all(BOUNDS["goals"][0] <= x <= BOUNDS["goals"][1] for x in gm[:2]):
+        return None
+    lh, la, label = gm
+    q = d["qs"].get("goals", 0.0)
+    if m == "totals" and point is not None:
+        exp = lh + la
+        tag = strength.shorten(f"{label} : {exp:.1f} buts attendus vs ligne {point}" + (f" ; {why['goals']}" if why.get("goals") else ""), 200)
+        return {"kind": "goals", "exp": exp, "p": deep_p(d, lh, la, m, point, c["name"]), "w": C.MODEL_WEIGHT["goals"] * qscale(q),
+                "tag": tag, "flag": C.PM_FLAG * 1.25, "q": q}
+    if m == "btts":
+        tag = strength.shorten(f"{label} : {lh:.1f}-{la:.1f} buts attendus (les 2 marquent)" + (f" ; {why['goals']}" if why.get("goals") else ""), 200)
+        return {"kind": "btts", "p": deep_p(d, lh, la, m, None, c["name"]), "w": C.MODEL_WEIGHT["goals"] * qscale(q),
+                "tag": tag, "flag": C.PM_FLAG * 1.25, "q": q}
+    if m == "h2h":
+        who = "draw" if c["name"] == "Draw" else ("home" if c["name"] == c["home"] else "away")
+        return {"kind": "h2h", "xgd": signed_diff(who, lh, la), "q": q}
+    return None
+
+
 def assess(c, f, sources):
     """Évaluation d'un pari à partir des chiffres d'avant-match `f` (sources.match_features) :
-    dict {kind, exp?, p?, w?, tag?, flag?, xgd?} ou None si les données manquent."""
+    dict {kind, exp?, p?, w?, tag?, flag?, xgd?, q?} ou None si les données manquent."""
     m, point = c["market"], c.get("point")
+    if f.get("deep") and not m.startswith("player_"):
+        a = deep_assess(c, f, f["deep"])
+        if a is not None:
+            return a
     if m in (CORNERS, CARDS):
         kind = "corners" if m == CORNERS else "cards"
         exp = f.get("exp_" + kind)
@@ -152,6 +216,8 @@ def apply(c, a, src="sources"):
             c["why"] = ", ".join(filter(None, [c["why"], a["tag"]]))
     if a.get("xgd") is not None:
         pm["xgd"] = round(a["xgd"], 2)
+    if a.get("q") is not None:
+        pm["q"] = round(a["q"], 2)
     c["pm"] = pm
     return c
 

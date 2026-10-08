@@ -1,5 +1,7 @@
 """Envoi de messages et lecture des commandes Telegram."""
+import html as _html
 import os
+import re
 import sys
 import time
 
@@ -8,6 +10,27 @@ import requests
 from . import store
 
 LAST_ERROR = ""        # dernière erreur d'envoi (description renvoyée par l'API Telegram)
+
+
+class Html(str):
+    """Message au format HTML Telegram (balises <b> et <i>, texte externe échappé). Envoyé en parse_mode HTML ; si
+    Telegram refuse le HTML, le même message part en texte brut. Un `str` ordinaire part en texte brut."""
+
+
+def plain(text):
+    """Texte brut d'un message HTML (console, repli quand Telegram refuse le HTML)."""
+    return _html.unescape(re.sub(r"</?(b|i|u|s|code|pre)>", "", str(text)))
+
+
+def _chunks(text, size=4000):
+    """Morceaux de `size` caractères au plus, coupés de préférence entre deux lignes (jamais au milieu d'une balise)."""
+    out = []
+    while len(text) > size:
+        cut = text.rfind("\n\n", 0, size)
+        cut = cut if cut > 0 else (text.rfind("\n", 0, size) if text.rfind("\n", 0, size) > 0 else size)
+        out.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return out + [text]
 
 
 class TelegramError(Exception):
@@ -50,17 +73,27 @@ def api(method, **payload):
 
 
 def send(text, chat_id=None):
-    """Envoie `text` (découpé). Sans identifiants : affiche. Ne lève jamais : renvoie False
-    et note l'erreur (stderr + LAST_ERROR) si Telegram refuse."""
+    """Envoie `text` (découpé). `Html` : parse_mode HTML, avec repli en texte brut si Telegram rejette le HTML. Sans
+    identifiants : affiche. Ne lève jamais : renvoie False et note l'erreur (stderr + LAST_ERROR) si Telegram refuse."""
     global LAST_ERROR
     token, chat = creds()
     chat_id = chat_id or chat
     if not (token and chat_id):
-        print(text + "\n")
+        print(plain(text) + "\n")
         return True
-    for i in range(0, len(text), 4000):             # limite Telegram : 4096 caractères
+    is_html = isinstance(text, Html)
+    for part in _chunks(str(text)):
         try:
-            api("sendMessage", chat_id=chat_id, text=text[i:i + 4000])
+            if is_html:
+                try:
+                    api("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True)
+                    continue
+                except TelegramError as e:
+                    if "parse" not in str(e).lower() and "entities" not in str(e).lower():
+                        raise
+                    print("[telegram] HTML refusé, renvoi en texte brut", file=sys.stderr)
+                    part = plain(part)
+            api("sendMessage", chat_id=chat_id, text=part)
         except TelegramError as e:
             LAST_ERROR = f"{e} (code {e.code})" if e.code else str(e)
             print(f"[telegram] envoi échoué : {LAST_ERROR}", file=sys.stderr)

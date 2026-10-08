@@ -8,12 +8,13 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (bankroll, bootstrap, budget, catalogue, combos as CB, config as C, fair, learn, monde, odds, settle, sources,
-               stats, store, telegram, track)
+from . import (bankroll, bootstrap, budget, cache, catalogue, combos as CB, config as C, fair, fmt, learn, monde, odds,
+               settle, sources, stats, store, strength, telegram, track)
 from .sources import http
+from .telegram import Html
 
-DISCLAIMER = ("Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
-              "mise petit. 18+")
+DISCLAIMER = Html("<i>Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
+                  "mise petit. 18+</i>")
 
 
 def now_utc():
@@ -26,88 +27,130 @@ def load_sample(name="sample_events.json"):
         return json.load(f)
 
 
-def fmt_pick(c, stake_hint=None):
-    why = f' ({c["why"]})' if c.get("why") else ""
-    return f'• {c["start"]} {c["event"]} [{c["league"]}]\n   → {c["pick"]} @ {c["odds"]:.2f}{why}'
-
-
-def fmt_combo(title, combo, bank):
-    if not combo:
-        return f"{title}\nPas assez de matchs aujourd'hui pour ce combiné."
-    picks, odds_, prob = combo
-    lines = [title] + [fmt_pick(c) for c in picks]
-    st = bankroll.stake(prob, odds_, title, bank)
-    lines.append(f"💰 {len(picks)} matchs | Cote totale : {odds_:.1f} | Proba estimée : {prob*100:.1f}% | "
-                 f"Mise conseillée : {st} u")
-    return "\n".join(lines), st
+def bank_line(bets_combos=None):
+    """« 💼 Bankroll : 104,3 u (+4,3 depuis le début) » + alerte après une série de défaites."""
+    b = bankroll.load()
+    lines = [f"💼 Bankroll : {fmt.trim(b['bankroll'], 1)} u ({fmt.signed(b['bankroll'] - b['initial'], '')} depuis le début)"]
+    st = bankroll.streak(bets_combos or [])
+    if st >= C.STREAK_WARNING:
+        lines.append(f"⚠️ {st} combinés perdus d'affilée : lève le pied, réduis les mises ou fais une pause.")
+    return "\n".join(lines)
 
 
 def build_day(picks, day, world=None, pronos=(), why_no_odds=None):
     """Messages du jour + enregistrement des paris envoyés. `world` : cache « tour du monde » (monde.build), `pronos` :
-    pronostics sans cote (fair.make). Toujours au moins un message utile : le tour du monde et les pronostics
-    remplacent les combinés les jours sans cotes réelles."""
+    pronostics sans cote (fair.make). Un message par combiné ; les paliers impossibles à bâtir avec des jambes de qualité
+    sont signalés UNE fois, en une ligne, dans l'en-tête. Toujours au moins un message utile : le tour du monde et les
+    pronostics remplacent les combinés les jours sans cotes réelles."""
     bank = bankroll.load()["bankroll"]
-    pool = CB.make_pool(picks)
-    soft = sum(1 for c in picks if CB.soft_market(c))
-    messages = []
+    quality = CB.make_pool(picks)
+    n_events = len({c["id"] for c in picks})
+    messages, sent_picks, sent_combos = [], [], []
+    top = max(quality, key=lambda c: c["score"]) if quality else None
+    plan = CB.plan(picks) if quality else [(t, None) for t, _, _ in C.COMBOS]
+    built = [(t, c) for t, c in plan if c]
+    missing = [t for t, c in plan if not c]
     if picks:
-        messages.append(f"🔥 KELLY — COMBINÉS DU {day.strftime('%d/%m/%Y')} 🔥\n{len(CB.per_event(picks))} matchs analysés, "
-                        f"{len(picks)} paris étudiés dont {soft} sur marchés secondaires (corners, cartons, joueurs)")
+        n_world = monde.total(world) if world else 0
+        seen = (f"{n_world} matchs analysés dans le monde, {n_events} avec des cotes réelles" if n_world
+                else f"{n_events} matchs analysés avec des cotes réelles")
+        n_c = f"{len(built)} combiné{'s' if len(built) > 1 else ''} aujourd'hui" if built else "aucun combiné aujourd'hui"
+        head = [fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}"), f"{seen} · {n_c}"]
+        if missing:
+            head.append(fmt.i(fmt.esc(CB.skip_line(missing, n_events, anything=bool(quality)))))
+        messages.append(Html("\n".join(head)))
     if world:
         messages.append(monde.tour_du_monde(world, len(pronos), why_no_odds))
-    sent_picks, sent_combos = [], []
-    if pool:
-        top = max(pool, key=lambda c: c["score"])
-        messages.append(f'⭐ PARI DU JOUR\n{top["start"]} {top["event"]} [{top["league"]}]\n→ {top["pick"]} @ '
-                        f'{top["odds"]:.2f} (proba {top["prob"]*100:.0f}%)'
-                        + (f'\nPourquoi : {top["why"]}' if top["why"] else ""))
+    if top:
+        messages.append(fmt.single(top, CB.leg_reason(top)))
         sent_picks.append(top)
-    for title, lo, hi in (C.COMBOS if picks else []):
-        combo = CB.make_combo(CB.pool_for(title, picks, pool), lo, hi)
-        if combo:
-            text, st = fmt_combo(title, combo, bank)
-            sent_picks += combo[0]
-            sent_combos.append({"tier": title, "keys": [c["key"] for c in combo[0]],
-                                "odds": round(combo[1], 2), "prob": round(combo[2], 5), "stake": st})
-        else:
-            text = fmt_combo(title, None, bank)
-        messages.append(text)
+    for title, combo in built:
+        picks_, odds_, prob = combo
+        st = bankroll.stake(prob, odds_, title, bank)
+        messages.append(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_}))
+        sent_picks += picks_
+        sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_],
+                            "odds": round(odds_, 2), "prob": round(prob, 5), "stake": st})
     if pronos:
-        messages.append(fair.fmt_pronos(pronos, C.FAIR_MAX if not sent_combos else max(3, C.FAIR_MAX // 2)))
+        messages.append(fmt.pronos(pronos, C.FAIR_MAX if not sent_combos else max(3, C.FAIR_MAX // 2)))
     if not messages:
-        messages.append(f"🔥 KELLY — {day.strftime('%d/%m/%Y')}\nPas de cotes réelles aujourd'hui"
-                        + (f" — {why_no_odds}" if why_no_odds else "") + " : ni combiné ni pronostic. /monde pour les matchs du jour.")
+        messages.append(Html(fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}") + "\nPas de cotes réelles aujourd'hui"
+                             + (f" — {fmt.esc(why_no_odds)}" if why_no_odds else "")
+                             + " : ni combiné ni pronostic. /monde pour les matchs du jour."))
     messages.append(DISCLAIMER)
     return messages, sent_picks, sent_combos
 
 
+def leg_result_line(row):
+    """« ✅ Flamengo gagne (2-0) » ; le match est rappelé quand le pari ne le nomme pas (« Plus de 2,5 buts »)."""
+    icon = {"win": "✅", "loss": "❌", "push": "↩️", "void": "⚪"}.get(row.get("result"), "⏳")
+    pick = fmt.esc(row["pick"])
+    if row["market"] not in ("h2h", "double_chance", "spreads") or row.get("name") == "Draw":
+        pick = f"{fmt.esc(row['home'])} – {fmt.esc(row['away'])} : {pick}"
+    return f"{icon} {pick}" + (f" ({fmt.esc(row['final'])})" if row.get("final") else "")
+
+
+def combo_result(c, by_key):
+    """Bloc de résultat d'un combiné terminé."""
+    name = fmt.tier_name(c["tier"]).split(" ", 1)[-1]
+    legs = [by_key.get(k) or {} for k in c["keys"]]
+    stake = c["stake"]
+    if c["result"] == "win":
+        odds_ = c.get("odds_final", c["odds"])
+        return "\n".join([f"{fmt.b(f'✅ {fmt.esc(name)} gagné — cote {fmt.odds_txt(odds_)}')} · {fmt.signed(stake * (odds_ - 1))}"]
+                         + [leg_result_line(r) for r in legs if r])
+    if c["result"] == "void":
+        return f"⚪ {fmt.b(fmt.esc(name) + ' annulé')} — les matchs n'ont pas eu lieu, mise rendue"
+    missed = [r for r in legs if r.get("result") == "loss"]
+    ok = sum(1 for r in legs if r.get("result") in ("win", "push", "void"))
+    why = ", ".join(f"{fmt.esc(r['home'])} – {fmt.esc(r['away'])}" + (f" ({fmt.esc(r['final'])})" if r.get("final") else "")
+                    for r in missed)
+    return (f"❌ {fmt.b(fmt.esc(name) + ' perdu')} — {ok} sur {len(c['keys'])}"
+            + (f", raté : {why}" if why else "") + f" · {fmt.signed(-stake)}")
+
+
+def results_message(bets, rows, settled):
+    """Résultats de la veille : un bloc par combiné (et le pari du jour), puis une ligne de bilan. None s'il n'y a rien de neuf."""
+    by_key = {r["key"]: r for r in rows}
+    in_combo = {k for c in bets["combos"] for k in c["keys"]}
+    done = [c for c in bets["combos"] if c.get("result") and not c.get("reported")]
+    singles = [b for b in settled if b.get("sent") and b["key"] not in in_combo and b["result"] in ("win", "loss")]
+    if not done and not singles:
+        return None
+    blocks = []
+    for b in singles:
+        icon = "✅" if b["result"] == "win" else "❌"
+        blocks.append(f"{fmt.b(f'{icon} Pari du jour — cote {fmt.odds_txt(b['odds'])}')}\n{leg_result_line(b)}")
+    for c in done:
+        c["reported"] = True
+        blocks.append(combo_result(c, by_key))
+    played = [c for c in done if c["result"] in ("win", "loss")]
+    wins = sum(1 for c in played if c["result"] == "win")
+    bank = bankroll.load()
+    summary = (f"Hier : {wins} combiné{'s' if wins > 1 else ''} gagné{'s' if wins > 1 else ''} sur {len(played)} · "
+               if played else "") + f"bankroll {fmt.trim(bank['bankroll'], 1)} u ({fmt.signed(bank['bankroll'] - bank['initial'], '')})"
+    if bankroll.streak(bets["combos"]) >= C.STREAK_WARNING:
+        summary += f"\n⚠️ {bankroll.streak(bets['combos'])} combinés perdus d'affilée : lève le pied ou fais une pause."
+    return Html(fmt.b("📋 Résultats d'hier") + "\n\n" + "\n\n".join(blocks) + "\n\n" + fmt.i(fmt.esc(summary)))
+
+
 def morning_report(now):
-    """Règle les paris d'hier, met à jour bankroll + apprentissage, renvoie le bilan."""
+    """Règle les paris d'hier, met à jour bankroll + apprentissage, renvoie les résultats en mots simples."""
     bets, settled = settle.settle_pending(now)
     bankroll.apply_results(bets["combos"])
     store.save("bets.json", bets)
     rows = track.load()
     model = learn.update(rows, bets["combos"])
     msgs = []
-    sent_settled = [b for b in settled if b.get("sent")]
-    if sent_settled:
-        lines = ["📋 RÉSULTATS DES DERNIERS PARIS"]
-        for b in sent_settled:
-            icon = {"win": "✅", "loss": "❌", "push": "↩️", "void": "⚪"}[b["result"]]
-            clv = f' | CLV {b["clv"]*100:+.0f}%' if b.get("clv") is not None else ""
-            lines.append(f'{icon} {b["event"]} : {b["pick"]} @ {b["odds"]:.2f}{clv}')
-        combos_done = [c for c in bets["combos"] if c.get("result") and not c.get("reported")]
-        for c in combos_done:
-            c["reported"] = True
-            icon = {"win": "🏆", "loss": "❌", "void": "⚪"}[c["result"]]
-            lines.append(f'{icon} {c["tier"].split(" (")[0]} (cote {c.get("odds_final", c["odds"]):.1f}, mise {c["stake"]} u)')
+    res = results_message(bets, rows, settled)
+    if res:
+        msgs.append(res)
         store.save("bets.json", bets)
-        msgs += ["\n".join(lines), settle.bilan(bets, rows=rows), bankroll.summary(bets["combos"])]
     try:
         msgs += fair_report(now)
     except Exception as e:                          # noqa: BLE001 - les pronostics sans cote sont facultatifs
         print(f"[fair] règlement ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-    d = learn.describe(model, rows)
+    d = learn.describe_simple(model, rows)
     if d:
         msgs.append(d)
     return msgs, model
@@ -119,18 +162,23 @@ def fair_report(now):
     new = [b for b in settled if b["result"] in ("win", "loss") and not b.get("reported")]
     if not new:
         return []
-    lines = ["🎲 PRONOSTICS KELLY — RÉSULTATS (sans cote)"]
+    lines, last = [fmt.b("🎲 Pronostics sans cote — résultats")], None
     for b in new[:12]:
         icon = "✅" if b["result"] == "win" else "❌"
-        lines.append(f'{icon} {b["home"]} - {b["away"]} : {fair.pick_label(b)} (proba {b["prob"]*100:.0f}%, '
-                     f'cote juste {fair.fair_odds(b):.2f})')
+        match = f"{fmt.esc(b['home'])} – {fmt.esc(b['away'])}"
+        if match != last:
+            lines.append("\n" + fmt.b(match))
+            last = match
+        lines.append(f"{icon} {fmt.esc(fair.pick_label(b))} (Kelly annonçait {fmt.pct(b['prob'])} de chances)")
     if len(new) > 12:
-        lines.append(f"(+ {len(new) - 12} autres)")
-    lines.append(fair.summary(rows))
+        lines.append(fmt.i(f"+ {len(new) - 12} autres"))
+    summ = settle.fair_line(rows)
+    if summ:
+        lines.append("\n" + fmt.i(fmt.esc(summ)))
     for b in new:
         b["reported"] = True
     store.save(fair.FILE, rows)
-    return ["\n".join(lines)]
+    return [Html("\n".join(lines))]
 
 
 def refresh_sources():
@@ -185,8 +233,7 @@ def world_report(scan, picks, day, now):
         fair.record(pronos, day)
     except Exception as e:                          # noqa: BLE001
         print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)
-    data = monde.build(scan, day, now, paid=scan.get("paid", []), africa=africa, ahead=ahead,
-                       spent=budget.spent("daily"), allowance=budget.allowance())
+    data = monde.build(scan, day, now, paid=scan.get("paid", []), africa=africa, ahead=ahead)     # sans crédits : technique
     monde.save(data)
     print(f"[monde] {monde.total(data)} matchs, {len(data['leagues'])} ligues, {len(scan.get('paid', []))} payée(s), "
           f"{len(pronos)} pronostic(s) sans cote.", file=sys.stderr)
@@ -196,6 +243,7 @@ def world_report(scan, picks, day, now):
 def run_daily(sample=False):
     now = now_utc()
     scan = None
+    cache.reset()
     if sample:
         events = load_sample()
         day = datetime.fromisoformat(events[0]["commence_time"].replace("Z", "+00:00")).date()
@@ -218,21 +266,23 @@ def run_daily(sample=False):
         if picks:
             store.save("odds_history.json", odds.snapshot(picks))
         try:
-            report.append(sources_message(picks))
+            print(sources_message(picks), file=sys.stderr)       # détail technique : dans les logs et --check, pas dans Telegram
         except Exception as e:                      # noqa: BLE001
             print(f"[sources] rapport ignoré : {e}", file=sys.stderr)
         world, pronos = world_report(scan, picks, day, now)
         if not scan.get("paid"):
             why = budget.why_not(len(C.FEATURED["soccer"].split(",")), "daily")
-            why = f"budget de crédits : {why}" if why else None
+            why = "budget de cotes du jour épuisé" if why else None
     messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why)
     track.record(picks, {c["key"] for c in sent_picks}, day, now)
     settle.record_combos(sent_combos, day)
     store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in pronos[:40]]})
     for m in report + messages:
         telegram.send(m)
+    print(cache.line(), file=sys.stderr)
     if not sample:
         run_track()
+    cache.flush()
     return report + messages
 
 
@@ -278,7 +328,8 @@ def run_track(events_for=None, now=None):
     track.mark_missed(rows, missed, now)
     combos = store.load("bets.json", {"combos": []})["combos"]
     calls = plan_closing(due, combos, bulk=events_for is None)
-    if calls and events_for is None and odds.CREDITS["remaining"] is None:
+    if (calls and events_for is None and odds.CREDITS["remaining"] is None
+            and store.load(budget.FILE, {}).get("remaining") is None):         # jamais connus : sinon l'état du budget suffit
         try:
             odds.get("/sports")                     # gratuit : fait connaître les crédits restants
         except Exception as e:                      # noqa: BLE001
@@ -317,6 +368,7 @@ def run_track(events_for=None, now=None):
         print(f"[budget] {budget.line()}", file=sys.stderr)
     if alerts:
         telegram.send(alert_text(alerts))
+    cache.flush()
     return n, alerts
 
 
@@ -371,25 +423,26 @@ def run_alert(sample=False):
 
 
 def alert_text(alerts):
-    lines = ["🚨 KELLY — ALERTE COTES : l'argent bouge"]
+    lines = [fmt.b("🚨 La cote chute : de l'argent arrive sur ces paris")]
     for _, c, prev in alerts:
-        lines.append(f'• {c["start"]} {c["event"]} [{c["league"]}]\n   → {c["pick"]} : {prev["o"]:.2f} ➜ {c["odds"]:.2f} '
-                     f'(proba {prev["p"]*100:.0f}% ➜ {c["prob"]*100:.0f}%) depuis {prev["t"][11:16]} UTC')
-    lines.append("Une cote qui chute vite = gros volumes sur ce pari. Vérifie la compo avant de suivre.")
-    return "\n".join(lines)
+        lines.append(f"\n{fmt.b(fmt.event_name(c))} · {fmt.hhmm(c['start'])} · {fmt.esc(c['league'])}\n"
+                     f"{fmt.esc(c['pick'])} : {fmt.num(prev['o'])} ➜ {fmt.b(fmt.num(c['odds']))} "
+                     f"({fmt.pct(prev['p'])} ➜ {fmt.pct(c['prob'])} de chances) depuis {fmt.hhmm(prev['t'][11:16])}")
+    lines.append("\n" + fmt.i("Une cote qui chute vite = beaucoup de mises sur ce pari. Vérifie les compositions avant de suivre."))
+    return Html("\n".join(lines))
 
 
 # ---------- commandes Telegram ----------
 
 HELP = """🤖 Kelly — commandes :
-/bilan [jours] : résultats et rendement
-/match <nom> : paris intéressants (ou pronostic sans cote) sur un match du jour
-/combi <cote> : combiné sur mesure à la cote visée
-/top : les 10 meilleurs paris du jour
-/monde [région] : tous les matchs du jour dans le monde (europe, ameriques, asie, afrique, international), relevé de 08:00
+/bilan [jours] : résultats et gains (/bilan détail pour les chiffres techniques)
+/match <nom> : les paris d'un match du jour (ou le pronostic sans cote)
+/combi <cote> : combiné sur mesure à la cote visée, quel que soit le nombre de matchs
+/top : les meilleurs paris du jour
+/monde [région] : tous les matchs du jour dans le monde (europe, ameriques, asie, afrique, international)
 /ligues : le catalogue des ligues suivies et celles payées en cotes réelles aujourd'hui
-/analyse <match> : chiffres d'avant-match (corners, cartons, tirs, xG) d'un match du jour + ses meilleurs paris
-/stats <équipe> : corners, cartons, tirs, fautes et xG des 10 derniers matchs
+/analyse <match> : chiffres d'avant-match (corners, cartons, tirs, buts) d'un match du jour + ses meilleurs paris
+/stats <équipe> : corners, cartons, tirs, fautes et buts des 10 derniers matchs
 /bank [montant] : voir ou régler la bankroll
 /aide : ce message"""
 
@@ -442,25 +495,59 @@ def fmt_team(p, query):
     return "\n".join(lines)
 
 
+def comma(text):
+    """Décimales à la française : 2.5 -> 2,5 (hors identifiants et dates)."""
+    return re.sub(r"(?<=\d)\.(?=\d)", ",", str(text))
+
+
 def pm_note(c):
     pm = c.get("pm") or {}
-    return f" [modèle {pm['exp']:.1f} vs ligne {c['point']}]" if pm.get("exp") is not None and c.get("point") is not None else ""
+    if pm.get("exp") is None or c.get("point") is None:
+        return ""
+    return f" (Kelly prévoit {fmt.num(pm['exp'], 1)} ; ligne à {fmt.trim(c['point'])})"
 
 
-def analyse(picks, query):
-    """Texte de /analyse : chiffres d'avant-match d'un match du jour + ses meilleurs paris avec leur « pourquoi »."""
+def deep_analysis(first):
+    """Analyse approfondie (modèle de force, contexte, grille de marchés) ou None si indisponible."""
+    if not first.get("sport_key", "").startswith("soccer"):
+        return None
+    try:
+        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"])
+    except Exception as e:                       # noqa: BLE001 - l'analyse ne doit jamais casser la commande
+        print(f"analyse approfondie : {e}", file=sys.stderr)
+        return None
+    if not txt or "Pas assez de données" in txt[:300]:
+        return None
+    lines = txt.split("\n")
+    return "\n".join(lines[1:] if lines[0].startswith("🔬") else lines)   # l'en-tête est déjà affiché
+
+
+def analyse(picks, query, pronos=()):
+    """Texte de /analyse : analyse approfondie d'un match du jour + ses meilleurs paris avec leur raison."""
     if not query:
         return "Exemple : /analyse Arsenal"
     found = [c for c in picks if query.lower() in c["event"].lower()]
+    if not found:                               # match sans cotes réelles : analyse seule (+ pronostics)
+        free = [c for c in pronos if query.lower() in c["event"].lower()]
+        events = list(dict.fromkeys(c["event"] for c in free))
+        if not free:
+            return f"Aucun match du jour ne contient « {query} »."
+        if len(events) > 1:
+            return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
+        deep = deep_analysis(free[0])
+        head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))} · {fmt.hhmm(free[0]['start'])} · {fmt.esc(free[0]['league'])}"
+        body = fmt.esc(deep) if deep else "Pas assez de données pour une analyse approfondie de ce match."
+        return Html(comma(head + "\n" + body) + "\n\n" + fmt.pronos(free, 6))
     events = list(dict.fromkeys(c["event"] for c in found))
-    if not found:
-        return f"Aucun match du jour ne contient « {query} »."
     if len(events) > 1:
         return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
     first = found[0]
-    lines = [f"🔬 {first['event']} ({first['start']} UTC) [{first['league']}]"]
-    f = sources.match_features(first["home"], first["away"], first["sport_key"]) if first["group"] == "soccer" else {"sources": []}
-    if f["sources"]:
+    lines = [f"🔬 {fmt.b(fmt.event_name(first))} · {fmt.hhmm(first['start'])} · {fmt.esc(first['league'])}"]
+    deep = deep_analysis(first)
+    f = {"sources": []} if deep or first["group"] != "soccer" else sources.match_features(first["home"], first["away"], first["sport_key"])
+    if deep:
+        lines.append(fmt.esc(deep))
+    elif f["sources"]:
         n = lambda k: f.get(k)                                  # noqa: E731
         def two(k, label, unit=""):
             t, h, a = n("exp_" + k), n(f"exp_{k}_home"), n(f"exp_{k}_away")
@@ -468,24 +555,39 @@ def analyse(picks, query):
                 return None
             split = f" ({h:.1f} + {a:.1f})" if h is not None and a is not None else ""
             return f"• {label} : {t if t is not None else h + a:.1f}{unit}{split}"
-        lines.append(f"Chiffres d'avant-match ({', '.join(f['sources'])}, {f.get('n_home', '?')} et {f.get('n_away', '?')} matchs) :")
+        lines.append(f"Chiffres d'avant-match ({fmt.esc(', '.join(f['sources']))}, {f.get('n_home', '?')} et {f.get('n_away', '?')} derniers matchs) :")
         lines += [x for x in (two("corners", "Corners attendus"), two("cards", "Cartons attendus"),
                               two("fouls", "Fautes attendues"), two("shots", "Tirs attendus"),
                               two("sot", "Tirs cadrés attendus"), two("goals", "Buts attendus (moyennes)")) if x]
         if f.get("exp_xg_total") is not None:
-            lines.append(f"• xG attendus : {f['exp_xg_total']:.2f} ({f['exp_xg_home']:.2f} - {f['exp_xg_away']:.2f})")
+            lines.append(f"• Buts attendus d'après les tirs : {f['exp_xg_total']:.2f} ({f['exp_xg_home']:.2f} - {f['exp_xg_away']:.2f})")
         if f.get("ref_cards") is not None:
-            lines.append(f"• Arbitre {f['referee']} : {f['ref_cards']:.1f} cartons par match")
+            lines.append(f"• Arbitre {fmt.esc(f['referee'])} : {f['ref_cards']:.1f} cartons par match")
     else:
         lines.append("Pas de stats réelles pour ce match (équipes inconnues des sources ou sources indisponibles).")
     best = sorted(found, key=lambda c: c["score"], reverse=True)[:6]
     lines.append("Meilleurs paris :")
-    lines += [f'• {c["pick"]} @ {c["odds"]:.2f} (proba {c["prob"]*100:.0f}%){pm_note(c)}{" — " + c["why"] if c["why"] else ""}'
-              for c in best]
-    return "\n".join(lines)
+    for c in best:
+        why = fmt.why_line(c, CB.leg_reason(c))
+        lines.append(f"• {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances){'' if why else pm_note(c)}"
+                     + (f"\n   ↳ {fmt.esc(why)}" if why else ""))
+    return Html(comma("\n".join(lines)))
+
+
+def _todays_usage(day, picks):
+    """Réutilisation des matchs par les combinés déjà envoyés aujourd'hui (voir combos.Usage)."""
+    combos = [c for c in store.load("bets.json", {"combos": []})["combos"] if c.get("date") == str(day)]
+    return CB.Usage.from_sent(combos, picks), len(combos)
 
 
 def handle_command(text):
+    """Répond à une commande Telegram. Hors ligne par construction : aucune requête réseau (cotes payantes ou non,
+    API-Football, sources), seulement les données du matin dans data/."""
+    with cache.offline():
+        return _handle_command(text)
+
+
+def _handle_command(text):
     parts = text.split()
     cmd, args = parts[0].lower().split("@")[0], parts[1:]
     today = store.load("today.json", {"day": "", "picks": []})
@@ -493,11 +595,15 @@ def handle_command(text):
     if cmd in ("/aide", "/help", "/start"):
         return HELP
     if cmd == "/bilan":
-        days = int(args[0]) if args and args[0].isdigit() else None
+        detail = any(a.lower() in ("détail", "detail", "details", "détails") for a in args)
+        days = next((int(a) for a in args if a.isdigit()), None)
         bets = store.load("bets.json", {"picks": [], "combos": []})
-        out = settle.bilan(bets, days) + "\n\n" + bankroll.summary(bets["combos"])
-        d = learn.describe(learn.load(), track.load())
-        return out + ("\n\n" + d if d else "")
+        out = settle.bilan(bets, days, detail=detail)
+        if detail:
+            d = learn.describe(learn.load(), track.load())
+            return out + "\n\n" + bankroll.summary(bets["combos"]) + ("\n\n" + d if d else "")
+        d = learn.describe_simple(learn.load(), track.load())
+        return Html(out + "\n\n" + fmt.esc(bank_line(bets["combos"])) + (("\n\n" + d) if d else ""))
     if cmd == "/bank":
         b = bankroll.load()
         if args:
@@ -507,25 +613,29 @@ def handle_command(text):
                 return "Montant invalide. Exemple : /bank 50000"
             b = {"bankroll": amount, "initial": amount}
             bankroll.save(b)
-            return f"Bankroll réglée à {amount:.2f} unités. Les mises conseillées s'adaptent dès demain."
-        return f"💼 Bankroll : {b['bankroll']:.2f} unités (départ {b['initial']:.2f})"
+            return f"Bankroll réglée à {fmt.trim(amount, 2)} unités. Les mises conseillées s'adaptent dès demain."
+        return f"💼 Bankroll : {fmt.trim(b['bankroll'], 1)} unités (départ {fmt.trim(b['initial'], 2)})"
     if cmd == "/stats":
-        return fmt_team(sources.team_profile(" ".join(args)) if args else None, " ".join(args))
+        return Html(comma(fmt.esc(fmt_team(sources.team_profile(" ".join(args)) if args else None, " ".join(args)))))
     if cmd in ("/monde", "/ligues"):
         data = monde.load(now_utc().date())
         return monde.fmt_monde(data, " ".join(args)) if cmd == "/monde" else monde.fmt_ligues(data)
     pronos = today.get("pronos") or []
     if not picks and not pronos:
         return "Kelly n'a pas encore analysé la journée (ça arrive à 08:00)."
-    if not picks and cmd in ("/analyse", "/combi"):
-        return "Pas de cotes réelles aujourd'hui : /top et /match montrent les pronostics sans cote, /monde les matchs."
     if cmd == "/analyse":
-        return analyse(picks, " ".join(args))
+        return analyse(picks, " ".join(args), pronos)
+    if not picks and cmd == "/combi":
+        return "Pas de cotes réelles aujourd'hui : /top et /match montrent les pronostics sans cote, /monde les matchs."
     if cmd == "/top":
         if not picks:
-            return fair.fmt_pronos(pronos, 10)
-        best = sorted(CB.per_event(picks, k=1), key=lambda c: c["score"], reverse=True)[:10]
-        return "🔝 TOP 10 DU JOUR\n" + "\n".join(fmt_pick(c) for c in best)
+            return fmt.pronos(pronos, 10)
+        best = sorted(CB.per_event(CB.make_pool(picks), k=1), key=lambda c: c["score"], reverse=True)[:10]
+        if not best:
+            return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
+                    "ou une forte probabilité. /match <équipe> montre tout ce qui existe pour un match.")
+        return Html(fmt.b("🔝 Les meilleurs paris du jour") + "\n\n" + "\n\n".join(
+            fmt.leg(k, c, CB.leg_reason(c)) for k, c in enumerate(best, 1)))
     if cmd == "/match":
         if not args:
             return "Exemple : /match PSG"
@@ -534,22 +644,34 @@ def handle_command(text):
         if not found:
             free = [c for c in pronos if q in c["event"].lower()]
             if free:
-                return fair.fmt_pronos(free, 8)
+                return fmt.pronos(free, 8)
             return f"Aucun match du jour ne contient « {' '.join(args)} »."
         found = sorted(found, key=lambda c: c["score"], reverse=True)[:8]
-        return f"🔎 {found[0]['event']} ({found[0]['start']} UTC)\n" + "\n".join(
-            f'• {c["pick"]} @ {c["odds"]:.2f} (proba {c["prob"]*100:.0f}%){" — " + c["why"] if c["why"] else ""}'
-            for c in found)
+        lines = [f"🔎 {fmt.b(fmt.event_name(found[0]))} · {fmt.hhmm(found[0]['start'])} · {fmt.esc(found[0]['league'])}"]
+        for c in found:
+            why = fmt.why_line(c, CB.leg_reason(c))
+            lines.append(f"• {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances)"
+                         + (f"\n   ↳ {fmt.esc(why)}" if why else ""))
+        return Html("\n".join(lines))
     if cmd == "/combi":
         try:
             target = float(args[0].replace(",", "."))
         except (IndexError, ValueError):
             return "Exemple : /combi 30"
-        combo = CB.make_combo(CB.make_pool(picks), target, target * 1.6)
+        usage, n_sent = _todays_usage(today.get("day"), picks)
+        combo = CB.custom(picks, target, usage)
+        pool = CB.make_pool(picks)
         if not combo:
-            return f"Impossible de monter un combiné à {target:g} avec les matchs restants."
-        text, _ = fmt_combo(f"🎯 COMBINÉ SUR MESURE (cote ~{target:g})", combo, bankroll.load()["bankroll"])
-        return text
+            return (f"Impossible de monter un combiné à la cote {fmt.trim(target, 1)} avec les paris de qualité encore disponibles "
+                    f"({len(usage.filter(pool))} sur {len(pool)} ; les paris déjà dans tes combinés du jour ne sont repris que "
+                    f"s'ils sont sûrs).")
+        picks_, odds_, prob = combo
+        msg = fmt.combo("🎯 COMBINÉ SUR MESURE", picks_, odds_, prob, bankroll.stake(prob, odds_, "🎯", bankroll.load()["bankroll"]),
+                        {c["key"]: CB.leg_reason(c) for c in picks_})
+        if n_sent:
+            msg = Html(msg + "\n\n" + fmt.i(f"Les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs "
+                                            f"({fmt.pct(C.LEG_SAFE_PROB)} de chances ou plus, {C.LEG_REUSE_MAX} combinés au plus)."))
+        return msg
     return "Commande inconnue. /aide pour la liste."
 
 
@@ -605,7 +727,7 @@ def _check_odds():
     lines.append(f"   Allocation du jour : {budget.allowance()} crédits (matin {budget.share('daily')}, clôture "
                  f"{budget.share('closing')}), {budget.days_left()} jour(s) avant la remise à zéro "
                  f"(jour {C.ODDS_RESET_DAY} du mois ; forfait {C.ODDS_MONTHLY_CREDITS}/mois)")
-    scan = odds.scan_today(now_utc().date(), sports=chosen)                # gratuit
+    scan = odds.scan_today(now_utc().date(), now_utc(), sports=chosen)      # gratuit, relu du cache du matin si possible
     counts = {k: len(v) for k, v in scan["leagues"].items()}
     playing = [f"{k} ({counts[k]})" for k in catalogue.prioritise(counts, C.SPORTS)]
     lines.append("   Ligues avec matchs aujourd'hui (gratuit) : " + (", ".join(playing) or "aucune"))
@@ -686,8 +808,13 @@ def run_check():
     ok_odds, l_odds = _check_odds()
     ok_stats, l_stats = _check_stats()
     l_src = sources.report().splitlines()           # facultatif : n'influe pas sur le verdict
+    l_cache = [cache.line(cache.today_totals())]    # cumul du jour, tous passages confondus
+    try:                                            # chiffres techniques de l'apprentissage : ici et dans /bilan détail
+        l_learn = learn.describe(learn.load(), track.load()).splitlines()
+    except Exception as e:                          # noqa: BLE001
+        l_learn = [f"(apprentissage illisible : {type(e).__name__})"]
     ok_bot, l_bot, chat_ok = _check_telegram_bot()
-    lines = l_odds + l_stats + l_src + l_bot
+    lines = l_odds + l_stats + l_src + l_cache + l_learn + l_bot
     ok_send = False
     if chat_ok:
         summary = "\n".join(lines)
@@ -698,6 +825,7 @@ def run_check():
             lines += [f"❌ Telegram sendMessage : {telegram.LAST_ERROR}",
                       f"   → {_telegram_hint(telegram.LAST_ERROR)}"]
     print("\n".join(lines))
+    cache.flush()
     ok = ok_odds and ok_stats is not False and ok_bot and ok_send
     print("\n" + ("✅ Tout est prêt." if ok else "⚠️ Au moins un service est mal configuré (voir ❌ ci-dessus)."))
     return ok

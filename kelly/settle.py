@@ -2,7 +2,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import config as C, fair, learn, odds, stats, store, track
+from . import config as C, fair, fmt, learn, odds, stats, store, track
 from .sources import footballdata as fd
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
@@ -50,6 +50,23 @@ def settle_pick(b, ev, fstats=None):
     if v == point:
         return "push"
     return "win" if (name == "Over") == (v > point) else "loss"
+
+
+def final_text(b, ev, fstats=None):
+    """Score ou total final du match tel qu'on l'affiche : « 2-0 » (buts), « 11 corners », « 4 cartons », « 2 tirs »."""
+    sc = _score_map(ev)
+    m = b["market"]
+    if m in GOAL_MARKETS and b["home"] in sc and b["away"] in sc:
+        return f"{sc[b['home']]:g}-{sc[b['away']]:g}"
+    fstats = fstats or {}
+    if m in FD_MARKETS and fstats.get("corners" if "corners" in m else "cards") is not None:
+        return f"{fstats['corners' if 'corners' in m else 'cards']:g} {'corners' if 'corners' in m else 'cartons'}"
+    if m.startswith("player_"):
+        field = {"player_shots": "shots", "player_shots_on_target": "shots_on_target", "player_fouls": "fouls"}.get(m)
+        v = stats.player_stat(fstats, b.get("who") or "", field) if field else None
+        unit = C.UNITS.get(m)
+        return f"{v:g} {unit}" if v is not None and isinstance(unit, str) else ""
+    return f"{sc[b['home']]:g}-{sc[b['away']]:g}" if b["home"] in sc and b["away"] in sc else ""
 
 
 def football_score(b):
@@ -145,7 +162,10 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
             if old:
                 b["result"] = "void"               # annulé / reporté / jamais de score
             continue
-        b["result"] = settle_pick(b, ev, match_stats(b, fdata, stats_for))
+        fst = match_stats(b, fdata, stats_for)
+        b["result"] = settle_pick(b, ev, fst)
+        if b["result"] in ("win", "loss", "push"):
+            b["final"] = final_text(b, ev, fst)       # affiché dans le message de résultats : « 2-0 », « 11 corners »
         if b["result"] is None and old:
             b["result"] = "void"                   # pas de stats disponibles
         if b["result"]:
@@ -197,6 +217,8 @@ def settle_fair(now=None, stats_for=None):
 def record_combos(combos_sent, day):
     bets = store.load("bets.json", {"picks": [], "combos": []})
     for combo in combos_sent:
+        if any(c["date"] == str(day) and c["tier"] == combo["tier"] and c["keys"] == combo["keys"] for c in bets["combos"]):
+            continue                                # relance du matin avec les mêmes cotes (cache) : pas de doublon
         bets["combos"].append(combo | {"date": str(day), "result": None})
     store.save("bets.json", bets)
 
@@ -219,8 +241,9 @@ def _block(name, rows):
     return txt
 
 
-def bilan(bets, days=None, rows=None):
-    """Texte du bilan : envoyés, fantômes, par palier, par marché, CLV, Brier."""
+def bilan(bets, days=None, rows=None, detail=False):
+    """Bilan. Par défaut en mots simples (combinés gagnés, résultat en unités, paris envoyés) ; `detail` : les chiffres
+    techniques (rendement par mise, CLV, Brier, par marché)."""
     rows = track.load() if rows is None else rows
     picks = [r for r in rows if r.get("result") in ("win", "loss")]
     combos = [c for c in bets["combos"] if c.get("result") in ("win", "loss")]
@@ -229,7 +252,54 @@ def bilan(bets, days=None, rows=None):
         picks = [b for b in picks if b["date"] >= cutoff]
         combos = [c for c in combos if c["date"] >= cutoff]
     if not picks and not combos:
-        return "📊 BILAN\nAucun pari réglé pour l'instant."
+        return "📊 BILAN\nAucun pari réglé pour l'instant." if detail else fmt.Html("📊 <b>Bilan</b>\nAucun pari réglé pour l'instant.")
+    return _bilan_detail(bets, days, rows, picks, combos) if detail else _bilan_simple(days, rows, picks, combos)
+
+
+def fair_line(rows, days=None, today=None):
+    """Pronostics sans cote réglés, en mots simples : « Pronostics sans cote : 5 gagnés sur 8 (62 %), Kelly en annonçait 64 % en
+    moyenne. » ('' si rien de réglé)."""
+    done = [r for r in rows if r.get("result") in ("win", "loss")]
+    if days:
+        cut = str((datetime.fromisoformat(str(today)) if today else datetime.now(timezone.utc)).date() - timedelta(days=days))
+        done = [r for r in done if r["date"] >= cut]
+    if not done:
+        return ""
+    w = sum(1 for r in done if r["result"] == "win")
+    return (f"Pronostics sans cote : {w} gagné{'s' if w > 1 else ''} sur {len(done)} ({fmt.pct(w / len(done))}), Kelly en "
+            f"annonçait {fmt.pct(sum(r['prob'] for r in done) / len(done))} en moyenne.")
+
+
+def _gain(c):
+    return c["stake"] * (c.get("odds_final", c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
+
+
+def _bilan_simple(days, rows, picks, combos):
+    sent = [r for r in picks if r.get("sent")]
+    lines = [f"📊 <b>Bilan</b>{f' — {days} derniers jours' if days else ''}"]
+    if combos:
+        w = sum(1 for c in combos if c["result"] == "win")
+        lines.append(f"Combinés : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat {fmt.signed(sum(map(_gain, combos)))}")
+        tiers = {}
+        for c in combos:
+            tiers.setdefault(fmt.tier_name(c["tier"]), []).append(c)
+        for tier, cs in tiers.items():
+            lines.append(f"   {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)} "
+                         f"({fmt.signed(sum(map(_gain, cs)))})")
+    if sent:
+        w = sum(1 for r in sent if r["result"] == "win")
+        lines.append(f"Paris envoyés : {w} gagnés sur {len(sent)} ({fmt.pct(w / len(sent))})")
+    fl = fair_line(fair.load(), days)
+    if fl:
+        lines.append(fmt.esc(fl))
+    pending = sum(1 for r in rows if r.get("result") is None)
+    if pending:
+        lines.append(fmt.i(f"{pending} pari{'s' if pending > 1 else ''} en attente de résultat"))
+    lines.append(fmt.i("Chiffres techniques : /bilan détail"))
+    return fmt.Html("\n".join(lines))
+
+
+def _bilan_detail(bets, days, rows, picks, combos):
     sent = [r for r in picks if r.get("sent")]
     ghost = [r for r in picks if not r.get("sent")]
     lines = [f"📊 BILAN{f' ({days} derniers jours)' if days else ''}",

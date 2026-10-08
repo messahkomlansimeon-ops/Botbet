@@ -14,6 +14,14 @@ def _int(name, default):
         return default
 
 
+def _float(name, default):
+    """Réel d'environnement ; vide ou invalide = valeur par défaut."""
+    try:
+        return float(os.environ.get(name) or default)
+    except ValueError:
+        return default
+
+
 def _bool(name, default=False):
     v = (os.environ.get(name) or "").strip().lower()
     return default if not v else v in ("1", "true", "oui", "yes")
@@ -145,18 +153,51 @@ PLAYER_MINUTES = 85        # minutes attendues d'un titulaire régulier (tirs/90
 SOT_RATIO = 0.35           # tirs cadrés ~ 35 % des tirs, si seul le nombre de tirs est connu (FBref bloqué)
 PM_FLAG = 0.08             # écart modèle/books (en proba) à partir duquel la ligne est signalée dans le « pourquoi »
 
-# (titre, cote minimale, cote maximale) : le nombre de matchs est libre.
+# Paliers : seule la fourchette de cote compte, jamais le nombre de matchs (4, 7 ou 20 : peu importe, la cote visée doit
+# être atteinte avec les paris les plus probables). (titre, cote minimale, cote maximale).
 SPECIAL = "🎯 SPÉCIAL CORNERS/CARTONS (cote 6 à 15)"     # construit uniquement sur corners, cartons et stats joueurs
 COMBOS = [
     ("🛡️ SÛR (cote 5 à 7)", 5.0, 7.0),
     ("⚖️ COSTAUD (cote 12 à 20)", 12.0, 20.0),
     (SPECIAL, 6.0, 15.0),
     ("🔥 MÉCHANT (cote 40 à 80)", 40.0, 80.0),
-    ("💀 MONSTRE (cote 150+)", 150.0, None),
+    ("💀 MONSTRE (cote 150+)", 150.0, 300.0),     # plafond : sans lui la cote dériverait vers l'absurde
 ]
-MAX_LEGS = 8
-POOL_SIZE = 22
-SOFT_SHARE = 0.75          # part mini de marchés secondaires dans le pool
+CUSTOM_TOLERANCE = 0.25    # /combi <cote> : fourchette cote x (1 - 25 %) à cote x (1 + 25 %)
+MAX_LEGS = _int("MAX_LEGS", 25)            # simple borne de sécurité, pas un réglage de jeu
+DP_BIN = 0.005             # pas de discrétisation du log des cotes pour l'optimiseur (kelly/combos.py)
+
+# ---- Cote « typique » (kelly/odds.py) ----
+# La meilleure cote parmi ~20 books est souvent une aberration (exchange sans commission, book en retard). Kelly
+# raisonne sur la cote typique : celle du (n // 4 + 1)-ième meilleur book (au moins le 2e), c'est-à-dire le 75e
+# centile : au moins un book sur quatre la propose ou mieux, et un seul prix aberrant ne la déplace pas. La
+# meilleure cote n'est plus qu'une note (« jusqu'à 4,60 chez Coolbet ») quand elle dépasse la typique de BEST_NOTE_GAP.
+TYPICAL_RANK_SHARE = 0.25
+TYPICAL_MIN_RANK = 2
+BEST_NOTE_GAP = 0.05
+# ---- « Books en désaccord » ----
+# Seuil de l'écart (max - min des probas) / proba : DISAGREE_BASE x (1 + FEW_BOOKS / nb de books). Peu de books : un
+# écart est normal, il faut plus. Dans le score, le désaccord pèse au prorata de min(1, nb de books / DISAGREE_FULL_BOOKS)
+# (petites ligues = peu de books = signal faible).
+DISAGREE_BASE = 0.12
+FEW_BOOKS = 4.0
+DISAGREE_FULL_BOOKS = 14
+# ---- Plancher de qualité d'une jambe de combiné (kelly/combos.py.leg_reason) ----
+# Une jambe doit porter une vraie raison, sinon elle n'entre dans aucun combiné ni pari du jour :
+#   valeur : écart (proba x cote typique - 1) >= LEG_MIN_EDGE x (1 + FEW_BOOKS / nb de books) ;
+#   stats  : le modèle d'avant-match (c["pm"]) donne au moins LEG_PM_GAP de proba de plus que les books, ou, au 1N2,
+#            un avantage de buts attendus >= LEG_XGD pour l'équipe choisie (jamais pour le nul) ;
+#   sûr    : proba >= LEG_SAFE_PROB.
+# Garde-fous communs : écart >= LEG_EDGE_FLOOR (on ne paie pas plus de 5 % de marge) et pas de veto du modèle
+# (proba du modèle inférieure de LEG_PM_GAP ou plus à celle des books).
+LEG_MIN_EDGE = _float("LEG_MIN_EDGE", 0.03)
+LEG_EDGE_FLOOR = -0.05
+LEG_PM_GAP = 0.04
+LEG_XGD = 0.5
+LEG_SAFE_PROB = _float("LEG_SAFE_PROB", 0.68)
+# Réutilisation d'un match dans plusieurs combinés du même jour : une jambe sûre (proba >= LEG_SAFE_PROB) peut figurer dans
+# au plus LEG_REUSE_MAX combinés ; une jambe risquée dans un seul.
+LEG_REUSE_MAX = _int("LEG_REUSE_MAX", 3)
 
 # Priorité aux marchés mal pricés. 1N2/buts/points : efficaces, pénalisés.
 MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8, "btts": 1.0,
@@ -207,3 +248,17 @@ MARKET_LABELS = {
     "player_points": "points joueur", "player_rebounds": "rebonds", "player_assists": "passes",
     "player_threes": "3 points",
 }
+
+# ---- Caches (kelly/cache.py) : ne jamais redemander ce qu'on a déjà ----
+# The Odds API : les réponses payantes du jour (marchés vedettes par ligue, marchés détaillés par match) sont gardées dans
+# .cache/odds avec leur heure de relevé ; un second passage du matin (relance manuelle) les relit sans dépenser un crédit.
+ODDS_CACHE_HOURS = _float("ODDS_CACHE_HOURS", 12)
+EVENTS_CACHE_HOURS = _float("EVENTS_CACHE_HOURS", 6)     # /sports et /events (gratuits : on ménage surtout le temps du run)
+# API-Football : listes de matchs d'un jour passé déjà terminé = pour toujours ; liste encore incomplète = au plus toutes les
+# FIXTURES_RETRY_HOURS et seulement pendant FIXTURES_STALE_DAYS jours ; moyennes d'équipe réutilisées STATS_TEAM_DAYS jours ;
+# une réponse en erreur ou vide n'est pas redemandée pendant STATS_NEG_MINUTES (anti-boucle de requêtes).
+FIXTURES_RETRY_HOURS = _float("FIXTURES_RETRY_HOURS", 6)
+FIXTURES_STALE_DAYS = _int("FIXTURES_STALE_DAYS", 3)
+STATS_TEAM_DAYS = _int("STATS_TEAM_DAYS", 3)
+STATS_NO_DATA_DAYS = _int("STATS_NO_DATA_DAYS", 3)       # match terminé sans statistiques : on ne le redemande pas avant
+STATS_NEG_MINUTES = _float("STATS_NEG_MINUTES", 20)

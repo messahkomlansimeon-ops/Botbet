@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 15      # le premier passage du jour, cache froid, télécharge ~20 CSV football-data (3 s entre requêtes)
     permissions:
       contents: write
+      actions: write           # supprimer les vieux caches (gh cache delete)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,19 +37,22 @@ jobs:
             *) m="${{ github.event.inputs.mode || 'daily' }}" ;;
           esac
           echo "mode=$m" >> "$GITHUB_OUTPUT"
-      - name: Date du jour (clé du cache des sources)
+      - name: Date du jour (clé des caches)
         id: day
         run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
-      # Téléchargements bruts de kelly.sources (CSV football-data, JSON Understat) : conservés d'un passage à l'autre pour ne
-      # redemander que ce qui a changé (requêtes conditionnelles). Une clé par jour ; sinon le cache le plus récent.
+      # Caches bruts : CSV football-data / JSON Understat (.cache/sources, requêtes conditionnelles) et réponses du jour de
+      # The Odds API (.cache/odds : une relance du matin relit les cotes payées au lieu de les racheter). RESTAURÉS dans tous les
+      # modes (daily, track, commands, check lisent ou peuvent lire .cache) ; SAUVÉS seulement par daily et check, qui
+      # sont les seuls à les écrire. Une clé par jour (kelly-cache-AAAA-MM-JJ) ; les plus anciennes sont supprimées ci-dessous :
+      # il n'en reste que 3, le cache ne grossit pas.
       # Les petits profils calculés (data/src_*.json, bootstrap.json) sont commités avec le reste de data/.
-      - name: Restaurer le cache des sources
-        if: ${{ steps.mode.outputs.mode == 'daily' }}
-        uses: actions/cache@v4
+      - name: Restaurer les caches (sources, cotes du jour)
+        id: cache
+        uses: actions/cache/restore@v4
         with:
-          path: .cache/sources
-          key: sources-${{ steps.day.outputs.day }}
-          restore-keys: sources-
+          path: .cache
+          key: kelly-cache-${{ steps.day.outputs.day }}
+          restore-keys: kelly-cache-
       - name: Lancer Kelly
         env:
           MODE: ${{ steps.mode.outputs.mode }}
@@ -67,6 +71,19 @@ jobs:
           python bot.py --"$MODE" || rc=$?
           case "$MODE" in daily|track) python bot.py --commands || rc=$?; esac
           exit $rc
+      - name: Sauvegarder les caches
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' && (steps.mode.outputs.mode == 'daily' || steps.mode.outputs.mode == 'check') }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache
+          key: kelly-cache-${{ steps.day.outputs.day }}
+      - name: Garder les 3 caches les plus récents
+        if: ${{ !cancelled() && (steps.mode.outputs.mode == 'daily') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list --key kelly-cache- --sort created_at --order desc --limit 100 --json id --jq '.[3:][].id' \
+            | xargs -r -n1 gh cache delete || true
       - name: Sauvegarder les données (paris, historique, apprentissage, budget)
         if: ${{ !cancelled() }}
         run: |

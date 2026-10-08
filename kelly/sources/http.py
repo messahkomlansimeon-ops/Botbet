@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from .. import cache as kcache
 from . import state
 
 UA = "KellyBot/1.0 (usage personnel)"
@@ -247,7 +248,11 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
     if state.is_blocked(source):
         return _fail(url, cached, state.health(source)["last_error"] or "source bloquée", blocked=True)
     if cached and _fresh(cached[0], ttl):
+        kcache.hit(source, 1)                       # frais : aucune requête
         return Result(url, cached[1], cached[0].get("status", 200), from_cache=True)
+    if kcache.OFFLINE:                              # commandes Telegram : le disque seulement
+        return Result(url, cached[1], cached[0].get("status", 200), from_cache=True, stale=True) if cached else Result(
+            url, None, error="hors ligne : pas de téléchargement en dehors des passages programmés")
     if _deadline is not None and time.monotonic() > _deadline:
         return _fail(url, cached, "délai dépassé, téléchargement reporté au prochain passage")
     if check_robots:
@@ -262,6 +267,7 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
             cond["If-None-Match"] = cached[0]["etag"]
         if cached[0].get("last_modified"):
             cond["If-Modified-Since"] = cached[0]["last_modified"]
+    kcache.miss(source, 1)
     r, err = _request(url, (headers or {}) | cond)
     if r is None:
         return _fail(url, cached, err)

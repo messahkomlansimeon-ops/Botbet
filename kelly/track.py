@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from . import combos as CB, config as C, learn, store
 
 FIELDS = ("key", "id", "sport_key", "group", "event", "home", "away", "league", "commence", "market",
-          "who", "point", "name", "pick", "odds", "prob", "book", "edge", "spread", "steam", "weight",
+          "who", "point", "name", "pick", "odds", "best_odds", "prob", "book", "edge", "spread", "steam", "weight",
           "score", "why", "n_books")
 
 

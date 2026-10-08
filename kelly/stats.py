@@ -17,12 +17,13 @@ import math
 import os
 import re
 import sys
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import catalogue, store
+from . import cache, catalogue, config as C, store
 
 BASE = "https://v3.football.api-sports.io"
 BUDGET = int(os.environ.get("STATS_BUDGET", 60))     # appels max par exécution
@@ -31,6 +32,7 @@ MIN_MATCHES = 3                                      # sous ce seuil : pas de mo
 DONE = ("FT", "AET", "PEN")                          # matchs terminés
 _calls = 0
 _halted = False                                      # erreur API : plus aucun appel
+_neg = {}                                            # (chemin, paramètres) -> (instant, résultat) : erreurs et réponses vides, brièvement
 
 
 def enabled():
@@ -70,20 +72,27 @@ def get(path, **params):
     """Appel API-Football. Renvoie `response` (liste, éventuellement vide) ou
     None (désactivé, quota atteint, erreur). Une erreur API stoppe tout."""
     global _calls
-    if not enabled() or _halted or _calls >= BUDGET:
+    if not enabled() or _halted or _calls >= BUDGET or cache.OFFLINE:
         return None
+    nk = (path, tuple(sorted(params.items())))
+    prev = _neg.get(nk)
+    if prev and time.monotonic() - prev[0] < C.STATS_NEG_MINUTES * 60:     # même échec ou même réponse vide : pas de nouvelle requête
+        cache.hit("api-football", 1)
+        return prev[1]
     q = _quota()
     if q["n"] >= _cap() or q.get("remaining") == 0:
         _halt(f"plafond quotidien atteint ({q['n']}/{_cap()} appels aujourd'hui).")
         return None
     _calls += 1
     q["n"] += 1
+    cache.miss("api-football", 1)
     try:
         r = requests.get(f"{BASE}{path}", params=params, timeout=30,
                          headers={"x-apisports-key": os.environ["STATS_API_KEY"]})
     except requests.RequestException as e:
         store.save("stats_quota.json", q)
         _warn(f"réseau indisponible ({type(e).__name__}).")
+        _neg[nk] = (time.monotonic(), None)
         return None
     h = getattr(r, "headers", None) or {}
     try:                                   # quota réel annoncé par l'API (journalier)
@@ -99,11 +108,13 @@ def get(path, **params):
         return None
     if r.status_code >= 400:
         _warn(f"HTTP {r.status_code} sur {path}.")
+        _neg[nk] = (time.monotonic(), None)
         return None
     try:
         data = r.json()
     except ValueError:
         _warn(f"réponse illisible sur {path}.")
+        _neg[nk] = (time.monotonic(), None)
         return None
     errors = data.get("errors")                 # liste ou dict, vide si tout va bien
     if errors:
@@ -111,7 +122,10 @@ def get(path, **params):
         return None
     if q.get("remaining") == 0:
         _halt("quota quotidien épuisé.")
-    return data.get("response") or []
+    out = data.get("response") or []
+    if not out:
+        _neg[nk] = (time.monotonic(), out)         # réponse vide : pas redemandée pendant quelques minutes
+    return out
 
 
 # --- Noms d'équipes -------------------------------------------------------
@@ -236,22 +250,42 @@ def _stale(day, lst):
     return str(day) < _today() and any(f.get("status") in PENDING or "gh" not in f for f in lst)
 
 
+def _fx_load():
+    """(listes par jour, heures de téléchargement par jour) de data/fixtures_day.json."""
+    raw = store.load("fixtures_day.json", {})
+    raw = raw if isinstance(raw, dict) else {}
+    meta = raw.pop("_fetched", None)
+    return raw, meta if isinstance(meta, dict) else {}
+
+
 def _day_fixtures(day):
-    """Tous les matchs du jour (UTC), en un seul appel par jour, mis en cache. Un jour passé dont le
-    cache contient un match non terminé est re-téléchargé (1 requête, au plus une fois par exécution)."""
-    cache = store.load("fixtures_day.json", {})
-    old = cache.get(str(day))
-    if old is not None and not (_stale(day, old) and str(day) not in _refreshed):
-        return old
+    """Tous les matchs du jour (UTC), en un seul appel par jour, mis en cache.
+    - jour passé dont tous les matchs sont terminés : pour toujours, zéro requête ;
+    - aujourd'hui : relevé du matin, relu tel quel (le règlement n'a besoin que des matchs finis, donc de la veille) ;
+    - jour passé avec un match non terminé : re-téléchargé au plus une fois par exécution, une fois par
+      C.FIXTURES_RETRY_HOURS, et seulement pendant C.FIXTURES_STALE_DAYS jours (un match reporté ne se re-télécharge pas
+      indéfiniment)."""
+    cache_, meta = _fx_load()
+    old = cache_.get(str(day))
+    if old is not None:
+        if not _stale(day, old):
+            cache.hit("api-football", 1)
+            return old
+        age_days = (datetime.now(timezone.utc).date() - datetime.fromisoformat(str(day)).date()).days
+        since = time.time() - meta.get(str(day), 0)
+        if str(day) in _refreshed or age_days > C.FIXTURES_STALE_DAYS or since < C.FIXTURES_RETRY_HOURS * 3600:
+            cache.hit("api-football", 1)
+            return old
     _refreshed.add(str(day))
     raw = get("/fixtures", date=str(day), timezone="UTC")
     if not raw:                                 # erreur ou rien : on garde l'ancien cache
         return old or []
     lst = [_entry(f) for f in raw]
     keep = str((datetime.now(timezone.utc) - timedelta(days=10)).date())
-    cache = {d: v for d, v in cache.items() if d >= keep}
-    cache[str(day)] = lst
-    store.save("fixtures_day.json", cache)
+    cache_ = {d: v for d, v in cache_.items() if d >= keep}
+    cache_[str(day)] = lst
+    meta = {d: t for d, t in meta.items() if d in cache_} | {str(day): time.time()}
+    store.save("fixtures_day.json", cache_ | {"_fetched": meta})
     return lst
 
 
@@ -277,10 +311,10 @@ def find_fixture(day, home, away, kickoff=None):
     if kickoff is None and len(str(day)) > 10:
         kickoff = day
     day = str(day)[:10]
-    cache = store.load("fixtures.json", {})
+    known = store.load("fixtures.json", {})
     k = f"{day}|{home}|{away}"
-    if k in cache:
-        return cache[k]
+    if k in known:
+        return known[k]
     kts = _ts(kickoff) if kickoff else None
     best, best_key = None, None
     for f in _day_fixtures(day):
@@ -295,10 +329,10 @@ def find_fixture(day, home, away, kickoff=None):
             best, best_key = f, key
     if not best:
         return None
-    cache[k] = {"id": best["id"], "home_id": best["home_id"], "away_id": best["away_id"],
+    known[k] = {"id": best["id"], "home_id": best["home_id"], "away_id": best["away_id"],
                 "status": best["status"]}
-    store.save("fixtures.json", cache)
-    return cache[k]
+    store.save("fixtures.json", known)
+    return known[k]
 
 
 def fixture_result(day, home, away, kickoff=None):
@@ -328,18 +362,26 @@ def _num(v):
 def fixture_stats(fixture_id, players=True):
     """Totaux du match : corners, cartons, et stats par joueur. Mis en cache.
     players=False évite l'appel /fixtures/players (moyennes d'équipe seulement)."""
-    cache = store.load("stats_cache.json", {})
-    cur = cache.get(str(fixture_id))
+    cache_ = store.load("stats_cache.json", {})
+    cur = cache_.get(str(fixture_id))
+    if cur and cur.get("missing"):                  # l'API n'a pas de statistiques pour ce match : pas avant quelques jours
+        if _today() < str((datetime.fromisoformat(cur["missing"]) + timedelta(days=C.STATS_NO_DATA_DAYS)).date()):
+            cache.hit("api-football", 1)
+            return None
+        cur = None
     if cur and (not players or cur.get("players_done")):
+        cache.hit("api-football", 1 + (1 if players else 0))
         return cur
     if cur:
         out = cur
     else:
         teams = get("/fixtures/statistics", fixture=fixture_id)
-        if not teams or len(teams) < 2:
+        if teams is None:                           # erreur ou quota : on réessaiera
             return None
-        # Sans aucune ligne « Corner Kicks », la donnée manque : ne pas régler sur 0.
-        if not any(s.get("type") == "Corner Kicks" for t in teams for s in t.get("statistics") or []):
+        # Sans aucune ligne « Corner Kicks », la donnée manque : ne pas régler sur 0 (et ne pas la redemander tout de suite).
+        if len(teams) < 2 or not any(s.get("type") == "Corner Kicks" for t in teams for s in t.get("statistics") or []):
+            cache_[str(fixture_id)] = {"missing": _today()}
+            store.save("stats_cache.json", cache_)
             return None
         out = {"corners": 0, "cards": 0, "shots": 0, "fouls": 0, "teams": {}, "players": {},
                "players_done": False}
@@ -362,8 +404,8 @@ def fixture_stats(fixture_id, players=True):
                         "fouls": _num((s.get("fouls") or {}).get("committed")),
                     }
             out["players_done"] = True
-    cache[str(fixture_id)] = out
-    store.save("stats_cache.json", cache)
+    cache_[str(fixture_id)] = out
+    store.save("stats_cache.json", cache_)
     return out
 
 
@@ -406,10 +448,12 @@ def player_stat(stats, name, field):
 def team_averages(team_id, day):
     """Moyennes corners/cartons pour et contre sur les derniers matchs.
     None si moins de MIN_MATCHES matchs avec stats (rien n'est mis en cache)."""
-    cache = store.load("team_avg.json", {})
-    k = f"{team_id}|{day}"
-    if k in cache:
-        return cache[k]
+    cache_ = store.load("team_avg.json", {})
+    k, day = str(team_id), str(day)[:10]
+    got = cache_.get(k)
+    if got and (datetime.fromisoformat(day) - datetime.fromisoformat(got.get("day", "2000-01-01"))).days <= C.STATS_TEAM_DAYS:
+        cache.hit("api-football", 1 + got.get("n", 0))      # les derniers matchs d'une équipe changent rarement : réutilisés quelques jours
+        return None if got.get("none") else got
     # `last` seul (status filtré côté client : combinaison non garantie par l'API).
     fixtures = get("/fixtures", team=team_id, last=LAST_N + 4) or []
     fixtures = sorted((f for f in fixtures if f["fixture"]["status"]["short"] in DONE),
@@ -427,11 +471,15 @@ def team_averages(team_id, day):
         tot["cards_for"] += mine["cards"]; tot["cards_against"] += other["cards"]
         tot["n"] += 1
     if tot["n"] < MIN_MATCHES:
+        if fixtures:                                # des matchs existent mais sans statistiques : inutile de réessayer chaque jour
+            cache_[k] = {"day": day, "none": True}
+            store.save("team_avg.json", cache_)
         return None
     avg = {k2: v / tot["n"] for k2, v in tot.items() if k2 != "n"}
     avg["n"] = tot["n"]
-    cache[k] = avg
-    store.save("team_avg.json", cache)
+    avg["day"] = day
+    cache_[k] = avg
+    store.save("team_avg.json", cache_)
     return avg
 
 

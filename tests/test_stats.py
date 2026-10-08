@@ -23,6 +23,7 @@ class Resp:
 def reset(fake=None, cap=None):
     stats._calls, stats._halted = 0, False
     stats._refreshed.clear()
+    stats._neg.clear()
     stats.BUDGET = 60
     for f in os.listdir(store.DATA_DIR):
         os.remove(os.path.join(store.DATA_DIR, f))
@@ -34,6 +35,15 @@ def reset(fake=None, cap=None):
     calls = []
     stats.requests.get = lambda url, **kw: (calls.append((url, kw.get("params"))), fake(url, kw.get("params")))[1]
     return calls
+
+
+def next_run(hours=24):
+    """Exécution suivante (le lendemain) : mémoire vide, relevés vieillis de `hours` heures."""
+    stats._refreshed.clear()
+    stats._neg.clear()
+    d = store.load("fixtures_day.json", {})
+    d["_fetched"] = {k: t - hours * 3600 for k, t in d.get("_fetched", {}).items()}
+    store.save("fixtures_day.json", d)
 
 
 def fx(i, home, away, ts, status="NS", goals=(None, None), fulltime=None):
@@ -221,7 +231,7 @@ def test_day_cache_refresh_and_result():
     assert stats.fixture_result(day, "Alpha", "Bravo", ko)["finished"] is False
     assert len(calls) == 1                                             # même exécution : pas de 2e appel
     state["status"] = "FT"
-    stats._refreshed.clear()                                           # exécution suivante
+    next_run()                                                         # exécution suivante
     r = stats.fixture_result(day, "Alpha", "Bravo", ko)
     assert r["finished"] and (r["home"], r["away"]) == (2, 1) and len(calls) == 2, (r, len(calls))
     r = stats.fixture_result(day, "Charlie", "Delta", ko)
@@ -402,6 +412,75 @@ def test_goal_markets_and_features():
     stats.enrich([t2], "2026-10-10")
     assert t2["pm"]["exp"] == 2.7 and t2["pm"]["kind"] == "goals"                # (2.0 + 1.2)/2 + (1.4 + 0.8)/2
     assert "moyennes de buts : 2.7 buts attendus" in t2["why"]
+
+
+def test_caching_no_refetch():
+    """Cache API-Football : jour passé terminé = pour toujours ; erreurs et réponses vides pas redemandées en boucle ;
+    statistiques absentes mémorisées ; moyennes d'équipe réutilisées quelques jours ; relevé incomplet re-téléchargé
+    au plus toutes les C.FIXTURES_RETRY_HOURS et pendant C.FIXTURES_STALE_DAYS jours seulement."""
+    from kelly import cache, config as C
+    day = str(date.fromisoformat(stats._today()) - timedelta(days=1))
+    ts = int(datetime.fromisoformat(day + "T19:00:00+00:00").timestamp())
+    ko = day + "T19:00:00Z"
+    # 1) HTTP 500 : une seule requête, même si on cherche 5 matchs (avant : une requête par recherche)
+    calls = reset(lambda u, p: Resp({"errors": [], "response": []}, status=500))
+    cache.reset()
+    for _ in range(5):
+        stats.find_fixture(day, "Alpha", "Bravo", ko)
+    assert len(calls) == 1 and cache.COUNTS["api-football"]["hit"] >= 4, (len(calls), cache.COUNTS)
+    # 2) réponse vide : pas redemandée dans la même exécution
+    calls = reset(lambda u, p: Resp({"errors": [], "response": []}))
+    for _ in range(3):
+        stats.find_fixture(day, "Alpha", "Bravo", ko)
+    assert len(calls) == 1
+    # 3) jour passé terminé : zéro requête le lendemain et au-delà
+    calls = reset(lambda u, p: Resp({"errors": [], "response": [fx(1, "Alpha", "Bravo", ts, "FT", (2, 1))]}))
+    assert stats.fixture_result(day, "Alpha", "Bravo", ko)["finished"] and len(calls) == 1
+    next_run(24 * 20)
+    assert stats.fixture_result(day, "Alpha", "Bravo", ko)["finished"] and len(calls) == 1
+    # 4) relevé incomplet (NS) : pas avant FIXTURES_RETRY_HOURS, plus du tout après FIXTURES_STALE_DAYS jours
+    calls = reset(lambda u, p: Resp({"errors": [], "response": [fx(1, "Alpha", "Bravo", ts, "NS")]}))
+    stats.fixture_result(day, "Alpha", "Bravo", ko)
+    next_run(1)
+    stats.fixture_result(day, "Alpha", "Bravo", ko)
+    assert len(calls) == 1, "moins de 6 h : pas de nouveau relevé"
+    next_run(C.FIXTURES_RETRY_HOURS + 1)
+    stats.fixture_result(day, "Alpha", "Bravo", ko)
+    assert len(calls) == 2, "relevé incomplet re-téléchargé après 6 h"
+    old_day = str(date.fromisoformat(stats._today()) - timedelta(days=C.FIXTURES_STALE_DAYS + 2))
+    calls = reset(lambda u, p: Resp({"errors": [], "response": [fx(1, "Alpha", "Bravo", ts, "NS")]}))
+    stats.find_fixture(old_day, "Alpha", "Bravo")
+    next_run(48)
+    stats.find_fixture(old_day, "Alpha", "Bravo")
+    stats.fixture_result(old_day, "Alpha", "Bravo")
+    assert len(calls) == 1, "un match NS vieux de plus de 3 jours n'est pas re-téléchargé indéfiniment"
+    # 5) statistiques absentes : mémorisées, redemandées seulement après STATS_NO_DATA_DAYS
+    calls = reset(lambda u, p: Resp({"errors": [], "response": []}))
+    assert stats.fixture_stats(77) is None and stats.fixture_stats(77) is None
+    stats._neg.clear()
+    assert stats.fixture_stats(77) is None and len(calls) == 1, "absence de statistiques mémorisée"
+    cache_ = store.load("stats_cache.json", {})
+    cache_["77"] = {"missing": str(date.fromisoformat(stats._today()) - timedelta(days=C.STATS_NO_DATA_DAYS + 1))}
+    store.save("stats_cache.json", cache_)
+    assert stats.fixture_stats(77) is None and len(calls) == 2
+    # 6) moyennes d'équipe : réutilisées le lendemain (0 requête), recalculées après STATS_TEAM_DAYS
+    def fake(url, p):
+        path = url.replace(stats.BASE, "")
+        if path == "/fixtures/statistics":
+            return Resp({"errors": [], "response": stat_resp((10, 20), 6, 4)})
+        return Resp({"errors": [], "response": [fx(10 + i, "A", "B", T0 - i * 86400, "FT") | {
+            "teams": {"home": {"id": p["team"], "name": "A"}, "away": {"id": 99, "name": "B"}}} for i in range(5)]})
+    calls = reset(fake)
+    a1 = stats.team_averages(10, "2026-10-10")
+    n = len(calls)
+    assert a1 and stats.team_averages(10, "2026-10-11")["n"] == a1["n"] and len(calls) == n
+    assert stats.team_averages(10, "2026-10-%02d" % (10 + C.STATS_TEAM_DAYS))["n"] == a1["n"] and len(calls) == n
+    assert stats.team_averages(10, "2026-10-%02d" % (11 + C.STATS_TEAM_DAYS)) and len(calls) > n
+    # 7) hors ligne (commandes Telegram) : aucune requête
+    calls = reset(fake)
+    with cache.offline():
+        assert stats.get("/fixtures", date="2026-10-10") is None and stats.team_averages(10, "2026-10-10") is None
+    assert calls == []
 
 
 def main():

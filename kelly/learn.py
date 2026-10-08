@@ -321,3 +321,25 @@ def describe(model, rows, days=7):
     if waiting:
         lines.append("Calibration en attente : " + ", ".join(waiting))
     return "\n".join(lines)
+
+
+def describe_simple(model, rows):
+    """🧠 en 2 ou 3 lignes simples, sans chiffre technique (CLV, Brier, coefficients : voir /bilan détail et --check).
+    '' s'il n'y a rien à dire."""
+    from . import fmt
+    sent = [r for r in rows if r.get("sent") and r.get("clv") is not None][-10:]
+    lines = []
+    if len(sent) >= 3:
+        beat = sum(1 for r in sent if r["clv"] > 0)
+        lines.append(f"Kelly a battu la cote finale sur {beat} de ses {len(sent)} derniers paris "
+                     "(c'est le meilleur signe qu'une méthode est bonne).")
+    elif rows:
+        lines.append(f"Kelly suit {len(rows)} paris pour apprendre, mais ne peut pas encore se juger sur la cote finale.")
+    if model and model.get("adopted"):
+        mk = [(n[7:], w) for n, w in zip(model.get("names", []), model.get("w", [])) if n.startswith("market=") and w > 0]
+        if mk:
+            best = max(mk, key=lambda x: x[1])[0]
+            lines.append(f"Elle fait davantage confiance au marché « {fmt.esc(C.MARKET_LABELS.get(best, best))} » en ce moment.")
+    elif model and rows:
+        lines.append("Elle apprend encore : pas assez de paris suivis pour changer sa façon de choisir.")
+    return fmt.Html("🧠 " + "\n".join(lines)) if lines else ""
