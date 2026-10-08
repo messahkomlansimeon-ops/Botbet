@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
-from . import bankroll, combos as CB, config as C, learn, odds, settle, stats, store, telegram
+from . import bankroll, combos as CB, config as C, learn, odds, settle, stats, store, telegram, track
 
 DISCLAIMER = ("Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
               "mise petit. 18+")
@@ -40,7 +40,7 @@ def build_day(picks, day):
     bank = bankroll.load()["bankroll"]
     pool = CB.make_pool(picks)
     soft = sum(1 for c in picks if CB.soft_market(c))
-    messages = [f"🔥 COMBINÉS DU {day.strftime('%d/%m/%Y')} 🔥\n{len(CB.per_event(picks))} matchs analysés, "
+    messages = [f"🔥 KELLY — COMBINÉS DU {day.strftime('%d/%m/%Y')} 🔥\n{len(CB.per_event(picks))} matchs analysés, "
                 f"{len(picks)} paris étudiés dont {soft} sur marchés secondaires (corners, cartons, joueurs)"]
     sent_picks, sent_combos = [], []
     if pool:
@@ -68,22 +68,24 @@ def morning_report(now):
     bets, settled = settle.settle_pending(now)
     bankroll.apply_results(bets["combos"])
     store.save("bets.json", bets)
-    model = learn.update(bets)
-    if not settled:
-        return [], model
-    yesterday = [b for b in settled]
-    lines = ["📋 RÉSULTATS DES DERNIERS PARIS"]
-    for b in yesterday:
-        icon = {"win": "✅", "loss": "❌", "push": "↩️", "void": "⚪"}[b["result"]]
-        lines.append(f'{icon} {b["event"]} : {b["pick"]} @ {b["odds"]:.2f}')
-    combos_done = [c for c in bets["combos"] if c.get("result") and not c.get("reported")]
-    for c in combos_done:
-        c["reported"] = True
-        icon = {"win": "🏆", "loss": "❌", "void": "⚪"}[c["result"]]
-        lines.append(f'{icon} {c["tier"].split(" (")[0]} (cote {c.get("odds_final", c["odds"]):.1f}, mise {c["stake"]} u)')
-    store.save("bets.json", bets)
-    msgs = ["\n".join(lines), settle.bilan(bets), bankroll.summary(bets["combos"])]
-    d = learn.describe(model)
+    rows = track.load()
+    model = learn.update(rows, bets["combos"])
+    msgs = []
+    sent_settled = [b for b in settled if b.get("sent")]
+    if sent_settled:
+        lines = ["📋 RÉSULTATS DES DERNIERS PARIS"]
+        for b in sent_settled:
+            icon = {"win": "✅", "loss": "❌", "push": "↩️", "void": "⚪"}[b["result"]]
+            clv = f' | CLV {b["clv"]*100:+.0f}%' if b.get("clv") is not None else ""
+            lines.append(f'{icon} {b["event"]} : {b["pick"]} @ {b["odds"]:.2f}{clv}')
+        combos_done = [c for c in bets["combos"] if c.get("result") and not c.get("reported")]
+        for c in combos_done:
+            c["reported"] = True
+            icon = {"win": "🏆", "loss": "❌", "void": "⚪"}[c["result"]]
+            lines.append(f'{icon} {c["tier"].split(" (")[0]} (cote {c.get("odds_final", c["odds"]):.1f}, mise {c["stake"]} u)')
+        store.save("bets.json", bets)
+        msgs += ["\n".join(lines), settle.bilan(bets, rows=rows), bankroll.summary(bets["combos"])]
+    d = learn.describe(model, rows)
     if d:
         msgs.append(d)
     return msgs, model
@@ -95,6 +97,7 @@ def run_daily(sample=False):
         events = load_sample()
         day = datetime.fromisoformat(events[0]["commence_time"].replace("Z", "+00:00")).date()
         after, report, model = None, [], learn.load()
+        now = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
     else:
         report, model = morning_report(now)
         day, after = now.date(), now
@@ -104,11 +107,50 @@ def run_daily(sample=False):
         picks = stats.enrich(picks, day)
         store.save("odds_history.json", odds.snapshot(picks))
     messages, sent_picks, sent_combos = build_day(picks, day)
-    settle.record(sent_picks, sent_combos, day)
+    track.record(picks, {c["key"] for c in sent_picks}, day, now)
+    settle.record_combos(sent_combos, day)
     store.save("today.json", {"day": str(day), "picks": picks})
     for m in report + messages:
         telegram.send(m)
+    if not sample:
+        run_track()
     return report + messages
+
+
+def run_track(events_for=None, now=None):
+    """Toutes les heures : cote de clôture des paris dont le match démarre
+    bientôt (un appel par événement, seulement ses marchés suivis) + alertes."""
+    now = now or now_utc()
+    rows = track.load()
+    due, missed = track.pending_closing(rows, now)
+    track.mark_missed(rows, missed, now)
+    by_event = {}
+    for r in due:
+        by_event.setdefault((r["sport_key"], r["id"]), set()).add(r["market"])
+    closing, alerts_src = [], []
+    for (sport_key, ev_id), markets in by_event.items():
+        try:
+            ev = events_for(sport_key, ev_id, markets) if events_for else odds.get(
+                f"/sports/{sport_key}/events/{ev_id}/odds", regions="eu", oddsFormat="decimal",
+                markets=",".join(sorted(markets)))
+        except Exception as e:                      # noqa: BLE001
+            print(f"clôture {ev_id} : {e}")
+            continue
+        if not ev:
+            continue
+        ev["sport_key"] = sport_key
+        day = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")).date()
+        closing += odds.build_picks([ev], day)
+    n = track.close(rows, closing, now)
+    track.save(rows)
+    hist = store.load("odds_history.json", {})
+    alerts = find_alerts(closing, hist)
+    hist.update(odds.snapshot(closing))
+    store.save("odds_history.json", hist)
+    print(f"{n} clôtures relevées, {len(missed)} manquées, {len(alerts)} alertes.")
+    if alerts:
+        telegram.send(alert_text(alerts))
+    return n, alerts
 
 
 def run_snapshot():
@@ -153,19 +195,23 @@ def run_alert(sample=False):
     if not alerts:
         print("Aucun mouvement notable.")
         return []
-    lines = ["🚨 ALERTE COTES : l'argent bouge"]
-    for _, c, prev in alerts:
-        lines.append(f'• {c["start"]} {c["event"]} [{c["league"]}]\n   → {c["pick"]} : {prev["o"]:.2f} ➜ {c["odds"]:.2f} '
-                     f'(proba {prev["p"]*100:.0f}% ➜ {c["prob"]*100:.0f}%) depuis {prev["t"][11:16]} UTC')
-    lines.append("Une cote qui chute vite = gros volumes sur ce pari. Vérifie la compo avant de suivre.")
-    text = "\n".join(lines)
+    text = alert_text(alerts)
     telegram.send(text)
     return [text]
 
 
+def alert_text(alerts):
+    lines = ["🚨 KELLY — ALERTE COTES : l'argent bouge"]
+    for _, c, prev in alerts:
+        lines.append(f'• {c["start"]} {c["event"]} [{c["league"]}]\n   → {c["pick"]} : {prev["o"]:.2f} ➜ {c["odds"]:.2f} '
+                     f'(proba {prev["p"]*100:.0f}% ➜ {c["prob"]*100:.0f}%) depuis {prev["t"][11:16]} UTC')
+    lines.append("Une cote qui chute vite = gros volumes sur ce pari. Vérifie la compo avant de suivre.")
+    return "\n".join(lines)
+
+
 # ---------- commandes Telegram ----------
 
-HELP = """🤖 Commandes :
+HELP = """🤖 Kelly — commandes :
 /bilan [jours] : résultats et rendement
 /match <nom> : paris intéressants sur un match du jour
 /combi <cote> : combiné sur mesure à la cote visée
@@ -184,7 +230,9 @@ def handle_command(text):
     if cmd == "/bilan":
         days = int(args[0]) if args and args[0].isdigit() else None
         bets = store.load("bets.json", {"picks": [], "combos": []})
-        return settle.bilan(bets, days) + "\n\n" + bankroll.summary(bets["combos"])
+        out = settle.bilan(bets, days) + "\n\n" + bankroll.summary(bets["combos"])
+        d = learn.describe(learn.load(), track.load())
+        return out + ("\n\n" + d if d else "")
     if cmd == "/bank":
         b = bankroll.load()
         if args:
@@ -197,7 +245,7 @@ def handle_command(text):
             return f"Bankroll réglée à {amount:.2f} unités. Les mises conseillées s'adaptent dès demain."
         return f"💼 Bankroll : {b['bankroll']:.2f} unités (départ {b['initial']:.2f})"
     if not picks:
-        return "Pas encore d'analyse aujourd'hui (elle arrive à 08:00)."
+        return "Kelly n'a pas encore analysé la journée (ça arrive à 08:00)."
     if cmd == "/top":
         best = sorted(CB.per_event(picks, k=1), key=lambda c: c["score"], reverse=True)[:10]
         return "🔝 TOP 10 DU JOUR\n" + "\n".join(fmt_pick(c) for c in best)

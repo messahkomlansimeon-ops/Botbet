@@ -54,9 +54,13 @@ STAKE_CAP = {"🛡️": 0.05, "⚖️": 0.02, "🔥": 0.01, "💀": 0.005}   # p
 MIN_STAKE_SHARE = 0.002
 STREAK_WARNING = 5
 
-# Apprentissage : lissage (nombre de paris "fictifs" tirant le facteur vers 1).
-LEARN_SHRINK = 20
-LEARN_CLAMP = (0.5, 1.6)
+# Suivi et apprentissage par la cote de clôture.
+CLOSE_WINDOW_MIN = 75      # relevé de clôture : matchs qui démarrent dans les 75 min
+TRACK_TOP = 50             # paris fantômes suivis par jour (en plus des envoyés)
+LEARN_MIN_ROWS = 40        # lignes avec clôture avant d'entraîner un modèle
+CALIB_MIN_ROWS = 300       # résultats réglés par famille avant de calibrer
+RIDGE_LAMBDA = 1.0
+TOP_BOOKS = 12             # bookmakers encodés individuellement
 
 MARKET_LABELS = {
     "h2h": "1N2", "double_chance": "double chance", "totals": "buts/points", "spreads": "handicap",

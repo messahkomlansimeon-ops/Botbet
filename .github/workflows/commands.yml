@@ -1,4 +1,4 @@
-name: Commandes Telegram
+name: Kelly — commandes Telegram
 on:
   schedule:
     - cron: "*/30 * * * *"   # réponses dans la demi-heure ; pour l'instantané : python bot.py --serve sur un serveur

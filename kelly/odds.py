@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from . import config as C
+from . import config as C, learn
 
 
 def sport_group(sport_key):
@@ -81,11 +81,8 @@ def label(market, name, point, who, group):
     return "Match nul" if name == "Draw" else name
 
 
-def market_weight(market, model=None):
-    base = C.PLAYER_WEIGHT if market.startswith("player_") else C.MARKET_WEIGHT.get(market, 1.2)
-    if model:
-        base *= model.get("market", {}).get(market, {}).get("factor", 1.0)
-    return base
+def market_weight(market):
+    return C.PLAYER_WEIGHT if market.startswith("player_") else C.MARKET_WEIGHT.get(market, 1.2)
 
 
 def build_picks(events, day, after=None, history=None, model=None):
@@ -94,8 +91,11 @@ def build_picks(events, day, after=None, history=None, model=None):
     score = valeur (meilleure cote vs consensus)
           + désaccord entre bookmakers (un book en retard = opportunité)
           + mouvement de la cote depuis le dernier relevé (argent des pros)
-          x poids du marché (secondaires = mal pricés), ajusté par l'apprentissage
+          x poids du marché (secondaires = mal pricés)
+    Si un modèle appris est adopté (learn.train_clv), le score devient le CLV
+    prédit, et la proba est calibrée par les résultats quand c'est actif.
     """
+    now = datetime.now(timezone.utc)
     history = history or {}
     model = model or {}
     picks = []
@@ -119,7 +119,6 @@ def build_picks(events, day, after=None, history=None, model=None):
                         probs.setdefault(k, []).append(1 / o["price"] / total)
                         if o["price"] > best.get(k, 0):
                             best[k], bests_book[k] = o["price"], bk.get("title", bk["key"])
-        league_factor = model.get("league", {}).get(ev.get("sport_key", ""), {}).get("factor", 1.0)
         for k, ps in probs.items():
             if len(ps) < C.MIN_BOOKMAKERS:
                 continue
@@ -133,7 +132,7 @@ def build_picks(events, day, after=None, history=None, model=None):
             prev = history.get(key)
             prev_p = prev["p"] if isinstance(prev, dict) else prev
             steam = (p - prev_p) / prev_p if prev_p else 0.0
-            weight = market_weight(market, model) * league_factor
+            weight = market_weight(market)
             signals = []
             if edge > 0.03:
                 signals.append(f"cote {odds:.2f} chez {bests_book[k]} > consensus {1/p:.2f}")
@@ -141,7 +140,8 @@ def build_picks(events, day, after=None, history=None, model=None):
                 signals.append("books en désaccord")
             if steam > 0.04:
                 signals.append(f"cote en baisse ({steam*100:+.0f}% de proba)")
-            picks.append({
+            p_cal = learn.calibrated(model, market, p)
+            c = {
                 "key": key, "id": ev["id"], "sport_key": ev.get("sport_key", ""), "group": group,
                 "event": f'{ev["home_team"]} - {ev["away_team"]}',
                 "home": ev["home_team"], "away": ev["away_team"],
@@ -149,10 +149,15 @@ def build_picks(events, day, after=None, history=None, model=None):
                 "commence": ev["commence_time"],
                 "market": market, "who": who, "point": point, "name": name,
                 "pick": label(market, name, point, who, group),
-                "prob": p, "odds": odds, "book": bests_book[k], "edge": edge, "weight": weight,
+                "prob": p_cal, "prob_book": p, "odds": odds, "book": bests_book[k], "edge": p_cal * odds - 1,
+                "spread": spread, "steam": steam, "n_books": len(ps), "weight": weight,
                 "score": (edge + 0.5 * spread + 2 * steam) * weight + (weight - 1) * 0.05,
                 "why": ", ".join(signals),
-            })
+            }
+            if model and model.get("adopted"):
+                c["heuristic"] = c["score"]
+                c["score"] = learn.predict(model, learn.features(c, now))
+            picks.append(c)
     return picks
 
 

@@ -1,0 +1,64 @@
+{
+"picks": [],
+"combos": [
+{
+"tier": "🛡️ SÛR (cote 5 à 7)",
+"keys": [
+"8|player_fouls|Casemiro|1.5|Under",
+"9|player_shots_on_target|Mbappé|1.5|Under",
+"6|alternate_totals_cards||3.5|Over"
+],
+"odds": 6.01,
+"prob": 0.15235,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+},
+{
+"tier": "⚖️ COSTAUD (cote 12 à 20)",
+"keys": [
+"8|player_fouls|Casemiro|1.5|Under",
+"5|alternate_totals_corners||9.5|Under",
+"9|player_shots_on_target|Mbappé|1.5|Under",
+"4|alternate_totals_corners||9.5|Under"
+],
+"odds": 12.72,
+"prob": 0.07021,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+},
+{
+"tier": "🔥 MÉCHANT (cote 40 à 80)",
+"keys": [
+"0|alternate_totals_cards||3.5|Under",
+"8|player_fouls|Casemiro|1.5|Under",
+"5|player_shots_on_target|Mbappé|1.5|Over",
+"6|alternate_totals_cards||3.5|Under",
+"1|alternate_totals_cards||3.5|Under"
+],
+"odds": 40.5,
+"prob": 0.02098,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+},
+{
+"tier": "💀 MONSTRE (cote 150+)",
+"keys": [
+"0|alternate_totals_cards||3.5|Under",
+"11|player_fouls|Casemiro|1.5|Under",
+"8|player_fouls|Casemiro|1.5|Under",
+"5|player_shots_on_target|Mbappé|1.5|Over",
+"6|alternate_totals_cards||3.5|Under",
+"1|alternate_totals_cards||3.5|Under",
+"4|alternate_totals_corners||9.5|Under"
+],
+"odds": 150.84,
+"prob": 0.0053,
+"stake": 0.2,
+"date": "2026-10-08",
+"result": null
+}
+]
+}

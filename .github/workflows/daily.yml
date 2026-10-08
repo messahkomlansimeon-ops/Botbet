@@ -1,14 +1,15 @@
-name: Botbet
+name: Kelly
 on:
   schedule:
     - cron: "0 8 * * *"    # 08:00 Abidjan : résultats d'hier + combinés du jour
     - cron: "0 12 * * *"   # 12:00 : alerte cotes
     - cron: "0 16 * * *"   # 16:00 : alerte cotes
     - cron: "0 20 * * *"   # 20:00 : relevé des cotes du lendemain
+    - cron: "0 * * * *"    # chaque heure : cote de clôture des matchs imminents + alertes
   workflow_dispatch:
     inputs:
       mode:
-        description: "daily | alert | snapshot"
+        description: "daily | alert | snapshot | track"
         default: daily
 concurrency:
   group: botbet-data
@@ -30,10 +31,14 @@ jobs:
             "0 8 * * *") m=daily ;;
             "0 12 * * *"|"0 16 * * *") m=alert ;;
             "0 20 * * *") m=snapshot ;;
+            "0 * * * *")
+              # Les passages horaires de 08h/12h/16h/20h sont couverts par les modes principaux.
+              case "$(date -u +%H)" in 08|12|16|20) m=skip ;; *) m=track ;; esac ;;
             *) m="${{ github.event.inputs.mode || 'daily' }}" ;;
           esac
           echo "mode=$m" >> "$GITHUB_OUTPUT"
-      - run: python bot.py --${{ steps.mode.outputs.mode }}
+      - if: steps.mode.outputs.mode != 'skip'
+        run: python bot.py --${{ steps.mode.outputs.mode }}
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
