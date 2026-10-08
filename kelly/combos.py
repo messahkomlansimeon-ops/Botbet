@@ -244,3 +244,60 @@ def skip_line(missing, n_events, anything=True):
     names = "/".join(fmt.tier_word(t) for t in missing)
     what = f"pas de {names}" if anything else "ni pari ni combiné de qualité"
     return f"Journée trop pauvre : {what} aujourd'hui ({n_events} matchs avec cotes)."
+
+
+# ---------- combinés à cote juste (pronostics sans cote de bookmaker) ----------
+# Jambes = pronostics de kelly/fair.py : proba Kelly et « cote minimale » (cote juste x 1,05) à exiger chez 1xBet. Même
+# optimiseur que les combinés réels, appliqué aux cotes minimales : le combiné a une « cote mini » (produit des cotes
+# minimales) et une proba. Jamais mélangé aux combinés à cotes réelles (autres jambes, autres messages, autre suivi) et
+# jamais de mise calculée sur la bankroll : seulement une mise indicative.
+
+def fair_eligible(c):
+    """Pronostic assez solide pour un combiné : proba Kelly >= FAIR_COMBO_MIN_P, qualité des données >= FAIR_COMBO_MIN_Q."""
+    return (c.get("prob", 0) >= C.FAIR_COMBO_MIN_P and c.get("conf", C.FAIR_COMBO_MIN_Q) >= C.FAIR_COMBO_MIN_Q
+            and c.get("min_odds", 0) > 1.0)
+
+
+def fair_legs(pronos):
+    """Jambes d'un combiné à cote juste : les pronostics solides, avec la cote minimale comme « cote » de l'optimiseur."""
+    return [c | {"odds": c["min_odds"]} for c in pronos if fair_eligible(c)]
+
+
+def fair_stake(min_total):
+    """Mise indicative (unités, pas la bankroll) : plus la cote mini est haute, plus elle est petite."""
+    return next(s for limit, s in C.FAIR_COMBO_STAKE if min_total < limit)
+
+
+def fair_plan(pronos, tiers=None, usage=None):
+    """Combinés à cote juste du jour, un par palier de C.FAIR_COMBO_TIERS (5, 12, 25 de cote mini) quand la matière le permet :
+    [(palier, (jambes, cote mini, proba) | None)]. Les matchs déjà pris sont réutilisables selon les règles des combinés réels."""
+    usage = usage if usage is not None else Usage()
+    legs = fair_legs(pronos)
+    out = []
+    for target, lo, hi in (tiers if tiers is not None else C.FAIR_COMBO_TIERS):
+        combo = best_combo(usage.filter(legs), lo, hi)
+        if combo:
+            usage.add(combo[0])
+        out.append((target, combo))
+    return out
+
+
+def fair_custom(pronos, target, usage=None):
+    """/combi <cote> sans cotes réelles : combiné à cote juste dont la cote mini est au moins la cote visée (jusqu'à
+    + C.CUSTOM_TOLERANCE) : on ne promet jamais moins que demandé, puisque c'est un minimum."""
+    legs = (usage or Usage()).filter(fair_legs(pronos))
+    return best_combo(legs, target, target * (1 + C.CUSTOM_TOLERANCE))
+
+
+def fair_shortfall(pronos, target):
+    """Ce qui manque pour un combiné à cote juste de cote `target` : {matches, legs, best_total, need} (matchs avec un
+    pronostic solide, meilleure cote mini atteignable avec tous, nombre approximatif de matchs nécessaires)."""
+    legs = fair_legs(pronos)
+    best = {}
+    for c in legs:
+        if c["id"] not in best or c["prob"] > best[c["id"]]["prob"]:
+            best[c["id"]] = c
+    total = math.prod(c["odds"] for c in best.values()) if best else 1.0
+    mean = math.exp(sum(math.log(c["odds"]) for c in best.values()) / len(best)) if best else 1.5
+    need = math.ceil(math.log(target) / math.log(max(mean, 1.05)))
+    return {"matches": len(best), "legs": len(legs), "best_total": total, "need": need}

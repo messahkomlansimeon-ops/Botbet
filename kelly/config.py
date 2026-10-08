@@ -129,9 +129,24 @@ FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'e
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
 FAIR_SHRINK = 0.9                                 # la proba du modèle est rapprochée de 50 % (le modèle de Poisson est trop sûr de lui)
 FAIR_MARGIN = 0.05                                # « joue si la cote >= cote juste x 1.05 » : marge de sécurité du modèle
-FAIR_API_EVENTS = _int("FAIR_API_EVENTS", 2)      # matchs sans profil football-data estimés par API-Football (~14 requêtes chacun)
+FAIR_API_EVENTS = _int("FAIR_API_EVENTS", 2)      # ancien repli (~14 requêtes par match) : inutilisé quand les profils API-Football (apistats) sont actifs
 FAIR_API_RESERVE = 30                             # requêtes API-Football du jour gardées pour le règlement
 FAIR_KEEP_DAYS = 10                               # historique gardé dans data/fair.json
+# ---- Stats mondiales API-Football (kelly/apistats.py) : profils d'équipe remplis progressivement, cache gardé ----
+APISTATS_DAILY = _int("APISTATS_DAILY", 60)       # requêtes API-Football par jour pour remplir les profils (0 = désactivé)
+APISTATS_LAST = 10                                # derniers matchs terminés d'une équipe dans son profil
+APISTATS_TARGET = 6                               # matchs avec statistiques cherchés pour une équipe encore inconnue
+APISTATS_MIN_N = 5                                # matchs avec statistiques minimum pour qu'une équipe soit « couverte »
+APISTATS_REFRESH_DAYS = _int("APISTATS_REFRESH_DAYS", 6)    # un profil plus récent n'est pas recalculé
+APISTATS_MAX_TEAMS = 700                          # équipes gardées dans data/apistats_profiles.json (< 300 Ko)
+APISTATS_KEEP_DAYS = 120                          # équipe oubliée si son profil n'a pas été renouvelé depuis
+APISTATS_SECONDS = _int("APISTATS_SECONDS", 150)  # durée maximale du remplissage du matin
+# ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
+FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
+FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
+FAIR_COMBO_TIERS = ((5, 5.0, 6.5), (12, 12.0, 15.0), (25, 25.0, 32.0))   # (cote mini visée, fourchette de la cote mini totale)
+FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
+FAIR_COMBO_KEEP_DAYS = 14
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}
 # Marchés détaillés : 1 appel par match et par marché (1 crédit chacun et par région), DANS CET
 # ORDRE de priorité (marchés mal pricés d'abord : si le budget manque, on coupe la fin).
@@ -247,7 +262,9 @@ MARKET_LABELS = {
     "btts": "les 2 marquent", "alternate_totals_corners": "corners", "alternate_totals_cards": "cartons",
     "player_shots_on_target": "tirs cadrés", "player_shots": "tirs", "player_fouls": "fautes",
     "player_points": "points joueur", "player_rebounds": "rebonds", "player_assists": "passes",
-    "player_threes": "3 points",
+    "player_threes": "3 points", "team_shots_total": "tirs (total)", "team_sot_total": "tirs cadrés (total)",
+    "team_shots_home": "tirs d'une équipe", "team_shots_away": "tirs d'une équipe", "team_sot_home": "tirs cadrés d'une équipe",
+    "team_sot_away": "tirs cadrés d'une équipe",
 }
 
 # ---- Caches (kelly/cache.py) : ne jamais redemander ce qu'on a déjà ----

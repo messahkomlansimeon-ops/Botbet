@@ -8,8 +8,12 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-")
 os.environ.pop("STATS_API_KEY", None)
 os.environ.pop("STATS_DAILY_CAP", None)
 
-from kelly import learn, stats, store  # noqa: E402
-from kelly.sources import features  # noqa: E402
+import contextlib  # noqa: E402
+import json  # noqa: E402
+
+from kelly import apistats, cache, config as C, learn, stats, store  # noqa: E402
+from kelly.sources import features, footballdata  # noqa: E402
+from tests.fake_api import FakeFootballAPI  # noqa: E402
 
 
 class Resp:
@@ -481,6 +485,234 @@ def test_caching_no_refetch():
     with cache.offline():
         assert stats.get("/fixtures", date="2026-10-10") is None and stats.team_averages(10, "2026-10-10") is None
     assert calls == []
+
+
+# --- stats mondiales : profils d'équipe API-Football (kelly/apistats.py), jeu de données réel du 8 octobre ----------------
+
+REAL = os.path.join(os.path.dirname(__file__), "fixtures", "real_2026-10-08")
+DAY8 = "2026-10-08"
+
+
+def real_day():
+    """(matchs du jour d'API-Football, relevé gratuit des ligues) du 8 octobre 2026, vrais fichiers de l'époque."""
+    entries = json.load(open(os.path.join(REAL, "fixtures_day.json")))[DAY8]
+    monde = json.load(open(os.path.join(REAL, "monde.json")))
+    scan = {"day": DAY8, "leagues": {k: [{"id": f"{k}-{i}", "sport_key": k, "home_team": h, "away_team": a,
+                                          "commence_time": f"{DAY8}T{t}:00Z"} for i, (h, a, t) in enumerate(v)]
+                                     for k, v in monde["leagues"].items()}}
+    return entries, scan
+
+
+def world(api_kw=None, cap=None):
+    """Données vides + faux API-Football sur le jeu du 8 octobre. -> (faux API, relevé gratuit)."""
+    entries, scan = real_day()
+    api = FakeFootballAPI(entries, **(api_kw or {}))
+    reset(None, cap)
+    stats.requests.get = api
+    features.reload()
+    return api, scan
+
+
+@contextlib.contextmanager
+def on_day(day, api=None):
+    """Horloge d'API-Football (jour UTC) déplacée : le lendemain, mémoire vide, mêmes fichiers (et compteur de l'API remis à zéro)."""
+    if api:
+        api.new_day()
+    old = stats._today
+    stats._today = lambda: day
+    stats._halted, stats._calls = False, 0
+    stats._neg.clear()
+    stats._refreshed.clear()
+    try:
+        yield
+    finally:
+        stats._today = old
+
+
+def test_brazilian_names():
+    """Les clubs brésiliens que The Odds API et API-Football nomment différemment se retrouvent ; deux États ne se confondent pas."""
+    sim = stats.team_sim
+    assert sim("Nautico PE", "Nautico Recife") >= 0.8 and sim("Atletico Mineiro", "Atletico-MG") >= 0.8
+    assert sim("Atletico Paranaense", "Athletico-PR") >= 0.8 and sim("Ceará", "Ceara") == 1.0
+    assert sim("Grêmio Novorizontino", "Novorizontino") >= 0.8
+    assert sim("Atletico MG", "Atletico GO") == 0 and sim("Botafogo SP", "Botafogo RJ") == 0
+    assert sim("Atletico Mineiro", "Atletico Paranaense") < 0.8 and sim("Arsenal", "Arsenal W") == 0
+    entries, _ = real_day()
+    reset(None)
+    stats.requests.get = FakeFootballAPI(entries)
+    for home, away in (("Nautico PE", "Grêmio Novorizontino"), ("Atletico Paranaense", "Atletico Mineiro"), ("Santos", "Flamengo"),
+                       ("Ceará", "Criciuma")):
+        assert stats.find_fixture(DAY8, home, away, f"{DAY8}T22:30:00Z" if "Atletico" not in home else f"{DAY8}T23:00:00Z"), (home, away)
+
+
+def test_apistats_queue_order():
+    """File du matin : ligues du catalogue (Europe puis Amériques) d'abord, l'Afrique ensuite ; ni les sélections, ni les matchs
+    déjà détaillés par football-data, ni les matchs terminés."""
+    api, scan = world()
+    fixtures = stats._day_fixtures(DAY8)
+    scan["leagues"]["soccer_uefa_nations_league"] = [{"id": "n1", "sport_key": "soccer_uefa_nations_league", "home_team": "France",
+                                                      "away_team": "Italie", "commence_time": f"{DAY8}T18:45:00Z"}]
+    items, missing = apistats.queue(DAY8, scan, fixtures)
+    names = [f"{i['home']} - {i['away']}" for i in items]
+    assert missing == 0 and len(items) == 7 + 24 - sum(1 for f in fixtures if f.get("lg") and f["status"] in stats.DONE), names
+    assert [i["sk"] for i in items[:7]] == ["soccer_finland_veikkausliiga"] * 2 + ["soccer_league_of_ireland"] + \
+        ["soccer_brazil_campeonato"] * 2 + ["soccer_brazil_serie_b"] * 2, [i["sk"] for i in items[:7]]
+    assert all(i["sk"] == "africa" for i in items[7:]) and all(i["lg"] for i in items)
+    assert not any("France" in n for n in names)                          # sélection : pas de profil de club
+    assert "Nautico PE - Grêmio Novorizontino" in names and "Atletico Paranaense - Atletico Mineiro" in names   # noms retrouvés
+    ids = {(i["hid"], i["aid"]) for i in items}
+    assert (128, 127) in ids                                                # Santos - Flamengo : ids d'API-Football
+    # football-data détaille déjà Ceará - Criciuma (corners + cartons) : il sort de la file
+    v = {"n": 10, "corners_for": 5.5, "corners_against": 5.0, "cards_for": 2.0, "cards_against": 2.0, "goals_for": 1.4, "goals_against": 1.3}
+    store.save("src_footballdata.json", {"updated": "2026-10-07T08:00", "referees": {}, "leagues": {}, "teams": {
+        t: {"div": "BRA", "last": "2026-10-04", "all": v, "home": v, "away": v} for t in ("Ceará", "Criciuma")}})
+    features.reload()
+    items2, _ = apistats.queue(DAY8, scan, fixtures)
+    assert len(items2) == len(items) - 1 and "Ceará - Criciuma" not in [f"{i['home']} - {i['away']}" for i in items2]
+
+
+def test_apistats_quota_and_cache():
+    """Jamais plus de APISTATS_DAILY (60) requêtes de profils par jour ni sous la réserve de 30 du règlement ; un match dont
+    les statistiques sont connues n'est jamais redemandé ; le lendemain reprend où la veille s'est arrêtée."""
+    api, scan = world()
+    rep = apistats.fill(DAY8, scan)
+    q = store.load("stats_quota.json", {})
+    assert rep["enabled"] and rep["stop"] == "budget" and q["n"] == len(api.calls) == q["aps"], (rep, q)
+    assert 55 <= q["n"] <= C.APISTATS_DAILY == 60 and stats.left_today() >= C.FAIR_API_RESERVE        # 60 + 30 = 90 au plus
+    assert rep["teams"] == 29 and 12 <= rep["covered"] < rep["queued"] == 31, rep
+    n_stats = api.count("/fixtures", ids=None) - 0
+    assert api.count("/fixtures/statistics") == 0                           # méthode groupée : 1 requête par équipe
+    assert apistats.counts()[:2] == (29, 29)
+    # même jour : plus rien à dépenser, zéro requête
+    again = apistats.fill(DAY8, scan)
+    assert len(api.calls) == q["n"] and again["stop"] == "budget" and again["requests"] == 0, again
+    # le règlement a déjà consommé 20 requêtes ce matin : les profils s'arrêtent à 90 - 30 (réserve) - 20 = 40
+    api, scan = world()
+    store.save("stats_quota.json", {"day": stats._today(), "n": 20})
+    apistats.fill(DAY8, scan)
+    q = store.load("stats_quota.json", {})
+    assert q["n"] <= 60 and q["aps"] == q["n"] - 20 <= 40 and stats.left_today() >= C.FAIR_API_RESERVE, q
+    # une équipe dont tous les matchs sont en cache ne coûte qu'UNE requête (la liste de ses derniers matchs) : zéro statistique
+    api, scan = world()
+    for k in range(1, 13):
+        fid = 128 * 1000 + k
+        stats._save_stats_cache(stats._stats_cache() | {str(fid): stats._entry_from(api.stats_for(fid))})
+    d = apistats.load()
+    ctx = {"sk": "soccer_brazil_campeonato", "lg": "Brasileirão"}
+    assert apistats.refresh_team(d, 128, "Santos", ctx, apistats.Budget())
+    assert api.count("/fixtures", team=128) == 1 and api.count("/fixtures", ids="") == 0 and len(api.calls) == 1, api.calls
+    assert d["teams"]["128"]["all"][0] >= C.APISTATS_TARGET
+    # le lendemain : les équipes déjà couvertes (profil de moins de 6 jours) ne coûtent rien ; la file avance sur les autres
+    api, scan = world()
+    apistats.fill(DAY8, scan)
+    done = {k for k, t in apistats.load()["teams"].items() if apistats.covered_team(t)}
+    with on_day("2026-10-09", api):
+        n0 = len(api.calls)
+        rep2 = apistats.fill(DAY8, scan)
+        new_teams = {c[1]["team"] for c in api.calls[n0:] if "team" in c[1]}
+        assert not ({str(t) for t in new_teams} & done), "un profil récent n'est pas recalculé"
+        assert rep2["covered"] > rep["covered"] and len(api.calls) - n0 <= C.APISTATS_DAILY
+        assert store.load("stats_quota.json", {})["day"] == "2026-10-09"
+    # les profils restent compacts : au plus APISTATS_MAX_TEAMS équipes, moins de 300 Ko
+    d = apistats.load()
+    base = next(iter(d["teams"].values()))
+    d["teams"] = {str(i): dict(base, nm="Equipe %d" % i, d="2026-10-%02d" % (1 + i % 8)) for i in range(1000)}
+    apistats.save(d)
+    assert len(apistats.load()["teams"]) == C.APISTATS_MAX_TEAMS and os.path.getsize(store.path("apistats_profiles.json")) < 300_000
+    old = dict(base, d="2020-01-01")
+    d["teams"] = {"1": old, "2": base}
+    apistats.save(d)
+    assert set(apistats.load()["teams"]) == {"2"}                          # équipe non renouvelée depuis 120 jours : oubliée
+
+
+def test_apistats_profile_format():
+    """Les profils API-Football ont le format de football-data et alimentent match_features (corners, cartons, tirs, tirs cadrés)."""
+    api, scan = world()
+    apistats.fill(DAY8, scan)
+    prof = apistats.profiles()
+    t = prof["teams"]["Santos"]
+    assert t["all"]["n"] >= C.APISTATS_MIN_N and t["sk"] == ["soccer_brazil_campeonato"] and t["id"] == 128
+    # même jeu de clés qu'un profil football-data complet
+    ms = [{"date": "2026-10-0%d" % (d + 1), "home": "A", "away": "B", "hg": 1, "ag": 0, "hs": 10, "as": 8, "hst": 4, "ast": 3, "hf": 11, "af": 12,
+           "hc": 5, "ac": 4, "hy": 2, "ay": 1, "hr": 0, "ar": 0, "div": "E0"} for d in range(6)]
+    ref = footballdata.team_profiles(ms)["teams"]["A"]["all"]
+    assert set(t["all"]) == set(ref), set(t["all"]) ^ set(ref)
+    assert set(t["home"]) <= set(ref) and t["home"]["n"] + t["away"]["n"] == t["all"]["n"]
+    # nom de l'équipe retrouvé par le nom de The Odds API (alias) : « Nautico PE » est « Nautico Recife » chez API-Football
+    assert "Nautico PE" in prof["teams"] and prof["teams"]["Nautico PE"]["all"]["n"] >= 5
+    f = features.match_features("Santos", "Flamengo", "soccer_brazil_campeonato")
+    assert f["sources"] == ["API-Football"] and f["n_home"] >= 5 and f["aps_q"] >= 0.35, f
+    for k in ("exp_corners", "exp_cards", "exp_shots", "exp_sot", "exp_fouls", "exp_goals_home", "exp_shots_home", "exp_sot_away"):
+        assert f.get(k) is not None and k in f["aps_keys"], k
+    assert 3 < f["exp_corners"] < 20 and 5 < f["exp_shots"] < 50 and f["exp_sot"] < f["exp_shots"]
+    # la formule est celle de football-data : production + concédé adverse, à parts égales
+    h, a = prof["teams"]["Santos"]["home"], prof["teams"]["Flamengo"]["away"]
+    assert abs(f["exp_corners_home"] - round((h["corners_for"] + a["corners_against"]) / 2, 2)) < 0.011
+    # une équipe sans profil : rien d'inventé ; un championnat d'une autre région : pas de profil non plus
+    assert features.match_features("Inconnu", "Flamengo", "soccer_brazil_campeonato")["sources"] == []
+    assert features.match_features("Santos", "Flamengo", "soccer_epl")["sources"] == []
+    # Afrique : seul le repli API-Football répond, jamais football-data
+    g = features.match_features("Masar", "El Dakhleya", "africa")
+    assert g["sources"] == ["API-Football"] and "exp_corners" in g
+    # /stats lit le même profil
+    p = features.team_profile("Nautico")
+    assert p["team"] == "Nautico Recife" and p["fd"] is None and p["aps"]["all"]["n"] >= 5
+
+
+def test_apistats_degrades():
+    """Méthode groupée absente -> un match par requête ; erreur de plan -> arrêt net, dit une fois en français ; statistiques
+    null -> équipe mémorisée sans données, pas redemandée avant quelques jours."""
+    # 1) /fixtures?ids= ne renvoie pas les statistiques : repli sur /fixtures/statistics, essayé une seule fois par jour
+    api, scan = world({"batch": False})
+    rep = apistats.fill(DAY8, scan)
+    assert api.count("/fixtures", ids="") == 0 and store.load("stats_quota.json", {}).get("nobatch") is True
+    assert sum(1 for c in api.calls if "ids" in c[1]) == 1, "la méthode groupée n'est pas réessayée"
+    per_team = api.count("/fixtures/statistics") / max(1, rep["teams"])
+    assert 4 <= per_team <= C.APISTATS_TARGET + 2 and rep["teams"] >= 5 and apistats.counts()[1] >= 5, (per_team, rep)
+    assert store.load("stats_quota.json", {})["aps"] <= C.APISTATS_DAILY
+    # 2) erreur de plan (forfait gratuit) : arrêt à la 1re requête, rapport clair, rien ne casse
+    api, scan = world({"plan_error": True})
+    rep = apistats.fill(DAY8, scan)
+    assert len(api.calls) == 1 and rep["stop"] == "halt" and rep["teams"] == 0 and stats._halted
+    lines = apistats.report_lines(rep)
+    assert sum("forfait" in l for l in lines) == 1 and "suspendues" in lines[0] and "Free plans" in lines[0], lines
+    assert any("suspendues" in l for l in apistats.check_lines()) and "football-data" in lines[0]
+    assert features.match_features("Santos", "Flamengo", "soccer_brazil_campeonato")["sources"] == []      # le reste du bot continue
+    # 3) statistiques null (championnat sans suivi) : équipe notée sans données, pas redemandée avant STATS_NO_DATA_DAYS
+    api, scan = world({"null_teams": {128, 127}})
+    apistats.fill(DAY8, scan)
+    d = apistats.load()["teams"]
+    assert d["128"].get("none") and d["127"].get("none") and not apistats.covered_team(d["128"])
+    assert features.match_features("Santos", "Flamengo", "soccer_brazil_campeonato")["sources"] == []
+    n = api.count("/fixtures", team=128)
+    with on_day("2026-10-09", api):
+        apistats.fill(DAY8, scan)
+        assert api.count("/fixtures", team=128) == n, "pas de nouvelle tentative le lendemain"
+    with on_day("2026-10-%02d" % (8 + C.STATS_NO_DATA_DAYS + 1), api):
+        apistats.fill(DAY8, scan)
+        assert api.count("/fixtures", team=128) == n + 1
+    # 4) sans clé : rien, sans erreur
+    os.environ.pop("STATS_API_KEY", None)
+    rep = apistats.fill(DAY8, scan)
+    assert rep["stop"] == "nokey" and apistats.report_lines(rep) == ["⚪ Stats mondiales : pas de clé STATS_API_KEY"]
+    assert apistats.check_lines() == ["   Stats mondiales : inactives (STATS_API_KEY absente)"]
+
+
+def test_fixture_stats_new_fields():
+    """Tirs cadrés, jaunes, nuls : un null d'API-Football n'est jamais compté comme zéro dans les profils."""
+    teams = [{"team": {"id": 1}, "statistics": [{"type": "Corner Kicks", "value": 6}, {"type": "Total Shots", "value": 14},
+                                                {"type": "Shots on Goal", "value": None}, {"type": "Fouls", "value": None},
+                                                {"type": "Yellow Cards", "value": 2}, {"type": "Red Cards", "value": None}]},
+             {"team": {"id": 2}, "statistics": [{"type": "Corner Kicks", "value": None}, {"type": "Total Shots", "value": 9},
+                                                {"type": "Shots on Goal", "value": 4}, {"type": "Fouls", "value": 13},
+                                                {"type": "Yellow Cards", "value": None}, {"type": "Red Cards", "value": None}]}]
+    e = stats._entry_from(teams)
+    a, b = e["teams"]["1"], e["teams"]["2"]
+    assert a["sot"] == 0 and "sot" not in a["nul"] and a["nul"] == ["fouls"] and a["cards"] == 2 and a["yel"] == 2
+    assert b["nul"] == ["corners", "cards", "yel"] and b["sot"] == 4
+    assert e["shots"] == 23 and e["sot"] == 4
+    assert stats._entry_from([]) is None and stats._entry_from([{"team": {"id": 1}, "statistics": [{"type": "Fouls", "value": 3}]}] * 2) is None
+
 
 
 def main():

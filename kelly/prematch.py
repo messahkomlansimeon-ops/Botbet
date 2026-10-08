@@ -103,6 +103,11 @@ def qscale(q):
     return 0.5 + 0.5 * max(0.0, min(1.0, q))
 
 
+def aps_scale(f, key):
+    """Poids du modèle réduit quand le chiffre `key` (exp_corners...) vient d'un profil API-Football court (f["aps_q"])."""
+    return qscale(f.get("aps_q", 1.0)) if key in (f.get("aps_keys") or ()) else 1.0
+
+
 def deep_p(d, lh, la, market, point, name):
     """Proba du côté choisi pour un total de buts ou « les 2 marquent » avec la matrice de Dixon-Coles du modèle `d`."""
     m = strength.score_matrix(lh, la, d.get("rho", 0.0))
@@ -163,7 +168,8 @@ def assess(c, f, sources):
         if exp is None or point is None or not BOUNDS[kind][0] <= exp <= BOUNDS[kind][1]:
             return None
         unit = "corners" if kind == "corners" else "cartons"
-        return {"kind": kind, "exp": exp, "p": over_p(c["name"], poisson_over(exp, point)), "w": C.MODEL_WEIGHT[kind],
+        return {"kind": kind, "exp": exp, "p": over_p(c["name"], poisson_over(exp, point)),
+                "w": C.MODEL_WEIGHT[kind] * aps_scale(f, "exp_" + kind),
                 "tag": f"stats réelles : {exp:.1f} {unit} attendus vs ligne {point}", "flag": C.PM_FLAG}
     if m in PLAYER and point is not None and c.get("who"):
         col, kind, unit = PLAYER[m]
@@ -185,14 +191,15 @@ def assess(c, f, sources):
     lh, la, label = gm
     if m == "totals" and point is not None:
         exp = lh + la
-        return {"kind": "goals", "exp": exp, "p": p_totals(lh, la, point, c["name"]), "w": C.MODEL_WEIGHT["goals"],
+        return {"kind": "goals", "exp": exp, "p": p_totals(lh, la, point, c["name"]),
+                "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
                 "tag": f"{label} : {exp:.1f} buts attendus vs ligne {point}", "flag": C.PM_FLAG * 1.25}
     if m == "btts":
-        return {"kind": "btts", "p": p_btts(lh, la, c["name"]), "w": C.MODEL_WEIGHT["goals"],
+        return {"kind": "btts", "p": p_btts(lh, la, c["name"]), "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
                 "tag": f"{label} : {lh:.1f}-{la:.1f} buts attendus (les 2 marquent)", "flag": C.PM_FLAG * 1.25}
     if m == "h2h":
         who = "draw" if c["name"] == "Draw" else ("home" if c["name"] == c["home"] else "away")
-        return {"kind": "h2h", "xgd": signed_diff(who, lh, la)}
+        return {"kind": "h2h", "xgd": signed_diff(who, lh, la) * aps_scale(f, "exp_goals_home")}    # profil court : avantage atténué
     return None
 
 

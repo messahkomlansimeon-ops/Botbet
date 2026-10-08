@@ -88,7 +88,7 @@ def _africa_lines(data, limit=4):
     af = data.get("africa") or []
     if not af:
         return []
-    lines = [f"{catalogue.region_label('afrique')} : {len(af)} match(s) (API-Football, sans cotes ni stats gratuites fiables)"]
+    lines = [f"{catalogue.region_label('afrique')} : {len(af)} match(s) (API-Football, sans cotes ; pronostic Kelly quand les stats des équipes sont prêtes)"]
     for lg in dict.fromkeys(m[0] for m in af):
         mine = [m for m in af if m[0] == lg]
         lines.append(f"   • {lg} ({len(mine)}) : " + " · ".join(f"{m[3]} {m[1]} - {m[2]}" for m in mine[:limit])

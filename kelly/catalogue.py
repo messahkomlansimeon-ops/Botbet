@@ -66,14 +66,17 @@ def tier(key):
     return 2 if pat in _TIER2 else 1
 
 
-def prioritise(counts, order=None):
+def prioritise(counts, order=None, covered=()):
     """Clés des ligues qui jouent (n > 0), dans l'ordre de paiement : région (international en tête les jours sans
-    grande affiche), puis grandes affiches, ligues majeures et petites ligues, puis nombre de matchs décroissant, puis ordre du
-    catalogue. `order` : liste des clés dans l'ordre de config.SPORTS (départage les ex æquo)."""
+    grande affiche), puis grandes affiches, ligues majeures et petites ligues, puis `covered` (ligues dont Kelly a déjà les
+    profils d'équipe, football-data ou API-Football : leurs corners et cartons sont chiffrés, donc comparables aux cotes), puis
+    nombre de matchs décroissant, puis ordre du catalogue. `order` : liste des clés dans l'ordre de config.SPORTS (départage
+    les ex æquo)."""
     order = {k: i for i, k in enumerate(order or [])}
     brk = is_break_day(counts)
     live = [k for k, n in counts.items() if n]
-    return sorted(live, key=lambda k: (region_rank(region(k), brk), tier(k), -counts[k], order.get(k, len(order)), k))
+    return sorted(live, key=lambda k: (region_rank(region(k), brk), tier(k), k not in covered, -counts[k],
+                                       order.get(k, len(order)), k))
 
 
 _ALIASES = {"europe": "europe", "ameriques": "ameriques", "amerique": "ameriques", "americas": "ameriques",

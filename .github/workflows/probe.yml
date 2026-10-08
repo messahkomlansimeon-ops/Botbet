@@ -2,7 +2,7 @@ name: Kelly — sonde des sources
 # Récupère un échantillon réel de chaque source (aucun crédit payant) pour valider les lecteurs.
 on:
   push:
-    paths: [".env", "kelly/envfile.py", "tools/probe.py", ".github/workflows/probe.yml", "kelly/sources/**", "kelly/bootstrap.py"]
+    paths: ["kelly/apistats.py", ".env", "kelly/envfile.py", "tools/probe.py", ".github/workflows/probe.yml", "kelly/sources/**", "kelly/bootstrap.py"]
   workflow_dispatch:
 concurrency:
   group: botbet-data
@@ -24,9 +24,9 @@ jobs:
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       # Test de bout en bout de kelly.sources en conditions réelles (dossier temporaire, aucun secret) : probe/sources_report.json
-      - name: Sonde bookmaker (1xBet, lecture seule)
+      - name: Sonde API-Football (stats mondiales, 2 requêtes)
         if: ${{ !cancelled() }}
-        run: python tools/probe.py --bookmaker || true
+        run: python tools/probe.py --apif-world || true
       - name: Diagnostic Kelly (aucun crédit dépensé, message de test Telegram)
         if: ${{ !cancelled() }}
         run: python bot.py --check | tee probe/check.txt

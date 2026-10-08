@@ -11,18 +11,36 @@ cartons. Chaque ligne est comparée à une référence naïve (le même pari pou
 voisines, Kelly garde la ligne où le modèle s'écarte le plus de la référence, et classe les pronostics par cet écart
 multiplié par la qualité des données (« confiance »).
 
+Tirs et tirs cadrés (total du match et par équipe) s'ajoutent dès que des profils les donnent (football-data, modèle
+approfondi ou profils API-Football de kelly/apistats.py) ; les championnats africains (sans cotes ni autre source) sont
+traités avec les seuls profils API-Football. Chaque pronostic porte sa « confiance » (c["conf"], qualité des données de
+0 à 1) : les combinés à cote juste (combos.fair_*) n'utilisent que ceux dont la confiance et la proba sont assez hautes.
+
 Ces pronostics n'ont ni cote ni mise : « compare chez 1xBet, joue si la cote >= X ». Ils n'entrent dans aucun combiné et
 ne sont pas suivis pour la cote de clôture ; leurs résultats vont dans data/fair.json (règlement gratuit,
 settle.settle_fair) pour mesurer si les probas de Kelly sont justes.
 """
 import sys
 import time
+from datetime import datetime, timezone
 
-from . import catalogue, config as C, odds, prematch, stats, store, strength
+from . import apistats, catalogue, config as C, odds, prematch, stats, store, strength
 
 FILE = "fair.json"
 LINES = {"goals": (1.5, 2.5, 3.5), "corners": (7.5, 8.5, 9.5, 10.5, 11.5, 12.5), "cards": (2.5, 3.5, 4.5, 5.5, 6.5)}
 FAMILIES = ("totals", "btts", "double_chance", prematch.CORNERS, prematch.CARDS)
+# Tirs et tirs cadrés : total du match, puis une équipe (le suffixe _home / _away dit laquelle) ; (clé des chiffres d'avant-match,
+# libellé, bornes plausibles de la moyenne attendue, dispersion de la binomiale négative)
+STAT_SPECS = {"team_shots_total": ("exp_shots", "tirs", (12.0, 45.0), 0.03),
+              "team_sot_total": ("exp_sot", "tirs cadrés", (3.0, 16.0), 0.04),
+              "team_shots_home": ("exp_shots_home", "tirs", (4.0, 26.0), 0.05),
+              "team_shots_away": ("exp_shots_away", "tirs", (4.0, 26.0), 0.05),
+              "team_sot_home": ("exp_sot_home", "tirs cadrés", (1.2, 10.0), 0.05),
+              "team_sot_away": ("exp_sot_away", "tirs cadrés", (1.2, 10.0), 0.05)}
+STAT_MARKETS = tuple(STAT_SPECS)
+ALL_FAMILIES = FAMILIES + STAT_MARKETS
+EXP_KEY = {prematch.CORNERS: "exp_corners", prematch.CARDS: "exp_cards"} | {m: v[0] for m, v in STAT_SPECS.items()}
+SIDE_MARKETS = {"team_shots": "shots", "team_sot": "sot"}         # marchés par équipe de strength.lines (côté dans l["side"])
 DEEP_LINES = {"corners": (6.5, 13.5), "cards": (1.5, 7.5)}      # lignes de corners / cartons proposées avec le modèle approfondi
 DEEP_MIN_Q = 0.35          # qualité des données minimale pour se fier au modèle approfondi
 EVAL_MAX = 250             # matchs examinés au plus (le calcul est local, mais les profils sont cherchés par noms approchés)
@@ -35,7 +53,8 @@ def shrink(p):
 
 def deep_options(f, home, away):
     """Options du modèle approfondi (f["deep"]) : [(marché, côté, ligne, proba brute, justification, référence naïve)] pour
-    les familles réglables (buts 0,5-4,5, les 2 marquent, double chance, corners, cartons). [] si la qualité est trop faible."""
+    les familles réglables (buts 0,5-4,5, les 2 marquent, double chance, corners, cartons, tirs et tirs cadrés). [] si la
+    qualité est trop faible."""
     d = f.get("deep")
     if not d or d.get("q", 0) < DEEP_MIN_Q:
         return []
@@ -51,13 +70,22 @@ def deep_options(f, home, away):
     kinds = {prematch.CORNERS: "corners", prematch.CARDS: "cards"}
     for l in strength.lines(d, home, away):
         mk, pt = l["market"], l["point"]
-        if mk not in FAMILIES:
+        if mk in SIDE_MARKETS and l.get("side"):
+            mk = f"{mk}_{l['side']}"
+        if mk not in ALL_FAMILIES:
             continue
         if mk in kinds:
             s = d["stats"].get(kinds[mk])
             lo, hi = DEEP_LINES[kinds[mk]]
             if not s or not lo <= pt <= hi or not prematch.BOUNDS[kinds[mk]][0] <= s["h"] + s["a"] <= prematch.BOUNDS[kinds[mk]][1]:
                 continue
+        elif mk in STAT_SPECS:
+            s = d["stats"].get(l["stat"])
+            mean = None if not s else (s["h"] + s["a"] if mk.endswith("_total") else s["h" if mk.endswith("_home") else "a"])
+            lo, hi = STAT_SPECS[mk][2]
+            if mean is None or not lo <= mean <= hi or l.get("q", 0) < DEEP_MIN_Q:
+                continue
+            tag[mk] = short(f"modèle Kelly : {mean:.1f} {STAT_SPECS[mk][1]} attendus" + (f" ; {why[l['stat']]}" if why.get(l["stat"]) else ""))
         out.append((mk, l["name"], pt, l["p"], tag.get(mk, tag["goals"]), l["base"]))
     return out
 
@@ -68,7 +96,9 @@ def _options(f, home, away):
         return [], {}
     deep = deep_options(f, home, away)
     if deep:
-        return [o[:5] for o in deep], {(o[0], o[1], o[2]): o[5] for o in deep}
+        # le modèle approfondi ne connaît que ses statistiques : les profils API-Football complètent les autres (corners, tirs...)
+        extra = _stat_options(f, home, away, skip={o[0] for o in deep}, only=set(f.get("aps_keys") or ()))
+        return [o[:5] for o in deep] + extra, {(o[0], o[1], o[2]): o[5] for o in deep}
     return _simple_options(f, home, away), {}
 
 
@@ -77,6 +107,34 @@ def options(f, home, away):
     (sources.match_features, ou dict {exp_corners, exp_cards, n_home, n_away} d'API-Football). [] si les données
     manquent ou si une équipe a trop peu de matchs récents."""
     return _options(f, home, away)[0]
+
+
+def _stat_options(f, home, away, skip=(), only=None):
+    """Options sur corners, cartons (Poisson, lignes fixes), tirs et tirs cadrés (binomiale négative, lignes autour de la moyenne).
+    `skip` : marchés déjà traités ; `only` : si donné, seulement les chiffres dont la clé (exp_corners...) y figure."""
+    out = []
+    small = min(f.get("n_home") or 0, f.get("n_away") or 0)
+    note = f" ({small} derniers matchs seulement)" if f.get("aps_keys") and small < C.APISTATS_LAST else ""
+    for kind, market, unit in (("corners", prematch.CORNERS, "corners"), ("cards", prematch.CARDS, "cartons")):
+        exp = f.get("exp_" + kind)
+        if market in skip or exp is None or (only is not None and "exp_" + kind not in only):
+            continue
+        if not prematch.BOUNDS[kind][0] <= exp <= prematch.BOUNDS[kind][1]:
+            continue
+        for pt in LINES[kind]:
+            for name in ("Over", "Under"):
+                out.append((market, name, pt, prematch.over_p(name, prematch.poisson_over(exp, pt)),
+                            f"stats réelles : {exp:.1f} {unit} attendus{note}"))
+    for market, (key, unit, (lo, hi), alpha) in STAT_SPECS.items():
+        exp = f.get(key)
+        if market in skip or exp is None or not lo <= exp <= hi or (only is not None and key not in only):
+            continue
+        pmf = strength.nb_pmf(exp, alpha)
+        for pt in strength._lines_near(exp, alpha, lo=1):
+            for name in ("Over", "Under"):
+                out.append((market, name, pt, prematch.over_p(name, strength.p_over(pmf, pt)),
+                            f"stats réelles : {exp:.1f} {unit} attendus{note}"))
+    return out
 
 
 def _simple_options(f, home, away):
@@ -96,15 +154,7 @@ def _simple_options(f, home, away):
         tag = f"{label} : {lh:.1f}-{la:.1f} buts attendus"
         out.append(("double_chance", f"{home} or Draw", None, ph + pd, tag))
         out.append(("double_chance", f"Draw or {away}", None, pd + pa, tag))
-    for kind, market, unit in (("corners", prematch.CORNERS, "corners"), ("cards", prematch.CARDS, "cartons")):
-        exp = f.get("exp_" + kind)
-        if exp is None or not prematch.BOUNDS[kind][0] <= exp <= prematch.BOUNDS[kind][1]:
-            continue
-        for pt in LINES[kind]:
-            for name in ("Over", "Under"):
-                out.append((market, name, pt, prematch.over_p(name, prematch.poisson_over(exp, pt)),
-                            f"stats réelles : {exp:.1f} {unit} attendus"))
-    return out
+    return out + _stat_options(f, home, away)
 
 
 def best_per_family(opts, families, bases=None):
@@ -127,13 +177,21 @@ def best_per_family(opts, families, bases=None):
     return [b[1:] for b in best.values()]
 
 
+def side_name(market, ev):
+    """Équipe visée par un marché « par équipe » (suffixe _home / _away), sinon None."""
+    if market in STAT_SPECS and not market.endswith("_total"):
+        return ev["home_team"] if market.endswith("_home") else ev["away_team"]
+    return None
+
+
 def make_pick(ev, market, name, point, p, tag, src):
     home, away = ev["home_team"], ev["away_team"]
+    who = side_name(market, ev)
     return {"key": f'{ev["id"]}|{market}||{point if point is not None else ""}|{name}', "id": ev["id"],
-            "sport_key": ev["sport_key"], "league": catalogue.name(ev["sport_key"]), "event": f"{home} - {away}",
+            "sport_key": ev["sport_key"], "league": ev.get("league") or catalogue.name(ev["sport_key"]), "event": f"{home} - {away}",
             "home": home, "away": away, "commence": ev["commence_time"], "start": ev["commence_time"][11:16],
-            "market": market, "name": name, "point": point, "who": None, "group": "soccer",
-            "pick": odds.label(market, name, point, None, "soccer"), "prob": round(p, 4), "fair": round(1 / p, 2),
+            "market": market, "name": name, "point": point, "who": who, "group": "soccer",
+            "pick": odds.label(market, name, point, who, "soccer"), "prob": round(p, 4), "fair": round(1 / p, 2),
             "min_odds": round(1 / p * (1 + C.FAIR_MARGIN), 2), "why": tag, "src": src,
             "score": (p - 0.5) * C.MARKET_WEIGHT.get(market, 1.0)}
 
@@ -150,39 +208,67 @@ def _with_base(c, base, q):
     return c
 
 
-def make(scan, picks=(), day=None, deadline=None):
+def simple_q(f, market):
+    """Qualité (0 à 1) des chiffres d'un pronostic du modèle simple : celle du profil API-Football si c'est lui qui les donne,
+    sinon croissante avec le nombre de matchs récents (5 matchs : 0,4 ; 10 : 0,6)."""
+    if EXP_KEY.get(market, "exp_goals_home") in (f.get("aps_keys") or ()):
+        return f.get("aps_q", 0.4)
+    return min(0.7, 0.4 + 0.04 * (min(f.get("n_home") or 0, f.get("n_away") or 0) - C.FAIR_MIN_N))
+
+
+def africa_event(f):
+    """Match africain d'API-Football (stats._entry avec « lg ») sous la forme d'un événement du relevé gratuit."""
+    ko = datetime.fromtimestamp(f["ts"], tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {"id": f"af{f['id']}", "sport_key": "africa", "league": f["lg"], "home_team": f["home"], "away_team": f["away"],
+            "commence_time": ko}
+
+
+def make(scan, picks=(), day=None, deadline=None, africa=()):
     """Pronostics du jour, du meilleur au moins bon (au plus 2 par match). `scan` : relevé gratuit (odds.scan_today),
     `picks` : sélections avec cotes réelles (leurs marchés ne sont pas refaits : seulement corners/cartons des matchs
-    payés qui n'ont pas de ligne chez les books). `deadline` : instant time.monotonic au-delà duquel on s'arrête."""
+    payés qui n'ont pas de ligne chez les books). `africa` : matchs africains du jour (stats.africa_matches), analysés avec
+    les seuls profils API-Football. `deadline` : instant time.monotonic au-delà duquel on s'arrête."""
     have = {}
     for c in picks:
         have.setdefault(c["id"], set()).add(c["market"])
     counts = {k: len(v) for k, v in scan["leagues"].items()}
-    api_left, out, seen = C.FAIR_API_EVENTS, [], 0
-    for key in catalogue.prioritise(counts, C.SPORTS):
-        for ev in sorted(scan["leagues"][key], key=lambda e: e["commence_time"]):
-            if seen >= EVAL_MAX or (deadline and time.monotonic() > deadline):
-                return _rank(out)
-            seen += 1
-            paid = ev["id"] in have
-            families = {prematch.CORNERS, prematch.CARDS} - have.get(ev["id"], set()) if paid else set(FAMILIES)
-            f = odds.match_numbers(ev["home_team"], ev["away_team"], key)
-            (opts, bases), src = _options(f, ev["home_team"], ev["away_team"]), "football-data"
-            if not opts and not paid and api_left > 0 and day is not None and stats.left_today() > C.FAIR_API_RESERVE:
-                api_left -= 1
-                try:
-                    exp = stats.expected_totals(day, ev["home_team"], ev["away_team"], ev["commence_time"])
-                except Exception as e:               # noqa: BLE001
-                    print(f"[fair] API-Football ignoré : {type(e).__name__}", file=sys.stderr)
-                    exp = None
-                if exp:
-                    opts = options({"exp_corners": exp["corners"], "exp_cards": exp["cards"],
-                                    "n_home": exp["n"], "n_away": exp["n"]}, ev["home_team"], ev["away_team"])
-                    src = "api"
-            q = (f.get("deep") or {}).get("q")
-            mine = sorted((_with_base(make_pick(ev, *b, src), bases.get((b[0], b[1], b[2])), q)
-                           for b in best_per_family(opts, families, bases)), key=lambda c: -c["score"])
-            out += mine[:2]
+    # Les profils API-Football (kelly/apistats.py) remplacent l'ancien repli « moyennes d'équipe » match par match.
+    api_left, out, seen = (0 if apistats.active() else C.FAIR_API_EVENTS), [], 0
+    events = [(key, ev) for key in catalogue.prioritise(counts, C.SPORTS) for ev in
+              sorted(scan["leagues"][key], key=lambda e: e["commence_time"])]
+    events += [("africa", africa_event(f)) for f in africa if f.get("status") not in stats.DONE]
+    for key, ev in events:
+        if seen >= EVAL_MAX or (deadline and time.monotonic() > deadline):
+            return _rank(out)
+        seen += 1
+        paid = ev["id"] in have
+        families = {prematch.CORNERS, prematch.CARDS} - have.get(ev["id"], set()) if paid else set(ALL_FAMILIES)
+        f = odds.match_numbers(ev["home_team"], ev["away_team"], key)
+        (opts, bases), src = _options(f, ev["home_team"], ev["away_team"]), "football-data" if key != "africa" else "API-Football"
+        if not opts and not paid and api_left > 0 and day is not None and stats.left_today() > C.FAIR_API_RESERVE:
+            api_left -= 1
+            try:
+                exp = stats.expected_totals(day, ev["home_team"], ev["away_team"], ev["commence_time"])
+            except Exception as e:               # noqa: BLE001
+                print(f"[fair] API-Football ignoré : {type(e).__name__}", file=sys.stderr)
+                exp = None
+            if exp:
+                opts = options({"exp_corners": exp["corners"], "exp_cards": exp["cards"],
+                                "n_home": exp["n"], "n_away": exp["n"]}, ev["home_team"], ev["away_team"])
+                src = "api"
+        if f.get("aps_keys") and src == "football-data":
+            src = "API-Football"
+        q = (f.get("deep") or {}).get("q")
+        picks_ = []
+        for b in best_per_family(opts, families, bases):
+            c = make_pick(ev, *b, src)
+            base = bases.get((b[0], b[1], b[2]))
+            if base is not None:
+                _with_base(c, base, q)
+            else:
+                c["conf"] = round(simple_q(f, b[0]), 2)
+            picks_.append(c)
+        out += sorted(picks_, key=lambda c: -c["score"])[:2]
     return _rank(out)
 
 
@@ -234,7 +320,8 @@ ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "
 
 
 def pick_label(r):
-    return odds.label(r["market"], r["name"], r.get("point"), None, "soccer")
+    who = side_name(r["market"], {"home_team": r["home"], "away_team": r["away"]})
+    return odds.label(r["market"], r["name"], r.get("point"), who, "soccer")
 
 
 def fair_odds(r):
@@ -276,3 +363,38 @@ def summary(rows, days=None, today=None):
     p = sum(r["prob"] for r in done) / len(done)
     return (f"🎲 Pronostics sans cote : {w}/{len(done)} gagnés ({w/len(done)*100:.0f}%) pour une proba annoncée "
             f"moyenne de {p*100:.0f}%")
+
+
+# ---------- combinés à cote juste : suivi (data/fair_combos.json) ----------
+
+COMBOS_FILE = "fair_combos.json"
+LEG_FIELDS = ROW + ("pick", "min_odds", "start", "league")        # une jambe de combiné garde de quoi être réglée seule
+
+
+def load_combos():
+    rows = store.load(COMBOS_FILE, [])
+    return rows if isinstance(rows, list) else []
+
+
+def combo_row(target, combo, day):
+    """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba) ; le résultat vient plus tard (settle_fair_combos)."""
+    legs, min_total, prob = combo
+    return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
+            "keys": [c["key"] for c in legs], "legs": [{k: c.get(k) for k in LEG_FIELDS} | {"result": None} for c in legs],
+            "result": None}
+
+
+def record_combos(sent, day):
+    """Enregistre les combinés à cote juste envoyés [(palier, combiné)] sans doublon, garde C.FAIR_COMBO_KEEP_DAYS jours.
+    -> nombre ajouté. Fichier à part de bets.json : ces combinés n'ont ni mise ni bankroll."""
+    from datetime import date, timedelta
+    rows = load_combos()
+    n = 0
+    for target, combo in sent:
+        row = combo_row(target, combo, day)
+        if not any(r["date"] == row["date"] and r["tier"] == target and r["keys"] == row["keys"] for r in rows):
+            rows.append(row)
+            n += 1
+    cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
+    store.save(COMBOS_FILE, [r for r in rows if r["date"] >= cut])
+    return n

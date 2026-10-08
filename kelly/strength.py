@@ -906,9 +906,9 @@ def lines(pred, home, away):
 
     qs = pred.get("qs") or {}
 
-    def add(market, name, point, p, p0, family, label, stat="goals"):
+    def add(market, name, point, p, p0, family, label, stat="goals", side=None):
         out.append({"market": market, "name": name, "point": point, "p": p, "base": p0, "family": family, "label": label,
-                    "stat": stat, "q": qs.get(stat, pred["q"])})
+                    "stat": stat, "q": qs.get(stat, pred["q"]), "side": side})
 
     for who, key, nm in ((home, "H", home), ("Nul", "D", "Draw"), (away, "A", away)):
         add("h2h", nm, None, g["1x2"][key], b["1x2"][key], "1N2", f"Victoire {who}" if key != "D" else "Match nul")
@@ -924,7 +924,8 @@ def lines(pred, home, away):
     for side, team in (("home", home), ("away", away)):
         for pt, v in g["team_totals"][side].items():
             for nm, k, word in (("Over", "over", "plus"), ("Under", "under", "moins")):
-                add("team_totals", nm, float(pt), v[k], b["team_totals"][side][pt][k], "buts équipe", f"{team} : {word} de {pt} buts")
+                add("team_totals", nm, float(pt), v[k], b["team_totals"][side][pt][k], "buts équipe", f"{team} : {word} de {pt} buts",
+                    side=side)
     for stat, market in (("corners", "alternate_totals_corners"), ("cards", "alternate_totals_cards"), ("shots", "team_shots_total"),
                          ("sot", "team_sot_total"), ("fouls", "team_fouls_total")):
         if stat not in g:
@@ -939,7 +940,7 @@ def lines(pred, home, away):
             for pt, v in g[stat][side].items():
                 for nm, k, word in (("Over", "over", "plus"), ("Under", "under", "moins")):
                     add(f"team_{stat}", nm, float(pt), v[k], gb[side][pt][k], f"{unit} équipe",
-                        f"{team} : {word} de {pt} {unit}", stat)
+                        f"{team} : {word} de {pt} {unit}", stat, side)
     return out
 
 

@@ -45,7 +45,8 @@ jobs:
       # modes (daily, track, commands, check lisent ou peuvent lire .cache) ; SAUVÉS seulement par daily et check, qui
       # sont les seuls à les écrire. Une clé par jour (kelly-cache-AAAA-MM-JJ) ; les plus anciennes sont supprimées ci-dessous :
       # il n'en reste que 3, le cache ne grossit pas.
-      # Les petits profils calculés (data/src_*.json, bootstrap.json) sont commités avec le reste de data/.
+      # .cache/apistats : statistiques brutes des matchs d'API-Football (jamais redemandées), même règle. Les petits profils
+      # calculés (data/src_*.json, apistats_profiles.json, bootstrap.json) sont commités avec le reste de data/.
       - name: Restaurer les caches (sources, cotes du jour)
         id: cache
         uses: actions/cache/restore@v4

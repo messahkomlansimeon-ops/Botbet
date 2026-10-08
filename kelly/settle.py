@@ -7,6 +7,26 @@ from .sources import footballdata as fd
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
+SHOT_MARKETS = ("team_shots_total", "team_sot_total", "team_shots_home", "team_shots_away", "team_sot_home", "team_sot_away")
+
+
+def _side_value(sd, fld):
+    """Tirs (« shots ») ou tirs cadrés (« sot ») d'une équipe d'après fstats["side"][côté] ; None si l'API les a laissés à null."""
+    if not sd or fld in (sd.get("nul") or []) or sd.get(fld) is None:
+        return None
+    return sd[fld]
+
+
+def shot_value(market, fstats):
+    """Valeur réelle d'un marché de tirs / tirs cadrés (total du match ou une équipe) d'après fstats, ou None."""
+    fld = "sot" if market.startswith("team_sot_") else "shots"
+    side = fstats.get("side") or {}
+    if market.endswith("_total"):
+        vals = [_side_value(side.get(s), fld) for s in ("home", "away")]
+        if side and all(v is not None for v in vals):
+            return sum(vals)
+        return None if side else fstats.get(fld)
+    return _side_value(side.get("home" if market.endswith("_home") else "away"), fld)
 
 
 def _score_map(ev):
@@ -44,6 +64,8 @@ def settle_pick(b, ev, fstats=None):
             v = stats.player_stat(fstats, b["who"] or "", field)
             if v is not None:
                 totals[m] = v
+        if m in SHOT_MARKETS and shot_value(m, fstats) is not None:
+            totals[m] = shot_value(m, fstats)
     if m not in totals:
         return None
     v = totals[m]
@@ -61,6 +83,9 @@ def final_text(b, ev, fstats=None):
     fstats = fstats or {}
     if m in FD_MARKETS and fstats.get("corners" if "corners" in m else "cards") is not None:
         return f"{fstats['corners' if 'corners' in m else 'cards']:g} {'corners' if 'corners' in m else 'cartons'}"
+    if m in SHOT_MARKETS:
+        v = shot_value(m, fstats)
+        return f"{v:g} {'tirs cadrés' if m.startswith('team_sot_') else 'tirs'}" if v is not None else ""
     if m.startswith("player_"):
         field = {"player_shots": "shots", "player_shots_on_target": "shots_on_target", "player_fouls": "fouls"}.get(m)
         v = stats.player_stat(fstats, b.get("who") or "", field) if field else None
@@ -110,8 +135,9 @@ class FootballData:
 
 
 def match_stats(b, fdata, stats_for=None):
-    """Totaux du match d'un pari hors buts (corners, cartons, stats joueurs) : API-Football d'abord, puis les CSV
-    football-data si API-Football est absent ou son quota épuisé. None pour un marché de buts."""
+    """Totaux du match d'un pari hors buts (corners, cartons, tirs, stats joueurs) : API-Football d'abord, puis les CSV
+    football-data si API-Football est absent ou son quota épuisé. None pour un marché de buts. fstats["side"] : tirs et
+    tirs cadrés de chaque équipe (marchés par équipe)."""
     if b["market"] in GOAL_MARKETS:
         return None
     soccer, fstats = b["group"] == "soccer", None
@@ -119,10 +145,15 @@ def match_stats(b, fdata, stats_for=None):
         fstats = stats_for(b)
     elif stats.enabled() and soccer:
         fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
-        fstats = stats.fixture_stats(fx["id"]) if fx else None
+        fstats = stats.fixture_stats(fx["id"], players=b["market"].startswith("player_")) if fx else None
+        if fstats and fx:                              # tirs de chaque équipe : les marchés « par équipe » en ont besoin
+            teams = fstats.get("teams") or {}
+            fstats = dict(fstats, side={"home": teams.get(str(fx["home_id"])), "away": teams.get(str(fx["away_id"]))})
     need = "corners" if "corners" in b["market"] else "cards"
     if soccer and b["market"] in FD_MARKETS and (fstats or {}).get(need) is None:
         fstats = fdata.stats(b) or fstats              # API-Football absent ou quota épuisé : football-data
+    elif soccer and b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None:
+        fstats = fdata.stats(b) or fstats
     return fstats
 
 
@@ -190,27 +221,56 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     return bets, settled
 
 
+def _settle_fair_row(b, now, fdata, stats_for=None):
+    """Règle une ligne de pronostic (data/fair.json ou jambe d'un combiné à cote juste) avec les sources gratuites : API-Football,
+    puis CSV football-data. Sans résultat, la ligne est annulée après WAIT_DAYS (buts) ou WAIT_DAYS_STATS (corners, cartons,
+    tirs). -> True si elle vient d'être réglée."""
+    ko = datetime.fromisoformat(b["commence"].replace("Z", "+00:00"))
+    if b.get("result") is not None or ko >= now - timedelta(hours=3):
+        return False
+    full = {"group": "soccer", "who": None} | b            # lignes de fair.json allégées : champs de settle_pick ajoutés
+    stat_market = b["market"] in FD_MARKETS or b["market"] in SHOT_MARKETS
+    old = ko < now - timedelta(days=C.WAIT_DAYS_STATS if stat_market else C.WAIT_DAYS)
+    ev = (football_score(full) if stats.enabled() else None) or fdata.score(full)
+    if ev:
+        fst = match_stats(full, fdata, stats_for)
+        b["result"] = settle_pick(full, ev, fst)
+        if b["result"] in ("win", "loss", "push"):
+            b["final"] = final_text(full, ev, fst)
+    if b.get("result") is None and old:
+        b["result"] = "void"
+    return bool(b.get("result"))
+
+
 def settle_fair(now=None, stats_for=None):
     """Règle les pronostics sans cote (data/fair.json) avec les mêmes sources gratuites que les paris (API-Football,
-    puis CSV football-data) : jamais de crédit, jamais d'annulation payante. Un pronostic sans résultat est annulé après
-    WAIT_DAYS (buts) ou WAIT_DAYS_STATS (corners, cartons). -> (toutes les lignes, lignes réglées cette fois)."""
+    puis CSV football-data) : jamais de crédit, jamais d'annulation payante. -> (toutes les lignes, lignes réglées cette fois)."""
     now = now or datetime.now(timezone.utc)
     rows = fair.load()
-    fdata, settled = FootballData(), []
-    for b in rows:
-        ko = datetime.fromisoformat(b["commence"].replace("Z", "+00:00"))
-        if b.get("result") is not None or ko >= now - timedelta(hours=3):
-            continue
-        full = {"group": "soccer", "who": None} | b            # lignes de fair.json allégées : champs de settle_pick ajoutés
-        old = ko < now - timedelta(days=C.WAIT_DAYS_STATS if b["market"] in FD_MARKETS else C.WAIT_DAYS)
-        ev = (football_score(full) if stats.enabled() else None) or fdata.score(full)
-        if ev:
-            b["result"] = settle_pick(full, ev, match_stats(full, fdata, stats_for))
-        if b.get("result") is None and old:
-            b["result"] = "void"
-        if b.get("result"):
-            settled.append(b)
+    fdata = FootballData()
+    settled = [b for b in rows if _settle_fair_row(b, now, fdata, stats_for)]
     store.save(fair.FILE, rows)
+    return rows, settled
+
+
+def settle_fair_combos(now=None, stats_for=None):
+    """Règle les combinés à cote juste (data/fair_combos.json) : perdu dès qu'une jambe est perdue, gagné quand toutes sont
+    gagnées (jambes annulées ou remboursées ignorées). Gratuit, comme les pronostics. -> (tous, réglés cette fois)."""
+    now = now or datetime.now(timezone.utc)
+    rows, fdata, settled = fair.load_combos(), FootballData(), []
+    for c in rows:
+        if c.get("result") is not None:
+            continue
+        for leg in c["legs"]:
+            _settle_fair_row(leg, now, fdata, stats_for)
+        results = [leg.get("result") for leg in c["legs"]]
+        if "loss" in results:
+            c["result"] = "loss"
+        elif all(r in ("win", "push", "void") for r in results):
+            c["result"] = "void" if all(r == "void" for r in results) else "win"
+        if c.get("result"):
+            settled.append(c)
+    store.save(fair.COMBOS_FILE, rows)
     return rows, settled
 
 
@@ -251,7 +311,7 @@ def bilan(bets, days=None, rows=None, detail=False):
         cutoff = str((datetime.now(timezone.utc) - timedelta(days=days)).date())
         picks = [b for b in picks if b["date"] >= cutoff]
         combos = [c for c in combos if c["date"] >= cutoff]
-    if not picks and not combos:
+    if not picks and not combos and not fair_combo_line(fair.load_combos(), days):
         return "📊 BILAN\nAucun pari réglé pour l'instant." if detail else fmt.Html("📊 <b>Bilan</b>\nAucun pari réglé pour l'instant.")
     return _bilan_detail(bets, days, rows, picks, combos) if detail else _bilan_simple(days, rows, picks, combos)
 
@@ -268,6 +328,19 @@ def fair_line(rows, days=None, today=None):
     w = sum(1 for r in done if r["result"] == "win")
     return (f"Pronostics sans cote : {w} gagné{'s' if w > 1 else ''} sur {len(done)} ({fmt.pct(w / len(done))}), Kelly en "
             f"annonçait {fmt.pct(sum(r['prob'] for r in done) / len(done))} en moyenne.")
+
+
+def fair_combo_line(rows, days=None, today=None):
+    """Combinés à cote juste réglés : « Combinés à vérifier : 2 gagnés sur 5 (sans mise : à comparer aux cotes de 1xBet) » ; '' si
+    rien de réglé."""
+    done = [r for r in rows if r.get("result") in ("win", "loss")]
+    if days:
+        cut = str((datetime.fromisoformat(str(today)) if today else datetime.now(timezone.utc)).date() - timedelta(days=days))
+        done = [r for r in done if r["date"] >= cut]
+    if not done:
+        return ""
+    w = sum(1 for r in done if r["result"] == "win")
+    return f"Combinés à vérifier chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} (sans mise, hors bankroll)."
 
 
 def _gain(c):
@@ -292,6 +365,9 @@ def _bilan_simple(days, rows, picks, combos):
     fl = fair_line(fair.load(), days)
     if fl:
         lines.append(fmt.esc(fl))
+    fc = fair_combo_line(fair.load_combos(), days)
+    if fc:
+        lines.append(fmt.esc(fc))
     pending = sum(1 for r in rows if r.get("result") is None)
     if pending:
         lines.append(fmt.i(f"{pending} pari{'s' if pending > 1 else ''} en attente de résultat"))
@@ -329,4 +405,7 @@ def _bilan_detail(bets, days, rows, picks, combos):
     fl = fair.summary(fair.load(), days)
     if fl:
         lines.append(fl)
+    fc = fair_combo_line(fair.load_combos(), days)
+    if fc:
+        lines.append(fc)
     return "\n".join(lines)

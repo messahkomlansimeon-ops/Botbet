@@ -235,6 +235,19 @@ def model_covered(ev):
     return "exp_corners" in f or "exp_cards" in f
 
 
+def covered_leagues(scan, sample=6):
+    """Ligues du relevé dont Kelly a des profils d'équipe (football-data ou API-Football) pour les premiers matchs : on les paie
+    avant les autres à rang égal (kelly/catalogue.prioritise), leurs corners et cartons ayant un modèle."""
+    out = set()
+    for key, evs in (scan.get("leagues") or {}).items():
+        try:
+            if any(model_covered(dict(ev, sport_key=key)) for ev in evs[:sample] if ev.get("home_team") and ev.get("away_team")):
+                out.add(key)
+        except Exception:                                # noqa: BLE001 - le classement ne doit jamais casser l'achat
+            pass
+    return out
+
+
 def _bulk_key(day, key, markets):
     return f"odds|{day}|{key}|{markets}"
 
@@ -278,7 +291,7 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
     if scan.get("error"):
         return events
     counts = {k: len(v) for k, v in scan["leagues"].items()}
-    leagues = catalogue.prioritise(counts, C.SPORTS)[:C.MAX_SPORTS]
+    leagues = catalogue.prioritise(counts, C.SPORTS, covered_leagues(scan))[:C.MAX_SPORTS]
     print(f"[odds] ligues avec matchs : {', '.join(leagues) or 'aucune'} "
           f"(budget « {use} » : {budget.left(use)} crédits)", file=sys.stderr)
     used = 0

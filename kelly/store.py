@@ -17,7 +17,8 @@ def load(name, default):
         return default
 
 
-def save(name, obj):
+def save(name, obj, compact=False):
+    """Écrit data/<name> ; `compact` : une seule ligne, sans espace (gros fichiers de profils)."""
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(path(name), "w") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=0)
+        json.dump(obj, f, ensure_ascii=False, **({"separators": (",", ":")} if compact else {"indent": 0}))

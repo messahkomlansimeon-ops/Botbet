@@ -1,11 +1,3 @@
-"""football-data.co.uk : CSV officiels gratuits (résultats, tirs, corners, fautes, cartons,
-arbitre, cotes d'ouverture et de clôture). La source la plus fiable.
-
-URL : https://www.football-data.co.uk/mmz4281/{saison ex. 2526}/{div}.csv
-Autres pays (« new leagues » : Brésil, Argentine, USA, Mexique, Japon, Chine, Scandinavie...) : un seul fichier par
-pays, https://www.football-data.co.uk/new/{BRA}.csv, avec les résultats et les cotes 1N2 seulement (pas de corners
-ni de cartons) : assez pour les buts attendus de Kelly (modèle de Poisson), pas pour corners/cartons.
-"""
 import csv
 import io
 import re
@@ -16,11 +8,10 @@ from . import http, names, state
 
 NAME = "footballdata"
 LABEL = "football-data"
-BASE = "https://football-data.co.uk/mmz4281"          # sans www : évite une redirection
+BASE = "https://football-data.co.uk/mmz4281"
 PROFILE_FILE = "src_footballdata.json"
 DEFAULT_DIVS = ("E0", "SP1", "I1", "D1", "F1")
 
-# Clés The Odds API -> division football-data.
 SPORT_TO_DIV = {
     "soccer_epl": "E0", "soccer_efl_champ": "E1", "soccer_england_league1": "E2", "soccer_england_league2": "E3",
     "soccer_spain_la_liga": "SP1", "soccer_spain_segunda_division": "SP2",
@@ -32,7 +23,7 @@ SPORT_TO_DIV = {
     "soccer_spl": "SC0", "soccer_greece_super_league": "G1",
 }
 NEW_BASE = "https://football-data.co.uk/new"
-SPORT_TO_NEW = {                                          # fichiers « new leagues » : résultats + cotes 1N2
+SPORT_TO_NEW = {
     "soccer_brazil_campeonato": "BRA", "soccer_argentina_primera_division": "ARG", "soccer_usa_mls": "USA",
     "soccer_mexico_ligamx": "MEX", "soccer_japan_j_league": "JPN", "soccer_china_superleague": "CHN",
     "soccer_denmark_superliga": "DNK", "soccer_norway_eliteserien": "NOR", "soccer_sweden_allsvenskan": "SWE",
@@ -40,21 +31,19 @@ SPORT_TO_NEW = {                                          # fichiers « new leag
     "soccer_league_of_ireland": "IRL", "soccer_finland_veikkausliiga": "FIN",
 }
 NEW_DIVS = frozenset(SPORT_TO_NEW.values())
-NEW_KEEP_DAYS = 400                                       # ces fichiers contiennent des années d'historique : on garde le récent
+NEW_KEEP_DAYS = 400
 SPORT_TO_DIV = SPORT_TO_DIV | SPORT_TO_NEW
 DIV_TO_SPORT = {v: k for k, v in SPORT_TO_DIV.items()}
-SLIM_KEYS = ("goals", "corners", "cards")                 # profils allégés des divisions hors DEFAULT_DIVS (taille de data/)
+SLIM_KEYS = ("goals", "corners", "cards")
 
-# Colonnes obligatoires (avec variantes des fichiers « nouveau format » : Home/Away/HG/AG).
 ALIASES = {"Home": "HomeTeam", "Away": "AwayTeam", "HG": "FTHG", "AG": "FTAG", "Res": "FTR"}
 REQUIRED = ("Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG")
 STAT_COLS = {"hs": "HS", "as": "AS", "hst": "HST", "ast": "AST", "hf": "HF", "af": "AF", "hc": "HC", "ac": "AC",
              "hy": "HY", "ay": "AY", "hr": "HR", "ar": "AR"}
-STATS_EXPECTED = ("HS", "HC", "HF", "HY")        # absentes = avertissement (ligues secondaires)
+STATS_EXPECTED = ("HS", "HC", "HF", "HY")
 
 
 def _odds_columns():
-    """(marché, phase, book) -> colonnes. 1x2 : H,D,A ; ou25 : plus,moins ; ah : domicile,extérieur."""
     cols = {}
     for book, p in (("avg", "Avg"), ("max", "Max"), ("ps", "PS"), ("b365", "B365")):
         cols[("1x2", "open", book)] = (f"{p}H", f"{p}D", f"{p}A")
@@ -71,10 +60,7 @@ ODDS_COLUMNS = _odds_columns()
 AH_LINE = {"open": "AHh", "close": "AHCh"}
 
 
-# --- Saisons ---------------------------------------------------------------
-
 def current_season(today=None):
-    """Code football-data de la saison en cours (juillet = nouvelle saison) : « 2526 »."""
     d = today or state.now().date()
     y = d.year if d.month >= 7 else d.year - 1
     return f"{y % 100:02d}{(y + 1) % 100:02d}"
@@ -100,8 +86,6 @@ def divs_for(sport_keys=None):
     return list(dict.fromkeys(SPORT_TO_DIV[k] for k in sport_keys if k in SPORT_TO_DIV))
 
 
-# --- Analyse d'un CSV --------------------------------------------------------
-
 def _f(v):
     try:
         x = float(str(v).strip().replace(",", "."))
@@ -116,7 +100,6 @@ def _i(v):
 
 
 def parse_date(s):
-    """dd/mm/yyyy, dd/mm/yy ou yyyy-mm-dd -> « AAAA-MM-JJ » (None si illisible)."""
     s = (s or "").strip()
     m = re.fullmatch(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})", s)
     if m:
@@ -148,11 +131,9 @@ def _odds(row):
 
 
 def parse_csv(text, div=None, season=None):
-    """CSV football-data -> (matchs normalisés, problèmes). Tolère BOM, lignes vides, colonnes
-    absentes. Les matchs sans score (non joués) sont ignorés."""
     problems = []
     text = (text or "").lstrip("\ufeff")
-    if text.startswith("\u00ef\u00bb\u00bf"):                  # BOM UTF-8 lue en latin-1 (« ï»¿Div »)
+    if text.startswith("\u00ef\u00bb\u00bf"):
         text = text[3:]
     if not text.strip():
         return [], ["fichier vide"]
@@ -171,7 +152,7 @@ def parse_csv(text, div=None, season=None):
     for row in reader:
         row = {(k or "").strip(): (v or "").strip() for k, v in row.items() if isinstance(k, str)}
         if not any(row.values()):
-            continue                                         # ligne vide
+            continue
         d, home, away = parse_date(row.get("Date")), row.get("HomeTeam"), row.get("AwayTeam")
         hg, ag = _i(row.get("FTHG")), _i(row.get("FTAG"))
         if not home and not away and d is None:
@@ -180,7 +161,7 @@ def parse_csv(text, div=None, season=None):
             bad += 1
             continue
         if hg is None or ag is None:
-            continue                                         # match non joué
+            continue
         m = {"date": d, "div": row.get("Div") or div, "season": season, "home": home, "away": away,
              "hg": hg, "ag": ag, "ftr": row.get("FTR") or ("H" if hg > ag else "A" if hg < ag else "D"),
              "referee": row.get("Referee") or None}
@@ -188,22 +169,18 @@ def parse_csv(text, div=None, season=None):
             m[k] = _i(row.get(col))
         m["odds"] = _odds(row)
         out.append(m)
-    if bad and bad * 10 > len(out) + bad:                    # plus de 10 % de lignes illisibles
+    if bad and bad * 10 > len(out) + bad:
         problems.append(f"{bad} ligne(s) ignorée(s) (date ou équipe illisible)")
     return out, problems
 
 
 def no_vig(odds):
-    """Probabilités sans marge à partir d'une liste de cotes (ex. [1.85, 3.7, 4.4])."""
     inv = [1 / o for o in odds if o and o > 1]
     s = sum(inv)
     return [x / s for x in inv] if s and len(inv) == len(odds) else None
 
 
-# --- Téléchargement ----------------------------------------------------------
-
 def fetch_season(div, season):
-    """(matchs, erreurs) d'une division et d'une saison (cache : 12 h en cours, ensuite éternel)."""
     u = url(div, season)
     ttl = http.TTL_CSV_CURRENT if season == current_season() or div in NEW_DIVS else http.FOREVER
     res = http.fetch(u, NAME, ttl)
@@ -212,10 +189,10 @@ def fetch_season(div, season):
         return [], [f"{tag} : {res.error}"]
     rows, probs = parse_csv(res.text, div, None if div in NEW_DIVS else season)
     if not rows:
-        http.invalidate(u)                                   # ne pas garder un fichier inexploitable
+        http.invalidate(u)
         probs = probs or ["aucune ligne exploitable"]
         return [], [f"{tag} : {p}" for p in probs]
-    strict = season == current_season() and div in DEFAULT_DIVS   # stats attendues : sinon, silence
+    strict = season == current_season() and div in DEFAULT_DIVS
     errs = [f"{tag} : {p}" for p in probs if strict or not p.startswith("colonnes de stats absentes")]
     if res.error:
         errs.append(f"{tag} : {res.error} (données en cache)")
@@ -223,7 +200,6 @@ def fetch_season(div, season):
 
 
 def _recent(rows):
-    """Matchs des NEW_KEEP_DAYS derniers jours (fichiers « new leagues » : tout l'historique du pays dans un fichier)."""
     cut = (state.now().date() - timedelta(days=NEW_KEEP_DAYS)).isoformat()
     return [m for m in rows if m["date"] >= cut]
 
@@ -233,7 +209,7 @@ def _load(divs, seasons):
     seasons = [str(s) for s in (seasons or default_seasons())]
     for div in divs:
         got = 0
-        if div in NEW_DIVS:                                  # un seul fichier par pays, quelle que soit la saison
+        if div in NEW_DIVS:
             rows, errs = fetch_season(div, seasons[0])
             matches += _recent(rows)
             errors += errs
@@ -242,7 +218,7 @@ def _load(divs, seasons):
             rows, errs = fetch_season(div, s)
             got += len(rows)
             if not rows and s == current_season() and any("HTTP 404" in e for e in errs) and len(seasons) > 1:
-                errs = []                                    # saison pas encore publiée : normal
+                errs = []
             matches += rows
             errors += errs
     matches.sort(key=lambda m: (m["date"], m["home"]))
@@ -250,8 +226,6 @@ def _load(divs, seasons):
 
 
 def load_history(divs=None, seasons=None):
-    """Matchs normalisés des divisions `divs` (codes E0, SP1...) et saisons `seasons` (« 2526 »).
-    Par défaut : divisions principales, saison en cours + précédente. Ne lève jamais."""
     try:
         return _load(list(divs or DEFAULT_DIVS), seasons)[0]
     except Exception:
@@ -259,11 +233,9 @@ def load_history(divs=None, seasons=None):
 
 
 def cached_history(divs=None, seasons=None):
-    """Matchs des CSV déjà en cache disque (même périmés) : AUCUNE requête réseau. Sert au règlement
-    gratuit des paris (le fichier est actualisé le matin par refresh_all)."""
     out = []
     for div in divs or DEFAULT_DIVS:
-        if div in NEW_DIVS:                                  # un seul fichier par pays
+        if div in NEW_DIVS:
             res = http.cached(url(div, ""))
             if res:
                 out += _recent(parse_csv(res.text, div)[0])
@@ -276,8 +248,6 @@ def cached_history(divs=None, seasons=None):
 
 
 def find_match(matches, home, away, day):
-    """Match joué (à ±1 jour de `day`, « AAAA-MM-JJ ») dont les équipes ressemblent à home / away
-    (noms The Odds API), ou None. Même seuil de confiance que stats.find_fixture."""
     try:
         d = date.fromisoformat(str(day)[:10])
     except ValueError:
@@ -298,28 +268,27 @@ def find_match(matches, home, away, day):
 
 
 def match_stats(m):
-    """Totaux du match pour le règlement : seules les clés disponibles. Cartons = jaunes + rouges
-    (comme API-Football ; certains books comptent un rouge double : à vérifier)."""
     out = {"players": {}}
-    pairs = {"corners": ("hc", "ac"), "shots": ("hs", "as"), "fouls": ("hf", "af")}
+    pairs = {"corners": ("hc", "ac"), "shots": ("hs", "as"), "sot": ("hst", "ast"), "fouls": ("hf", "af")}
     for k, (h, a) in pairs.items():
         if m.get(h) is not None and m.get(a) is not None:
             out[k] = m[h] + m[a]
+    side = {s: {k: m[c] for k, c in (("shots", p + "s"), ("sot", p + "st")) if m.get(c) is not None}
+            for s, p in (("home", "h"), ("away", "a"))}
+    if side["home"] or side["away"]:
+        out["side"] = side
     if m.get("hy") is not None and m.get("ay") is not None:
         out["cards"] = m["hy"] + m["ay"] + (m.get("hr") or 0) + (m.get("ar") or 0)
     return out
 
-
-# --- Profils -----------------------------------------------------------------
 
 def _cards(y, r):
     return None if y is None else y + (r or 0)
 
 
 def _side(m, side):
-    """Stats d'une équipe dans un match : pour (elle) / contre (adversaire)."""
     me, op = ("h", "a") if side == "home" else ("a", "h")
-    g = lambda k: m.get(k)                                   # noqa: E731
+    g = lambda k: m.get(k)
     pair = {
         "goals": (g("hg" if me == "h" else "ag"), g("hg" if op == "h" else "ag")),
         "shots": (g(me + "s"), g(op + "s")), "sot": (g(me + "st"), g(op + "st")),
@@ -331,7 +300,6 @@ def _side(m, side):
 
 
 def _avg_view(recs, keys=("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")):
-    """Moyennes sur une liste de dicts {stat: (pour, contre)}."""
     out = {"n": len(recs)}
     for k in keys:
         f = [r[k][0] for r in recs if r[k][0] is not None]
@@ -344,9 +312,6 @@ def _avg_view(recs, keys=("goals", "shots", "sot", "corners", "fouls", "cards", 
 
 
 def team_profiles(matches, last_n=10, max_age_days=200):
-    """Profils glissants par équipe (vues all / home / away sur les `last_n` derniers matchs),
-    par arbitre (cartons, fautes par match) et par division (moyennes de ligue).
-    Les équipes sans match depuis `max_age_days` avant le dernier match connu sont écartées."""
     ms = sorted(matches, key=lambda m: m["date"])
     per = {}
     for m in ms:
@@ -358,7 +323,7 @@ def team_profiles(matches, last_n=10, max_age_days=200):
         if latest and (date.fromisoformat(latest) - date.fromisoformat(recs[-1][0])).days > max_age_days:
             continue
         div = recs[-1][2]
-        kw = {} if div in DEFAULT_DIVS or div is None else {"keys": SLIM_KEYS}     # divisions secondaires : profil léger
+        kw = {} if div in DEFAULT_DIVS or div is None else {"keys": SLIM_KEYS}
         teams[team] = {"div": div, "last": recs[-1][0],
                        "all": _avg_view([r[3] for r in recs[-last_n:]], **kw),
                        "home": _avg_view([r[3] for r in recs if r[1] == "home"][-last_n:], **kw),
@@ -391,10 +356,7 @@ def team_profiles(matches, last_n=10, max_age_days=200):
     return {"teams": teams, "referees": referees, "leagues": leagues}
 
 
-# --- Interface commune des sources --------------------------------------------
-
 def refresh(sport_keys=None, seasons=None):
-    """Télécharge, construit et enregistre les profils. Ne lève jamais ; renvoie health()."""
     try:
         divs = divs_for(sport_keys)
         if not divs:

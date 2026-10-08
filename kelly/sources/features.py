@@ -1,22 +1,9 @@
-"""Chiffres d'avant-match issus des profils (football-data, Understat, FBref).
-
-match_features(home, away, sport_key, referee=None) -> dict (clés absentes si donnée inconnue) :
-  exp_corners[_home|_away], exp_cards (+ exp_cards_team, ref_cards), exp_fouls, exp_shots_home/away,
-  exp_sot_home/away, exp_goals_home/away, xg_home/xga_home/xg_away/xga_away, exp_xg_home/away/total,
-  n_home / n_away (matchs utilisés), sources (liste), home_team / away_team (noms retenus).
-  Quand le modèle de force de la ligue (kelly/strength.py : Dixon-Coles pondéré, contexte, arbitre) existe et connaît les
-  deux équipes, il REMPLACE les moyennes glissantes pour exp_goals*, exp_corners*, exp_cards*, exp_shots*, exp_sot*,
-  exp_fouls* et ajoute : deep (la prévision complète : lh, la, rho, q, qs, stats, notes, why...), "modèle Kelly" dans sources.
-player_features(name, team=None, sport_key=None) -> dict ou None : shots90, sot90, fouls90, fouled90,
-  cards90, xg90, xa90, minutes...
-Convention : l'espérance d'une équipe mêle sa production (vue domicile ou extérieur) et ce que
-l'adversaire concède, à parts égales ; repli sur la vue « all » sous MIN_N matchs.
-"""
 from . import fbref, footballdata, names, understat
+from .. import apistats, catalogue
 
-MIN_N = 3                    # matchs minimum dans une vue domicile / extérieur
-REF_MIN_N = 3                # matchs minimum pour croire un arbitre
-REF_WEIGHT = 0.3             # poids de l'arbitre dans les cartons / fautes attendus
+MIN_N = 3
+REF_MIN_N = 3
+REF_WEIGHT = 0.3
 _cache = {}
 
 
@@ -25,7 +12,7 @@ def reload():
     try:
         from .. import strength
         strength.reload()
-    except Exception:                       # noqa: BLE001
+    except Exception:
         pass
 
 
@@ -53,7 +40,6 @@ def _mix(*vals):
 
 
 def _expect(hteam, ateam, stat):
-    """(attendu domicile, attendu extérieur) pour une stat : production + concédé adverse."""
     h, a = _view(hteam, "home"), _view(ateam, "away")
     return (_mix(h.get(stat + "_for"), a.get(stat + "_against")),
             _mix(a.get(stat + "_for"), h.get(stat + "_against")))
@@ -123,7 +109,6 @@ def _understat(out, home, away, sport_key):
 
 
 def _fbref(out, home, away, sport_key):
-    """FBref : sert de repli pour tirs / fautes / cartons / corners absents de football-data."""
     squads = ((_p("fb", fbref).get("leagues") or {}).get(sport_key) or {}).get("squads") or {}
     h, a = names.best_team(home, squads), names.best_team(away, squads)
     if not h or not a or h == a:
@@ -139,8 +124,6 @@ def _fbref(out, home, away, sport_key):
 
 
 def _deep(out, home, away, sport_key, referee):
-    """Modèle de force (kelly/strength.py) : si la ligue a assez de matchs en cache, ses chiffres remplacent les moyennes
-    glissantes (même clés exp_*) et la prévision complète est jointe sous « deep »."""
     from .. import strength
     div = footballdata.SPORT_TO_DIV.get(sport_key)
     model = strength.get(div) if div else None
@@ -167,20 +150,65 @@ def _deep(out, home, away, sport_key, referee):
         out["ref_fouls"] = rf["avg"]
 
 
+def _aps_candidates(prof, sport_key):
+    same = {n: p for n, p in prof.items() if sport_key in p.get("sk", [])}
+    if same or sport_key.startswith("africa"):
+        return same
+    region = catalogue.region(sport_key)
+    if region == catalogue.OTHER:
+        return {}
+    return {n: p for n, p in prof.items() if any(catalogue.region(k) == region for k in p.get("sk", []))}
+
+
+def aps_quality(n):
+    return round(min(0.6, 0.35 + 0.05 * max(0, n - 5)), 2)
+
+
+def _apistats(out, home, away, sport_key):
+    prof = _aps_candidates(_p("aps", apistats).get("teams") or {}, sport_key)
+    h, a = names.best_team(home, prof), names.best_team(away, prof)
+    if not h or not a or prof[h] is prof[a]:
+        return
+    ht, at = prof[h], prof[a]
+    tmp = {}
+    for stat, key in (("corners", "corners"), ("goals", "goals"), ("shots", "shots"), ("sot", "sot"), ("fouls", "fouls"),
+                      ("cards", "cards")):
+        hv, av = _expect(ht, at, stat)
+        _put_pair(tmp, stat, key, hv, av, total=True)
+    new = {k: v for k, v in tmp.items() if k not in out}
+    if not new:
+        return
+    out.update(new)
+    if "exp_cards" in new:
+        out.setdefault("exp_cards_team", out["exp_cards"])
+    n_h, n_a = ht["all"]["n"], at["all"]["n"]
+    out["sources"].append("API-Football")
+    out["aps_keys"] = sorted(new)
+    out["aps_n"] = (n_h, n_a)
+    out["aps_q"] = aps_quality(min(n_h, n_a))
+    out.setdefault("home_team", h)
+    out.setdefault("away_team", a)
+    out.setdefault("n_home", n_h)
+    out.setdefault("n_away", n_a)
+
+
 def match_features(home, away, sport_key, referee=None):
-    """Chiffres d'avant-match fusionnés (voir l'en-tête du module). Dict avec au moins « sources »."""
     out = {"sources": []}
-    for fn, args in ((_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
-                     (_fbref, (home, away, sport_key)), (_deep, (home, away, sport_key, referee))):
+    if sport_key.startswith("africa"):
+        steps = [(_apistats, (home, away, sport_key))]
+    else:
+        steps = [(_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
+                 (_fbref, (home, away, sport_key)), (_deep, (home, away, sport_key, referee)),
+                 (_apistats, (home, away, sport_key))]
+    for fn, args in steps:
         try:
             fn(out, *args)
-        except Exception:                       # une source cassée ne doit jamais bloquer les autres
+        except Exception:
             pass
     return out
 
 
 def _player_pool(name, team, sport_key):
-    """[(source, ligue, équipe, joueur, stats)] des joueurs plausibles."""
     pools = []
     us = _p("us", understat).get("leagues") or {}
     ulg = understat.SPORT_TO_LEAGUE.get(sport_key)
@@ -204,8 +232,6 @@ def _player_pool(name, team, sport_key):
 
 
 def player_features(name, team=None, sport_key=None):
-    """Stats par 90 min d'un joueur (Understat : tirs, xG, xA ; FBref : tirs cadrés, fautes, cartons).
-    None si inconnu ou ambigu (même nom dans deux équipes sans `team`)."""
     try:
         found = _player_pool(name, team, sport_key)
     except Exception:
@@ -213,7 +239,7 @@ def player_features(name, team=None, sport_key=None):
     if not found:
         return None
     if len({(t, p) for _, t, p, _ in found}) > 1:
-        return None                             # deux joueurs distincts : ambigu
+        return None
     out = {"name": found[0][2], "team": found[0][1], "sources": []}
     for src, _, _, st in found:
         out["sources"].append(src)
@@ -223,15 +249,13 @@ def player_features(name, team=None, sport_key=None):
             elif k == "min90":
                 out["minutes"] = max(out.get("minutes", 0), round(v * 90))
             elif k == "shots90" and src == "fbref" and "shots90" in out:
-                continue                         # Understat prime pour les tirs
+                continue
             elif k != "pos":
                 out.setdefault(k, v)
     return out
 
 
 def _find(query, candidates):
-    """('ok', nom) | ('many', [noms]) | None : nom proche de `query` (plusieurs noms aussi proches = ambigu),
-    sinon nom qui contient tous ses mots."""
     candidates = list(candidates)
     good = sorted(((names.team_sim(query, c), c) for c in candidates), reverse=True)
     good = [(s, c) for s, c in good if s >= 0.8]
@@ -243,12 +267,17 @@ def _find(query, candidates):
     return ("ok", hits[0]) if len(hits) == 1 else (("many", hits[:8]) if hits else None)
 
 
+def _aps_block(name, query=None):
+    teams = _p("aps", apistats).get("teams") or {}
+    n = names.best_team(name, teams)
+    return teams.get(n) if n else None
+
+
 def team_profile(query):
-    """Profil d'une équipe pour /stats : {team, div, fd (vues all/home/away sur ~10 matchs), us (forme xG),
-    updated}, {"many": [noms]} si plusieurs équipes correspondent, None si inconnue."""
     fdp = _p("fd", footballdata)
     teams = fdp.get("teams") or {}
     us = (_p("us", understat).get("leagues") or {})
+    aps = _p("aps", apistats).get("teams") or {}
     found = _find(query, teams)
     if found and found[0] == "many":
         return {"many": found[1]}
@@ -258,9 +287,17 @@ def team_profile(query):
         ulg = understat.SPORT_TO_LEAGUE.get(footballdata.DIV_TO_SPORT.get(div))
         uteams = (us.get(ulg) or {}).get("teams") or {}
         un = names.best_team(name, uteams)
-        return {"team": name, "div": div, "fd": teams[name], "us": uteams.get(un), "updated": fdp.get("updated")}
-    for lg, d in us.items():                             # équipe absente de football-data (ligue non couverte)
+        return {"team": name, "div": div, "fd": teams[name], "us": uteams.get(un), "aps": _aps_block(name),
+                "updated": fdp.get("updated")}
+    for lg, d in us.items():
         f2 = _find(query, d.get("teams") or {})
         if f2 and f2[0] == "ok":
-            return {"team": f2[1], "div": lg, "fd": None, "us": d["teams"][f2[1]], "updated": None}
+            return {"team": f2[1], "div": lg, "fd": None, "us": d["teams"][f2[1]], "aps": _aps_block(f2[1]), "updated": None}
+    uniq = {p["nm"]: p for p in aps.values() if p.get("nm")}
+    f3 = _find(query, uniq)
+    if f3 and f3[0] == "many":
+        return {"many": f3[1]}
+    if f3:
+        p = uniq[f3[1]]
+        return {"team": f3[1], "div": p.get("lg"), "fd": None, "us": None, "aps": p, "updated": p.get("d")}
     return None

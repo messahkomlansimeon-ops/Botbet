@@ -7,12 +7,16 @@ Sert à deux choses :
    deux équipes) pour repérer les lignes mal placées par les bookmakers : en repli
    seulement, les sources gratuites (kelly/sources, voir enrich) passent d'abord.
 
+Statistiques de toute équipe du monde (tirs, tirs cadrés, corners, fautes, cartons) pour les profils de kelly/apistats.py :
+fixture_stats / fixture_stats_batch les gardent dans .cache/apistats/stats_cache.json (un match connu n'est jamais redemandé).
+
 Plan gratuit : 100 appels/jour. Garde-fous : plafond par exécution
 (STATS_BUDGET), plafond par jour UTC (STATS_DAILY_CAP, défaut 90, compteur dans
 data/stats_quota.json), en-tête x-ratelimit-requests-remaining, et arrêt net
 dès que l'API renvoie une erreur (HTTP 200 avec `errors` non vide).
 """
 import difflib
+import json
 import math
 import os
 import re
@@ -26,7 +30,7 @@ import requests
 from . import cache, catalogue, config as C, store
 
 BASE = "https://v3.football.api-sports.io"
-BUDGET = int(os.environ.get("STATS_BUDGET", 60))     # appels max par exécution
+BUDGET = int(os.environ.get("STATS_BUDGET", 90))     # appels max par exécution (le plafond du jour reste STATS_DAILY_CAP)
 LAST_N = 6                                           # matchs récents utilisés
 MIN_MATCHES = 3                                      # sous ce seuil : pas de moyenne
 DONE = ("FT", "AET", "PEN")                          # matchs terminés
@@ -68,9 +72,14 @@ def _quota():
     return q
 
 
-def get(path, **params):
+PLAN_ERROR = re.compile(r"plan|season|saison|access|subscription|abonnement", re.I)
+
+
+def get(path, soft=False, **params):
     """Appel API-Football. Renvoie `response` (liste, éventuellement vide) ou
-    None (désactivé, quota atteint, erreur). Une erreur API stoppe tout."""
+    None (désactivé, quota atteint, erreur). Une erreur API stoppe tout, sauf avec `soft=True` (essai d'une méthode
+    facultative) quand l'erreur ne parle ni de plan ni de saison. L'erreur est gardée dans data/stats_quota.json
+    (clé « err ») : --check et le journal du matin la relisent."""
     global _calls
     if not enabled() or _halted or _calls >= BUDGET or cache.OFFLINE:
         return None
@@ -118,6 +127,14 @@ def get(path, **params):
         return None
     errors = data.get("errors")                 # liste ou dict, vide si tout va bien
     if errors:
+        plan = bool(PLAN_ERROR.search(str(errors)))
+        text = "; ".join(f"{k}: {v}" for k, v in errors.items()) if isinstance(errors, dict) else "; ".join(map(str, errors))
+        q["err"] = {"path": path, "msg": text[:200], "plan": plan}
+        store.save("stats_quota.json", q)
+        if soft and not plan:
+            _warn(f"{path} refusé ({str(errors)[:120]}), méthode ignorée.")
+            _neg[nk] = (time.monotonic(), None)
+            return None
         _halt(f"erreur API sur {path} ({errors}) : clé, quota ou saison non incluse dans le plan.")
         return None
     if q.get("remaining") == 0:
@@ -153,7 +170,13 @@ _ALIAS = {
     "stade rennais": "rennes", "ac milan": "milan", "as roma": "roma", "napoli": "napoli",
     "celta vigo": "celta", "real betis": "betis", "red star belgrade": "crvena zvezda",
     "psv eindhoven": "psv", "sl benfica": "benfica", "fc porto": "porto",
+    # Brésil : The Odds API et API-Football ne nomment pas les clubs pareil
+    "atletico mg": "atletico mineiro", "athletico pr": "athletico paranaense", "atletico pr": "athletico paranaense",
+    "atletico paranaense": "athletico paranaense",
 }
+# Sigles d'États brésiliens en fin de nom (« Nautico PE », « Atletico MG ») : retirés pour comparer, jamais pour confondre deux
+# États (« Atletico MG » n'est pas « Atletico GO »).
+_STATES = {"pe", "mg", "sp", "rj", "rs", "pr", "ba", "ce", "go", "pb", "rn", "df", "mt", "ms"}
 _MARK = re.compile(r"^(w|women|fem|ii|iii|b|u\d\d|youth|reserves|res)$")
 
 
@@ -162,11 +185,19 @@ def _norm(s):
     return " ".join(re.sub(r"[^a-z0-9 ]+", " ", s.replace("&", " and ")).split())
 
 
+def _state(name):
+    """Sigle d'État brésilien en fin de nom (« Nautico PE » -> « pe »), sinon None."""
+    toks = _norm(name).split()
+    return toks[-1] if len(toks) >= 2 and toks[-1] in _STATES else None
+
+
 def _team_key(name):
     """(nom canonique, marqueurs femmes/jeunes/réserve) d'une équipe."""
     n = _norm(name)
     n = _ALIAS.get(n, n)
     toks = n.split()
+    if len(toks) >= 2 and toks[-1] in _STATES:
+        toks = toks[:-1]
     marks = frozenset(t for t in toks if _MARK.match(t))
     kept = " ".join(t for t in toks if t not in _STOP and t not in marks)
     return _ALIAS.get(kept, kept), marks
@@ -177,8 +208,11 @@ def team_sim(a, b):
     (na, ma), (nb, mb) = _team_key(a), _team_key(b)
     if ma != mb or not na or not nb:
         return 0.0
+    sa, sb = _state(a), _state(b)
+    if sa and sb and sa != sb:
+        return 0.0
     if na == nb:
-        return 1.0
+        return 1.0 if sa == sb else 0.88
     ta, tb = set(na.split()), set(nb.split())
     if ta <= tb or tb <= ta:                    # « Tottenham » ~ « Tottenham Hotspur »
         return 0.88
@@ -331,7 +365,8 @@ def find_fixture(day, home, away, kickoff=None):
         return None
     known[k] = {"id": best["id"], "home_id": best["home_id"], "away_id": best["away_id"],
                 "status": best["status"]}
-    store.save("fixtures.json", known)
+    cut = str((datetime.now(timezone.utc) - timedelta(days=14)).date())
+    store.save("fixtures.json", {key: v for key, v in known.items() if key[:10] >= cut})     # le fichier ne grossit pas
     return known[k]
 
 
@@ -359,10 +394,94 @@ def _num(v):
         return 0.0
 
 
+def _numn(v):
+    """Comme _num, mais None si la valeur est absente (null : l'API ne suit pas cette statistique pour ce match)."""
+    try:
+        return float(str(v).strip().rstrip("%"))
+    except (TypeError, ValueError):
+        return None
+
+
+STATS_KEEP_DAYS = 45                                 # statistiques brutes : les matchs plus vieux sont oubliés (profils déjà calculés)
+
+
+def _team_values(t):
+    """Totaux d'une équipe pour un match d'après la réponse /fixtures/statistics : corners, cartons (jaunes + rouges), tirs,
+    tirs cadrés, fautes (0 si absent, compatibilité du règlement) + « nul » : statistiques que l'API a laissées à null (jamais
+    comptées comme 0 dans les profils). Un null de tirs cadrés ou de rouges avec des tirs connus est un vrai zéro."""
+    st = {s["type"]: _numn(s.get("value")) for s in t.get("statistics") or [] if s.get("type")}
+    shots, y, r = st.get("Total Shots"), st.get("Yellow Cards"), st.get("Red Cards")
+    vals = {"corners": st.get("Corner Kicks"), "shots": shots, "fouls": st.get("Fouls"),
+            "sot": st.get("Shots on Goal") if st.get("Shots on Goal") is not None else (0.0 if shots is not None else None),
+            "cards": None if y is None and r is None else (y or 0.0) + (r or 0.0), "yel": y if y is not None else (0.0 if r is not None else None)}
+    out = {k: (v if v is not None else 0.0) for k, v in vals.items()}
+    out["nul"] = [k for k, v in vals.items() if v is None]
+    return out
+
+
+def _entry_from(teams):
+    """Entrée du cache d'un match terminé à partir des équipes de /fixtures/statistics ; None si l'API n'a pas de statistiques
+    (sans aucune ligne « Corner Kicks », la donnée manque : ne pas régler sur 0)."""
+    if len(teams) < 2 or not any(s.get("type") == "Corner Kicks" for t in teams for s in t.get("statistics") or []):
+        return None
+    out = {"corners": 0, "cards": 0, "shots": 0, "sot": 0, "fouls": 0, "teams": {}, "players": {}, "players_done": False,
+           "d": _today()}
+    for t in teams:
+        tv = _team_values(t)
+        out["teams"][str(t["team"]["id"])] = tv
+        for k in ("corners", "cards", "shots", "sot", "fouls"):
+            out[k] += tv[k]
+    return out
+
+
+def _stats_path():
+    """Fichier des statistiques brutes des matchs : .cache/apistats (persisté par actions/cache, jamais commité : il grossit de
+    ~60 matchs par jour) ; dans le dossier de données quand DATA_DIR est réglé (tests, --sample) ; STATS_CACHE_DIR le remplace."""
+    d = os.environ.get("STATS_CACHE_DIR")
+    if not d and not os.environ.get("DATA_DIR"):
+        d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache", "apistats")
+    return os.path.join(d, "stats_cache.json") if d else store.path("stats_cache.json")
+
+
+def _stats_cache():
+    try:
+        with open(_stats_path()) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_stats_cache(cache_):
+    """Écrit le cache des statistiques en oubliant les matchs vus il y a plus de STATS_KEEP_DAYS jours (le fichier ne grossit pas)."""
+    cut = str((datetime.fromisoformat(_today()) - timedelta(days=STATS_KEEP_DAYS)).date())
+    for k, v in cache_.items():
+        if isinstance(v, dict) and not v.get("d") and not v.get("missing"):
+            v["d"] = _today()                       # ancien format : daté à la première réécriture
+    keep = {k: v for k, v in cache_.items() if not isinstance(v, dict) or (v.get("d") or v.get("missing") or "9") >= cut}
+    try:
+        os.makedirs(os.path.dirname(_stats_path()), exist_ok=True)
+        with open(_stats_path(), "w") as f:
+            json.dump(keep, f, ensure_ascii=False, separators=(",", ":"))
+    except OSError as e:                            # le cache est facultatif : sans lui, on redemande
+        _warn(f"cache des statistiques non écrit ({type(e).__name__}).")
+
+
+def stats_known(fixture_id):
+    """Vrai si le cache du disque contient déjà les statistiques (ou leur absence récente) de ce match : zéro requête."""
+    cur = _stats_cache().get(str(fixture_id))
+    if not cur:
+        return False
+    if cur.get("missing"):
+        return _today() < str((datetime.fromisoformat(cur["missing"]) + timedelta(days=C.STATS_NO_DATA_DAYS)).date())
+    return True
+
+
 def fixture_stats(fixture_id, players=True):
-    """Totaux du match : corners, cartons, et stats par joueur. Mis en cache.
+    """Totaux du match : corners, cartons, tirs, tirs cadrés, fautes, par équipe et au total, et stats par joueur. Mis en cache
+    (pour la durée STATS_KEEP_DAYS) : un match déjà demandé ne l'est jamais deux fois.
     players=False évite l'appel /fixtures/players (moyennes d'équipe seulement)."""
-    cache_ = store.load("stats_cache.json", {})
+    cache_ = _stats_cache()
     cur = cache_.get(str(fixture_id))
     if cur and cur.get("missing"):                  # l'API n'a pas de statistiques pour ce match : pas avant quelques jours
         if _today() < str((datetime.fromisoformat(cur["missing"]) + timedelta(days=C.STATS_NO_DATA_DAYS)).date()):
@@ -378,20 +497,11 @@ def fixture_stats(fixture_id, players=True):
         teams = get("/fixtures/statistics", fixture=fixture_id)
         if teams is None:                           # erreur ou quota : on réessaiera
             return None
-        # Sans aucune ligne « Corner Kicks », la donnée manque : ne pas régler sur 0 (et ne pas la redemander tout de suite).
-        if len(teams) < 2 or not any(s.get("type") == "Corner Kicks" for t in teams for s in t.get("statistics") or []):
+        out = _entry_from(teams)
+        if out is None:
             cache_[str(fixture_id)] = {"missing": _today()}
-            store.save("stats_cache.json", cache_)
+            _save_stats_cache(cache_)
             return None
-        out = {"corners": 0, "cards": 0, "shots": 0, "fouls": 0, "teams": {}, "players": {},
-               "players_done": False}
-        for t in teams:
-            st = {s["type"]: _num(s.get("value")) for s in t.get("statistics") or []}
-            tv = {"corners": st.get("Corner Kicks", 0), "cards": st.get("Yellow Cards", 0) + st.get("Red Cards", 0),
-                  "shots": st.get("Total Shots", 0), "fouls": st.get("Fouls", 0)}
-            out["teams"][str(t["team"]["id"])] = tv
-            for k2 in ("corners", "cards", "shots", "fouls"):
-                out[k2] += tv[k2]
     if players:
         resp = get("/fixtures/players", fixture=fixture_id)
         if resp is not None:
@@ -405,8 +515,44 @@ def fixture_stats(fixture_id, players=True):
                     }
             out["players_done"] = True
     cache_[str(fixture_id)] = out
-    store.save("stats_cache.json", cache_)
+    _save_stats_cache(cache_)
     return out
+
+
+BATCH_MAX = 20                                       # /fixtures?ids= accepte 20 matchs au plus
+
+
+def fixture_stats_batch(ids):
+    """Statistiques de plusieurs matchs terminés en UNE requête (GET /fixtures?ids=a-b-c : chaque match revient avec son
+    tableau « statistics », comme /fixtures/statistics). Remplit le même cache que fixture_stats et ne demande jamais un
+    match déjà connu. -> nombre de matchs nouvellement connus (statistiques ou absence constatée), ou None si la méthode ne
+    marche pas (erreur, quota, réponse sans statistiques) : l'appelant se replie sur fixture_stats, un match par requête.
+    Un échec est mémorisé pour la journée (clé « nobatch » de stats_quota.json)."""
+    todo = [i for i in dict.fromkeys(ids) if not stats_known(i)][:BATCH_MAX]
+    if not todo:
+        return 0
+    if _quota().get("nobatch"):
+        return None
+    resp = get("/fixtures", soft=True, ids="-".join(str(i) for i in todo))
+    if resp is None:
+        return None
+    if not any("statistics" in f for f in resp):            # la méthode ne renvoie pas les statistiques : plus d'essai aujourd'hui
+        q = _quota()
+        q["nobatch"] = True
+        store.save("stats_quota.json", q)
+        return None
+    cache_, got = _stats_cache(), set()
+    for f in resp:
+        fid = (f.get("fixture") or {}).get("id")
+        if fid is None or str(fid) not in {str(i) for i in todo}:
+            continue
+        cache_[str(fid)] = _entry_from(f.get("statistics") or []) or {"missing": _today()}
+        got.add(str(fid))
+    for i in todo:                                    # demandé mais absent de la réponse : pas redemandé avant quelques jours
+        if str(i) not in got:
+            cache_[str(i)] = {"missing": _today()}
+    _save_stats_cache(cache_)
+    return len(todo)
 
 
 _SUFFIX = {"jr", "junior", "sr", "filho"}

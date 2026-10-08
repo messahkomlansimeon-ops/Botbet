@@ -1,0 +1,249 @@
+{
+"day": "2026-10-08",
+"at": "13:58",
+"brk": 1,
+"complete": 1,
+"act": [
+"soccer_epl",
+"soccer_spain_la_liga",
+"soccer_italy_serie_a",
+"soccer_germany_bundesliga",
+"soccer_france_ligue_one",
+"soccer_uefa_champs_league",
+"soccer_uefa_europa_league",
+"soccer_uefa_europa_conference_league",
+"soccer_portugal_primeira_liga",
+"soccer_netherlands_eredivisie",
+"soccer_belgium_first_div",
+"soccer_turkey_super_league",
+"soccer_spl",
+"soccer_efl_champ",
+"soccer_germany_bundesliga2",
+"soccer_spain_segunda_division",
+"soccer_italy_serie_b",
+"soccer_france_ligue_two",
+"soccer_england_league1",
+"soccer_england_league2",
+"soccer_greece_super_league",
+"soccer_switzerland_superleague",
+"soccer_austria_bundesliga",
+"soccer_poland_ekstraklasa",
+"soccer_denmark_superliga",
+"soccer_sweden_allsvenskan",
+"soccer_norway_eliteserien",
+"soccer_finland_veikkausliiga",
+"soccer_league_of_ireland",
+"soccer_sweden_superettan",
+"soccer_germany_liga3",
+"soccer_england_efl_cup",
+"soccer_brazil_campeonato",
+"soccer_argentina_primera_division",
+"soccer_usa_mls",
+"soccer_mexico_ligamx",
+"soccer_conmebol_copa_libertadores",
+"soccer_conmebol_copa_sudamericana",
+"soccer_chile_campeonato",
+"soccer_brazil_serie_b",
+"soccer_japan_j_league",
+"soccer_korea_kleague1",
+"soccer_saudi_arabia_pro_league",
+"soccer_china_superleague",
+"soccer_australia_aleague",
+"soccer_uefa_nations_league"
+],
+"paid": [
+"soccer_finland_veikkausliiga",
+"soccer_league_of_ireland"
+],
+"leagues": {
+"soccer_finland_veikkausliiga": [
+[
+"HJK Helsinki",
+"VPS Vaasa",
+"15:00"
+],
+[
+"KuPS Kuopio",
+"AC Oulu",
+"16:00"
+]
+],
+"soccer_league_of_ireland": [
+[
+"Shamrock Rovers",
+"Drogheda United",
+"19:00"
+]
+],
+"soccer_brazil_campeonato": [
+[
+"Santos",
+"Flamengo",
+"22:30"
+],
+[
+"Atletico Paranaense",
+"Atletico Mineiro",
+"23:00"
+]
+],
+"soccer_brazil_serie_b": [
+[
+"Ceará",
+"Criciuma",
+"22:30"
+],
+[
+"Nautico PE",
+"Grêmio Novorizontino",
+"22:30"
+]
+]
+},
+"africa": [
+[
+"Ligi kuu Bara (Tanzania)",
+"Mashujaa",
+"Polisi Tanzania",
+"11:00"
+],
+[
+"Second League (Egypt)",
+"AL Nasr SC",
+"Proxy",
+"12:30"
+],
+[
+"Second League (Egypt)",
+"Haras El Hodood",
+"El Seka El Hadid",
+"12:30"
+],
+[
+"Second League (Egypt)",
+"Masar",
+"El Dakhleya",
+"12:30"
+],
+[
+"Second League (Egypt)",
+"Tersana",
+"Kahraba Ismailia",
+"12:30"
+],
+[
+"Second League (Egypt)",
+"Mega Sport",
+"Dayrout",
+"12:30"
+],
+[
+"Premier League (Uganda)",
+"Blacks Power",
+"Vipers",
+"13:00"
+],
+[
+"Premier Soccer League (Zimbabwe)",
+"Ngezi Platinum",
+"Highlanders",
+"13:00"
+],
+[
+"Ligi kuu Bara (Tanzania)",
+"Pamba Jiji",
+"Geita Gold",
+"13:15"
+],
+[
+"League Cup (Egypt)",
+"Al Ittihad",
+"Wadi Degla",
+"14:00"
+],
+[
+"League Cup (Egypt)",
+"El Mokawloon",
+"El Gouna FC",
+"14:00"
+],
+[
+"Ligue 2 (Algeria)",
+"RC Kouba",
+"Usm El Harrach",
+"14:00"
+],
+[
+"Ligi kuu Bara (Tanzania)",
+"Namungo",
+"Tabora United",
+"15:30"
+],
+[
+"Premier League (Uganda)",
+"NEC",
+"Express",
+"16:00"
+],
+[
+"Botola Pro (Morocco)",
+"UTS Rabat",
+"Renaissance Berkane",
+"16:00"
+],
+[
+"Ligue 1 (Algeria)",
+"MB Rouisset",
+"USM Alger",
+"17:00"
+],
+[
+"Ligue 1 (Algeria)",
+"JS Saoura",
+"Olympique Akbou",
+"17:00"
+],
+[
+"League Cup (Egypt)",
+"Ghazl El Mehalla",
+"Abu Qair Semad",
+"17:00"
+],
+[
+"League Cup (Egypt)",
+"Future FC",
+"National Bank of Egypt",
+"17:00"
+],
+[
+"Ligi kuu Bara (Tanzania)",
+"Coastal Union",
+"Azam",
+"18:00"
+],
+[
+"Botola Pro (Morocco)",
+"FAR Rabat",
+"Widad Témara",
+"18:00"
+],
+[
+"Botola Pro (Morocco)",
+"CR Khemis Zemamra",
+"Hassania Agadir",
+"18:00"
+],
+[
+"Ligue 1 (Algeria)",
+"MC Oran",
+"ES Setif",
+"19:00"
+],
+[
+"Botola Pro (Morocco)",
+"Maghreb Fès",
+"Raja Casablanca",
+"20:00"
+]
+]
+}

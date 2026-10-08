@@ -512,7 +512,10 @@ def test_prematch_and_fair_use_the_model():
             assert ah["kind"] == "h2h" and "p" not in ah and close(ah["xgd"], d["lh"] - d["la"], 1e-9)
             # pronostics sans cote : lignes 0,5 à 4,5, références naïves, classement par avance x qualité
             opts, bases = fair._options(f, "Arsenal", "Manchester City")
-            assert {o[0] for o in opts} == set(fair.FAMILIES) and bases
+            # tirs et tirs cadrés (total et par équipe) s'ajoutent aux familles de base quand le modèle les a
+            assert {o[0] for o in opts} == set(fair.ALL_FAMILIES) and bases, {o[0] for o in opts}
+            assert {o[0] for o in opts if o[0].startswith("team_sot_")} == {"team_sot_total", "team_sot_home", "team_sot_away"}
+            assert all(o[3] > 0 and 0 <= o[3] <= 1 for o in opts if o[0].startswith("team_s"))
             pts = {o[2] for o in opts if o[0] == "totals"}
             assert pts == {0.5, 1.5, 2.5, 3.5, 4.5}, pts
             assert all(0 <= o[3] <= 1 and o[4].startswith("modèle Kelly") for o in opts) and fair.options(f, "Arsenal", "Manchester City") == opts

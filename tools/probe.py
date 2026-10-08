@@ -77,6 +77,32 @@ def probe_bookmaker():
     save("bookmaker_report.json", json.dumps(report, indent=1))
 
 
+def probe_apif_world():
+    """API-Football gratuit : derniers matchs d'une équipe sans saison, et statistiques groupées par ids."""
+    key = os.environ.get("STATS_API_KEY")
+    if not key:
+        return 0
+    h = {"x-apisports-key": key}
+    out = {}
+    r = fetch("apif_team_last", "https://v3.football.api-sports.io/fixtures", headers=h, params={"team": 127, "last": 12})
+    ids = []
+    if r is not None:
+        body = r.json() if r.ok else {}
+        resp = body.get("response") or []
+        ids = [f["fixture"]["id"] for f in resp if (f.get("fixture", {}).get("status") or {}).get("short") in ("FT", "AET", "PEN")][:3]
+        out["team_last"] = {"status": r.status_code, "errors": body.get("errors"), "n": len(resp), "finished_ids": ids}
+    if ids:
+        r = fetch("apif_ids", "https://v3.football.api-sports.io/fixtures", headers=h, params={"ids": "-".join(map(str, ids))})
+        if r is not None:
+            body = r.json() if r.ok else {}
+            resp = body.get("response") or []
+            out["ids"] = {"status": r.status_code, "errors": body.get("errors"), "n": len(resp),
+                          "with_statistics": sum(1 for f in resp if f.get("statistics")),
+                          "stat_types": sorted({s["type"] for f in resp for t in (f.get("statistics") or []) for s in t.get("statistics", [])})[:20]}
+    save("apif_world.json", json.dumps(out, indent=1, ensure_ascii=False))
+    return 0
+
+
 def main():
     present = {k: bool(os.environ.get(k)) for k in ("ODDS_API_KEY", "STATS_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")}
     save("secrets_presence.json", json.dumps(present, indent=1))     # noms seulement, jamais les valeurs
@@ -216,6 +242,8 @@ def main_full():
 
 
 if __name__ == "__main__":
+    if "--apif-world" in sys.argv:
+        sys.exit(probe_apif_world())
     if "--bookmaker" in sys.argv:
         sys.exit(probe_bookmaker())
     sys.exit(main_full() if "--full" in sys.argv else main_sources() if "--sources" in sys.argv else main())

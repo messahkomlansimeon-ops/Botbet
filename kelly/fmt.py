@@ -97,6 +97,12 @@ SINGULAR = {"tirs cadrés": "tir cadré", "tirs": "tir", "fautes": "faute", "poi
 def label(market, name, point, who, group):
     """« Plus de 2,5 buts », « Moins de 9,5 corners », « Total cartons : plus de 3,5 », « Mbappé : 2 tirs cadrés ou plus »,
     « Les deux équipes marquent : oui », « Double chance : Nul ou Flamengo », « Flamengo gagne »."""
+    if market.startswith(("team_shots_", "team_sot_")):          # tirs et tirs cadrés (pronostics sans cote) : total ou par équipe
+        u = "tirs cadrés" if market.startswith("team_sot_") else "tirs"
+        if market.endswith("_total"):
+            return f"{'Plus' if name == 'Over' else 'Moins'} de {trim(point)} {u} au total"
+        return f"{who or ('Équipe à domicile' if market.endswith('_home') else 'Équipe extérieure')} : " \
+               f"{'plus' if name == 'Over' else 'moins'} de {trim(point)} {u}"
     unit = C.UNITS.get(market)
     if isinstance(unit, dict):
         unit = unit.get(group, "")
@@ -217,3 +223,20 @@ def pronos(items, limit=10):
         lines.append(i(f"+ {len(items) - len(shown)} autres : /match <équipe> pour un match précis"))
     lines.append(i("Kelly donne sa probabilité, pas une cote : si le bookmaker paie moins, passe ton chemin."))
     return Html("\n".join(lines))
+
+
+def fair_leg(n, c):
+    """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
+    return "\n".join([f"{n}. {b(event_name(c))} · {hhmm(c.get('start'))} · {esc(c.get('league', ''))}",
+                      f"   {esc(c['pick'])} · joue si la cote est au moins {b(num(c['min_odds']))}",
+                      f"   ↳ Kelly lui donne {pct(c['prob'])} de chances"])
+
+
+def fair_combo(min_total, picks, prob, stake):
+    """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
+    (mise indicative seulement), chaque jambe avec sa cote minimale."""
+    head = [b(f"🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini {odds_txt(min_total)}"),
+            i(f"{len(picks)} paris · {pct(prob)} de chances · mise indicative : {units(stake)} au plus (pas calculée sur ta bankroll)"),
+            i("Kelly n'a pas vu les cotes de 1xBet : ces cotes sont ses minimums. Joue seulement si 1xBet paie au moins la cote "
+              "indiquée sur CHAQUE pari (la cote totale sera alors d'au moins " + odds_txt(min_total) + "), sinon passe ton chemin.")]
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)))
