@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from . import fbref, features, footballdata, state, understat
+from . import betexplorer, fbref, features, footballdata, fotmob, state, understat
 from .features import match_features, player_features, team_profile
 
-SOURCES = (footballdata, understat, fbref)
+SOURCES = (footballdata, understat, fbref, fotmob, betexplorer)
 SOCCER_PREFIX = "soccer_"
 
 
@@ -14,7 +14,8 @@ def soccer_leagues(leagues=None):
             leagues = list(getattr(config, "SPORTS", []))
         except Exception:
             leagues = []
-    known = set(footballdata.SPORT_TO_DIV) | set(understat.SPORT_TO_LEAGUE) | set(fbref.SPORT_TO_COMP)
+    known = (set(footballdata.SPORT_TO_DIV) | set(understat.SPORT_TO_LEAGUE) | set(fbref.SPORT_TO_COMP)
+             | {k for k in fotmob.SPORT_TO_LEAGUE} | {k for k in betexplorer.PATHS})
     out = []
     for k in leagues:
         out += sorted(x for x in known if x.startswith(k)) if k.endswith("_") else [k]

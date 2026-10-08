@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, combos as CB, config as C, fair, fmt, learn, monde,
-               odds, settle, sources, stats, store, strength, telegram, track)
+               odds, played, settle, sources, stats, store, strength, telegram, track)
 from .sources import http
 from .telegram import Html
 
@@ -48,9 +48,10 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     n_events = len({c["id"] for c in picks})
     messages, sent_picks, sent_combos = [], [], []
     top = max(quality, key=lambda c: c["score"]) if quality else None
-    plan = CB.plan(picks) if quality else [(t, None) for t, _, _ in C.COMBOS]
+    rejected = []
+    plan = CB.plan(picks, rejected=rejected) if quality else [(t, None) for t, _, _ in C.COMBOS]
     built = [(t, c) for t, c in plan if c]
-    missing = [t for t, c in plan if not c]
+    missing = [t for t, c in plan if not c and t not in rejected]
     built_fair = [(t, c) for t, c in fair_combos if c]
     if picks:
         n_world = monde.total(world) if world else 0
@@ -63,21 +64,24 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         head = [fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}"), f"{seen} · {n_c}"]
         if missing:
             head.append(fmt.i(fmt.esc(CB.skip_line(missing, n_events, anything=bool(quality)))))
+        if rejected:
+            head.append(fmt.i(fmt.esc(CB.ev_line(rejected))))
         messages.append(Html("\n".join(head)))
     if world:
         messages.append(monde.tour_du_monde(world, len(pronos), why_no_odds))
     if top:
-        messages.append(fmt.single(top, CB.leg_reason(top)))
+        messages.append(fmt.single(top, CB.leg_reason(top), hint="/joue pari <cote>"))
         sent_picks.append(top)
     for title, combo in built:
         picks_, odds_, prob = combo
         st = bankroll.stake(prob, odds_, title, bank)
-        messages.append(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_}))
+        messages.append(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
+                                  hint=f"/joue {played.norm(fmt.tier_word(title))} <cote>"))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_],
                             "odds": round(odds_, 2), "prob": round(prob, 5), "stake": st})
-    for _, (legs, min_total, prob) in built_fair:
-        messages.append(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total)))
+    for target, (legs, min_total, prob) in built_fair:
+        messages.append(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), hint=f"/joue v{target} <cote>"))
     if pronos:
         messages.append(fmt.pronos(pronos, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
     if not messages:
@@ -101,10 +105,14 @@ def combo_result(c, by_key):
     """Bloc de résultat d'un combiné terminé."""
     name = fmt.tier_name(c["tier"]).split(" ", 1)[-1]
     legs = [by_key.get(k) or {} for k in c["keys"]]
-    stake = c["stake"]
+    stake = c["played"]["stake"] if c.get("played") else c["stake"]
     if c["result"] == "win":
         odds_ = c.get("odds_final", c["odds"])
-        return "\n".join([f"{fmt.b(f'✅ {fmt.esc(name)} gagné — cote {fmt.odds_txt(odds_)}')} · {fmt.signed(stake * (odds_ - 1))}"]
+        gain = stake * (odds_ - 1)
+        if c.get("played"):
+            odds_, gain = c["played"]["odds"] * odds_ / c["odds"], bankroll.played_gain(c)
+        where = " chez 1xBet" if c.get("played") else ""
+        return "\n".join([f"{fmt.b(f'✅ {fmt.esc(name)} gagné — cote {fmt.odds_txt(odds_)}{where}')} · {fmt.signed(gain)}"]
                          + [leg_result_line(r) for r in legs if r])
     if c["result"] == "void":
         return f"⚪ {fmt.b(fmt.esc(name) + ' annulé')} — les matchs n'ont pas eu lieu, mise rendue"
@@ -147,6 +155,8 @@ def morning_report(now):
     bankroll.apply_results(bets["combos"])
     store.save("bets.json", bets)
     rows = track.load()
+    bankroll.apply_results([r for r in rows if r.get("played")], played_only=True)     # pari du jour noté avec /joue
+    track.save(rows)
     model = learn.update(rows, bets["combos"])
     msgs = []
     res = results_message(bets, rows, settled)
@@ -167,7 +177,7 @@ def morning_report(now):
 def fair_report(now):
     """Règle les pronostics sans cote (gratuit) et résume les nouveaux résultats : [] s'il n'y a rien de neuf."""
     rows, settled = settle.settle_fair(now)
-    new = [b for b in settled if b["result"] in ("win", "loss") and not b.get("reported")]
+    new = [b for b in settled if b["result"] in ("win", "loss") and not b.get("reported") and not b.get("x")]   # x : suivi en silence
     if not new:
         return []
     lines, last = [fmt.b("🎲 Pronostics sans cote — résultats")], None
@@ -194,6 +204,9 @@ def fair_combos_report(now):
     n'ont pas de mise : « gagné » veut dire que toutes les jambes sont passées (à jouer seulement si 1xBet payait les cotes
     minimales)."""
     rows, settled = settle.settle_fair_combos(now)
+    if any(c.get("played") and not c.get("counted") for c in settled):
+        bankroll.apply_results([c for c in rows if c.get("played")], played_only=True)
+        store.save(fair.COMBOS_FILE, rows)
     new = [c for c in settled if c["result"] in ("win", "loss") and not c.get("reported")]
     if not new:
         return []
@@ -497,6 +510,7 @@ HELP = """🤖 Kelly — commandes :
 /ligues : le catalogue des ligues suivies et celles payées en cotes réelles aujourd'hui
 /analyse <match> : chiffres d'avant-match (corners, cartons, tirs, buts) d'un match du jour + ses meilleurs paris
 /stats <équipe> : corners, cartons, tirs, fautes et buts des 10 derniers matchs (football-data, ou API-Football pour le Brésil, l'Afrique...)
+/joue <palier> <cote> [mise] : note ce que tu as joué chez 1xBet (ex. /joue sur 5,40 · /joue pari 1,85 · /joue v5 6,10) ; /joue seul : ce qui reste à noter
 /bank [montant] : voir ou régler la bankroll
 /aide : ce message"""
 
@@ -700,12 +714,14 @@ def _handle_command(text):
                 amount = float(args[0].replace(",", "."))
             except ValueError:
                 return "Montant invalide. Exemple : /bank 50000"
-            b = {"bankroll": amount, "initial": amount}
+            b = {**b, "bankroll": amount, "initial": amount}
             bankroll.save(b)
             return f"Bankroll réglée à {fmt.trim(amount, 2)} unités. Les mises conseillées s'adaptent dès demain."
         return f"💼 Bankroll : {fmt.trim(b['bankroll'], 1)} unités (départ {fmt.trim(b['initial'], 2)})"
     if cmd == "/stats":
         return Html(comma(fmt.esc(fmt_team(sources.team_profile(" ".join(args)) if args else None, " ".join(args)))))
+    if cmd in ("/joue", "/joué", "/jouer"):
+        return played.command(args, today.get("day") or now_utc().date())
     if cmd in ("/monde", "/ligues"):
         data = monde.load(now_utc().date())
         return monde.fmt_monde(data, " ".join(args)) if cmd == "/monde" else monde.fmt_ligues(data)
@@ -762,6 +778,9 @@ def custom_combo(picks, pronos, target, day):
             picks_, odds_, prob = combo
             msg = fmt.combo("🎯 COMBINÉ SUR MESURE", picks_, odds_, prob,
                             bankroll.stake(prob, odds_, "🎯", bankroll.load()["bankroll"]), {c["key"]: CB.leg_reason(c) for c in picks_})
+            if CB.ev(combo) < C.COMBO_MIN_EV:
+                msg = Html(msg + "\n\n" + fmt.i(f"⚠️ Espérance négative : à ces cotes, ce combiné rend en moyenne "
+                                                f"{fmt.pct(1 - CB.ev(combo))} de moins que la mise. Mise petit, ou vise une autre cote."))
             if n_sent:
                 msg = Html(msg + "\n\n" + fmt.i(f"Les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs "
                                                 f"({fmt.pct(C.LEG_SAFE_PROB)} de chances ou plus, {C.LEG_REUSE_MAX} combinés au plus)."))

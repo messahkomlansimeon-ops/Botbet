@@ -1,4 +1,4 @@
-from . import fbref, footballdata, names, understat
+from . import betexplorer, fbref, footballdata, fotmob, names, understat
 from .. import apistats, catalogue, config as C
 
 MIN_N = 3
@@ -108,6 +108,27 @@ def _understat(out, home, away, sport_key):
         out["exp_xg_home"], out["exp_xg_away"], out["exp_xg_total"] = _r(eh), _r(ea), _r(eh + ea)
 
 
+def _fotmob(out, home, away, sport_key):
+    """xG attendu d'après les classements FotMob (repli d'Understat : couverture mondiale des ligues mappées)."""
+    lgid = fotmob.SPORT_TO_LEAGUE.get(sport_key)
+    if lgid is None:
+        return
+    data = ((_p("fm", fotmob).get("leagues") or {}).get(sport_key) or {}).get("teams") or {}
+    h, a = names.best_team(home, data), names.best_team(away, data)
+    if not h or not a or h == a:
+        return
+    hv, av = data[h], data[a]
+    eh, ea = _mix(hv.get("xg"), av.get("xga")), _mix(av.get("xg"), hv.get("xga"))
+    if eh is None or ea is None:
+        return
+    new = {k: _r(v) for k, v in (("exp_xg_home", eh), ("exp_xg_away", ea), ("exp_xg_total", eh + ea))
+           if k not in out}
+    if not new:
+        return
+    out.update(new)
+    out["sources"].append("FotMob")
+
+
 def _fbref(out, home, away, sport_key):
     squads = ((_p("fb", fbref).get("leagues") or {}).get(sport_key) or {}).get("squads") or {}
     h, a = names.best_team(home, squads), names.best_team(away, squads)
@@ -205,8 +226,8 @@ def match_features(home, away, sport_key, referee=None):
         steps = [(_apistats, (home, away, sport_key))]
     else:
         steps = [(_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
-                 (_fbref, (home, away, sport_key)), (_deep, (home, away, sport_key, referee)),
-                 (_apistats, (home, away, sport_key))]
+                 (_fotmob, (home, away, sport_key)), (_fbref, (home, away, sport_key)),
+                 (_deep, (home, away, sport_key, referee)), (_apistats, (home, away, sport_key))]
     for fn, args in steps:
         try:
             fn(out, *args)

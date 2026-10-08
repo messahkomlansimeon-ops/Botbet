@@ -123,7 +123,10 @@ SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de t
 SOURCES_SECONDS = _int("SOURCES_SECONDS", 420)    # téléchargements des stats gratuites (le reste vient du cache)
 # Pronostics Kelly sans cote de bookmaker (kelly/fair.py) : proba du modèle + « cote juste » = 1 / proba.
 FAIR_MAX = _int("FAIR_MAX", 10)                   # pronostics détaillés dans le message du matin (5 si des combinés existent)
-FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json)
+FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json), montrés le matin
+FAIR_TRACK_FREE = _int("FAIR_TRACK_FREE", 150)    # en plus, pronostics buts / 1N2 / double chance / 2 marquent suivis en silence (réglés sans requête)
+FAIR_CALIB_MIN = 60                               # pronostics réglés d'une famille avant de corriger ses probas (kelly/calib.py)
+FAIR_CALIB_PRIOR = 200                            # la correction n'a tout son poids qu'avec bien plus de pronostics : n / (n + 200)
 FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe
 FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'est du hasard, au-dessus la cote juste est < 1.25
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
@@ -241,6 +244,9 @@ ALERT_PROB_RISE = 0.07
 KELLY_FRACTION = 0.25
 STAKE_CAP = {"🛡️": 0.05, "⚖️": 0.02, "🎯": 0.015, "🔥": 0.01, "💀": 0.005}   # part max de la bankroll par tier
 MIN_STAKE_SHARE = 0.002
+# Espérance minimale d'un combiné (proba x cote typique) : la marge du bookmaker se multiplie à chaque jambe. Sous ce seuil Kelly
+# retente le palier avec les seules jambes de valeur positive, sinon le saute (« espérance négative »). 0 = désactivé.
+COMBO_MIN_EV = _float("COMBO_MIN_EV", 1.0)
 STREAK_WARNING = 5
 
 # Suivi et apprentissage par la cote de clôture.

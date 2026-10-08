@@ -2,7 +2,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import config as C, fair, fmt, learn, odds, stats, store, track
+from . import calib, config as C, fair, fmt, learn, odds, played, stats, store, track
 from .sources import footballdata as fd
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
@@ -249,6 +249,7 @@ def settle_fair(now=None, stats_for=None):
     rows = fair.load()
     fdata = FootballData()
     settled = [b for b in rows if _settle_fair_row(b, now, fdata, stats_for)]
+    calib.add(rows)                                 # cumul par famille, gardé pour toujours (fair.json : 10 jours)
     store.save(fair.FILE, rows)
     return rows, settled
 
@@ -362,12 +363,16 @@ def _bilan_simple(days, rows, picks, combos):
     if sent:
         w = sum(1 for r in sent if r["result"] == "win")
         lines.append(f"Paris envoyés : {w} gagnés sur {len(sent)} ({fmt.pct(w / len(sent))})")
+    lines += [fmt.esc(x) for x in played.summary_lines(store.load("bets.json", {"combos": []}), rows, fair.load_combos(), days)]
     fl = fair_line(fair.load(), days)
     if fl:
         lines.append(fmt.esc(fl))
     fc = fair_combo_line(fair.load_combos(), days)
     if fc:
         lines.append(fmt.esc(fc))
+    cl = calib.lines()
+    if cl:
+        lines.append(fmt.esc("Fiabilité de Kelly (pronostics réglés, depuis le début) : " + " · ".join(cl)))
     pending = sum(1 for r in rows if r.get("result") is None)
     if pending:
         lines.append(fmt.i(f"{pending} pari{'s' if pending > 1 else ''} en attente de résultat"))
@@ -380,6 +385,7 @@ def _bilan_detail(bets, days, rows, picks, combos):
     ghost = [r for r in picks if not r.get("sent")]
     lines = [f"📊 BILAN{f' ({days} derniers jours)' if days else ''}",
              _block("Envoyés", sent), _block("Suivis en silence", ghost)]
+    lines += played.summary_lines(bets, rows, fair.load_combos(), days, detail=True)
     tiers = {}
     for c in combos:
         tiers.setdefault(c["tier"].split(" (")[0], []).append(c)
@@ -408,4 +414,8 @@ def _bilan_detail(bets, days, rows, picks, combos):
     fc = fair_combo_line(fair.load_combos(), days)
     if fc:
         lines.append(fc)
+    cl = calib.lines(detail=True)
+    if cl:
+        lines.append("Fiabilité par marché (pronostics sans cote, depuis le début) :")
+        lines += [f"• {x}" for x in cl]
     return "\n".join(lines)

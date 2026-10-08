@@ -7,7 +7,8 @@ from .. import store
 FILE = "sources_state.json"
 BLOCK_HOURS = 24
 CLOUDFLARE_HOURS = 24 * 7
-LABELS = {"footballdata": "football-data", "understat": "Understat", "fbref": "FBref"}
+LABELS = {"footballdata": "football-data", "understat": "Understat", "fbref": "FBref",
+          "fotmob": "FotMob", "betexplorer": "BetExplorer"}
 MAX_PROFILE_BYTES = 450_000
 clock = time.time
 

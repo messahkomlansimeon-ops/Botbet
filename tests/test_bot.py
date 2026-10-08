@@ -17,8 +17,8 @@ os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import (app, bankroll, bootstrap, budget, cache, combos as CB, fmt, config as C, learn, odds, settle, sources,  # noqa: E402
-                   stats, store, telegram, track)
+from kelly import (app, bankroll, bootstrap, budget, cache, calib, combos as CB, fair, fmt, config as C, learn, odds, played,  # noqa: E402
+                   settle, sources, stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
 from tests import make_sample, synth  # noqa: E402
 from tests.fake_api import FakeFootballAPI, match as fake_match, seed_history, ts_of  # noqa: E402
@@ -1293,7 +1293,9 @@ def test_morning_always_useful():
         data = store.load("monde.json", {})
         assert data["day"] == WDAY and data["brk"] == 1 and data["paid"] == [k for k in data["leagues"] if k in paid_leagues] \
             and sum(len(v) for v in data["leagues"].values()) == 50 and os.path.getsize(store.path("monde.json")) < 20_000
-        assert len(fair_rows := store.load("fair.json", [])) == C.FAIR_TRACK and all(r["result"] is None for r in fair_rows)
+        fair_rows = store.load("fair.json", [])
+        assert len([r for r in fair_rows if not r.get("x")]) == C.FAIR_TRACK and all(r["result"] is None for r in fair_rows)
+        assert all(r["market"] in fair.FREE_MARKETS for r in fair_rows if r.get("x")) and all("p0" in r for r in fair_rows)
         # --- commandes lues dans le cache du matin (aucun appel réseau)
         sb.serve(lambda url, **kw: (_ for _ in ()).throw(AssertionError(f"requête inattendue : {url}")))
         m = app.handle_command("/monde")
@@ -1824,7 +1826,7 @@ def test_messages_human():
             mkleg(2, 1.90, 0.53, edge=0.07, home="Santos", away="Gremio", pick="Plus de 2,5 buts", start="22:30",
                   why="cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)", best_odds=2.05, book="Betfair")]
     msg = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"})
-    assert isinstance(msg, telegram.Html) and msg.startswith("<b>🛡️ SÛR — cote 2,95</b>\n<i>2 paris · 37 % de chances · mise conseillée : 2 u</i>\n\n1. <b>Flamengo – Vasco &amp; Fils</b> · 21h00 · Brasileirão")
+    assert isinstance(msg, telegram.Html) and msg.startswith("<b>🛡️ SÛR — cote 2,95</b>\n<i>2 paris · 37 % de chances · espérance +9,4 % · mise conseillée : 2 u</i>\n\n1. <b>Flamengo – Vasco &amp; Fils</b> · 21h00 · Brasileirão")
     assert "\n   Flamengo gagne — <b>1,55</b>\n   ↳ Très probable : 70 % de chances\n\n2. <b>Santos – Gremio</b> · 22h30" in msg, msg
     assert "<b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n   ↳ Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)" in msg, msg
     # résultats du lendemain
@@ -2258,6 +2260,151 @@ def test_paid_ranking_favours_profiles():
     print("classement des ligues payées : OK")
 
 
+class saved_files:
+    """Sauvegarde puis restaure des fichiers de data/ autour d'un test qui les réécrit."""
+
+    def __init__(self, *names):
+        self.names = names
+
+    def __enter__(self):
+        self.old = {n: store.load(n, None) for n in self.names}
+
+    def __exit__(self, *exc):
+        for n, v in self.old.items():
+            if v is None:
+                with contextlib.suppress(OSError):
+                    os.remove(store.path(n))
+            else:
+                store.save(n, v)
+        calib._memo.clear()
+
+
+def test_played_bets():
+    """/joue : note la cote et la mise obtenues chez 1xBet ; la bankroll passe en mode réel (seuls les paris notés comptent),
+    le bilan donne le résultat réel et l'écart de cote 1xBet face à la cote typique."""
+    files = ("bets.json", "tracked.json", "fair_combos.json", "bankroll.json", "today.json")
+    with saved_files(*files):
+        day = "2026-10-08"
+        bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        store.save("today.json", {"day": day, "picks": [], "pronos": []})
+        sur = {"tier": C.COMBOS[0][0], "keys": ["k1", "k2"], "odds": 5.0, "prob": 0.22, "stake": 10.0, "date": day, "result": None}
+        costaud = {"tier": C.COMBOS[1][0], "keys": ["k4"], "odds": 13.0, "prob": 0.08, "stake": 5.0, "date": "2026-10-01",
+                   "result": "loss"}
+        store.save("bets.json", {"picks": [], "combos": [sur, costaud]})
+        row = lambda k, sent, odds_, prob: {"key": k, "id": k, "date": day, "sent": sent, "odds": odds_, "prob": prob,  # noqa: E731
+                                            "pick": f"Pari {k}", "result": None, "market": "h2h"}
+        track.save([row("k1", True, 2.0, 0.5), row("k2", True, 2.5, 0.44), row("k3", True, 1.9, 0.55), row("k5", False, 3.0, 0.3)])
+        legs = [{"key": "f1", "min_odds": 2.3, "result": None}, {"key": "f2", "min_odds": 2.3, "result": None}]
+        store.save("fair_combos.json", [{"date": day, "tier": 5, "min_odds": 5.29, "prob": 0.2, "keys": ["f1", "f2"], "legs": legs,
+                                         "result": None}])
+        todo = app.handle_command("/joue")
+        assert "/joue sur <cote>" in todo and "/joue pari <cote>" in todo and "/joue v5 <cote>" in todo and "pas noté" in todo, todo
+        m = app.handle_command("/joue sûr 5,40")
+        assert "Noté" in m and "5,40" in m and "+8 %" in m and "ne suit plus que les paris notés" in m, m
+        assert bankroll.load()["real"] and store.load("bets.json", {})["combos"][0]["played"]["stake"] == 10.0
+        m = app.handle_command("/joue sur 5,40 3")
+        assert "mise 3 u" in m and "ne suit plus" not in m, m
+        assert "Noté" in app.handle_command("/joue pari 2")
+        assert next(r for r in track.load() if r["key"] == "k3")["played"] == {"odds": 2.0, "stake": 10.0,
+                                                                               "at": next(r for r in track.load() if r["key"] == "k3")["played"]["at"]}
+        assert "moins que la cote mini" in app.handle_command("/joue v5 5,0")
+        assert "inconnu" in app.handle_command("/joue foot 2")
+        assert "Pas de combiné Costaud" in app.handle_command("/joue costaud 13")     # celui du 1er octobre est déjà réglé
+        assert "invalide" in app.handle_command("/joue sur abc") and "supérieure à 1" in app.handle_command("/joue sur 0,9")
+        assert "✅" in app.handle_command("/joue")
+        # règlement : seuls les paris notés font bouger la bankroll, à la cote de 1xBet
+        bets = store.load("bets.json", {})
+        bets["combos"][0] |= {"result": "win", "odds_final": 5.0}
+        store.save("bets.json", bets)
+        rows = track.load()
+        next(r for r in rows if r["key"] == "k3")["result"] = "loss"
+        track.save(rows)
+        fc = fair.load_combos()
+        fc[0]["result"] = "win"
+        for leg_ in fc[0]["legs"]:
+            leg_["result"] = "win"
+        store.save("fair_combos.json", fc)
+        bankroll.apply_results(bets["combos"])
+        rows = track.load()
+        bankroll.apply_results([r for r in rows if r.get("played")], played_only=True)
+        bankroll.apply_results(fc, played_only=True)
+        expected = 1000 + 3 * (5.4 - 1) - 10 + 1.0 * (5.0 - 1)
+        assert abs(bankroll.load()["bankroll"] - round(expected, 2)) < 1e-6, bankroll.load()
+        bankroll.apply_results(bets["combos"])
+        assert abs(bankroll.load()["bankroll"] - round(expected, 2)) < 1e-6, "un pari n'est compté qu'une fois"
+        store.save("bets.json", bets)
+        assert "déjà réglé" in app.handle_command("/joue sur 6")
+        res = app.combo_result(bets["combos"][0], {})
+        assert "cote 5,40 chez 1xBet" in res and "+13,2 u" in res, res
+        simple = settle.bilan(bets, rows=rows)
+        assert "Joués chez 1xBet : 2 gagnés sur 3" in simple and "Cotes de 1xBet : +6,6 % en moyenne" in simple, simple
+        detail = settle.bilan(bets, rows=rows, detail=True)
+        assert "Écart de cote 1xBet par palier : Sûr +8 % (1), Pari du jour" in detail, detail
+        assert "réglée" in app.handle_command("/bank 500") and bankroll.load()["real"]
+        assert "paris notés avec /joue seulement" in bankroll.summary([])
+    print("paris joués chez 1xBet (/joue) : OK")
+
+
+def test_calibration_tracking():
+    """Pronostics sans cote : les C.FAIR_TRACK meilleurs + jusqu'à C.FAIR_TRACK_FREE de marchés réglés au score, en silence ;
+    cumul de fiabilité par famille gardé pour toujours, et correction des probas d'une famille trop sûre d'elle."""
+    with saved_files("fair.json", "calib.json"):
+        with contextlib.suppress(OSError):
+            os.remove(store.path("calib.json"))
+        calib._memo.clear()
+        assert calib.factor("alternate_totals_corners") == 1.0
+        rows = [{"market": "alternate_totals_corners", "prob": 0.7, "p0": 0.7, "result": "win" if i < 55 else "loss"}
+                for i in range(100)] + [{"market": "totals", "prob": 0.65, "result": "win"} for _ in range(10)]
+        assert calib.add(rows) == 110 and calib.add(rows) == 0          # jamais compté deux fois
+        calib._memo.clear()                                             # relu depuis le disque
+        k = calib.factor("alternate_totals_corners")
+        assert abs(k - 0.75) < 1e-9 and calib.factor("totals") == 1.0, k  # 10 pronostics : trop peu pour corriger
+        assert abs(calib.calibrate("alternate_totals_corners", 0.7) - 0.65) < 1e-9
+        assert calib.lines() == ["corners : 55 % réalisés pour 70 % annoncés (100)"], calib.lines()
+        assert "correction k = 0.75" in calib.lines(detail=True)[0]
+        ev = {"id": "e1", "home_team": "A", "away_team": "B", "sport_key": "soccer_epl", "commence_time": "2026-10-08T15:00:00Z"}
+        c = fair.make_pick(ev, "alternate_totals_corners", "Over", 9.5, 0.7, "tag", "src")
+        assert c["p0"] == 0.7 and abs(c["prob"] - 0.65) < 1e-9 and c["min_odds"] > round(1 / 0.7 * 1.05, 2), c
+        assert fair.make_pick(ev, "totals", "Over", 2.5, 0.7, "tag", "src")["prob"] == 0.7
+        store.save("fair.json", [])
+        pronos = [{"key": f"p{i}", "id": f"e{i}", "sport_key": "soccer_epl", "home": "A", "away": "B", "commence": "2026-10-08T15:00:00Z",
+                   "market": "alternate_totals_corners" if i % 2 else "totals", "name": "Over", "point": 2.5, "prob": 0.6, "p0": 0.6}
+                  for i in range(40)]
+        assert fair.record(pronos, "2026-10-08") == C.FAIR_TRACK + 14
+        got = fair.load()
+        assert len([r for r in got if not r.get("x")]) == C.FAIR_TRACK and all(r["market"] == "totals" for r in got if r.get("x"))
+        text = settle.bilan({"picks": [], "combos": []}, rows=[{"result": "win", "sent": True, "odds": 2.0, "prob": 0.5,
+                                                                 "date": "2026-10-08", "market": "h2h", "key": "z"}], detail=True)
+        assert "Fiabilité par marché" in text and "corners : 55 % réalisés pour 70 % annoncés (100), correction k = 0.75" in text, text
+    print("suivi élargi et fiabilité par marché : OK")
+
+
+def test_combo_expectation():
+    """Un combiné dont l'espérance (proba x cote) est sous COMBO_MIN_EV est rebâti avec les seules jambes de valeur positive,
+    sinon le palier saute et le message du matin le dit."""
+    tiers = [("🛡️ SÛR (cote 5 à 7)", 5.0, 7.0)]
+    safe = [mkleg(i, 1.35, 0.70, edge=-0.055) for i in range(3)]        # jambes sûres payées avec la marge
+    v1 = mkleg(10, 3.0, 0.35, edge=0.05)
+    v2 = mkleg(11, 2.2, 0.475, edge=0.045)
+    best = CB.best_combo(safe + [v1, v2], 5.0, 7.0)
+    assert CB.ev(best) < 1 and "e10" in {c["id"] for c in best[0]}       # le plus probable : 2 sûres + v1, espérance 0,94
+    rejected = []
+    (_, combo), = CB.plan(safe + [v1, v2], tiers, rejected=rejected)
+    assert combo and {c["id"] for c in combo[0]} == {"e10", "e11"} and CB.ev(combo) >= 1 and not rejected, combo
+    rejected = []
+    (_, combo), = CB.plan(safe + [v1], tiers, rejected=rejected)
+    assert combo is None and rejected == [tiers[0][0]]
+    assert "espérance négative" in CB.ev_line(rejected) and "Sûr" in CB.ev_line(rejected)
+    old = C.COMBO_MIN_EV
+    C.COMBO_MIN_EV = 0
+    (_, combo), = CB.plan(safe + [v1], tiers)
+    C.COMBO_MIN_EV = old
+    assert combo and CB.ev(combo) < 1                                   # 0 = filtre désactivé
+    msg = fmt.combo(tiers[0][0], combo[0], combo[1], combo[2], 2.0, hint="/joue sur <cote>")
+    assert "espérance −6,2 %" in msg and "/joue sur &lt;cote&gt;" in msg, msg
+    print("espérance des combinés : OK")
+
+
 def main():
     bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
     events = app.load_sample()
@@ -2380,6 +2527,9 @@ def main():
     test_messages_human()
     test_fair_stat_markets()
     test_fair_combos()
+    test_played_bets()
+    test_calibration_tracking()
+    test_combo_expectation()
     test_paid_ranking_favours_profiles()
     test_replay_oct8()
     test_run_daily_world()

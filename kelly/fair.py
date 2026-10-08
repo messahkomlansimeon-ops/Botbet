@@ -18,17 +18,21 @@ traités avec les seuls profils API-Football. Chaque pronostic porte sa « confi
 
 Ces pronostics n'ont ni cote ni mise : « compare chez 1xBet, joue si la cote >= X ». Ils n'entrent dans aucun combiné et
 ne sont pas suivis pour la cote de clôture ; leurs résultats vont dans data/fair.json (règlement gratuit,
-settle.settle_fair) pour mesurer si les probas de Kelly sont justes.
+settle.settle_fair) pour mesurer si les probas de Kelly sont justes : les C.FAIR_TRACK meilleurs, plus jusqu'à
+C.FAIR_TRACK_FREE pronostics de buts, 1N2, double chance et « les 2 marquent » suivis en silence (réglés avec la liste des
+matchs de la veille, déjà téléchargée : aucune requête de plus). Le cumul par famille (kelly/calib.py) corrige ensuite les
+probas des marchés où Kelly se montre trop sûre d'elle (c["p0"] = proba avant correction).
 """
 import sys
 import time
 from datetime import datetime, timezone
 
-from . import apistats, catalogue, config as C, odds, prematch, stats, store, strength
+from . import apistats, calib, catalogue, config as C, odds, prematch, stats, store, strength
 
 FILE = "fair.json"
 LINES = {"goals": (1.5, 2.5, 3.5), "corners": (7.5, 8.5, 9.5, 10.5, 11.5, 12.5), "cards": (2.5, 3.5, 4.5, 5.5, 6.5)}
 FAMILIES = ("totals", "btts", "double_chance", prematch.CORNERS, prematch.CARDS)
+FREE_MARKETS = ("totals", "btts", "double_chance", "h2h")       # réglés avec le seul score : suivis en nombre, gratuitement
 # Tirs et tirs cadrés : total du match, puis une équipe (le suffixe _home / _away dit laquelle) ; (clé des chiffres d'avant-match,
 # libellé, bornes plausibles de la moyenne attendue, dispersion de la binomiale négative)
 STAT_SPECS = {"team_shots_total": ("exp_shots", "tirs", (12.0, 45.0), 0.03),
@@ -186,13 +190,15 @@ def side_name(market, ev):
 
 
 def make_pick(ev, market, name, point, p, tag, src):
+    """Pronostic d'un match ; `p` : proba brute (rapprochée de 50 %), corrigée par la fiabilité mesurée du marché (calib)."""
+    p0, p = p, calib.calibrate(market, p)
     home, away = ev["home_team"], ev["away_team"]
     who = side_name(market, ev)
     return {"key": f'{ev["id"]}|{market}||{point if point is not None else ""}|{name}', "id": ev["id"],
             "sport_key": ev["sport_key"], "league": ev.get("league") or catalogue.name(ev["sport_key"]), "event": f"{home} - {away}",
             "home": home, "away": away, "commence": ev["commence_time"], "start": ev["commence_time"][11:16],
             "market": market, "name": name, "point": point, "who": who, "group": "soccer",
-            "pick": odds.label(market, name, point, who, "soccer"), "prob": round(p, 4), "fair": round(1 / p, 2),
+            "pick": odds.label(market, name, point, who, "soccer"), "prob": round(p, 4), "p0": round(p0, 4), "fair": round(1 / p, 2),
             "min_odds": round(1 / p * (1 + C.FAIR_MARGIN), 2), "why": tag, "src": src,
             "score": (p - 0.5) * C.MARKET_WEIGHT.get(market, 1.0)}
 
@@ -202,7 +208,7 @@ def _with_base(c, base, q):
     x (0,5 + 0,5 x qualité) ; ajoute c["base"] (référence rapprochée) et c["conf"] (qualité des données)."""
     if base is None:
         return c
-    b = shrink(base)
+    b = calib.calibrate(c["market"], shrink(base))
     w = C.MARKET_WEIGHT.get(c["market"], 1.0)
     c["base"], c["conf"] = round(b, 4), round(q or 0.0, 2)
     c["score"] = ((c["prob"] - 0.5) + (c["prob"] - b)) / 2 * w * (0.5 + 0.5 * (q or 0.0))
@@ -317,7 +323,7 @@ def fmt_pronos(pronos, limit=None):
 
 # ---------- suivi (calibration) ----------
 
-ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob")   # lignes de fair.json : petites
+ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0")   # lignes de fair.json : petites
 
 
 def pick_label(r):
@@ -335,16 +341,20 @@ def load():
 
 
 def record(pronos, day):
-    """Enregistre les C.FAIR_TRACK meilleurs pronostics du jour dans data/fair.json (fantômes sans cote : seuls leurs
-    résultats servent, jamais la cote de clôture ni l'apprentissage), garde C.FAIR_KEEP_DAYS jours. -> nombre ajouté."""
+    """Enregistre dans data/fair.json les C.FAIR_TRACK meilleurs pronostics du jour, plus jusqu'à C.FAIR_TRACK_FREE pronostics
+    de marchés réglés avec le seul score, suivis en silence (« x » : absents du message de résultats, comptés dans le bilan et la
+    fiabilité). Fantômes sans cote : seuls leurs résultats servent, jamais la cote de clôture ni l'apprentissage. Garde
+    C.FAIR_KEEP_DAYS jours. -> nombre ajouté."""
     from datetime import date, timedelta
     rows = load()
     known = {r["key"] for r in rows}
     n = 0
-    for c in pronos[:C.FAIR_TRACK]:
+    extra = [c for c in pronos[C.FAIR_TRACK:] if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
+    for c in pronos[:C.FAIR_TRACK] + extra:
         if c["key"] not in known:
             known.add(c["key"])
-            rows.append({k: c.get(k) for k in ROW} | {"date": str(day), "result": None})
+            rows.append({k: c.get(k) for k in ROW} | {"date": str(day), "result": None}
+                        | ({"x": 1} if c in extra else {}))
             n += 1
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_KEEP_DAYS))
     store.save(FILE, [r for r in rows if r["date"] >= cut])

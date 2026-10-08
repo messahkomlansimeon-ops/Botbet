@@ -17,7 +17,7 @@ os.environ.pop("FBREF_MAX_PAGES", None)
 import requests  # noqa: E402
 
 from kelly import bootstrap, config as C, learn, sources, store  # noqa: E402
-from kelly.sources import fbref, features, footballdata as fd, http, names, state, understat  # noqa: E402
+from kelly.sources import betexplorer, fbref, features, footballdata as fd, fotmob, http, names, state, understat  # noqa: E402
 
 from tests import synth  # noqa: E402
 
@@ -98,13 +98,17 @@ def fresh(serve=True):
     NET = Net(CLOCK)
     requests.get = NET.get
     if serve:
-        for d in (FD, US, FB):
+        for d in (FD, US, FB, FM, BX):
             NET.routes[f"https://{d}/robots.txt"] = ROBOTS_OK
         NET.routes[EPL_FD] = Resp(200, fixture("E0_2526.csv"), {"ETag": '"abc"'})
         NET.routes["https://football-data.co.uk/mmz4281/2425/E0.csv"] = Resp(404)
         NET.routes[API_US] = Resp(200, fixture("understat_api_epl_2025.json"), {"Content-Type": "text/javascript;charset=UTF-8"})
         NET.routes[EPL_FB.format("shooting")] = Resp(200, fixture("fbref_epl_shooting.html"))
         NET.routes[EPL_FB.format("misc")] = Resp(200, fixture("fbref_epl_misc.html"))
+        for kid in set(fotmob.SPORT_TO_LEAGUE.values()) | set(fotmob.EXTRA_LEAGUES.values()):
+            NET.routes[f"https://{FM}/leagues/{kid}"] = Resp(200, _fotmob_html())
+        for path in set(betexplorer.PATHS.values()) | set(betexplorer.EXTRA_PATHS.values()):
+            NET.routes[f"https://{BX}/football/{path}/results/"] = Resp(200, fixture("betexplorer_ci_results.html"))
     return NET
 
 
@@ -586,8 +590,8 @@ def test_health_report_and_features():
         assert set(h) == {"ok", "last_success", "last_error", "rows", "blocked_until"} and h["ok"] is True and h["rows"] > 0, (name, h)
     assert out["footballdata"]["last_error"] and "HTTP 404" in out["footballdata"]["last_error"]       # 2425/E0 absent : avertissement
     txt = sources.report()
-    assert txt.count("✅") == 3 and "football-data" in txt and "Understat" in txt and "FBref" in txt, txt
-    assert len(txt.splitlines()) == 4
+    assert txt.count("✅") == 5 and all(n in txt for n in ("football-data", "Understat", "FBref", "FotMob", "BetExplorer")), txt
+    assert len(txt.splitlines()) == 6
     total = sum(os.path.getsize(store.path(f)) for f in os.listdir(store.DATA_DIR) if f.startswith("src_"))
     assert 0 < total < 100_000, total
     # le délai de 6 s est tenu entre les pages FBref
@@ -857,6 +861,119 @@ def test_refresh_never_raises():
     assert sources.match_features("Arsenal", "Chelsea", "soccer_epl") == {"sources": []}
     assert sources.soccer_leagues(["soccer_epl", "tennis_atp", "soccer_nope"]) == ["soccer_epl"]
     assert "soccer_spain_la_liga" in sources.soccer_leagues(["soccer_"])
+
+
+# --- FotMob et BetExplorer ----------------------------------------------------
+
+FM = "www.fotmob.com"
+BX = "www.betexplorer.com"
+
+
+def _fotmob_html():
+    data = json.loads(fixture("fotmob_league47.json"))
+    inner = json.dumps({"props": {"pageProps": data}}, ensure_ascii=False).replace("</", "<\\/")
+    return (f'<html><body><script id="__NEXT_DATA__" type="application/json">{inner}</script>'
+            "</body></html>").encode()
+
+
+def test_fotmob_parse_league():
+    data, probs = fotmob.parse_league(_fotmob_html().decode())
+    assert data and not probs, probs
+    t = data["teams"]
+    assert t["Arsenal"]["n"] == 5 and t["Arsenal"]["w"] == 4 and close(t["Arsenal"]["xg"], 8.48, 0.02)
+    assert t["Manchester City"]["gf"] == 13 and t["Manchester City"]["ga"] == 5 and t["Manchester City"]["xga"]
+    ms = data["matches"]
+    assert len(ms) >= 40 and any(m["home"] == "Arsenal" and m["hg"] == 3 and m["ag"] == 0 for m in ms)
+    assert all(m["d"] and m["hg"] is not None and m["ag"] is not None for m in ms)
+    assert fotmob.parse_league("<html>pas de donnees</html>")[0] is None
+    assert "__NEXT_DATA__ introuvable" in fotmob.parse_league("<html>x</html>")[1][0]
+    # table vide (saison à zéro, ancien et nouveau format) = erreur claire, pas d'exception
+    vide = json.dumps({"props": {"pageProps": {"table": [{"data": {"table": {"all": []}}}]}}})
+    html = (f'<script id="__NEXT_DATA__">{vide}</script>')
+    assert fotmob.parse_league(html)[0] is None and "aucun classement" in fotmob.parse_league(html)[1][0]
+    vide2 = json.dumps({"props": {"pageProps": {"table": [{"data": {"table": {"all": [], "xg": []}}}]}}})
+    html2 = (f'<script id="__NEXT_DATA__">{vide2}</script>')
+    assert fotmob.parse_league(html2)[0] is None and "aucun classement" in fotmob.parse_league(html2)[1][0]
+
+
+def test_fotmob_refresh_and_features():
+    fresh(serve=False)
+    NET.routes[f"https://{FM}/robots.txt"] = ROBOTS_OK
+    NET.routes["https://www.fotmob.com/leagues/47"] = Resp(200, _fotmob_html())
+    for kid in (526, 10508, 9428, 10608, 10196):                    # ligues africaines toujours actualisées
+        NET.routes[f"https://www.fotmob.com/leagues/{kid}"] = Resp(200, _fotmob_html())
+    h = fotmob.refresh(["soccer_epl"])
+    assert h["ok"] and h["rows"] > 0, h
+    prof = fotmob.profiles()
+    assert "soccer_epl" in prof["leagues"] and prof["leagues"]["soccer_epl"]["teams"]["Arsenal"]["xg"]
+    # le 2e passage relit le cache : mêmes données, aucun appel
+    n = len(NET.log)
+    assert fotmob.refresh(["soccer_epl"])["ok"]
+    assert len(NET.log) == n
+    # features : l'xG FotMob complète quand Understat est absent
+    features.reload()
+    f = features.match_features("Arsenal", "Coventry City", "soccer_epl")
+    assert "FotMob" in f["sources"] and "exp_xg_home" in f and "exp_xg_total" in f
+    # robots.txt interdit -> aucune requête de données, erreurs explicites, health négatif
+    fresh(serve=False)
+    NET.routes[f"https://{FM}/robots.txt"] = Resp(200, b"User-agent: *\nDisallow: /\n")
+    h = fotmob.refresh(["soccer_epl"])
+    assert h["ok"] is False and "robots.txt interdit" in (h["last_error"] or "")
+    assert not [e for e in NET.log if "/leagues/" in e[0]]
+
+
+def test_betexplorer_parse_and_refresh():
+    html = fixture("betexplorer_ci_results.html").decode()
+    ms = betexplorer.parse_results(html, today=date(2026, 10, 8))
+    assert ms, "aucun match parsé"
+    m = next(x for x in ms if x["home"] == "ISCA")
+    assert m["away"] == "Bouake" and (m["hg"], m["ag"]) == (1, 0)
+    assert (m["o1"], m["ox"], m["o2"]) == (2.37, 2.82, 3.03) and m["mid"]
+    reporte = [x for x in ms if x["home"] == "Agboville"]
+    assert reporte == []                                            # POSTP. sans score : sauté
+    dated = [x for x in ms if x["d"]]
+    assert dated and dated[0]["d"] in ("2026-10-07", "2026-10-06", "2026-10-05"), dated[:2]
+    # date absolue « 06.10. » -> 2026-10-06
+    row = ('<tr><td><a href="/football/ivory-coast/ligue-1/zoman-korhogo/AAAA1111/">'
+           "<span><strong>Zoman</strong></span> - <span>Korhogo</span></a></td>"
+           '<td><a href="/x/">1:1</a></td><td data-odd="2.10"></td><td data-odd="3.20"></td>'
+           '<td data-odd="3.30"></td><td>06.10.</td></tr>')
+    ms2 = betexplorer.parse_results(row, today=date(2026, 10, 8))
+    assert ms2 and ms2[0]["d"] == "2026-10-06" and ms2[0]["hg"] == 1
+    # refresh réel avec faux réseau
+    fresh(serve=False)
+    NET.routes[f"https://{BX}/robots.txt"] = ROBOTS_OK
+    NET.routes[f"https://{BX}/football/ivory-coast/ligue-1/results/"] = Resp(200, html.encode())
+    h = betexplorer.refresh(["soccer_epl"])                         # epl absent -> erreur, extras actualisés
+    prof = betexplorer.profiles()
+    assert "africa_ivory_coast_ligue_1" in prof["leagues"], list(prof["leagues"])
+    assert prof["leagues"]["africa_ivory_coast_ligue_1"]["matches"][0]["o1"]
+    assert any("soccer_epl" in e for e in [h["last_error"] or ""]) or h["ok"] is True
+    # sans cotes (page vide) : erreur de structure, cache invalidé
+    for path in betexplorer.EXTRA_PATHS.values():
+        NET.routes[f"https://{BX}/football/{path}/results/"] = Resp(200, b"<html><table></table></html>")
+    h = betexplorer.refresh(["soccer_africa_egypt_premier_league"])
+    assert "structure" in (h["last_error"] or "")
+    # désactivée par env : aucun appel réseau, health inchangée
+    n = len(NET.log)
+    os.environ["BETEXPLORER_ENABLED"] = "0"
+    try:
+        assert betexplorer.refresh() == betexplorer.health() and len(NET.log) == n
+    finally:
+        os.environ.pop("BETEXPLORER_ENABLED")
+    assert "FotMob" in sources.report() and "BetExplorer" in sources.report()
+
+
+def test_new_sources_wired_in():
+    fresh(serve=False)
+    for d in (FM, BX, FD, US, FB):
+        NET.routes[f"https://{d}/robots.txt"] = ROBOTS_OK
+    names = [m.NAME for m in sources.SOURCES]
+    assert "fotmob" in names and "betexplorer" in names
+    assert sources.soccer_leagues(["soccer_epl"]) == ["soccer_epl"]
+    assert fotmob.leagues_for(["soccer_fifa_world_cup_qualifiers_"]) == sorted(
+        k for k in fotmob.SPORT_TO_LEAGUE if k.startswith("soccer_fifa_world_cup_qualifiers_")) + \
+        [k for k in sorted(fotmob.EXTRA_LEAGUES)]
 
 
 def main():

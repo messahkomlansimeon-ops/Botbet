@@ -195,19 +195,29 @@ def leg(n, c, reason=None):
     return "\n".join(lines)
 
 
-def combo(title, picks, odds_total, prob, stake, reasons=None):
-    """Message d'un combiné : titre et cote, chances et mise, puis les jambes (ligne vide entre deux)."""
+def expect(prob, odds_total):
+    """« espérance +6 % » : ce que rend la mise en moyenne à cette cote, d'après les probabilités de Kelly."""
+    return f"espérance {signed((prob * odds_total - 1) * 100, ' %')}"
+
+
+def played_hint(hint):
+    return f"\n\n{i(f'Joué chez 1xBet ? Note-le : {esc(hint)}')}" if hint else ""
+
+
+def combo(title, picks, odds_total, prob, stake, reasons=None, hint=None):
+    """Message d'un combiné : titre et cote, chances, espérance et mise, puis les jambes (ligne vide entre deux) et la commande
+    /joue pour le noter."""
     reasons = reasons or {}
     head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
-            i(f"{len(picks)} paris · {pct(prob)} de chances · mise conseillée : {units(stake)}")]
+            i(f"{len(picks)} paris · {pct(prob)} de chances · {expect(prob, odds_total)} · mise conseillée : {units(stake)}")]
     legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(legs))
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(legs) + played_hint(hint))
 
 
-def single(c, reason=None, title="⭐ PARI DU JOUR"):
+def single(c, reason=None, title="⭐ PARI DU JOUR", hint=None):
     """Pari du jour : une seule jambe."""
     head = [b(f"{title} — cote {odds_txt(c['odds'])}"), i(f"{pct(c['prob'])} de chances")]
-    return Html("\n".join(head) + "\n\n" + leg(None, c, reason))
+    return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + played_hint(hint))
 
 
 def pronos(items, limit=10):
@@ -232,11 +242,11 @@ def fair_leg(n, c):
                       f"   ↳ Kelly lui donne {pct(c['prob'])} de chances"])
 
 
-def fair_combo(min_total, picks, prob, stake):
+def fair_combo(min_total, picks, prob, stake, hint=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
     (mise indicative seulement), chaque jambe avec sa cote minimale."""
     head = [b(f"🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini {odds_txt(min_total)}"),
             i(f"{len(picks)} paris · {pct(prob)} de chances · mise indicative : {units(stake)} au plus (pas calculée sur ta bankroll)"),
             i("Kelly n'a pas vu les cotes de 1xBet : ces cotes sont ses minimums. Joue seulement si 1xBet paie au moins la cote "
               "indiquée sur CHAQUE pari (la cote totale sera alors d'au moins " + odds_txt(min_total) + "), sinon passe ton chemin.")]
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)))
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)) + played_hint(hint))

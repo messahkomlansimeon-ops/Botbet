@@ -9,6 +9,8 @@ Plancher de qualité (config.LEG_*) : une jambe sans raison n'entre dans aucun c
   stats  : le modèle d'avant-match (c["pm"]) voit au moins LEG_PM_GAP de proba de plus que les books
   sûr    : proba >= LEG_SAFE_PROB
 Réutilisation d'un match dans plusieurs combinés du jour : jambe sûre jusqu'à LEG_REUSE_MAX combinés, jambe risquée une fois.
+Espérance (proba x cote) : la marge du bookmaker se multiplie à chaque jambe. Un combiné sous C.COMBO_MIN_EV est rebâti avec les
+seules jambes de valeur positive (espérance du produit >= 1) ; s'il n'y en a pas assez, le palier saute.
 """
 import math
 
@@ -209,6 +211,21 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None):
     return best
 
 
+def ev(combo):
+    """Espérance d'un combiné (jambes, cote, proba) : ce que rend 1 u misée en moyenne (1 = à l'équilibre)."""
+    return combo[1] * combo[2]
+
+
+def best_with_ev(legs, min_odds, max_odds=None):
+    """best_combo, puis, si son espérance est sous C.COMBO_MIN_EV, le même avec les seules jambes de valeur positive.
+    -> (combiné | None, rejeté pour l'espérance ?)."""
+    combo = best_combo(legs, min_odds, max_odds)
+    if not combo or ev(combo) >= C.COMBO_MIN_EV:
+        return combo, False
+    combo = best_combo([c for c in legs if c.get("edge", 0) >= 0], min_odds, max_odds)
+    return (combo, False) if combo and ev(combo) >= C.COMBO_MIN_EV else (None, True)
+
+
 def make_combo(pool, min_odds, max_odds=None, max_legs=None):
     """Alias de best_combo (ancien nom)."""
     return best_combo(pool, min_odds, max_odds, max_legs)
@@ -216,15 +233,18 @@ def make_combo(pool, min_odds, max_odds=None, max_legs=None):
 
 # ---------- la journée ----------
 
-def plan(picks, tiers=None, usage=None):
+def plan(picks, tiers=None, usage=None, rejected=None):
     """Combinés du jour, palier par palier (dans l'ordre de config.COMBOS) : [(titre, combiné | None)]. Un palier sans
-    assez de jambes de qualité n'est pas bâti (None). `usage` est complété : les paris d'un combiné sont réutilisables selon
-    les règles de réutilisation (sûres jusqu'à LEG_REUSE_MAX combinés, risquées une seule fois)."""
+    assez de jambes de qualité, ou d'espérance négative (best_with_ev), n'est pas bâti (None) ; `rejected` reçoit les titres
+    sautés pour l'espérance. `usage` est complété : les paris d'un combiné sont réutilisables selon les règles de
+    réutilisation (sûres jusqu'à LEG_REUSE_MAX combinés, risquées une seule fois)."""
     usage = usage if usage is not None else Usage()
     out = []
     for title, lo, hi in (tiers if tiers is not None else C.COMBOS):
         legs = usage.filter(pool_for(title, picks))
-        combo = best_combo(legs, lo, hi)
+        combo, neg = best_with_ev(legs, lo, hi)
+        if neg and rejected is not None:
+            rejected.append(title)
         if combo:
             usage.add(combo[0])
         out.append((title, combo))
@@ -232,9 +252,19 @@ def plan(picks, tiers=None, usage=None):
 
 
 def custom(picks, target, usage=None):
-    """/combi <cote> : combiné à la cote visée (± C.CUSTOM_TOLERANCE) sur les jambes de qualité encore disponibles."""
+    """/combi <cote> : combiné à la cote visée (± C.CUSTOM_TOLERANCE) sur les jambes de qualité encore disponibles ; celui
+    d'espérance positive s'il existe, sinon le plus probable (demandé explicitement : l'appelant prévient)."""
     legs = (usage or Usage()).filter(make_pool(picks))
-    return best_combo(legs, target * (1 - C.CUSTOM_TOLERANCE), target * (1 + C.CUSTOM_TOLERANCE))
+    lo, hi = target * (1 - C.CUSTOM_TOLERANCE), target * (1 + C.CUSTOM_TOLERANCE)
+    combo, _ = best_with_ev(legs, lo, hi)
+    return combo or best_combo(legs, lo, hi)
+
+
+def ev_line(rejected):
+    """« Pas de Méchant/Monstre : espérance négative, la marge du bookmaker mangerait le gain. »"""
+    from . import fmt
+    names = "/".join(fmt.tier_word(t) for t in rejected)
+    return f"Pas de {names} : espérance négative aujourd'hui (la marge du bookmaker, multipliée à chaque pari, mangerait le gain)."
 
 
 def skip_line(missing, n_events, anything=True):

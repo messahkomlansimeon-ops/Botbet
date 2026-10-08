@@ -1,6 +1,6 @@
 {
- "when": "2026-10-08T16:01:53+00:00",
- "seconds": 332.8,
+ "when": "2026-10-08T20:25:19+00:00",
+ "seconds": 708.5,
  "leagues": [
   "soccer_epl",
   "soccer_spain_la_liga",
@@ -8,6 +8,8 @@
   "soccer_germany_bundesliga",
   "soccer_france_ligue_one",
   "soccer_uefa_champs_league",
+  "soccer_uefa_europa_league",
+  "soccer_uefa_europa_conference_league",
   "soccer_portugal_primeira_liga",
   "soccer_netherlands_eredivisie",
   "soccer_belgium_first_div",
@@ -29,12 +31,26 @@
   "soccer_norway_eliteserien",
   "soccer_finland_veikkausliiga",
   "soccer_league_of_ireland",
+  "soccer_fa_cup",
+  "soccer_england_efl_cup",
   "soccer_brazil_campeonato",
   "soccer_argentina_primera_division",
   "soccer_usa_mls",
   "soccer_mexico_ligamx",
+  "soccer_chile_campeonato",
+  "soccer_brazil_serie_b",
   "soccer_japan_j_league",
-  "soccer_china_superleague"
+  "soccer_korea_kleague1",
+  "soccer_saudi_arabia_pro_league",
+  "soccer_china_superleague",
+  "soccer_australia_aleague",
+  "soccer_africa_cup_of_nations",
+  "soccer_uefa_nations_league",
+  "soccer_fifa_world_cup_qualifiers_europe",
+  "soccer_fifa_world_cup_qualifiers_south_america",
+  "soccer_fifa_world_cup_qualifiers_afc",
+  "soccer_fifa_world_cup_qualifiers_concacaf",
+  "soccer_international_friendlies"
  ],
  "sources": {
   "footballdata": {
@@ -52,8 +68,20 @@
   "fbref": {
    "ok": false,
    "rows": 0,
-   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 15:59 UTC",
-   "blocked_until": "2026-10-09T15:59:30+00:00"
+   "error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 20:17 UTC",
+   "blocked_until": "2026-10-09T20:17:04+00:00"
+  },
+  "fotmob": {
+   "ok": true,
+   "rows": 1808,
+   "error": "soccer_international_friendlies : structure de la page modifiée : classement introuvable ; soccer_african_football_league : structure de la page modifiée : classement introuvable",
+   "blocked_until": null
+  },
+  "betexplorer": {
+   "ok": true,
+   "rows": 4369,
+   "error": "soccer_australia_aleague : structure de la page modifiée : aucun match avec cotes ; soccer_uefa_europa_conference_league : structure de la page modifiée : aucun match avec cotes ; africa_ethiopia_premier_league : structure de la page modifiée : aucun match avec cotes (+3)",
+   "blocked_until": null
   }
  },
  "profiles": {
@@ -87,20 +115,22 @@
   "bytes": 94061
  },
  "cache": {
-  "files": 178,
-  "bytes": 17162803
+  "files": 364,
+  "bytes": 61619137
  },
  "sample_match": {
   "match": "Arsenal - Aston Villa",
   "sources": [
    "football-data",
+   "FotMob",
    "modèle Kelly"
   ],
-  "fields": 25,
+  "fields": 28,
   "exp_corners": 9.14,
   "exp_cards": 4.0,
   "exp_fouls": 22.81,
-  "exp_shots_home": 15.76
+  "exp_shots_home": 15.76,
+  "exp_xg_total": 13.17
  },
  "sample_team": [
   "aps",
