@@ -52,6 +52,31 @@ def fetch(name, url, **kw):
         return None
 
 
+def probe_bookmaker():
+    """1xBet : règles robots et flux public des cotes (aucune authentification)."""
+    report = {}
+    for host in ("1xbet.com", "1xbet.ci", "1xbet.ng"):
+        r = fetch(f"bk_{host}_robots", f"https://{host}/robots.txt", headers=UA, allow_redirects=True)
+        if r is not None:
+            save(f"bk_{host}_robots.txt", r.text, limit=4000)
+            report[host] = {"robots_status": r.status_code, "final_url": r.url}
+        time.sleep(3)
+    feeds = {
+        "line_sports": "https://{h}/LineFeed/GetSportsShortZip?sports=1&lng=fr&country=1&partner=1&virtualSports=true",
+        "line_champs": "https://{h}/LineFeed/GetChampsZip?sport=1&lng=fr&country=1&partner=1",
+        "line_games": "https://{h}/LineFeed/Get1x2_VZip?sports=1&count=20&lng=fr&mode=4&country=1&partner=1&getEmpty=true",
+    }
+    for host in ("1xbet.com", "1xbet.ci"):
+        for name, url in feeds.items():
+            r = fetch(f"bk_{host}_{name}", url.format(h=host), headers=UA | {"Accept": "application/json"})
+            if r is not None:
+                save(f"bk_{host}_{name}.json", r.text, limit=5000)
+                report.setdefault(host, {})[name] = {"status": r.status_code, "type": r.headers.get("Content-Type"),
+                                                     "bytes": len(r.content)}
+            time.sleep(3)
+    save("bookmaker_report.json", json.dumps(report, indent=1))
+
+
 def main():
     present = {k: bool(os.environ.get(k)) for k in ("ODDS_API_KEY", "STATS_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")}
     save("secrets_presence.json", json.dumps(present, indent=1))     # noms seulement, jamais les valeurs

@@ -24,6 +24,9 @@ jobs:
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       # Test de bout en bout de kelly.sources en conditions réelles (dossier temporaire, aucun secret) : probe/sources_report.json
+      - name: Sonde bookmaker (1xBet, lecture seule)
+        if: ${{ !cancelled() }}
+        run: python tools/probe.py --bookmaker || true
       - name: Diagnostic Kelly (aucun crédit dépensé, message de test Telegram)
         if: ${{ !cancelled() }}
         run: python bot.py --check | tee probe/check.txt
