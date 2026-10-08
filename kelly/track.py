@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from . import combos as CB, config as C, learn, store
 
 FIELDS = ("key", "id", "sport_key", "group", "event", "home", "away", "league", "commence", "market",
-          "who", "point", "name", "pick", "odds", "best_odds", "prob", "book", "edge", "spread", "steam", "weight",
+          "who", "point", "name", "pick", "odds", "best_odds", "prob", "prob_book", "book", "edge", "spread", "steam", "weight",
           "score", "why", "n_books")
 
 
@@ -27,8 +27,10 @@ def _ts(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-def record(picks, sent_keys, day, now=None):
-    """Enregistre les envoyés + les TRACK_TOP meilleurs candidats (3 max par match)."""
+def record(picks, sent_keys, day, now=None, single_key=None):
+    """Enregistre les envoyés + les TRACK_TOP meilleurs candidats (3 max par match). `single_key` : clé du pari du jour (envoyé
+    seul, même s'il figure aussi dans un combiné) ; sa ligne reçoit r["single"] = True. `prob_book` : proba brute des bookmakers,
+    celle que la calibration (learn.calibrated) corrige."""
     now = now or datetime.now(timezone.utc)
     rows = load()
     known = {r["key"] for r in rows}
@@ -39,12 +41,14 @@ def record(picks, sent_keys, day, now=None):
         if c["key"] in known:
             r = next(r for r in rows if r["key"] == c["key"])
             r["sent"] = r["sent"] or c["key"] in sent_keys
+            if c["key"] == single_key:
+                r["single"] = True
             continue
         known.add(c["key"])
         rows.append({k: c.get(k) for k in FIELDS} | {
             "date": str(day), "sent": c["key"] in sent_keys, "taken_at": now.isoformat(timespec="minutes"),
             "features": learn.features(c, now), "close_odds": None, "close_prob": None, "closed_at": None,
-            "clv": None, "result": None})
+            "clv": None, "result": None} | ({"single": True} if c["key"] == single_key else {}))
         added += 1
     save(rows)
     return added

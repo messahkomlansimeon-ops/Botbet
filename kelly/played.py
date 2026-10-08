@@ -42,9 +42,12 @@ def _pick(items, day):
 
 
 def single_rows(rows, combos):
-    """Paris du jour envoyés seuls (le pari du jour) : lignes envoyées de tracked.json qui ne sont dans aucun combiné de leur date."""
+    """Paris du jour envoyés seuls (le pari du jour) : lignes envoyées de tracked.json marquées r["single"] (track.record : le
+    pari du jour peut aussi être une jambe d'un combiné). Anciennes lignes sans marque : celles qui ne sont dans aucun combiné
+    de leur date."""
     in_combo = {(c["date"], k) for c in combos for k in c["keys"]}
-    return [r for r in rows if r.get("sent") and (r["date"], r["key"]) not in in_combo]
+    return [r for r in rows if r.get("sent")
+            and (r["single"] if "single" in r else (r.get("date"), r["key"]) not in in_combo)]
 
 
 class Target:
@@ -181,13 +184,15 @@ def summary_lines(bets, rows, fair_rows, days=None, detail=False, today=None):
     if not its:
         return []
     done = [x for x in its if x[2].get("result") in ("win", "loss")]
+    unk = sum(1 for x in its if x[2].get("result") == "unknown")                # non vérifiables : ni gagnés ni perdus
+    unk_txt = f" ({unk} non vérifiable{'s' if unk > 1 else ''}, vérifie chez 1xBet)" if unk else ""
     lines = []
     if done:
         w = sum(1 for x in done if x[2]["result"] == "win")
         gain = sum(bankroll.played_gain(x[2]) for x in its if x[2].get("result") in bankroll.DONE)
-        lines.append(f"Joués chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} · résultat {fmt.signed(gain)}")
+        lines.append(f"Joués chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} · résultat {fmt.signed(gain)}{unk_txt}")
     else:
-        lines.append(f"Joués chez 1xBet : {len(its)} noté{'s' if len(its) > 1 else ''}, aucun réglé pour l'instant")
+        lines.append(f"Joués chez 1xBet : {len(its)} noté{'s' if len(its) > 1 else ''}, aucun réglé pour l'instant{unk_txt}")
     real = [x for x in its if x[0] == "réel"]
     if real:
         g = sum(_gap(x[2]["played"]["odds"], x[3]) for x in real) / len(real)
