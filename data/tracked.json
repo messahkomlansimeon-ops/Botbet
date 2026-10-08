@@ -136,10 +136,10 @@
 "group=soccer": 1.0,
 "book=Matchbook": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 2.05,
+"close_prob": 0.4623,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0523,
 "result": null
 },
 {
@@ -232,10 +232,10 @@
 "book=Matchbook": 1.0,
 "xg_diff": 0.45
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.78,
+"close_prob": 0.5362,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0332,
 "result": null
 },
 {
@@ -279,10 +279,10 @@
 "group=soccer": 1.0,
 "book=Matchbook": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 3.84,
+"close_prob": 0.2563,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0408,
 "result": null
 },
 {
@@ -376,10 +376,10 @@
 "group=soccer": 1.0,
 "book=Matchbook": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.8,
+"close_prob": 0.5274,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0274,
 "result": null
 },
 {
@@ -423,10 +423,10 @@
 "group=soccer": 1.0,
 "book=Pinnacle": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.78,
+"close_prob": 0.5354,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.1115,
 "result": null
 },
 {
@@ -568,10 +568,10 @@
 "group=soccer": 1.0,
 "book=Betfair": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 2.72,
+"close_prob": 0.3535,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": -0.0223,
 "result": null
 },
 {
@@ -665,10 +665,10 @@
 "group=soccer": 1.0,
 "book=Matchbook": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.58,
+"close_prob": 0.5941,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0434,
 "result": null
 },
 {
@@ -712,10 +712,10 @@
 "group=soccer": 1.0,
 "book=1xBet": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 2.12,
+"close_prob": 0.4513,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0595,
 "result": null
 },
 {
@@ -762,10 +762,10 @@
 "has_pm": 1.0,
 "gap_goals": 0.35
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.62,
+"close_prob": 0.5839,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0829,
 "result": null
 },
 {
@@ -809,10 +809,10 @@
 "group=soccer": 1.0,
 "book=Betfair": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 4.7,
+"close_prob": 0.2144,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": -0.0889,
 "result": null
 },
 {
@@ -859,10 +859,10 @@
 "has_pm": 1.0,
 "gap_goals": -0.35
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 2.28,
+"close_prob": 0.4161,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0087,
 "result": null
 },
 {
@@ -906,10 +906,10 @@
 "group=soccer": 1.0,
 "book=Matchbook": 1.0
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 2.38,
+"close_prob": 0.4059,
+"closed_at": "2026-10-08T22:05+00:00",
+"clv": 0.0331,
 "result": null
 },
 {

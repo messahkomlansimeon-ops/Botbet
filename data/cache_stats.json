@@ -15,9 +15,9 @@
 },
 "odds": {
 "hit": 0,
-"miss": 4,
+"miss": 6,
 "saved": 0,
-"spent": 7
+"spent": 11
 },
 "api-football": {
 "hit": 3,

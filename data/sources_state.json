@@ -15,5 +15,11 @@
 "blocked_until": "2026-10-09T13:07:06+00:00",
 "last_error": "bloquée par le site (robots.txt refusé par fbref.com), pas de nouvelle requête avant 2026-10-09 13:07 UTC",
 "rows": 0
+},
+"fotmob": {
+"rows": 2210,
+"ok": true,
+"last_error": "soccer_international_friendlies : structure de la page modifiée : classement introuvable ; soccer_african_football_league : structure de la page modifiée : classement introuvable",
+"last_success": "2026-10-08T22:16:28+00:00"
 }
 }
