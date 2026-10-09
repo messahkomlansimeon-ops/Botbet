@@ -103,6 +103,13 @@ Chaque matin, juste après le calcul des pronostics, Kelly lit chez 1xBet (1xbet
 - **Deux relevés par jour** : 04:00 (passage du matin) et 15:00 (`python bot.py --xbet`, timer `kelly-xbet.timer`). À 15:00, les pronostics du matin dont le match n'a pas commencé sont remis aux cotes 1xBet du moment (les marchés tirs, fautes... ouvrent souvent le jour même) ; `/top` et `/combi` les relisent, et un message « 💎 Nouvelles cotes 1xBet de l'après-midi » part seulement s'il y a de nouveaux paris jouables. Un match non retrouvé garde ses cotes du matin.
 - Vérifie toujours que la cote n'a pas baissé avant de valider.
 
+## Plus de championnats grâce à 1xBet (`kelly/xworld.py`)
+
+The Odds API ne liste qu'une soixantaine de championnats. Pour 46 autres que 1xBet propose et que FotMob couvre (`XB_LEAGUES` dans `config.py` : Roumanie, Croatie, Serbie, Tchéquie, Russie, Ukraine, deuxièmes divisions européennes, Colombie, Pérou, Équateur, Uruguay, Paraguay, Bolivie, Venezuela, USL, J2, K League 2, Qatar, Iran, Égypte, Maroc, Algérie...), la liste des matchs du jour vient de 1xBet (via le proxy, ~10 Ko par championnat), APRÈS l'achat des cotes The Odds API et les profils API-Football : ces championnats ne prennent ni crédit ni quota.
+- **Données** : classement FotMob (id vérifiés : pays et nom lus sur la page de la ligue) pour les buts attendus (buts et xG par match, avec l'avantage du terrain mesuré sur les derniers résultats du championnat, rapproché de la moyenne mondiale de 55 %), qualité modeste (0,30 à 0,50) ; puis les stats de match FotMob accumulées chaque heure (corners, tirs, fautes...).
+- **Cotes** : chaque match garde son id 1xBet, ses cotes sont lues directement ; mêmes règles que les autres (💎 seulement si la cote 1xBet est assez haute).
+- `XWORLD_ENABLED=0` revient aux seuls championnats de The Odds API.
+
 ## Touches, hors-jeu, fautes, tirs cadrés : stats de match FotMob
 Les pages de match de FotMob (HTML autorisé par robots.txt ; seul `/api/*` est interdit et n'est jamais appelé) donnent pour chaque équipe les **touches, hors-jeu, fautes, tirs, tirs cadrés, corners et cartons** (les cartons sont comptés sur le fil du match : la stat vaut parfois 0-0 à tort). La page d'une ligue liste tous les matchs de la saison avec leur lien : Kelly peut donc remonter l'historique d'une équipe, ce que le forfait gratuit d'API-Football interdit. `kelly/sources/fmmatch.py` :
 - **Quand** : à chaque passage horaire (11:05 à 22:05), `FM_PAGES_PER_RUN` (15) pages de match au plus en `FM_SECONDS` (80 s), jamais à 08:00 (déjà chargé). La page de la ligue, lue le matin, est relue depuis le cache. Une page pèse ~1 Mo et n'est jamais gardée : seules les stats vont dans `data/fm_matches.json` (compact, 12 derniers matchs par équipe).

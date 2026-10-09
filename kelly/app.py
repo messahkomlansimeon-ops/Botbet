@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, freeclose, learn, monde,
-               money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xprice)
+               money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xprice, xworld)
 from .sources import fmmatch, http
 from .telegram import Html
 
@@ -371,7 +371,7 @@ def world_report(scan, picks, day, now):
             print(f"[monde] prochains matchs ignorés : {e}", file=sys.stderr)
     try:
         xb = C.SOURCES_REFRESH and C.XBET_ENABLED
-        pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.SCAN_SECONDS, africa=africa, all_families=xb)
+        pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.FAIR_SECONDS, africa=africa, all_families=xb)
         if xb:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé
             xprice.apply(pronos)
         fair.record(pronos, day, shown=CB.best_per_match(pronos))     # suivis : les montrés + d'autres en silence (fiabilité)
@@ -449,6 +449,9 @@ def run_daily(sample=False):
             print(sources_message(picks), file=sys.stderr)       # détail technique : dans les logs et --check, pas dans Telegram
         except Exception as e:                      # noqa: BLE001
             print(f"[sources] rapport ignoré : {e}", file=sys.stderr)
+        # + championnats hors The Odds API proposés par 1xBet (via le proxy) : APRÈS l'achat des cotes et les profils API-Football,
+        # pour ne prendre ni crédit ni quota aux championnats de The Odds API
+        xworld.extend_scan(scan, day, now)
         world, pronos = world_report(scan, picks, day, now)
         if not scan.get("paid"):
             why = budget.why_not(len(C.FEATURED["soccer"].split(",")), "daily")

@@ -15,6 +15,12 @@ for _r in REGION_ORDER:
             _TIER2.add(_k)
 
 
+for _r, _rows in C.XB_LEAGUES.items():         # championnats vus par 1xBet + FotMob (kelly/xworld.py) : rang 2 de leur région
+    for _k, _n, _x, _f in _rows:
+        _INFO[_k] = (_r, _n)
+        _TIER2.add(_k)
+
+
 def _lookup(key):
     if key in _INFO:
         return _INFO[key], ""

@@ -459,7 +459,7 @@ def test_blocked_403_and_isolation():
     assert out["understat"]["ok"] is False and out["understat"]["blocked_until"]
     assert "bloquée" in out["understat"]["last_error"] and "403" in out["understat"]["last_error"]
     until = datetime.fromisoformat(out["understat"]["blocked_until"])
-    assert abs((until - datetime.fromtimestamp(CLOCK.t, timezone.utc)).total_seconds() - 24 * HOUR) < 300
+    assert abs((until - datetime.fromtimestamp(CLOCK.t, timezone.utc)).total_seconds() - 24 * HOUR) < 1800   # pages FotMob lues après
     # les autres sources ont tourné normalement
     assert out["footballdata"]["ok"] is True and out["footballdata"]["rows"] > 0
     assert out["fbref"]["ok"] is True and out["fbref"]["rows"] > 0
@@ -495,7 +495,7 @@ def test_blocked_403_and_isolation():
     fb = out["fbref"]
     assert fb["ok"] is False and "FBref bloque les robots (Cloudflare) : source désactivée" in fb["last_error"]
     until = datetime.fromisoformat(fb["blocked_until"])
-    assert abs((until - datetime.fromtimestamp(CLOCK.t, timezone.utc)).total_seconds() - 7 * 24 * HOUR) < 300
+    assert abs((until - datetime.fromtimestamp(CLOCK.t, timezone.utc)).total_seconds() - 7 * 24 * HOUR) < 1800
     assert len(NET.hits("fbref.com/en/comps")) == 1 and out["footballdata"]["ok"] and out["understat"]["ok"]
     assert "⛔ FBref bloque les robots (Cloudflare)" in sources.report()
     f = sources.match_features("Arsenal", "Man City", "soccer_epl")
@@ -599,7 +599,7 @@ def test_health_report_and_features():
     assert txt.count("✅") == 5 and all(n in txt for n in ("football-data", "Understat", "FBref", "FotMob", "BetExplorer")), txt
     assert len(txt.splitlines()) == 6
     total = sum(store.size(f) for f in store.names("src_"))
-    assert 0 < total < 100_000, total
+    assert 0 < total < 400_000, total            # ~60 ligues FotMob avec les championnats 1xBet (C.XB_LEAGUES)
     # le délai de 6 s est tenu entre les pages FBref
     ts = [e[2] for e in net.log if "fbref.com" in e[0]]
     assert all(b - a >= 6.0 for a, b in zip(ts, ts[1:]))

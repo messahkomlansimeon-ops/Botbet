@@ -55,7 +55,7 @@ EXP_KEY = {prematch.CORNERS: "exp_corners", prematch.CARDS: "exp_cards"} | {m: v
 SIDE_MARKETS = {"team_shots": "shots", "team_sot": "sot", "team_fouls": "fouls"}         # marchés par équipe de strength.lines (côté dans l["side"])
 DEEP_LINES = {"corners": (6.5, 13.5), "cards": (1.5, 7.5)}      # lignes de corners / cartons proposées avec le modèle approfondi
 DEEP_MIN_Q = 0.35          # qualité des données minimale pour se fier au modèle approfondi
-EVAL_MAX = 250             # matchs examinés au plus (le calcul est local, mais les profils sont cherchés par noms approchés)
+EVAL_MAX = 500             # matchs examinés au plus (le calcul est local, mais les profils sont cherchés par noms approchés)
 
 
 def shrink(p):
@@ -230,7 +230,7 @@ def make_pick(ev, market, name, point, p, tag, src):
             "market": market, "name": name, "point": point, "who": who, "group": "soccer",
             "pick": odds.label(market, name, point, who, "soccer"), "prob": round(p, 4), "p0": round(p0, 4), "fair": round(1 / p, 2),
             "min_odds": round(1 / p * (1 + C.FAIR_MARGIN), 2), "why": tag, "src": src,
-            "score": (p - 0.5) * C.MARKET_WEIGHT.get(market, 1.0)}
+            "score": (p - 0.5) * C.MARKET_WEIGHT.get(market, 1.0)} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {})
 
 
 def _with_base(c, base, q):

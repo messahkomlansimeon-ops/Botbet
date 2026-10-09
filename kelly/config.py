@@ -110,6 +110,59 @@ TOP_LEAGUES = ("soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", "so
                "soccer_france_ligue_one", "soccer_uefa_champs_league", "soccer_uefa_europa_league",
                "soccer_uefa_europa_conference_league")
 LEAGUE_KEYS = [k for r, _ in REGIONS for k, _ in CATALOGUE[r]]
+# Championnats hors The Odds API, analysés grâce à 1xBet (liste des matchs et cotes, kelly/xworld.py) et FotMob (classement et stats de
+# match ; id vérifiés : pays et nom lus sur la page de la ligue) : (clé Kelly, nom affiché, nom anglais chez 1xBet, id FotMob). Rang 2
+# dans leur région ; un championnat que 1xBet ne liste pas ce jour-là est simplement absent du relevé.
+XB_LEAGUES = {
+    "europe": [
+        ("soccer_xb_romania", "Liga 1 roumaine", "Romania. Liga 1", 189), ("soccer_xb_croatia", "HNL croate", "Croatia. HNL", 252),
+        ("soccer_xb_serbia", "SuperLiga serbe", "Serbia. SuperLiga", 182),
+        ("soccer_xb_czech", "Chance Liga tchèque", "Czech Republic. Chance Liga", 122),
+        ("soccer_xb_russia", "Premier Liga russe", "Russia. Premier League", 63),
+        ("soccer_xb_ukraine", "Premier Liga ukrainienne", "Ukraine. Premier League", 441),
+        ("soccer_xb_hungary", "NB I hongroise", "Hungary. NB I", 212), ("soccer_xb_bulgaria", "1re ligue bulgare", "Bulgaria. First League", 270),
+        ("soccer_xb_israel", "Ligat ha'Al", "Israel. Premier League", 127), ("soccer_xb_cyprus", "1re division chypriote", "Cyprus. First Division", 136),
+        ("soccer_xb_slovakia", "1re ligue slovaque", "Slovakia. Super League", 176), ("soccer_xb_slovenia", "PrvaLiga slovène", "Slovenia. League 1", 173),
+        ("soccer_xb_scotland_2", "Championship écossais", "Scotland. Championship", 123),
+        ("soccer_xb_netherlands_2", "Eerste Divisie", "Netherlands. Eerste Divisie", 111),
+        ("soccer_xb_portugal_2", "Liga Portugal 2", "Portugal. Segunda Liga", 185), ("soccer_xb_turkey_2", "1. Lig turque", "Turkey. TFF 1. Lig", 165),
+        ("soccer_xb_belgium_2", "Challenger Pro League", "Belgium. Challenger Pro League", 264),
+        ("soccer_xb_austria_2", "2. Liga autrichienne", "Austria. Second League", 119),
+        ("soccer_xb_switzerland_2", "Challenge League suisse", "Switzerland. Challenge League", 163),
+        ("soccer_xb_denmark_2", "1re division danoise", "Denmark. 1st Division", 85),
+        ("soccer_xb_norway_2", "1re division norvégienne", "Norway. Adeccoligaen", 203),
+        ("soccer_xb_poland_2", "I Liga polonaise", "Poland Championship. Liga 1", 197),
+        ("soccer_xb_northern_ireland", "Premiership nord-irlandaise", "Northern Ireland. IFA Premiership", 129),
+    ],
+    "ameriques": [
+        ("soccer_xb_colombia", "Primera A colombienne", "Colombia. Categoria Primera A", 274), ("soccer_xb_peru", "Liga 1 péruvienne", "Peru. Liga 1", 131),
+        ("soccer_xb_ecuador", "LigaPro équatorienne", "Ecuador. Serie A", 246),
+        ("soccer_xb_uruguay", "Primera uruguayenne", "Uruguay. Primera Division", 161),
+        ("soccer_xb_paraguay", "Primera paraguayenne", "Paraguay. Primera Division", 199),
+        ("soccer_xb_bolivia", "Primera bolivienne", "Bolivia. Primera Division", 144),
+        ("soccer_xb_venezuela", "Primera vénézuélienne", "Venezuela. Primera Division", 339),
+        ("soccer_xb_costa_rica", "Primera costaricienne", "Costa Rica. Primera Division", 121),
+        ("soccer_xb_guatemala", "Liga Nacional guatémaltèque", "Guatemala. Liga Nacional", 336),
+        ("soccer_xb_usl", "USL Championship", "USA. USL", 8972),
+        ("soccer_xb_argentina_2", "Primera Nacional argentine", "Argentina. Primera B Nacional", 8965),
+        ("soccer_xb_mexico_2", "Liga de Expansión MX", "Mexico. Liga de Expansion MX", 8976),
+        ("soccer_xb_brazil_c", "Brasileirão Série C", "Brazil. Campeonato Brasileiro Serie C", 8971),
+        ("soccer_xb_canada", "Premier League canadienne", "Canada. Premier League", 9986),
+    ],
+    "asie": [
+        ("soccer_xb_japan_2", "J2 League", "Japan. J-League Division 2", 8974), ("soccer_xb_korea_2", "K League 2", "South Korea. K League 2", 9116),
+        ("soccer_xb_qatar", "Qatar Stars League", "Qatar Championship", 535), ("soccer_xb_iran", "Persian Gulf Pro League", "Iran. Pro League", 523),
+        ("soccer_xb_indonesia", "Super League indonésienne", "Indonesia. Super League", 8983),
+        ("soccer_xb_china_2", "China League One", "China. League One", 9137),
+    ],
+    "afrique": [
+        ("africa_egypt_premier_league", "Premier League égyptienne", "Egypt. Premier League", 519),
+        ("africa_morocco_botola_pro", "Botola Pro marocaine", "Morocco. Botola", 530),
+        ("soccer_xb_algeria", "Ligue 1 algérienne", "Algeria. Ligue 1", 516),
+    ],
+}
+XB_KEYS = [row[0] for r, _ in REGIONS for row in XB_LEAGUES.get(r, ())]
+XWORLD_ENABLED = _bool("XWORLD_ENABLED", True)     # 0 : Kelly s'en tient aux championnats de The Odds API
 # Sports suivis, dans l'ordre de priorité (MAX_SPORTS coupe la fin). Une entrée se terminant par "_" est un préfixe de
 # clés The Odds API ; sinon c'est une clé exacte (soccer_uefa_champs_league n'attrape pas la version féminine).
 # Défaut : tout le catalogue ci-dessus, foot uniquement (réglable gratuitement). Élargis via la variable SPORTS
@@ -123,7 +176,8 @@ DAY_END_HOUR = _int("DAY_END_HOUR", 4)            # heure du passage du matin ; 
 LOCK_WAIT_MIN = _int("LOCK_WAIT_MIN", 20)         # le bot Telegram attend au plus ce temps (minutes) que le matin / le relevé horaire libère les données
 OUTBOX_MAX_HOURS = _int("OUTBOX_MAX_HOURS", 36)   # un message resté en attente d'envoi (réseau coupé) plus longtemps que ça est abandonné
 SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de toutes les ligues
-SOURCES_SECONDS = _int("SOURCES_SECONDS", 420)    # téléchargements des stats gratuites (le reste vient du cache)
+FAIR_SECONDS = _int("FAIR_SECONDS", 300)          # calcul des pronostics de tous les matchs du jour (championnats 1xBet compris)
+SOURCES_SECONDS = _int("SOURCES_SECONDS", 720)    # téléchargements des stats gratuites (le reste vient du cache)
 # Pronostics Kelly sans cote de bookmaker (kelly/fair.py) : proba du modèle + « cote juste » = 1 / proba.
 FAIR_MAX = _int("FAIR_MAX", 10)                   # pronostics détaillés dans le message du matin (5 si des combinés existent)
 FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json), montrés le matin
@@ -154,8 +208,8 @@ APISTATS_SECONDS = _int("APISTATS_SECONDS", 150)  # durée maximale du remplissa
 STATS_DATE_WINDOW = _int("STATS_DATE_WINDOW", 1)  # jours demandés autour d'aujourd'hui à /fixtures?date= (forfait gratuit : hier, aujourd'hui, demain)
 # ---- Stats de match FotMob (kelly/sources/fmmatch.py) : touches, hors-jeu, fautes, corners, tirs, cartons par équipe ----
 # Une page de match (~1 Mo) par match lu, jamais gardée brute ; remplissage étalé sur les passages horaires (pas celui de 08:00).
-FM_PAGES_PER_RUN = _int("FM_PAGES_PER_RUN", 15)   # pages de match lues par passage horaire (0 = désactivé)
-FM_SECONDS = _int("FM_SECONDS", 150)              # durée maximale du remplissage d'un passage (6 s entre deux pages FotMob)
+FM_PAGES_PER_RUN = _int("FM_PAGES_PER_RUN", 25)   # pages de match lues par passage horaire (0 = désactivé)
+FM_SECONDS = _int("FM_SECONDS", 170)              # durée maximale du remplissage d'un passage (6 s entre deux pages FotMob)
 FM_KEEP_MATCHES = 12                              # derniers matchs gardés par équipe
 FM_KEEP_DAYS = 150                                # matchs plus anciens ignorés ; équipe oubliée sans mise à jour depuis
 FM_RECENT_DAYS = 10                               # matchs gardés en entier pour le règlement des paris
@@ -179,12 +233,14 @@ FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0)
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
 # Cotes 1xBet (kelly/sources/xbet.py) : le prix exact des pronostics chez le bookmaker de l'utilisateur, lu le matin (gratuit, poli)
 XBET_ENABLED = os.environ.get("XBET_ENABLED", "1") != "0"
-XBET_SECONDS = _int("XBET_SECONDS", 480)            # temps maximal du relevé 1xBet du matin (3 s entre requêtes)
-XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 60)     # matchs relevés au plus (les mieux classés d'abord)
+XBET_SECONDS = _int("XBET_SECONDS", 1200)           # temps maximal du relevé 1xBet du matin (3 s entre requêtes)
+XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 150)    # matchs relevés au plus (les mieux classés d'abord) : ~2 Mo
 # Proxy de l'utilisateur pour 1xBet (celui de scrap_stat) : les relevés ne partent jamais de la connexion du compte 1xBet. XBET_PROXY
 # (variable d'environnement), sinon la ligne XBET_PROXY= de XBET_PROXY_FILE. Introuvable : pas de relevé (jamais en direct), sauf
 # XBET_DIRECT=1.
-XBET_PROXY_FILE = os.environ.get("XBET_PROXY_FILE") or os.path.expanduser("~/.config/scrap_stat/sofa.env")
+# Tests et --sample (DATA_DIR réglé) : jamais le vrai fichier de la machine, donc aucun relevé réel (XBET_PROXY pour un essai manuel).
+XBET_PROXY_FILE = os.environ.get("XBET_PROXY_FILE") or (os.path.join(os.environ["DATA_DIR"], "sofa.env") if os.environ.get("DATA_DIR")
+                                                         else os.path.expanduser("~/.config/scrap_stat/sofa.env"))
 XBET_DIRECT = _bool("XBET_DIRECT", False)
 XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)        # plafond mensuel de données 1xBet via le proxy (forfait 1 Go partagé avec SofaScore)
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll

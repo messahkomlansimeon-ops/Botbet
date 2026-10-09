@@ -112,8 +112,9 @@ def _understat(out, home, away, sport_key):
 
 
 def _fotmob(out, home, away, sport_key):
-    """xG attendu d'après les classements FotMob (repli d'Understat : couverture mondiale des ligues mappées)."""
-    lgid = fotmob.SPORT_TO_LEAGUE.get(sport_key)
+    """xG attendu d'après les classements FotMob (repli d'Understat : couverture mondiale des ligues mappées). Championnats vus par
+    1xBet seulement (fotmob.EXTRA_LEAGUES : Roumanie, Colombie...) : aussi les buts attendus du classement (_standings_goals)."""
+    lgid = fotmob.SPORT_TO_LEAGUE.get(sport_key) or fotmob.EXTRA_LEAGUES.get(sport_key)
     if lgid is None:
         return
     data = ((_p("fm", fotmob).get("leagues") or {}).get(sport_key) or {}).get("teams") or {}
@@ -121,11 +122,18 @@ def _fotmob(out, home, away, sport_key):
     if not h or not a or h == a:
         return
     hv, av = data[h], data[a]
+    extra = sport_key not in fotmob.SPORT_TO_LEAGUE
+    if extra:
+        matches = ((_p("fm", fotmob).get("leagues") or {}).get(sport_key) or {}).get("matches") or []
+        _standings_goals(out, h, a, hv, av, matches)
+        hs = home_share(matches)
     # Le classement xG de FotMob donne des TOTAUX de saison : par match = total / matchs joués.
     per = lambda t, k: t[k] / t["n"] if t.get(k) is not None and (t.get("n") or 0) >= MIN_N else None      # noqa: E731
     eh, ea = _mix(per(hv, "xg"), per(av, "xga")), _mix(per(av, "xg"), per(hv, "xga"))
     if eh is None or ea is None:
         return
+    if extra:                                     # classement saison (domicile + extérieur mêlés) : avantage du terrain du championnat
+        eh, ea = eh * 2 * hs, ea * 2 * (1 - hs)
     new = {k: _r(v) for k, v in (("exp_xg_home", eh), ("exp_xg_away", ea), ("exp_xg_total", eh + ea))
            if k not in out}
     if not new:
@@ -134,6 +142,42 @@ def _fotmob(out, home, away, sport_key):
     out["sources"].append("FotMob")
     if "exp_xg_home" in new:
         out["xg_src"] = "fotmob-classement"           # totaux de saison : _fmmatch les remplace par les xG des matchs récents s'il en a
+
+
+STANDINGS_Q = (0.30, 0.01, 0.50)      # qualité des buts tirés du classement : 0,30 + 0,01 par match joué (équipe la moins fournie), 0,50 au plus
+HOME_SHARE = (0.555, 60)              # part des buts marqués à domicile (moyenne mondiale) et son poids en matchs fictifs
+
+
+def home_share(matches):
+    """Part des buts marqués par l'équipe à domicile dans le championnat (derniers résultats FotMob), rapprochée de la moyenne mondiale
+    HOME_SHARE (30 matchs ne suffisent pas à la mesurer seule) : 0,555 = l'équipe qui reçoit marque 1,25 fois plus."""
+    prior, k = HOME_SHARE
+    done = [m for m in matches if m.get("hg") is not None and m.get("ag") is not None]
+    hg, tot = sum(m["hg"] for m in done), sum(m["hg"] + m["ag"] for m in done)
+    n = len(done)
+    share = hg / tot if tot else prior
+    return (n * share + k * prior) / (n + k)
+
+
+def _standings_goals(out, h, a, hv, av, matches=()):
+    """Buts attendus d'un match d'après le classement FotMob (buts marqués et encaissés par match, mêlés comme _expect) : seule
+    source de buts des championnats vus par 1xBet tant que les stats de match FotMob (fmmatch) ne sont pas accumulées. Qualité
+    modeste (STANDINGS_Q, dans aps_q : le modèle simple la reprend) ; rien sous MIN_N matchs joués."""
+    n = min(hv.get("n") or 0, av.get("n") or 0)
+    if n < MIN_N or "exp_goals_home" in out:
+        return
+    hs = home_share(matches)                  # le classement mêle domicile et extérieur : avantage du terrain du championnat
+    eh = _mix(hv["gf"] / hv["n"], av["ga"] / av["n"]) * 2 * hs
+    ea = _mix(av["gf"] / av["n"], hv["ga"] / hv["n"]) * 2 * (1 - hs)
+    lo, step, hi = STANDINGS_Q
+    out.update(exp_goals_home=_r(eh), exp_goals_away=_r(ea), exp_goals_total=_r(eh + ea))
+    out["sources"].append("FotMob (classement)")
+    out["aps_keys"] = sorted(set(out.get("aps_keys") or ()) | {"exp_goals_home", "exp_goals_away", "exp_goals_total"})
+    out["aps_q"] = round(min(hi, lo + step * n), 2)
+    out.setdefault("home_team", h)
+    out.setdefault("away_team", a)
+    out.setdefault("n_home", int(hv["n"]))
+    out.setdefault("n_away", int(av["n"]))
 
 
 def _fbref(out, home, away, sport_key):

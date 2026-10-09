@@ -63,6 +63,8 @@ LEAGUES = {
     "soccer_international_friendlies": "Friendlies. National Teams",
 }
 
+LEAGUES.update({k: x for rows in C.XB_LEAGUES.values() for k, _, x, _ in rows})      # championnats hors The Odds API (xworld)
+
 # Familles statistiques : type de sous-match 1xBet -> (marché total, marché équipe 1, marché équipe 2) de Kelly (None : pas chez Kelly)
 SUBGAMES = {2: ("alternate_totals_corners", None, None), 12: ("team_sot_total", "team_sot_home", "team_sot_away"),
             95: ("team_shots_total", "team_shots_home", "team_shots_away"),
@@ -114,7 +116,11 @@ def menu():
 
 
 def _name(o):
-    return (o or {}).get("fullName") or (o or {}).get("name") or ""
+    """Nom de l'équipe : l'anglais d'abord (« CSKA Moscow » plutôt que « CSKA Moscou ») : plus proche de FotMob et The Odds API."""
+    return (o or {}).get("fullNameEng") or (o or {}).get("fullName") or (o or {}).get("name") or ""
+
+
+_SPECIAL = re.compile(r"^(home|away|à domicile|à l'extérieur)\b|special", re.I)      # paris spéciaux présentés comme des matchs
 
 
 def parse_games(data):
@@ -122,6 +128,7 @@ def parse_games(data):
     return [{"gid": g["id"], "home": _name(g.get("opponent1")), "away": _name(g.get("opponent2")), "ts": g["startTs"]}
             for g in (data if isinstance(data, list) else []) if isinstance(g, dict) and g.get("id") and g.get("startTs")
             and g.get("id") == g.get("mainGameId", g["id"]) and _name(g.get("opponent1")) and _name(g.get("opponent2"))
+            and not _SPECIAL.search(_name(g.get("opponent1"))) and not _SPECIAL.search(_name(g.get("opponent2")))
             and (g.get("sport") or {}).get("id") in (1, None)]
 
 
@@ -302,50 +309,92 @@ def usage_line(u=None):
     return f"1xBet via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois ({u['requests']} requêtes), plafond {C.XBET_MONTH_MB:.0f} Mo"
 
 
-def fetch_day(events, deadline=None, max_matches=None, wanted=None):
-    """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
-    événement qui porte "xgid" (id 1xBet trouvé au relevé du matin) est lu directement, sans menu ni liste du championnat.
-    `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là). Passe par le proxy
-    (proxy() ; introuvable = aucun relevé, sauf C.XBET_DIRECT) ; s'arrête au délai `deadline` (time.monotonic), après
-    `max_matches` matchs ou au plafond mensuel C.XBET_MONTH_MB. Ne lève pas : erreurs dans state (rapport des sources)."""
-    out, errors, leagues, cat = {}, [], {}, None
-    max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches
-    if state.is_blocked(SOURCE):
-        return out
-    px_url = proxy()
-    if not px_url and not C.XBET_DIRECT:
-        state.record_run(SOURCE, 0, [f"proxy introuvable (XBET_PROXY ou {C.XBET_PROXY_FILE}) : aucun relevé, jamais en direct"])
-        return out
-    u, cap = usage(), C.XBET_MONTH_MB * 1e6
-    if px_url and u.get("session") and with_session(px_url, u["session"]):
-        px_url = with_session(px_url, u["session"])       # dernière session Webshare qui marchait
-    if px_url:
-        http.PROXIES[DOMAIN] = px_url
-    else:
-        http.PROXIES.pop(DOMAIN, None)
-    switches = [0]
+class _Session:
+    """Un relevé 1xBet : proxy (proxy() ; introuvable = rien, sauf C.XBET_DIRECT ; dernière session Webshare qui marchait), compteur
+    de données du mois et plafond C.XBET_MONTH_MB. `call(fn, *a)` : proxy en panne (502 du fournisseur, délai) -> session Webshare
+    suivante, MAX_SWITCH fois au plus ; jamais pour un refus de 1xBet (403/429 : source coupée 24 h par http.fetch)."""
 
-    def call(fn, *a):
-        """fn(*a) ; proxy en panne (502 du fournisseur, délai) : session Webshare suivante et nouvel essai, MAX_SWITCH fois au plus
-        par relevé. Jamais pour un refus de 1xBet (403/429 : source coupée 24 h par http.fetch)."""
+    def __init__(self):
+        self.u, self.cap, self.switches, self.why = usage(), C.XBET_MONTH_MB * 1e6, 0, None
+        self.url = proxy()
+        if state.is_blocked(SOURCE):
+            self.why = state.health(SOURCE)["last_error"] or "source bloquée"
+        elif not self.url and not C.XBET_DIRECT:
+            self.why = f"proxy introuvable (XBET_PROXY ou {C.XBET_PROXY_FILE}) : aucun relevé, jamais en direct"
+        elif self.u["bytes"] >= self.cap:
+            self.why = f"plafond mensuel atteint ({usage_line(self.u)}) : relevé sauté"
+        if self.url and self.u.get("session") and with_session(self.url, self.u["session"]):
+            self.url = with_session(self.url, self.u["session"])
+        if self.url:
+            http.PROXIES[DOMAIN] = self.url
+        else:
+            http.PROXIES.pop(DOMAIN, None)
+        self.start = dict(http.WIRE.get(DOMAIN, {"bytes": 0, "requests": 0}))
+
+    def full(self):
+        """Plafond du mois atteint (avec ce relevé) ou source bloquée en cours de route."""
+        return self.u["bytes"] + _spent(self.start)[0] >= self.cap or state.is_blocked(SOURCE)
+
+    def call(self, fn, *a):
         while True:
             try:
                 return fn(*a)
             except XbetError as e:
                 nxt = with_session(http.PROXIES.get(DOMAIN), (session_no(http.PROXIES.get(DOMAIN)) or 0) + 1)
-                if not nxt or switches[0] >= MAX_SWITCH or not any(k in str(e) for k in PROXY_FAIL):
+                if not nxt or self.switches >= MAX_SWITCH or not any(k in str(e) for k in PROXY_FAIL):
                     raise
-                switches[0] += 1
+                self.switches += 1
                 http.PROXIES[DOMAIN] = nxt
-                u["session"] = session_no(nxt)
-                print(f"[1xbet] proxy en panne ({e}) : session Webshare n° {u['session']}", file=sys.stderr)
-    start = dict(http.WIRE.get(DOMAIN, {"bytes": 0, "requests": 0}))
-    if u["bytes"] >= cap:
-        state.record_run(SOURCE, 0, [f"plafond mensuel atteint ({usage_line(u)}) : relevé sauté"])
+                self.u["session"] = session_no(nxt)
+                print(f"[1xbet] proxy en panne ({e}) : session Webshare n° {self.u['session']}", file=sys.stderr)
+
+    def close(self, what):
+        b, n = _save_usage(self.u, self.start)
+        print(f"[1xbet] {what} : {n} requête(s), {b / 1e3:.0f} Ko via {'le proxy' if self.url else 'la connexion directe'} ; "
+              f"{usage_line()}", file=sys.stderr)
+
+
+def list_leagues(keys, deadline=None):
+    """Matchs à venir chez 1xBet des championnats Kelly `keys` (C.XB_KEYS : hors The Odds API) : {clé: [{"gid", "home", "away",
+    "ts"}]}. Un menu + une liste (~10 Ko) par championnat proposé ce jour-là. Ne lève pas."""
+    out, errors, ses = {}, [], _Session()
+    if ses.why:
+        state.record_run(SOURCE, 0, [ses.why])
+        return out
+    try:
+        cat = ses.call(menu)
+    except XbetError as e:
+        ses.close("liste des championnats")
+        state.record_run(SOURCE, 0, [f"menu : {e}"])
+        return out
+    for key in keys:
+        if (deadline and time.monotonic() > deadline) or ses.full():
+            break
+        if LEAGUES.get(key) not in cat:
+            continue
+        try:
+            out[key] = ses.call(games, key, cat)
+        except XbetError as e:
+            errors.append(f"{key} : {e}")
+    ses.close(f"liste des matchs de {len(out)} championnat(s)")
+    state.record_run(SOURCE, sum(len(v) for v in out.values()), errors)
+    return out
+
+
+def fetch_day(events, deadline=None, max_matches=None, wanted=None):
+    """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
+    événement qui porte "xgid" (id 1xBet déjà connu : relevé du matin, championnat vu par 1xBet) est lu directement, sans menu ni
+    liste du championnat. `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là).
+    Voir _Session (proxy, plafond) ; s'arrête au délai `deadline` (time.monotonic) ou après `max_matches` matchs. Ne lève pas :
+    erreurs dans state (rapport des sources)."""
+    out, errors, leagues, cat = {}, [], {}, None
+    max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches
+    ses = _Session()
+    if ses.why:
+        state.record_run(SOURCE, 0, [ses.why])
         return out
     for key, ev in events:
-        if (len(out) >= max_matches or (deadline and time.monotonic() > deadline) or state.is_blocked(SOURCE)
-                or u["bytes"] + _spent(start)[0] >= cap):
+        if len(out) >= max_matches or (deadline and time.monotonic() > deadline) or ses.full():
             break
         if ev.get("xgid"):
             g = {"gid": ev["xgid"], "home": ev["home_team"], "away": ev["away_team"]}
@@ -354,8 +403,8 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
                 continue
             if key not in leagues:
                 try:
-                    cat = cat if cat is not None else call(menu)
-                    leagues[key] = call(games, key, cat)
+                    cat = cat if cat is not None else ses.call(menu)
+                    leagues[key] = ses.call(games, key, cat)
                 except XbetError as e:
                     errors.append(f"{key} : {e}")
                     leagues[key] = []
@@ -365,12 +414,10 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
             if not g:
                 continue
         try:
-            out[ev["id"]] = {"gid": g["gid"], "px": call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])} | {
-                "home": g["home"], "away": g["away"]}
+            out[ev["id"]] = {"gid": g["gid"], "px": ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"],
+                                                             ev["away_team"])} | {"home": g["home"], "away": g["away"]}
         except XbetError as e:
             errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")
-    b, n = _save_usage(u, start)
-    print(f"[1xbet] {n} requête(s), {b / 1e3:.0f} Ko via {'le proxy' if px_url else 'la connexion directe'} ; {usage_line()}",
-          file=sys.stderr)
+    ses.close(f"cotes de {len(out)} match(s)")
     state.record_run(SOURCE, len(out), errors)
     return out

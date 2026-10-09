@@ -93,7 +93,10 @@ def test_parse_and_url():
     assert out[("team_sot_total", "Over", 8.5)] == 1.81 and out[("team_sot_home", "Under", 4.5)] == 1.65
     assert out[("team_sot_away", "Over", 4.5)] == 1.95
     assert xbet.book_prob(out, "team_sot_total", "Over", 8.5) == round((1 / 1.81) / (1 / 1.81 + 1 / 1.95), 4)
-    assert [g["gid"] for g in xbet.parse_games(GAMES)] == [900, 901]                           # pas les sous-matchs (902)
+    assert [g["gid"] for g in xbet.parse_games(GAMES)] == [900]                    # ni paris spéciaux (901), ni sous-matchs (902)
+    eng = [{"id": 5, "mainGameId": 5, "startTs": KO, "opponent1": {"fullNameEng": "CSKA Moscow", "fullName": "CSKA Moscou"},
+            "opponent2": {"fullName": "Dynamo Moscou"}}]
+    assert xbet.parse_games(eng)[0]["home"] == "CSKA Moscow"                                    # nom anglais d'abord
     print("ok  lecture des cotes et adresses triées")
 
 
@@ -320,6 +323,41 @@ def test_afternoon_refresh():
     print("ok  relevé 1xBet de l'après-midi")
 
 
+def test_xworld_scan():
+    """Championnats hors The Odds API : matchs 1xBet du jour Kelly ajoutés au relevé avec leur id 1xBet, sans toucher aux autres."""
+    from datetime import date
+    from kelly import xworld
+    day = date(2026, 10, 9)
+    games = [{"gid": 1, "home": "FCSB", "away": "Rapid Bucuresti", "ts": KO},
+             {"gid": 2, "home": "CFR Cluj", "away": "Dinamo", "ts": KO + 2 * 86400}]          # après le jour Kelly : ignoré
+    scan = {"leagues": {"soccer_epl": [{"id": "x"}]}}
+    n = xworld.extend_scan(scan, day, lister=lambda keys: {"soccer_xb_romania": games, "soccer_epl": games})
+    ev = scan["leagues"]["soccer_xb_romania"]
+    assert n == 1 and len(ev) == 1 and ev[0]["xgid"] == 1 and ev[0]["id"] == "xb1" and ev[0]["sport_key"] == "soccer_xb_romania"
+    assert scan["leagues"]["soccer_epl"] == [{"id": "x"}], "un championnat déjà relevé n'est pas remplacé"
+    assert xworld.extend_scan({}, day, lister=lambda keys: {}) == 0
+    from kelly import catalogue
+    assert catalogue.region("soccer_xb_romania") == "europe" and catalogue.tier("soccer_xb_romania") == 2
+    assert "soccer_xb_romania" in C.XB_KEYS and "soccer_xb_romania" not in C.SPORTS, "jamais acheté chez The Odds API"
+    from kelly import fair
+    c = fair.make_pick(ev[0], "totals", "Under", 2.5, 0.62, "x", "FotMob")
+    assert c["xgid"] == 1, "le pronostic garde l'id 1xBet : cotes lues directement"
+    # buts attendus tirés du classement FotMob, avec l'avantage du terrain du championnat (rapproché de la moyenne mondiale)
+    from kelly.sources import features
+    assert features.home_share([]) == features.HOME_SHARE[0]
+    home_heavy = [{"hg": 3, "ag": 0}] * 60
+    assert 0.555 < features.home_share(home_heavy) < 1.0
+    out = {"sources": []}
+    hv, av = {"n": 10, "gf": 15, "ga": 10, "w": 5, "pts": 17}, {"n": 10, "gf": 15, "ga": 10, "w": 5, "pts": 17}
+    features._standings_goals(out, "A", "B", hv, av)
+    assert out["exp_goals_home"] > out["exp_goals_away"], "à forces égales, l'équipe qui reçoit marque plus"
+    assert out["aps_q"] == 0.4 and out["n_home"] == 10 and "FotMob (classement)" in out["sources"]
+    few = {"sources": []}
+    features._standings_goals(few, "A", "B", hv | {"n": 2}, av)
+    assert "exp_goals_home" not in few, "moins de 3 matchs joués : pas de chiffres"
+    print("ok  championnats hors The Odds API ajoutés depuis 1xBet")
+
+
 def main():
     test_parse_and_url()
     test_find_match()
@@ -328,6 +366,7 @@ def main():
     test_choose_line_and_viability()
     test_apply_and_messages()
     test_afternoon_refresh()
+    test_xworld_scan()
     print("tests 1xBet : OK")
 
 
