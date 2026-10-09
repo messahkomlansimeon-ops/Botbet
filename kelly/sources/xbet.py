@@ -27,8 +27,7 @@ from .. import config as C, stats, store
 from . import http, names, state
 
 SOURCE = "xbet"
-COUPON_RETRIES = 1            # 2e tentative quand 1xBet refuse un code (refus intermittents)
-COUPON_RETRY_WAIT = 2.0       # secondes avant
+COUPON_BACKOFF = (2.0, 5.0, 10.0)   # attentes (s) avant chaque nouvel essai quand 1xBet refuse un code (refus intermittents) : 17 s au plus
 DOMAIN = "1xbet.ci"
 BASE = "https://" + DOMAIN
 FEED = BASE + "/service-api/main-line-feed/v3/"
@@ -598,14 +597,14 @@ def save_coupon(legs):
         except Exception as e:                      # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
             _coupon_fail(f"{type(e).__name__}: {e}", legs)
         return None, False
-    # refus intermittents de 1xBet (même ticket accepté quelques minutes plus tard) : une 2e tentative, seulement après un « non »
-    # explicite de 1xBet (Success false, réponse sans code) : aucun ticket n'a été créé
+    # refus intermittents de 1xBet (même ticket accepté quelques minutes plus tard) : nouveaux essais à attente croissante
+    # (COUPON_BACKOFF), seulement après un « non » explicite de 1xBet (Success false, réponse sans code) : aucun ticket n'a été créé
     try:
         code, again = attempt()
-        for _ in range(COUPON_RETRIES):
+        for wait in COUPON_BACKOFF:
             if code or not again:
                 break
-            time.sleep(COUPON_RETRY_WAIT)
+            time.sleep(wait)
             code, again = attempt()
         return code
     finally:

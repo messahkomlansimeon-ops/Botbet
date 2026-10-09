@@ -408,14 +408,15 @@ def test_save_coupon():
 
     # Échec applicatif Success: false -> None
     err_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": False, "Error": "Erreur"}).encode("utf-8"), 200)
-    with patch("kelly.sources.http.post", return_value=err_res) as m, patch("kelly.sources.xbet.time.sleep"):
+    with patch("kelly.sources.http.post", return_value=err_res) as m, patch("kelly.sources.xbet.time.sleep") as sl:
         assert xbet.save_coupon(legs) is None
-        assert m.call_count == 1 + xbet.COUPON_RETRIES             # refus : une 2e tentative, pas plus
+        assert m.call_count == 1 + len(xbet.COUPON_BACKOFF)          # refus : un essai par attente, pas plus
+        assert [c.args[0] for c in sl.call_args_list] == list(xbet.COUPON_BACKOFF) == sorted(xbet.COUPON_BACKOFF)    # attentes croissantes
 
     # Refus intermittent puis accepté : le code de la 2e tentative
     ok_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": True, "Value": "AP89E"}).encode("utf-8"), 200)
-    with patch("kelly.sources.http.post", side_effect=[err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"):
-        assert xbet.save_coupon(legs) == "AP89E"
+    with patch("kelly.sources.http.post", side_effect=[err_res, err_res, ok_res]), patch("kelly.sources.xbet.time.sleep") as sl:
+        assert xbet.save_coupon(legs) == "AP89E" and sl.call_count == 2       # accepté au 3e essai : on s'arrête là
 
     # Entrées invalides -> None, ne lève jamais
     assert xbet.save_coupon([]) is None
