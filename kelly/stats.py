@@ -387,7 +387,7 @@ def _stale(day, lst, fetched=None):
     téléchargement (time.time()), None si inconnue (ancien cache : on ne devine pas)."""
     if str(day) < _today() and any(f.get("status") in PENDING or "gh" not in f for f in lst):
         return True
-    if fetched and str(day) <= _today():
+    if fetched and str(day) == _today():           # jours passés : la règle précédente suffit (un match non terminé)
         try:
             return fetched < datetime.fromisoformat(str(day)[:10]).replace(tzinfo=timezone.utc).timestamp()
         except ValueError:

@@ -419,7 +419,7 @@ def combo_row(target, combo, day, stake=None, cur=None):
     legs, min_total, prob = combo
     return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
             "keys": [c["key"] for c in legs], "legs": [{k: c.get(k) for k in LEG_FIELDS} | {"result": None} for c in legs],
-            "result": None} | ({"stake": stake, "cur": cur} if stake else {})
+            "result": None} | ({} if stake is None else {"stake": stake} | ({"cur": cur} if stake else {}))   # mise 0 : pari sans mise
 
 
 def record_combos(sent, day, stakes=None, cur=None):

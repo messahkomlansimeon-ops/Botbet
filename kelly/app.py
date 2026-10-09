@@ -77,7 +77,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     stakes, spent, kept, poor = day_stakes(top, built, built_fair)
     cur = money.cur()
     if fair_stakes is not None:
-        fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple)) if st})
+        fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple))})   # 0 compris
     mise = lambda st: (money.money(st) if st else "pas de mise (trop petite pour ton budget)") if money.active() else None    # noqa: E731
     if picks:
         n_world = monde.total(world) if world else 0

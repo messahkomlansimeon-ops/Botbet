@@ -108,7 +108,7 @@ def find(word, day):
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
         if not c:
             return f"Pas de combiné à vérifier « cote mini {w[1:]} » à noter (ni aujourd'hui ni en attente de résultat)."
-        return Target(c, c["min_odds"], c["stake"] if c.get("cur") else CB.fair_stake(c["min_odds"]), f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])}) "
+        return Target(c, c["min_odds"], c["stake"] if c.get("cur") or c.get("stake") == 0 else CB.fair_stake(c["min_odds"]), f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])}) "
                       f"du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows), "cote mini")
     return None
 
