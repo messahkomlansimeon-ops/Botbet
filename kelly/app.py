@@ -885,7 +885,7 @@ def _handle_command(text):
     if cmd in ("/joue", "/joué", "/jouer"):
         return played.command(args, today.get("day") or now_utc().date())
     if cmd in ("/monde", "/ligues"):
-        data = monde.load(now_utc().date())
+        data = monde.load(monde.kelly_day(now_utc()))
         return monde.fmt_monde(data, " ".join(args)) if cmd == "/monde" else monde.fmt_ligues(data)
     pronos = today.get("pronos") or []
     if not picks and not pronos:

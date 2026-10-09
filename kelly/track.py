@@ -6,7 +6,8 @@ clôture) : positif = la cote a baissé après notre prise, on a pris mieux que
 le marché final, quel que soit le résultat.
 """
 import math
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import date, datetime, timedelta, timezone
 
 from . import combos as CB, config as C, learn, store
 
@@ -19,8 +20,46 @@ def load():
     return store.load("tracked.json", [])
 
 
+def _archive(old):
+    """Ajoute les lignes réglées anciennes à data/archive/tracked-AAAA.json (par année de leur date, sans doublon date+clé)."""
+    by_year = {}
+    for r in old:
+        by_year.setdefault(str(r.get("date") or "")[:4] or "0000", []).append(r)
+    os.makedirs(os.path.dirname(store.path("archive/x")), exist_ok=True)
+    for year, rows in by_year.items():
+        name = f"archive/tracked-{year}.json"
+        cur = store.load(name, [])
+        cur = cur if isinstance(cur, list) else []
+        have = {(x.get("date"), x.get("key")) for x in cur}
+        cur += [r for r in rows if (r.get("date"), r.get("key")) not in have]
+        store.save(name, cur, compact=True)
+
+
+def prune(rows):
+    """-> (lignes gardées, lignes à archiver) : réglées (result non nul) ET plus vieilles que C.TRACK_KEEP_DAYS jours avant la
+    dernière date suivie. Les lignes sans date lisible restent."""
+    try:
+        last = max(date.fromisoformat(str(r["date"])[:10]) for r in rows if r.get("date"))
+    except (ValueError, KeyError):
+        return rows, []
+    cut = str(last - timedelta(days=C.TRACK_KEEP_DAYS))
+    old = [r for r in rows if r.get("result") is not None and str(r.get("date") or "9999") < cut]
+    if not old:
+        return rows, []
+    gone = {id(r) for r in old}
+    return [r for r in rows if id(r) not in gone], old
+
+
 def save(rows):
-    store.save("tracked.json", rows)
+    """Écrit tracked.json court : les lignes réglées de plus de C.TRACK_KEEP_DAYS jours passent dans l'archive annuelle
+    (data/archive/tracked-AAAA.json) ; l'apprentissage (learn.update) n'a besoin que des derniers mois."""
+    keep, old = prune(rows)
+    if old:
+        try:
+            _archive(old)
+        except Exception:                 # archive impossible : on garde tout dans le fichier courant plutôt que de perdre des lignes
+            keep = rows
+    store.save("tracked.json", keep)
 
 
 def _ts(s):
@@ -37,18 +76,25 @@ def record(picks, sent_keys, day, now=None, single_key=None):
     ranked = sorted(CB.per_event(picks, k=3), key=lambda c: c["score"], reverse=True)
     chosen = [c for c in ranked[:C.TRACK_TOP]] + [c for c in picks if c["key"] in sent_keys]
     added = 0
+    has_single = any(r.get("single") is True and r.get("date") == str(day) for r in rows)      # relance du matin : un seul pari du jour par date
     for c in chosen:
         if c["key"] in known:
             r = next(r for r in rows if r["key"] == c["key"])
             r["sent"] = r["sent"] or c["key"] in sent_keys
-            if c["key"] == single_key:
-                r["single"] = True
+            if c["key"] == single_key and r.get("single") is not True:
+                r["single"] = not has_single              # False : deuxième « top » du jour, que played.single_rows ne doit pas deviner
+                has_single = has_single or r["single"]
             continue
         known.add(c["key"])
-        rows.append({k: c.get(k) for k in FIELDS} | {
+        single = c["key"] == single_key and not has_single
+        row = {k: c.get(k) for k in FIELDS} | {
             "date": str(day), "sent": c["key"] in sent_keys, "taken_at": now.isoformat(timespec="minutes"),
             "features": learn.features(c, now), "close_odds": None, "close_prob": None, "closed_at": None,
-            "clv": None, "result": None} | ({"single": True} if c["key"] == single_key else {}))
+            "clv": None, "result": None} | ({"single": True} if single else {})
+        if c["key"] == single_key and not single:        # deuxième « top » du jour : ni pari du jour, ni mise du budget
+            row |= {"single": False, "stake": None, "cur": None}
+        rows.append(row)
+        has_single = has_single or single
         added += 1
     save(rows)
     return added

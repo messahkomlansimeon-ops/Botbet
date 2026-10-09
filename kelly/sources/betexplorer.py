@@ -10,7 +10,7 @@ au plus BETEXPLORER_KEEP matchs par ligue. Les matchs reportés ou sans cote son
 """
 import os
 import re
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from .. import store
 from . import http, state
@@ -84,17 +84,32 @@ def _f(v):
 
 
 def _date(label, today):
-    """« Yesterday », « 06.10. », « 07.10. 18:00 » -> date ISO (selon la date de relevé)."""
+    """« Yesterday », « 06.10. », « 07.10. 18:00 », « 06.10.2025 » -> date ISO (selon la date de relevé `today`).
+    Sans année, la page ne liste que des matchs passés : une date postérieure à `today` est celle de l'année précédente
+    (relevé début janvier, match fin décembre)."""
     t = _txt(label).split(" ")[0].lower()
-    d = today
+    d = today.date() if isinstance(today, datetime) else today
     if t == "yesterday":
         return (d.fromordinal(d.toordinal() - 1)).isoformat() if d else None
     if t == "today":
         return d.isoformat() if d else None
-    m = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.", t)
-    if m and d:
+    m = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.(\d{4})?", t)
+    if m:
         try:
-            return date(d.year, int(m.group(2)), int(m.group(1))).isoformat()
+            if m.group(3):
+                return date(int(m.group(3)), int(m.group(2)), int(m.group(1))).isoformat()
+            if not d:
+                return None
+            try:
+                x = date(d.year, int(m.group(2)), int(m.group(1)))
+            except ValueError:                        # 29.02. : l'année du relevé n'est pas bissextile
+                return date(d.year - 1, int(m.group(2)), int(m.group(1))).isoformat()
+            if x > d + timedelta(days=1):             # date future : l'année précédente
+                try:
+                    x = date(d.year - 1, int(m.group(2)), int(m.group(1)))
+                except ValueError:
+                    return None
+            return x.isoformat()
         except ValueError:
             return None
     return None
@@ -117,7 +132,7 @@ def parse_results(html, today=None):
         if not home or not away:
             continue
         d = None
-        dm = re.search(r">(\d{1,2}\.\d{1,2}\.\s*\d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.|Yesterday|Today)<", row)
+        dm = re.search(r">(\d{1,2}\.\d{1,2}\.\s*\d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{4}|\d{1,2}\.\d{1,2}\.|Yesterday|Today)<", row)
         if dm:
             d = _date(dm.group(1), today)
         out.append({"d": d, "home": home, "away": away, "hg": int(score.group(1)), "ag": int(score.group(2)),
@@ -152,7 +167,7 @@ def refresh(sport_keys=None):
             if not res.ok:
                 errors.append(f"{key} : {res.error}")
                 continue
-            matches = parse_results(res.text)
+            matches = parse_results(res.text, state.now().date())
             if not matches:
                 errors.append(f"{key} : structure de la page modifiée : aucun match avec cotes")
                 http.invalidate(u)

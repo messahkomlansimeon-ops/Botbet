@@ -6,7 +6,7 @@ d'API-Football (sans cotes) et, les jours sans match, les prochains jours. Petit
 ~15 Ko. Les passages horaires et les commandes ne le relisent que, sans appel réseau.
 """
 import html
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from . import catalogue, config as C, store
 
@@ -51,6 +51,14 @@ def _hhmm(ts):
 
 def save(data):
     store.save(FILE, data)
+
+
+def kelly_day(now=None):
+    """Jour Kelly en cours : le relevé de 08:00 UTC du jour D vaut jusqu'au lendemain C.DAY_END_HOUR h UTC, donc avant cette heure
+    le jour courant est celui de la veille (datetime aware UTC ou naïf ; défaut : maintenant)."""
+    from datetime import timezone
+    now = now or datetime.now(timezone.utc)
+    return now.date() - timedelta(days=1) if now.hour < C.DAY_END_HOUR else now.date()
 
 
 def load(day=None):

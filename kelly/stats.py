@@ -171,7 +171,8 @@ def get(path, **params):
 # --- Noms d'équipes -------------------------------------------------------
 
 _STOP = {"fc", "afc", "cf", "sc", "ac", "as", "de", "the", "club", "ssc", "fk", "sk", "cd", "ud",
-         "rc", "calcio", "sv", "vfb", "vfl", "tsg", "1", "cp", "ca", "of", "and", "e", "y", "1899", "bk", "if", "ik"}
+         "rc", "calcio", "sv", "vfb", "vfl", "tsg", "1", "cp", "ca", "of", "and", "e", "y", "1899", "bk", "if", "ik",
+         "bsc", "kv", "ksv", "krc", "kaa", "rsc", "kvc", "kfco"}      # préfixes de club (« BSC Young Boys », « Cercle Brugge KSV »)
 # Écarts fréquents Odds API / API-Football (clés et valeurs déjà normalisées).
 _ALIAS = {
     "inter milan": "inter", "internazionale": "inter", "internazionale milano": "inter",
@@ -196,6 +197,10 @@ _ALIAS = {
     # Brésil : The Odds API et API-Football ne nomment pas les clubs pareil
     "atletico mg": "atletico mineiro", "athletico pr": "athletico paranaense", "atletico pr": "athletico paranaense",
     "atletico paranaense": "athletico paranaense",
+    # abréviations de football-data (sans apostrophe : « Nott'm Forest » -> « nottm forest », « M'gladbach » -> « mgladbach »)
+    "sp lisbon": "sporting", "qpr": "queens park rangers", "nott m forest": "nottingham forest", "mgladbach": "monchengladbach",
+    "m gladbach": "monchengladbach", "sp gijon": "sporting gijon", "la coruna": "deportivo la coruna", "hertha": "hertha berlin",
+    "for sittard": "fortuna sittard", "nijmegen": "nec nijmegen", "hibs": "hibernian",
 }
 # Sigles d'États brésiliens en fin de nom (« Nautico PE », « Atletico MG ») : retirés pour comparer, jamais pour confondre deux
 # États (« Atletico MG » n'est pas « Atletico GO »).
@@ -205,14 +210,17 @@ _STATES = {"pe", "mg", "sp", "rj", "rs", "pr", "ba", "ce", "go", "pb", "rn", "df
 GENERIC = {"atletico", "athletic", "athletico", "independiente", "inter", "sporting", "sport", "sports", "club", "america", "nacional",
            "united", "city", "town", "county", "real", "royal", "deportivo", "deportes", "deportiva", "union", "racing", "dinamo",
            "olympic", "rovers", "wanderers", "albion", "rangers", "juniors", "central", "universidad", "academico", "al", "el", "la",
-           "los", "las", "san", "santa", "sao", "saint", "st", "new", "north", "south", "east", "west", "young", "boys", "athletics",
+           "los", "las", "st", "santa", "sao", "new", "north", "south", "east", "west", "athletics",
            "olympique", "internacional", "internazionale", "alianza", "libertad"}
-_TOKEN_ALIAS = {"utd": "united", "dynamo": "dinamo", "jrs": "juniors", "rvs": "rovers"}
+_TOKEN_ALIAS = {"utd": "united", "dynamo": "dinamo", "jrs": "juniors", "rvs": "rovers",
+                "sint": "st", "saint": "st", "sankt": "st", "san": "st"}      # « Sint Truiden » = « St Truiden », « Saint-Etienne » = « St Etienne »
+_TRANSLIT = str.maketrans({"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "ł": "l", "Ł": "L", "đ": "d", "Đ": "D",
+                           "ß": "ss", "ı": "i", "ð": "d", "Ð": "D", "þ": "th", "Þ": "Th", "ħ": "h", "Ħ": "H"})   # lettres sans décomposition NFKD
 _MARK = re.compile(r"^(w|women|fem|ii|iii|b|u\d\d|youth|reserves|res)$")
 
 
 def _norm(s):
-    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+    s = unicodedata.normalize("NFKD", str(s).translate(_TRANSLIT)).encode("ascii", "ignore").decode().lower()
     return " ".join(re.sub(r"[^a-z0-9 ]+", " ", s.replace("&", " and ")).split())
 
 
@@ -238,7 +246,7 @@ def _initials(toks):
 
 def _team_key(name):
     """(nom canonique, marqueurs femmes/jeunes/réserve) d'une équipe."""
-    n = _norm(name)
+    n = _norm(str(name).replace("'", "").replace("\u2019", "").replace("\u2018", "").replace("`", ""))     # « Newell's » = « Newells »
     n = _ALIAS.get(n, n)
     toks = _initials(n.split())
     if len(toks) >= 2 and toks[-1] in _STATES:
@@ -246,6 +254,28 @@ def _team_key(name):
     marks = frozenset(t for t in toks if _MARK.match(t))
     kept = " ".join(_TOKEN_ALIAS.get(t, t) for t in toks if t not in _STOP and t not in marks)
     return _ALIAS.get(kept, kept), marks
+
+
+def _fold_initials(na, nb):
+    """« estudiantes la plata » ~ « estudiantes lp » : une suite de mots d'un nom dont les initiales forment un sigle de l'autre est
+    remplacée par ce sigle (« L.P. » = « La Plata »). -> (na, nb) repliés."""
+    def fold(x, y):                       # y dont les suites de mots épelant un sigle de x sont remplacées par ce sigle
+        xs, ys = x.split(), y.split()
+        for t in xs:
+            if 2 <= len(t) <= 4 and t not in ys:
+                for i in range(len(ys) - len(t) + 1):
+                    if "".join(w[0] for w in ys[i:i + len(t)]) == t and all(len(w) > 1 for w in ys[i:i + len(t)]):
+                        ys = ys[:i] + [t] + ys[i + len(t):]
+                        break
+        return " ".join(ys)
+    return fold(nb, na), fold(na, nb)
+
+
+def distinct_overlap(a, b):
+    """Nombre de mots non génériques communs aux noms canoniques de `a` et `b` (départage les égalités de best_team)."""
+    (na, _), (nb, _) = _team_key(a), _team_key(b)
+    na, nb = _fold_initials(na, nb)
+    return len((set(na.split()) & set(nb.split())) - GENERIC)
 
 
 def _same_word(x, y):
@@ -268,6 +298,7 @@ def team_sim(a, b):
     sa, sb = _state(a), _state(b)
     if sa and sb and sa != sb:
         return 0.0
+    na, nb = _fold_initials(na, nb)
     ta, tb = set(na.split()), set(nb.split())
     if na == nb:
         return 1.0 if sa == sb else (0.88 if ta - GENERIC else 0.0)      # « Atletico GO » n'est pas « Atletico » tout court
@@ -349,10 +380,19 @@ def _entry(f):
     return e
 
 
-def _stale(day, lst):
+def _stale(day, lst, fetched=None):
     """Liste en cache d'un jour PASSÉ qui contient un match non terminé (ou sans buts, ancien format) :
-    le cache du matin (statut NS) bloquerait le règlement."""
-    return str(day) < _today() and any(f.get("status") in PENDING or "gh" not in f for f in lst)
+    le cache du matin (statut NS) bloquerait le règlement. Aussi : liste du jour `day` téléchargée AVANT son début (préchargement
+    de la veille, africa_matches) alors que `day` a commencé : horaires et statuts d'hier, à rafraîchir. `fetched` : heure de
+    téléchargement (time.time()), None si inconnue (ancien cache : on ne devine pas)."""
+    if str(day) < _today() and any(f.get("status") in PENDING or "gh" not in f for f in lst):
+        return True
+    if fetched and str(day) <= _today():
+        try:
+            return fetched < datetime.fromisoformat(str(day)[:10]).replace(tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            return False
+    return False
 
 
 def _fx_load():
@@ -366,14 +406,15 @@ def _fx_load():
 def _day_fixtures(day):
     """Tous les matchs du jour (UTC), en un seul appel par jour, mis en cache.
     - jour passé dont tous les matchs sont terminés : pour toujours, zéro requête ;
-    - aujourd'hui : relevé du matin, relu tel quel (le règlement n'a besoin que des matchs finis, donc de la veille) ;
+    - aujourd'hui : relevé du matin, relu tel quel (le règlement n'a besoin que des matchs finis, donc de la veille), sauf s'il a été
+      téléchargé avant le début du jour (préchargement de la veille) : alors rafraîchi, comme un jour passé ;
     - jour passé avec un match non terminé : re-téléchargé au plus une fois par exécution, une fois par
       C.FIXTURES_RETRY_HOURS, et seulement pendant C.FIXTURES_STALE_DAYS jours (un match reporté ne se re-télécharge pas
       indéfiniment)."""
     cache_, meta = _fx_load()
     old = cache_.get(str(day))
     if old is not None:
-        if not _stale(day, old):
+        if not _stale(day, old, meta.get(str(day))):
             cache.hit("api-football", 1)
             return old
         age_days = (datetime.fromisoformat(_today()).date() - datetime.fromisoformat(str(day)).date()).days

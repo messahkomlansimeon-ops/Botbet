@@ -52,7 +52,7 @@ def _bx_close(r, matches):
     for m in matches:
         try:
             gap = abs((datetime.fromisoformat(m["d"]).date() - day).days)
-        except (KeyError, ValueError):
+        except (KeyError, TypeError, ValueError, AttributeError):     # date absente/invalide : ligne sautée, jamais d'arrêt
             continue
         if gap <= 1 and stats.team_sim(m["home"], r["home"]) >= 0.8 and stats.team_sim(m["away"], r["away"]) >= 0.8:
             p = fd.no_vig([m.get("o1"), m.get("ox"), m.get("o2")])
@@ -79,7 +79,10 @@ def fill(rows, now, fdata=None, bx=None):
         p_take = r.get("prob_book") or (r["prob"] if r["market"] == "h2h" else None)    # anciennes lignes : 1N2 seulement (proba non mélangée)
         if not p_take:
             continue
-        got = _fd_close(r, fdata) or _bx_close(r, (leagues.get(r["sport_key"]) or {}).get("matches") or [])
+        try:
+            got = _fd_close(r, fdata) or _bx_close(r, (leagues.get(r["sport_key"]) or {}).get("matches") or [])
+        except Exception:                 # une ligne bancale ne doit jamais arrêter le remplissage des suivantes
+            continue
         if not got:
             continue
         p_close, src = got
