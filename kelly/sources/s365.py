@@ -749,7 +749,14 @@ def fill(*a, **kw):
     with _via_proxy() as why:
         if why:
             return {"added": 0, "games": 0, "lists": 0, "requests": 0, "left": 0, "errors": [why], "off": True, "why": why}
-        return _fill(*a, **kw)
+        if not kw.get("backfill"):
+            return _fill(*a, **kw)
+        # rattrapage ponctuel : écart réduit (S365_BACKFILL_DELAY) qui cède au Crawl-delay du robots.txt ; le passage horaire garde 3 s
+        http.DELAY_REDUCED[HOST] = C.S365_BACKFILL_DELAY
+        try:
+            return _fill(*a, **kw)
+        finally:
+            http.DELAY_REDUCED.pop(HOST, None)
 
 
 def match_stats(b):

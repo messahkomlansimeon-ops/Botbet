@@ -209,12 +209,15 @@ def _fresh(meta, ttl):
 
 
 DELAY_OVERRIDE = {}       # domaine -> écart imposé (xbet.live_mode : 1 s pendant une vérification en direct demandée sur Telegram)
+DELAY_REDUCED = {}        # domaine -> écart réduit qui cède toujours au Crawl-delay du robots.txt (s365 : rattrapage ponctuel)
 
 
 def delay_for(domain):
     domain = domain.lower().split(":")[0]
     if domain in DELAY_OVERRIDE:
         return DELAY_OVERRIDE[domain]
+    if domain in DELAY_REDUCED:
+        return max(DELAY_REDUCED[domain], min(_crawl.get(domain, 0.0), MAX_CRAWL_DELAY))
     floor = next((v for k, v in FLOOR.items() if domain.endswith(k)), DEFAULT_DELAY)
     conf = next((v for k, v in MIN_DELAY.items() if domain.endswith(k)), DEFAULT_DELAY)
     return max(floor, conf, min(_crawl.get(domain, 0.0), MAX_CRAWL_DELAY))

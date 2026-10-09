@@ -253,6 +253,7 @@ S365_KEEP_DAYS = 150                              # équipe oubliée sans mise �
 S365_LIST_HOURS = _int("S365_LIST_HOURS", 20)     # une liste de résultats n'est relue qu'après ce délai (x3 pour un championnat sans match depuis 2 semaines)
 S365_BACKFILL_REQUESTS = _int("S365_BACKFILL_REQUESTS", 150)    # `python -m kelly.sources.s365 backfill` : requêtes au plus (listes comprises)
 S365_BACKFILL_SECONDS = _int("S365_BACKFILL_SECONDS", 900)      # ... et durée au plus
+S365_BACKFILL_DELAY = _float("S365_BACKFILL_DELAY", 1.5)      # ... et écart entre deux requêtes (s) pendant ce rattrapage (le passage horaire garde 3 s ; le Crawl-delay de robots.txt reste prioritaire)
 # ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
 # Pronostic « viable » (combos.viable) : le seul montré pour un match est son meilleur pronostic viable ; les combinés à vérifier
 # n'utilisent que des pronostics viables. Niveau « modéré » choisi par l'utilisateur.

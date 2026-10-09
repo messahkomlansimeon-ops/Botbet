@@ -1088,6 +1088,29 @@ def test_proxy_and_monthly_cap():
         s365._fill, xbet.proxy, C.S365_PROXY, C.S365_MONTH_MB, kcache.OFFLINE = old
 
 
+def test_backfill_reduced_delay():
+    """Rattrapage : écart S365_BACKFILL_DELAY (1,5 s) pendant le seul rattrapage, 3 s sinon ; un Crawl-delay de robots.txt plus grand reste prioritaire."""
+    fresh()
+    seen = []
+    old = s365._fill
+
+    def fake_fill(*a, **kw):
+        seen.append(http.delay_for(s365.HOST))
+        return {"added": 0, "games": 0, "lists": 0, "requests": 0, "left": 0, "errors": []}
+    try:
+        s365._fill = fake_fill
+        s365.fill(backfill=True)
+        s365.fill(max_lists=1)
+        assert seen == [C.S365_BACKFILL_DELAY, http.DEFAULT_DELAY] and C.S365_BACKFILL_DELAY < http.DEFAULT_DELAY, seen
+        assert http.delay_for(s365.HOST) == http.DEFAULT_DELAY and s365.HOST not in http.DELAY_REDUCED
+        http._crawl[s365.HOST] = 5.0                                    # robots.txt demande 5 s : respecté même pendant le rattrapage
+        s365.fill(backfill=True)
+        assert seen[-1] == 5.0, seen
+    finally:
+        s365._fill = old
+        http._crawl.pop(s365.HOST, None)
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     try:
