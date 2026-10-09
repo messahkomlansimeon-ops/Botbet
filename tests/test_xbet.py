@@ -427,6 +427,16 @@ def test_save_coupon():
                     "⏳ 1xBet a refusé le code coupon (« Erreur ») : nouvel essai dans 5 s (3/4)…",
                     "✅ 1xBet a accepté le code coupon."], said
     said.clear()
+    ru = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon",
+                json.dumps({"Success": False, "Error": "Сбой вызова, попробуйте позже.", "ErrorCode": 161627}).encode("utf-8"), 200)
+    ru2 = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon",
+                 json.dumps({"Success": False, "Error": "Неизвестно", "ErrorCode": 99}).encode("utf-8"), 200)
+    with patch("kelly.sources.http.post", side_effect=[ru, ru2, ok_res]), patch("kelly.sources.xbet.time.sleep"), \
+            xbet.coupon_notice(said.append):
+        assert xbet.save_coupon(legs) == "AP89E"
+    assert said[0].startswith("⏳ 1xBet a refusé le code coupon (« panne passagère chez 1xBet »)"), said      # jamais de russe
+    assert "(« erreur chez 1xBet (code 99) »)" in said[1], said
+    said.clear()
     with patch("kelly.sources.http.post", return_value=ok_res), xbet.coupon_notice(said.append):
         assert xbet.save_coupon(legs) == "AP89E" and said == []                 # accepté du premier coup : rien à dire
     with patch("kelly.sources.http.post", side_effect=[err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"):

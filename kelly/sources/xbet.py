@@ -586,7 +586,7 @@ def save_coupon(legs):
             if not data.get("Success"):
                 _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
                                         ensure_ascii=False), legs)
-                attempt.why = str(data.get("Error") or "").strip()[:120]
+                attempt.why = _coupon_why(data)
                 return None, True
             val = data.get("Value")
             if isinstance(val, str) and val.strip():
@@ -616,6 +616,20 @@ def save_coupon(legs):
         return code
     finally:
         ses.close("enregistrement du coupon")
+
+
+COUPON_ERRORS = {161627: "panne passagère chez 1xBet"}     # ErrorCode de SaveCoupon -> raison en français (161627 : « Сбой вызова, попробуйте позже. »)
+
+
+def _coupon_why(data):
+    """Raison d'un refus de SaveCoupon, en français pour l'utilisateur : traduction connue de l'ErrorCode, sinon le texte de 1xBet s'il
+    est en alphabet latin, sinon « erreur chez 1xBet (code N) » (1xBet répond parfois en russe)."""
+    code, text = data.get("ErrorCode"), str(data.get("Error") or "").strip()
+    if code in COUPON_ERRORS:
+        return COUPON_ERRORS[code]
+    if text and not re.search(r"[\u0400-\u04FF]", text):
+        return text[:120]
+    return f"erreur chez 1xBet (code {code})" if code else "erreur chez 1xBet"
 
 
 _NOTICE = None          # fonction(texte) pendant une commande Telegram : l'utilisateur qui attend est prévenu d'un refus de 1xBet
