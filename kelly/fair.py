@@ -132,12 +132,25 @@ def options(f, home, away):
     return _options(f, home, away)[0]
 
 
+def stat_n(f, market):
+    """Matchs de données derrière le chiffre d'un marché : buts du classement FotMob (f["std_n"]), autres chiffres d'un profil court
+    (FotMob matchs, API-Football : f["aps_n"]), sinon l'effectif de la source principale (n_home / n_away). Les buts d'un classement
+    de 20 matchs ne rendent pas fiables des corners tirés de 3 matchs."""
+    key = EXP_KEY.get(market, "exp_goals_home")
+    own = set(f.get("aps_keys") or ())
+    if key in own:
+        n = f.get("std_n") if key.startswith("exp_goals") and f.get("std_n") else f.get("aps_n")
+        if n:
+            return min(n)
+    return min(f.get("n_home") or 0, f.get("n_away") or 0)
+
+
 def _stat_options(f, home, away, skip=(), only=None):
     """Options sur corners, cartons (Poisson, lignes fixes), tirs et tirs cadrés (binomiale négative, lignes autour de la moyenne).
     `skip` : marchés déjà traités ; `only` : si donné, seulement les chiffres dont la clé (exp_corners...) y figure."""
     out = []
-    small = min(f.get("n_home") or 0, f.get("n_away") or 0)
-    note = f" ({small} derniers matchs seulement)" if f.get("aps_keys") and small < C.APISTATS_LAST else ""
+    note = lambda market: (f" ({stat_n(f, market)} derniers matchs seulement)"        # noqa: E731 - effectif de la source de CE chiffre
+                           if f.get("aps_keys") and stat_n(f, market) < C.APISTATS_LAST else "")
     for kind, market, unit in (("corners", prematch.CORNERS, "corners"), ("cards", prematch.CARDS, "cartons")):
         exp = f.get("exp_" + kind)
         if market in skip or exp is None or (only is not None and "exp_" + kind not in only):
@@ -147,7 +160,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         for pt in LINES[kind]:
             for name in ("Over", "Under"):
                 out.append((market, name, pt, prematch.over_p(name, prematch.poisson_over(exp, pt)),
-                            f"stats réelles : {exp:.1f} {unit} attendus{note}"))
+                            f"stats réelles : {exp:.1f} {unit} attendus{note(market)}"))
     for market, (key, unit, (lo, hi), alpha) in STAT_SPECS.items():
         exp = f.get(key)
         if market in skip or exp is None or not lo <= exp <= hi or (only is not None and key not in only):
@@ -156,7 +169,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         for pt in strength._lines_near(exp, alpha, lo=1):
             for name in ("Over", "Under"):
                 out.append((market, name, pt, prematch.over_p(name, strength.p_over(pmf, pt)),
-                            f"stats réelles : {exp:.1f} {unit} attendus{note}"))
+                            f"stats réelles : {exp:.1f} {unit} attendus{note(market)}"))
     return out
 
 
@@ -310,7 +323,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
         for b in best_per_family(opts, families, bases):
             c = make_pick(ev, *b, src)
             c["alts"] = alternatives(opts, bases, b[0])        # autres lignes du marché : la meilleure à la cote 1xBet (xprice.py)
-            c["n_min"] = min(f.get("n_home") or 0, f.get("n_away") or 0)      # matchs de données de l'équipe la moins connue
+            c["n_min"] = stat_n(f, b[0])        # matchs de données de l'équipe la moins connue, pour la source de CE chiffre
             base = bases.get((b[0], b[1], b[2]))
             if base is not None:
                 _with_base(c, base, stat_q(f, b[0]))          # qualité de la statistique du pari (pas celle des buts)

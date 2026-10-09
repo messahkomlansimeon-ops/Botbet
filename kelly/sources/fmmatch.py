@@ -223,7 +223,9 @@ def candidates(d, today=None):
     """Matchs terminés à lire, du plus utile au moins utile : équipes qui rejouent bientôt ; parmi elles, d'abord celles qui n'ont pas
     encore APISTATS_MIN_N matchs (le minimum d'un pronostic), dans l'ordre de priorité du catalogue (5 grands championnats, puis le
     reste de l'Europe, les Amériques...) ; puis les moins fournies, puis les matchs les plus récents. Seuls les FM_KEEP_MATCHES
-    derniers matchs de chaque équipe comptent, dans la fenêtre FM_KEEP_DAYS."""
+    derniers matchs de chaque équipe comptent, dans la fenêtre FM_KEEP_DAYS. Les ligues du catalogue (C.LEAGUE_KEYS) et les autres
+    (championnats 1xBet : des centaines d'équipes à moins de 3 matchs, toutes prioritaires) alternent : les ligues établies gardent au
+    moins la moitié des pages de chaque fill()."""
     today = today or _today()
     oldest, soon_end = str(today - timedelta(days=C.FM_KEEP_DAYS)), str(today + timedelta(days=SOON_DAYS))
     out, ids = [], set()
@@ -246,7 +248,13 @@ def candidates(d, today=None):
                    min(have, C.APISTATS_GOOD_N), -_d2i(m["d"]))
             ids.add(m["id"])
             out.append((pri, sk, m))
-    return [(sk, m) for _, sk, m in sorted(out, key=lambda x: x[0])]
+    ordered = [(sk, m) for _, sk, m in sorted(out, key=lambda x: x[0])]
+    est = lambda sk: sk in C.LEAGUE_KEYS or any(sk.startswith(k) for k in C.LEAGUE_KEYS if k.endswith("_"))      # noqa: E731
+    core, other = [x for x in ordered if est(x[0])], [x for x in ordered if not est(x[0])]
+    mixed = []
+    for i in range(max(len(core), len(other))):
+        mixed += core[i:i + 1] + other[i:i + 1]
+    return mixed
 
 
 def _read_page(url, budget=None):

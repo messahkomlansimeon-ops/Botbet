@@ -125,7 +125,7 @@ def _fotmob(out, home, away, sport_key):
     extra = sport_key not in fotmob.SPORT_TO_LEAGUE
     if extra:
         matches = ((_p("fm", fotmob).get("leagues") or {}).get(sport_key) or {}).get("matches") or []
-        _standings_goals(out, h, a, hv, av, matches)
+        _standings_goals(out, h, a, hv, av, matches, league=data)
         hs = home_share(matches)
     # Le classement xG de FotMob donne des TOTAUX de saison : par match = total / matchs joués.
     per = lambda t, k: t[k] / t["n"] if t.get(k) is not None and (t.get("n") or 0) >= MIN_N else None      # noqa: E731
@@ -144,6 +144,7 @@ def _fotmob(out, home, away, sport_key):
         out["xg_src"] = "fotmob-classement"           # totaux de saison : _fmmatch les remplace par les xG des matchs récents s'il en a
 
 
+STANDINGS_PRIOR_N = 6                 # poids (en matchs fictifs) de la moyenne de la ligue dans les buts par match d'une équipe du classement
 STANDINGS_Q = (0.30, 0.01, 0.50)      # qualité des buts tirés du classement : 0,30 + 0,01 par match joué (équipe la moins fournie), 0,50 au plus
 HOME_SHARE = (0.555, 60)              # part des buts marqués à domicile (moyenne mondiale) et son poids en matchs fictifs
 
@@ -159,21 +160,41 @@ def home_share(matches):
     return (n * share + k * prior) / (n + k)
 
 
-def _standings_goals(out, h, a, hv, av, matches=()):
+def _league_rate(league, field):
+    """Buts marqués (« gf ») ou encaissés (« ga ») par équipe et par match dans tout le classement `league` ; None s'il est vide."""
+    tot, n = 0.0, 0.0
+    for t in (league or {}).values():
+        if (t.get("n") or 0) > 0 and t.get(field) is not None:
+            tot, n = tot + t[field], n + t["n"]
+    return tot / n if n else None
+
+def _shrunk(t, field, mean):
+    """Buts par match d'une équipe du classement, rapprochés de la moyenne de la ligue (poids STANDINGS_PRIOR_N matchs) : en début de
+    saison, 3 matchs ne font pas une attaque. Sans moyenne (classement inconnu), le taux brut."""
+    raw = t[field] / t["n"]
+    if mean is None:
+        return raw
+    return (t["n"] * raw + STANDINGS_PRIOR_N * mean) / (t["n"] + STANDINGS_PRIOR_N)
+
+def _standings_goals(out, h, a, hv, av, matches=(), league=None):
     """Buts attendus d'un match d'après le classement FotMob (buts marqués et encaissés par match, mêlés comme _expect) : seule
     source de buts des championnats vus par 1xBet tant que les stats de match FotMob (fmmatch) ne sont pas accumulées. Qualité
-    modeste (STANDINGS_Q, dans aps_q : le modèle simple la reprend) ; rien sous MIN_N matchs joués."""
+    modeste (STANDINGS_Q, dans aps_q : le modèle simple la reprend) ; rien sous MIN_N matchs joués. `league` : tout le classement,
+    dont la moyenne de buts rapproche les taux de chaque équipe (_shrunk). out["std_n"] : matchs joués des deux équipes (la source des
+    buts n'est pas celle des autres statistiques de aps_keys)."""
     n = min(hv.get("n") or 0, av.get("n") or 0)
     if n < MIN_N or "exp_goals_home" in out:
         return
     hs = home_share(matches)                  # le classement mêle domicile et extérieur : avantage du terrain du championnat
-    eh = _mix(hv["gf"] / hv["n"], av["ga"] / av["n"]) * 2 * hs
-    ea = _mix(av["gf"] / av["n"], hv["ga"] / hv["n"]) * 2 * (1 - hs)
+    mf, ma = _league_rate(league, "gf"), _league_rate(league, "ga")
+    eh = _mix(_shrunk(hv, "gf", mf), _shrunk(av, "ga", ma)) * 2 * hs
+    ea = _mix(_shrunk(av, "gf", mf), _shrunk(hv, "ga", ma)) * 2 * (1 - hs)
     lo, step, hi = STANDINGS_Q
     out.update(exp_goals_home=_r(eh), exp_goals_away=_r(ea), exp_goals_total=_r(eh + ea))
     out["sources"].append("FotMob (classement)")
     out["aps_keys"] = sorted(set(out.get("aps_keys") or ()) | {"exp_goals_home", "exp_goals_away", "exp_goals_total"})
     out["aps_q"] = round(min(hi, lo + step * n), 2)
+    out["std_n"] = (int(hv["n"]), int(av["n"]))
     out.setdefault("home_team", h)
     out.setdefault("away_team", a)
     out.setdefault("n_home", int(hv["n"]))
@@ -222,7 +243,11 @@ def _deep(out, home, away, sport_key, referee):
         out["ref_fouls"] = rf["avg"]
 
 
+AFR_XB = frozenset(row[0] for row in C.XB_LEAGUES.get("afrique", ()))      # Égypte, Maroc, Algérie : vus par 1xBet ET listés « africa » par API-Football
+
 def _aps_candidates(prof, sport_key):
+    if sport_key in AFR_XB:              # le profil API-Football de ces équipes porte « africa » (fair.make écarte la copie « africa » du match)
+        return {n: p for n, p in prof.items() if sport_key in p.get("sk", []) or "africa" in p.get("sk", [])}
     same = {n: p for n, p in prof.items() if sport_key in p.get("sk", [])}
     if same or sport_key.startswith("africa"):
         return same
@@ -274,6 +299,7 @@ def _apistats(out, home, away, sport_key):
     out.setdefault("n_away", n_a)
 
 
+GOAL_KEYS = ("exp_goals_home", "exp_goals_away", "exp_goals_total")
 FM_STATS = ("corners", "goals", "shots", "sot", "fouls", "cards", "throws", "offsides")
 
 
@@ -281,6 +307,8 @@ def _fm_candidates(prof, sport_key):
     """Équipes FotMob de la ligue (toutes les ligues africaines pour un match « africa », nom de ligue inconnu)."""
     if sport_key == "africa":
         return {n: p for n, p in prof.items() if any(k.startswith("africa") for k in p.get("sk", []))}
+    if sport_key in AFR_XB:
+        return {n: p for n, p in prof.items() if sport_key in p.get("sk", []) or "africa" in p.get("sk", [])}
     return {n: p for n, p in prof.items() if sport_key in p.get("sk", [])}
 
 
@@ -334,7 +362,11 @@ def _fmmatch(out, home, away, sport_key):
     for stat in FM_STATS:
         hv, av = _expect(ht, at, stat)
         _put_pair(tmp, stat, stat, hv, av, total=True)
+    n_h, n_a = ht["all"]["n"], at["all"]["n"]
+    std = out.get("std_n") and min(n_h, n_a) >= C.APISTATS_GOOD_N and all(k in tmp for k in GOAL_KEYS[:2] + ("exp_goals",))
     new = {k: v for k, v in tmp.items() if k not in out}
+    if std:                                               # assez de matchs FotMob : leurs buts valent mieux que ceux du classement de saison
+        new |= {"exp_goals_home": tmp["exp_goals_home"], "exp_goals_away": tmp["exp_goals_away"], "exp_goals_total": tmp["exp_goals"]}
     xg = _fm_xg(ht, at)
     if xg and (not any(k in out for k in XG_KEYS) or out.get("xg_src") == "fotmob-classement"):
         new |= xg
@@ -346,11 +378,18 @@ def _fmmatch(out, home, away, sport_key):
     out.update(new)
     if "exp_cards" in new:
         out.setdefault("exp_cards_team", out["exp_cards"])
-    n_h, n_a = ht["all"]["n"], at["all"]["n"]
+    if std:
+        out.pop("std_n")                                  # les buts ne viennent plus du classement : leur échantillon est celui de FotMob
+        out["n_home"], out["n_away"] = n_h, n_a
+        if "FotMob (classement)" in out["sources"]:
+            out["sources"].remove("FotMob (classement)")
     out["sources"].append("FotMob (matchs)")
+    q = aps_quality(min(n_h, n_a))
+    if set(out.get("aps_keys") or ()) - set(new):         # d'autres chiffres déjà là (classement) : on garde la qualité la plus prudente
+        q = min(q, out.get("aps_q", q))
     out["aps_keys"] = sorted(set(out.get("aps_keys") or ()) | set(new))
     out["aps_n"] = (n_h, n_a)
-    out["aps_q"] = aps_quality(min(n_h, n_a))
+    out["aps_q"] = q
     out.setdefault("home_team", h)
     out.setdefault("away_team", a)
     out.setdefault("n_home", n_h)
@@ -361,6 +400,8 @@ def match_features(home, away, sport_key, referee=None):
     out = {"sources": []}
     if sport_key.startswith("africa"):
         steps = [(_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key))]
+        if sport_key in AFR_XB:                         # championnat vu par 1xBet : aussi les buts du classement FotMob
+            steps.insert(0, (_fotmob, (home, away, sport_key)))
     else:
         steps = [(_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
                  (_fotmob, (home, away, sport_key)), (_fbref, (home, away, sport_key)),

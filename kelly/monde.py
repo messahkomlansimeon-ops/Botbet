@@ -21,8 +21,19 @@ def fr_date(d):
     return f"{DAYS[d.weekday()]} {d.strftime('%d/%m')}"
 
 
+def _dup_africa(f, scan):
+    """Vrai si le match africain `f` d'API-Football est déjà dans le relevé (Égypte, Maroc, Algérie vus par 1xBet, qualifications CAF) :
+    même règle que fair.make, qui n'analyse pas deux fois un match ; sans quoi il serait listé et compté deux fois."""
+    from . import fair
+    if not f.get("ts"):
+        return False
+    ev = fair.africa_event(f)
+    return any(fair.same_match(ev, e) for evs in scan.get("leagues", {}).values() for e in evs)
+
+
 def build(scan, day, now, paid=(), africa=(), ahead=None, spent=None, allowance=None):
-    """Cache compact du jour à partir d'un relevé odds.scan_today (voir l'en-tête du module)."""
+    """Cache compact du jour à partir d'un relevé odds.scan_today (voir l'en-tête du module). Un match africain déjà dans le relevé
+    (même match, deux sources) n'est gardé que dans sa ligue."""
     counts = {k: len(v) for k, v in scan.get("leagues", {}).items()}
     leagues, total = {}, 0
     for key in catalogue.prioritise(counts, C.SPORTS):
@@ -33,7 +44,7 @@ def build(scan, day, now, paid=(), africa=(), ahead=None, spent=None, allowance=
     data = {"day": str(day), "at": now.strftime("%H:%M"), "brk": int(catalogue.is_break_day(counts)),
             "complete": int(scan.get("complete", True)), "act": list(scan.get("sports", [])),
             "paid": [k for k in paid if k in leagues], "leagues": leagues,
-            "africa": [[f["lg"], f["home"], f["away"], _hhmm(f.get("ts"))] for f in africa][:40]}
+            "africa": [[f["lg"], f["home"], f["away"], _hhmm(f.get("ts"))] for f in africa if not _dup_africa(f, scan)][:40]}
     if scan.get("error"):
         data["error"] = scan["error"][:160]
     if spent is not None:

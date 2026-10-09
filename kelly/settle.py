@@ -3,7 +3,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import calib, config as C, fair, fmt, learn, odds, played, stats, store, track
-from .sources import fmmatch, footballdata as fd
+from .sources import fmmatch, footballdata as fd, fotmob, names
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
@@ -108,12 +108,38 @@ def football_score(b):
             "scores": [{"name": b["home"], "score": str(r["home"])}, {"name": b["away"], "score": str(r["away"])}]}
 
 
+FM_DAYS = 1                                                # écart de date toléré entre le coup d'envoi 1xBet et le match FotMob
+FM_MIN_SIM = 0.6                                           # ressemblance minimale des noms : seuls les matchs de la ligue à ±1 jour sont candidats (« Slavia Praha » ~ « Slavia Prague » : 0,7)
+
+
+def fotmob_score(b, leagues=None):
+    """Score d'un match de championnat vu par 1xBet d'après les derniers résultats FotMob de la ligue (src_fotmob.json, matches[sport_key]) :
+    repli quand API-Football (noms trop différents : « Slavia Prague » / « Slavia Praha ») et football-data (pas de division) n'ont rien.
+    Date à FM_DAYS jour près, les deux équipes reconnues (names.best_team, seuil FM_MIN_SIM : la fenêtre ne compte qu'une dizaine de
+    matchs) parmi les matchs de cette fenêtre. Au format de settle_pick ; None sinon.
+    `leagues` : profils de ligues déjà lus (src_fotmob.json["leagues"])."""
+    if leagues is None:
+        leagues = fotmob.profiles().get("leagues") or {}
+    try:
+        day = datetime.fromisoformat(b["commence"][:10])
+        win = [m for m in (leagues.get(b.get("sport_key")) or {}).get("matches") or []
+               if m.get("d") and abs((datetime.fromisoformat(m["d"]) - day).days) <= FM_DAYS
+               and m.get("hg") is not None and m.get("ag") is not None]
+    except (ValueError, TypeError, AttributeError):
+        return None
+    h = names.best_team(b["home"], list(dict.fromkeys(m["home"] for m in win)), min_sim=FM_MIN_SIM)
+    a = names.best_team(b["away"], list(dict.fromkeys(m["away"] for m in win)), min_sim=FM_MIN_SIM)
+    m = next((m for m in win if m["home"] == h and m["away"] == a), None) if h and a else None
+    return m and {"id": b["id"], "completed": True,
+                  "scores": [{"name": b["home"], "score": str(m["hg"])}, {"name": b["away"], "score": str(m["ag"])}]}
+
+
 class FootballData:
     """Règlement gratuit avec les CSV football-data déjà en cache (aucune requête : refresh_all les actualise le
     matin). Le site ne se met à jour que ~2 fois par semaine : un match récent peut manquer."""
 
     def __init__(self):
-        self._by_div, self._memo = {}, {}
+        self._by_div, self._memo, self._fm = {}, {}, None
 
     def match(self, b):
         div = fd.SPORT_TO_DIV.get(b["sport_key"])
@@ -136,6 +162,16 @@ class FootballData:
     def stats(self, b):
         m = self.match(b)
         return fd.match_stats(m) if m else None
+
+    def fotmob_score(self, b):
+        """Score FotMob (fotmob_score) ; le fichier de profils n'est lu qu'une fois par exécution."""
+        if self._fm is None:
+            try:
+                self._fm = fotmob.profiles().get("leagues") or {}
+            except Exception as e:                    # noqa: BLE001 - facultatif
+                print(f"[settle] FotMob (scores) ignoré : {e}", file=sys.stderr)
+                self._fm = {}
+        return fotmob_score(b, self._fm)
 
 
 def match_stats(b, fdata, stats_for=None):
@@ -244,7 +280,7 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
     full = {"group": "soccer", "who": None} | b            # lignes de fair.json allégées : champs de settle_pick ajoutés
     stat_market = b["market"] in FD_MARKETS or b["market"] in SHOT_MARKETS
     old = ko < now - timedelta(days=C.WAIT_DAYS_STATS if stat_market else C.WAIT_DAYS)
-    ev = (football_score(full) if stats.enabled() else None) or fdata.score(full)
+    ev = (football_score(full) if stats.enabled() else None) or fdata.score(full) or fdata.fotmob_score(full)
     if ev:
         fst = match_stats(full, fdata, stats_for)
         b["result"] = settle_pick(full, ev, fst)
@@ -269,7 +305,8 @@ def settle_fair(now=None, stats_for=None):
 
 def settle_fair_combos(now=None, stats_for=None):
     """Règle les combinés à cote juste (data/fair_combos.json) : perdu dès qu'une jambe est perdue, gagné quand toutes sont
-    gagnées (jambes annulées ou remboursées ignorées). Gratuit, comme les pronostics. -> (tous, réglés cette fois)."""
+    gagnées (jambes remboursées ignorées). Une jambe sans score trouvé est « unknown », pas « void » : le combiné est alors « unknown »,
+    jamais gagné. Gratuit, comme les pronostics. -> (tous, réglés cette fois)."""
     now = now or datetime.now(timezone.utc)
     rows, fdata, settled = fair.load_combos(), FootballData(), []
     for c in rows:
@@ -277,6 +314,8 @@ def settle_fair_combos(now=None, stats_for=None):
             continue
         for leg in c["legs"]:
             _settle_fair_row(leg, now, fdata, stats_for)
+            if leg.get("result") == "void":
+                leg["result"] = UNKNOWN                # aucun score trouvé : on ne sait pas si la jambe a passé, le combiné ne peut pas être « gagné »
         results = [leg.get("result") for leg in c["legs"]]
         if "loss" in results:
             c["result"] = "loss"

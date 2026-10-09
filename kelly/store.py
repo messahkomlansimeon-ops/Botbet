@@ -1,10 +1,12 @@
 """Mémoire du bot : base SQLite data/kelly.db (DATA_DIR pour les tests). Chaque document garde son ancien nom de fichier
 (« bets.json », « archive/tracked-2026.json »...) et son contenu JSON : load / save ne changent pas pour le reste du code.
-Les anciens fichiers data/*.json sont importés une seule fois, à la création de la base, puis rangés dans data/sauvegarde/.
+Les anciens fichiers data/*.json sont importés une seule fois, à la création de la base, puis rangés dans data/sauvegarde/ ; une base
+recréée (kelly.db perdu) sans ancien fichier se remplit depuis data/sauvegarde/ (_restore_backup) au lieu de repartir à vide.
 Sauvegarde lisible (et commitée par git) : export() écrit chaque document en JSON dans data/sauvegarde/ ; import_dir() restaure."""
 import fcntl
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -59,9 +61,39 @@ def _legacy_files():
     return out
 
 
+def _backup_files(src=None):
+    """Documents JSON d'un dossier de sauvegarde (data/sauvegarde/ par défaut) : [(nom, chemin)] triés."""
+    src = src or backup_dir()
+    out = []
+    for root, _, files in os.walk(src):
+        out += [(os.path.relpath(os.path.join(root, f), src).replace(os.sep, "/"), os.path.join(root, f))
+                for f in files if f.endswith(".json")]
+    return sorted(out)
+
+
+def _restore_backup(con):
+    """Base neuve, aucun ancien fichier à importer, mais data/sauvegarde/ a des documents : kelly.db a disparu (le dossier est son miroir).
+    Les importe tout de suite (dans la transaction de _migrate) : sans cela le bot tournerait à vide et le prochain export() viderait la
+    sauvegarde. -> nombre de documents restaurés."""
+    n = 0
+    for name, p in _backup_files():
+        try:
+            with open(p, encoding="utf-8") as f:
+                obj = json.load(f)
+        except (OSError, ValueError) as e:
+            print(f"[store] {p} non restauré ({type(e).__name__}) : laissé en place", file=sys.stderr)
+            continue
+        con.execute("INSERT OR IGNORE INTO docs (name, body, updated) VALUES (?, ?, ?)", (name, _dump(obj), _now()))
+        n += 1
+    if n:
+        print(f"[store] ATTENTION : {db_path()} était absent ; {n} document(s) restauré(s) depuis {backup_dir()}", file=sys.stderr)
+    return n
+
+
 def _migrate(con):
     """Une seule fois par base (drapeau meta.migrated, posé dans la même transaction) : importe les anciens fichiers JSON, puis les
-    range dans data/sauvegarde/ (même forme que l'export). Un fichier illisible reste où il est."""
+    range dans data/sauvegarde/ (même forme que l'export). Un fichier illisible reste où il est. Sans ancien fichier, restaure
+    data/sauvegarde/ (_restore_backup)."""
     con.execute("BEGIN IMMEDIATE")
     try:
         if con.execute("SELECT 1 FROM meta WHERE key='migrated'").fetchone():
@@ -77,6 +109,8 @@ def _migrate(con):
                 continue
             con.execute("INSERT OR IGNORE INTO docs (name, body, updated) VALUES (?, ?, ?)", (name, _dump(obj), _now()))
             done.append((name, p))
+        if not done:
+            _restore_backup(con)
         con.execute("INSERT INTO meta (key, value) VALUES ('migrated', ?)", (_now(),))
         con.execute("COMMIT")
     except BaseException:
@@ -170,12 +204,30 @@ def version(name):
         return None
 
 
+ESSENTIAL = ("bets.json", "tracked.json", "fair.json")      # documents dont l'absence de la base, alors que le dossier les a, signale une base vidée
+TMP_RE = re.compile(r"\.json\.(\d+)\.tmp$")
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True                                 # existe mais n'est pas à nous
+    return True
+
+
 def export(dest=None):
     """Écrit chaque document (sauf les caches NO_EXPORT) en JSON lisible dans `dest` (data/sauvegarde/ par défaut) et efface les
-    fichiers .json qui n'y correspondent plus : le dossier est le miroir de la base, que git sauvegarde. -> nombre de documents."""
+    fichiers .json qui n'y correspondent plus : le dossier est le miroir de la base, que git sauvegarde. Jamais d'effacement (écriture
+    seule, avertissement) si la base paraît vidée : moins de la moitié des documents du dossier, ou bets.json / tracked.json / fair.json
+    absents de la base alors que le dossier les a. Les « *.json.<pid>.tmp » laissés par un export interrompu sont supprimés.
+    -> nombre de documents."""
     dest = dest or backup_dir()
     with _db() as con:
         rows = con.execute("SELECT name, body FROM docs ORDER BY name").fetchall()
+    before = {n for n, _ in _backup_files(dest)}
     keep = set()
     for name, body in rows:
         if name.startswith(NO_EXPORT):
@@ -194,11 +246,22 @@ def export(dest=None):
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
         os.replace(tmp, p)
+    names_ = {os.path.relpath(k, os.path.normpath(dest)).replace(os.sep, "/") for k in keep}
+    lost = sorted(before - names_)
+    suspect = bool(lost) and (2 * len(names_) < len(before) or any(n in lost for n in ESSENTIAL))
+    if suspect:
+        print(f"[store] ATTENTION : la base ({len(names_)} document(s)) paraît vidée par rapport à {dest} ({len(before)} fichier(s) ; "
+              f"absents de la base : {', '.join(lost[:5])}{'...' if len(lost) > 5 else ''}) : rien n'est effacé dans la sauvegarde",
+              file=sys.stderr)
     for root, _, files in os.walk(dest):
         for f in files:
             p = os.path.normpath(os.path.join(root, f))
-            if f.endswith(".json") and p not in keep:
+            if f.endswith(".json") and p not in keep and not suspect:
                 os.remove(p)
+            else:
+                m = TMP_RE.search(f)
+                if m and (int(m.group(1)) == os.getpid() or not _pid_alive(int(m.group(1)))):      # reste d'un export interrompu
+                    os.remove(p)
     return len(keep)
 
 
