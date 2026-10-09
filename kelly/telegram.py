@@ -79,6 +79,15 @@ def _scrub(text):
     return str(text).replace(token, "***") if token else str(text)
 
 
+def _not_sent(e):
+    """L'erreur est survenue AVANT l'envoi de la requête (connexion impossible : délai de connexion, proxy, connexion neuve refusée) : la
+    rejouer ne risque pas de doubler un message. Une connexion gardée coupée en route ou un délai de lecture : Telegram a pu le recevoir
+    (comme sources.http._not_sent)."""
+    if isinstance(e, (requests.ConnectTimeout, requests.exceptions.ProxyError)):
+        return True
+    return isinstance(e, requests.ConnectionError) and not isinstance(e, requests.Timeout) and "NewConnectionError" in repr(e)
+
+
 def api(method, http_timeout=40, **payload):
     """Appel Bot API -> `result`. Lève TelegramError avec la description de l'API (sans le token). `http_timeout` : attente maximale
     de la réponse (une connexion coupée en silence n'est détectée qu'au bout de ce délai)."""
@@ -90,7 +99,9 @@ def api(method, http_timeout=40, **payload):
             try:
                 r = _session.post(f"https://api.telegram.org/bot{token}/{method}", json=payload,
                                   timeout=(CONNECT_TIMEOUT, http_timeout))
-            except requests.ConnectionError:        # connexion gardée coupée entre-temps : un nouvel essai, sur une connexion neuve
+            except requests.ConnectionError as e:   # un nouvel essai, sur une connexion neuve, SEULEMENT si la requête n'est pas partie
+                if method.startswith("send") and not _not_sent(e):      # coupure en route : Telegram a pu recevoir le message, le
+                    raise                                               # renvoyer le doublerait (getUpdates, édition : sans risque)
                 r = _session.post(f"https://api.telegram.org/bot{token}/{method}", json=payload,
                                   timeout=(CONNECT_TIMEOUT, http_timeout))
         except requests.RequestException as e:

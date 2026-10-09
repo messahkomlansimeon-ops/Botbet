@@ -405,21 +405,33 @@ def record(pronos, day, shown=None):
     """Enregistre dans data/fair.json les C.FAIR_TRACK meilleurs pronostics du jour, plus jusqu'à C.FAIR_TRACK_FREE pronostics
     de marchés réglés avec le seul score, suivis en silence (« x » : absents du message de résultats, comptés dans le bilan et la
     fiabilité). Fantômes sans cote : seuls leurs résultats servent, jamais la cote de clôture ni l'apprentissage. Garde
-    C.FAIR_KEEP_DAYS jours. -> nombre ajouté."""
+    C.FAIR_KEEP_DAYS jours. Un pronostic déjà suivi en silence (« x ») puis montré sort du silence ; une ligne qui change dans la
+    journée (même match, même marché) met à jour le suivi existant au lieu d'en ajouter un second. -> nombre ajouté."""
     from datetime import date, timedelta
     rows = load()
-    known = {r["key"] for r in rows}
+    by_key = {r["key"]: r for r in rows}
+    slot = {(r["date"], r["id"], r["market"]): r for r in rows}          # un suivi par match et marché (avant ce passage)
     n = 0
     main = list(shown) if shown is not None else pronos[:C.FAIR_TRACK]     # `shown` : pronostics montrés (un viable par match)
     rest = [c for c in pronos if c not in main]
     extra = [c for c in rest if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
     extra += [c for c in rest if c["market"].startswith(("team_shots_", "team_sot_"))][:C.FAIR_TRACK_SHOTS]
     for c in main + extra:
-        if c["key"] not in known:
-            known.add(c["key"])
-            rows.append({k: c.get(k) for k in ROW} | {"date": str(day), "result": None}
-                        | ({"x": 1} if c in extra else {}))
-            n += 1
+        old = by_key.get(c["key"])
+        if old is None:
+            old = slot.get((str(day), c["id"], c["market"]))
+            if old is not None and old.get("result") is None:      # la ligne a changé (relevé 1xBet) : même suivi, mis à jour
+                old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")})
+                by_key[c["key"]] = old
+            elif old is None:
+                by_key[c["key"]] = row = {k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
+                rows.append(row)
+                n += 1
+                continue
+            else:                                                   # déjà réglé : on n'y touche pas
+                continue
+        if c in main and old.get("result") is None:                 # suivi en silence le matin, annoncé depuis : il sort du silence
+            old.pop("x", None)
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_KEEP_DAYS))
     store.save(FILE, [r for r in rows if r["date"] >= cut])
     return n
@@ -444,6 +456,7 @@ def summary(rows, days=None, today=None):
 
 COMBOS_FILE = "fair_combos.json"
 LEG_FIELDS = ROW + ("pick", "min_odds", "start", "league")        # une jambe de combiné garde de quoi être réglée seule
+SENT_FIELDS = LEG_FIELDS + ("odds", "xref")        # + de quoi refaire le combiné et son code coupon (dernière version envoyée)
 
 
 def load_combos():
@@ -451,13 +464,43 @@ def load_combos():
     return rows if isinstance(rows, list) else []
 
 
+def combo_leg(c):
+    """Jambe d'un combiné suivi : de quoi la régler seule et, pour un combiné aux cotes 1xBet, le refaire (cote, référence du pari)."""
+    return {k: c.get(k) for k in SENT_FIELDS if c.get(k) is not None or k in LEG_FIELDS}
+
+
 def combo_row(target, combo, day, stake=None, cur=None):
     """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba ; mise sur le budget du jour et devise si elle existe) ;
     le résultat vient plus tard (settle_fair_combos)."""
     legs, min_total, prob = combo
     return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
-            "keys": [c["key"] for c in legs], "legs": [{k: c.get(k) for k in LEG_FIELDS} | {"result": None} for c in legs],
+            "keys": [c["key"] for c in legs], "legs": [combo_leg(c) | {"result": None} for c in legs],
             "result": None} | ({} if stake is None else {"stake": stake} | ({"cur": cur} if stake else {}))   # mise 0 : pari sans mise
+
+
+def update_combo(row, combo, hhmm):
+    """Combiné du matin renvoyé à jour : la ligne de suivi prend la nouvelle version (jambes, clés, cote, proba) ; la mise et la devise
+    restent, les clés du matin sont gardées une fois (« orig_keys »), « updated » note l'heure. Un combiné déclaré mort qui revit
+    redevient un combiné normal."""
+    legs, min_total, prob = combo
+    row.setdefault("orig_keys", list(row.get("keys") or []))
+    row.update(min_odds=round(min_total, 2), prob=round(prob, 5), keys=[c["key"] for c in legs], updated=hhmm,
+               legs=[combo_leg(c) | {"result": None} for c in legs])
+    if row.pop("dead", None):
+        row["result"] = None
+        if row.pop("auto_skipped", None):
+            row.pop("skipped", None)
+    return row
+
+
+def kill_combo(row):
+    """Combiné du matin déclaré injouable (« ne le joue pas ») : plus rien à suivre. Réglé « annulé » avec la marque « dead » (hors
+    des résultats, du bilan et de l'argent) ; sur le budget du jour il passe aussi en « ❌ Pas joué » (money.skip)."""
+    row["dead"] = True
+    row["result"] = "void"
+    if row.get("cur") and not row.get("skipped"):
+        row["skipped"] = row["auto_skipped"] = True
+    return row
 
 
 def record_combos(sent, day, stakes=None, cur=None):

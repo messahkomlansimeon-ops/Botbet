@@ -284,16 +284,18 @@ def fair_leg(n, c):
     return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 
-def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=None, coupon=None):
+def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=None, coupon=None, when=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
-    (mise indicative seulement), chaque jambe avec sa cote minimale. `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »)."""
+    (mise indicative seulement), chaque jambe avec sa cote minimale. `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »).
+    `when` : heure « HH:MM » du relevé des cotes 1xBet (combiné réel), rappelée en bas du message."""
     real = all(c.get("xodds") for c in picks)          # toutes les cotes relevées chez 1xBet par Kelly : la cote totale est réelle
     tail = "COTES 1XBET" if real else "À VÉRIFIER CHEZ 1XBET"
     head = [b(f"{title} — {tail}" if title else ("💎 COMBINÉ AUX COTES 1XBET" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")),
             f"🎯 {'Cote' if real else 'Cote mini'} {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
-            (f"💰 Mise : {b(esc(stake_txt))} {i('(seulement si 1xBet paie la cote mini)')}" if stake_txt else
+            (f"💰 Mise : {b(esc(stake_txt))}" + ("" if real else f" {i('(seulement si 1xBet paie la cote mini)')}") if stake_txt else
              f"💰 Mise indicative : {units(stake)} au plus {i('(pas calculée sur ta bankroll)')}")]
-    foot = i("💎 Cotes relevées chez 1xBet par Kelly ce matin : vérifie qu'elles n'ont pas baissé avant de valider." if real else
+    foot = i(f"💎 Cotes 1xBet de {esc(when)} : vérifie qu'elles n'ont pas baissé avant de valider." if real and when else
+             "💎 Cotes relevées chez 1xBet par Kelly : vérifie qu'elles n'ont pas baissé avant de valider." if real else
              ("⚠️ Kelly n'a pas vu toutes les cotes de 1xBet : " if any(c.get("xodds") for c in picks) else
               "⚠️ Kelly n'a pas vu les cotes de 1xBet : ") + "joue seulement si CHAQUE pari atteint sa cote mini "
              f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")

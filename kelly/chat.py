@@ -58,6 +58,24 @@ def with_played_button(text, what, day, funded=True, refresh=None):
     return telegram.with_buttons(text, markup) if markup else text
 
 
+def refresh_row(what, day):
+    """Ligne « 🎟️ Vérifier ce combiné » d'un combiné « v<palier> » aux cotes 1xBet, à garder quand les boutons du pari changent ([] sinon)."""
+    if not str(what).startswith("v"):
+        return []
+    t = played.find(what, str(day)[:10])
+    if t is None or isinstance(t, str) or not played.is_real(t.item):
+        return []
+    return telegram.inline([[("🎟️ Vérifier ce combiné", f"xmaj|{what[1:]}|{str(day)[:10]}")]])["inline_keyboard"]
+
+
+def keep_refresh(markup, what, day):
+    """`markup` (boutons du pari) avec, en plus, la ligne « 🎟️ Vérifier ce combiné » s'il y a lieu."""
+    extra = refresh_row(what, day)
+    if not extra:
+        return markup
+    return {"inline_keyboard": ((markup or {}).get("inline_keyboard") or []) + extra}
+
+
 def combi_picker():
     return telegram.with_buttons("🎯 Quelle cote veux-tu pour ton combiné ?",
                                  telegram.inline([[(f"cote {t}", f"combi|{t}") for t in COMBI_TARGETS]]))
@@ -97,8 +115,8 @@ def _answer(p, text):
     reply = played.command([p["what"], text], p["day"])
     if reply.startswith("✅ Noté") and p.get("msg"):
         label = (f"✅ Joué à {money.split_tokens([text])[0]}", None)
-        telegram.edit_buttons(p["msg"], telegram.inline([[label, ("❌ Pas joué", f"skip|{p['what']}|{p['day']}")]] if money.active()
-                                                         else [[label]]))
+        telegram.edit_buttons(p["msg"], keep_refresh(telegram.inline([[label, ("❌ Pas joué", f"skip|{p['what']}|{p['day']}")]]
+                                                                     if money.active() else [[label]]), p["what"], p["day"]))
     return reply
 
 
@@ -183,8 +201,8 @@ def on_callback(data, message_id=None):
             if len(parts) == 4:                       # depuis la liste « Mes paris » : la liste entière est rafraîchie
                 markup = getattr(played.todo(parts[2]), "markup", None) or {"inline_keyboard": []}
             else:
-                markup = (telegram.inline([[("↩️ Finalement joué", f"unskip|{parts[1]}|{parts[2]}")]]) if parts[0] == "skip"
-                          else played_button(parts[1], parts[2]))
+                markup = keep_refresh(telegram.inline([[("↩️ Finalement joué", f"unskip|{parts[1]}|{parts[2]}")]]) if parts[0] == "skip"
+                                      else played_button(parts[1], parts[2]), parts[1], parts[2])
             telegram.edit_buttons(message_id, markup)
         return reply
     if parts[0] == "budget" and len(parts) == 2:

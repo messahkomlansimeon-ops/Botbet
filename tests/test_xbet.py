@@ -555,6 +555,7 @@ def test_refresh_button_and_updates():
     assert chat.route("🔄 Mettre à jour tous les paris") == ("/cotes", None) and chat.route("actualiser") == ("/cotes", None)
     assert chat.route("🔄 Actualiser les cotes") == ("/cotes", None) and chat.route("mettre à jour") == ("/cotes", None)
     store.save(app.COMBO_UPDATES, {})
+    store.save(fair.COMBOS_FILE, [fair.combo_row(5, (legs, 1.55 ** 4, 0.72 ** 4), DAY2)])       # le suivi suit la dernière version envoyée : retour au matin
     fetch = lambda ev, deadline=None, wanted=None: {k: v for k, v in fake_px(("m3",)).items() if k in {e["id"] for _, e in ev}}  # noqa: E731
     reply, sent, _ = with_fakes(lambda: app.manual_refresh(now=now.replace(hour=16), fetch=fetch))
     assert reply.startswith("✅ Cotes 1xBet actualisées à 16:00 : 7 match(s) relu(s)") and "1 combiné(s) du matin mis à jour" in reply, reply

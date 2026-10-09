@@ -109,15 +109,23 @@ def find(word, day):
         if not c:
             return None if not (w[1:].isdigit() or CB.shots_title(w[1:])) else \
                 f"Pas de combiné à vérifier « {_fair_name(w[1:])} » à noter (ni aujourd'hui ni en attente de résultat)."
-        return Target(c, c["min_odds"], c["stake"] if c.get("cur") or c.get("stake") == 0 else CB.fair_stake(c["min_odds"]), f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])}) "
-                      f"du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows), "cote mini")
+        what = (f"combiné aux cotes 1xBet (cote {fmt.odds_txt(c['min_odds'])})" if is_real(c)
+                else f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])})")
+        return Target(c, c["min_odds"], c["stake"] if c.get("cur") or c.get("stake") == 0 else CB.fair_stake(c["min_odds"]),
+                      f"{what} du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows),
+                      "cote 1xBet" if is_real(c) else "cote mini")
     return None
 
 
-def _fair_name(tier):
-    """« Tirs cadrés », « Tirs vers le but » pour les combinés « spécial tirs », sinon « À vérifier »."""
+def is_real(c):
+    """Combiné de fair_combos.json bâti avec les cotes 1xBet relevées (toutes les jambes ont leur cote) : « cote », pas « cote mini »."""
+    return bool(c.get("legs")) and all(leg.get("xodds") for leg in c["legs"])
+
+
+def _fair_name(tier, real=False):
+    """« Tirs cadrés », « Tirs vers le but » pour les combinés « spécial tirs », sinon « À vérifier » (« Aux cotes 1xBet » si `real`)."""
     t = CB.shots_title(str(tier))
-    return t.replace("🎯 COMBINÉ ", "").capitalize() if t else "À vérifier"
+    return t.replace("🎯 COMBINÉ ", "").capitalize() if t else ("Aux cotes 1xBet" if real else "À vérifier")
 
 
 def _gap(odds, ref):
@@ -185,8 +193,8 @@ def todo(day):
     lines, rows = [], []
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
-    items_ += [(f"{_fair_name(c['tier'])} (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"v{c['tier']}")
-               for c in fair.load_combos() if c["date"] == day]
+    items_ += [(f"{_fair_name(c['tier'], is_real(c))} (cote {'' if is_real(c) else 'mini '}{fmt.odds_txt(c['min_odds'])})", c, c["min_odds"],
+                f"v{c['tier']}") for c in fair.load_combos() if c["date"] == day]
     if not items_:
         return f"Rien à noter aujourd'hui : les paris du jour arrivent à {C.DAY_END_HOUR:02d}h00."
     if any(x.get("cur") for _, x, _, _ in items_):
