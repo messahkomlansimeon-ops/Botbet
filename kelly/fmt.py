@@ -256,7 +256,7 @@ def pronos(items, limit=10, title=None, intro=None):
             q = c.get("conf")
             data = "" if q is None else (" · données solides" if q >= 0.4 else " · données correctes")
             if c.get("xodds"):
-                lines.append(f"💎 {esc(c['pick'])} — cote 1xBet {b(num(c['xodds']))}")
+                lines.append(f"💎 {esc(c['pick'])} — cote 1xBet {b(num(c['xodds']))}{xbet_link(c)}")
                 lines.append(i(f"   {pct(c['prob'])} de chances{data} · valeur {c['xev'] * 100:+.0f} %"))
             else:
                 lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")
@@ -266,11 +266,18 @@ def pronos(items, limit=10, title=None, intro=None):
     return Html("\n".join(lines))
 
 
+def xbet_link(c):
+    """« · ouvrir chez 1xBet » : lien vers la page du match (c["xcid"], kelly/xprice.py) ; rien sans id."""
+    if not c.get("xcid"):
+        return ""
+    return f' · <a href="https://1xbet.ci/fr/line/football/1/{int(c["xcid"])}">ouvrir chez 1xBet</a>'
+
+
 def fair_leg(n, c):
     """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
     chances = i(f"({pct(c['prob'])} de chances)")
     if c.get("xodds"):
-        return "\n".join([_match_line(n, c), f"💎 {esc(c['pick'])}", f"✔️ Cote 1xBet {b(num(c['xodds']))}  {chances}"])
+        return "\n".join([_match_line(n, c), f"💎 {esc(c['pick'])}", f"✔️ Cote 1xBet {b(num(c['xodds']))}  {chances}{xbet_link(c)}"])
     return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 

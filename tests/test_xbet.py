@@ -34,7 +34,7 @@ GAMES = [{"id": 900, "mainGameId": 900, "startTs": KO, "sport": {"id": 1},
          {"id": 901, "mainGameId": 901, "startTs": KO, "sport": {"id": 1},
           "opponent1": {"fullName": "Home (Special bets)"}, "opponent2": {"fullName": "Away (Special bets)"}},
          {"id": 902, "mainGameId": 777, "startTs": KO, "sport": {"id": 1}, "opponent1": {"fullName": "x"}, "opponent2": {"fullName": "y"}}]
-MAIN = {"eventGroups": [{"groupId": 1, "events": [cell(1, 2.878), cell(2, 3.295), cell(3, 2.745)]},
+MAIN = {"constId": 369147714, "eventGroups": [{"groupId": 1, "events": [cell(1, 2.878), cell(2, 3.295), cell(3, 2.745)]},
                         {"groupId": 8, "events": [cell(4, 1.512), cell(5, 1.385), cell(6, 1.474)]},
                         {"groupId": 19, "events": [cell(180, 1.79), cell(181, 1.937)]},
                         {"groupId": 17, "events": [cell(9, 2.167, 2.5) + cell(10, 1.806, 2.5), cell(9, 1.33, 1.5) + cell(10, 3.3, 1.5)]}],
@@ -133,7 +133,8 @@ def test_fetch_day_requests():
     eps = [urlparse(u).path.rsplit("/", 1)[-1] + ("#" + dict(parse_qsl(urlparse(u).query)).get("gameId", "")) for u in calls]
     # menu, liste de la Liga, marché principal, corners ; pas de tirs cadrés (non voulus) ; Premier League absente du menu : rien
     assert eps == ["leftMenuSports#", "games1x2#", "gameEvents#900", "gameEvents#951"], eps
-    assert got["e1"]["px"][("alternate_totals_corners", "Over", 9.5)] == 1.99
+    assert got["e1"]["px"][("alternate_totals_corners", "Over", 9.5)] == 1.99 and got["e1"]["cid"] == 369147714
+    assert xbet.match_url(369147714) == "https://1xbet.ci/fr/line/football/1/369147714" and xbet.match_url(None) is None
     assert state.health("xbet")["rows"] == 1
     print("ok  requêtes limitées aux familles voulues")
 
@@ -258,14 +259,16 @@ def test_apply_and_messages():
 
     def fetch(events, deadline=None, wanted=None):
         seen.update(events=[e["id"] for _, e in events], wanted=wanted)
-        return {"e1": {"gid": 900, "px": px}}
+        return {"e1": {"gid": 900, "px": px, "cid": 369147714}}
     assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0, "none": 0}
     assert seen["events"] == ["e1", "e2"] and seen["wanted"]["e1"] == {"alternate_totals_corners"}
     text = fmt.pronos(CB.best_per_match(pronos))
     assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text, text
+    assert '<a href="https://1xbet.ci/fr/line/football/1/369147714">ouvrir chez 1xBet</a>' in text, "lien vers le match"
     assert "— mini <b>" not in text and "« mini »" not in text, "le pronostic sans cote 1xBet n'est pas montré"
     real = fmt.fair_combo(3.96, [pronos[0], pronos[0] | {"id": "x"}], 0.36, 0.5)
     assert real.startswith("<b>💎 COMBINÉ AUX COTES 1XBET</b>") and "🎯 Cote <b>" in real and "✔️ Cote 1xBet <b>1,99</b>" in real
+    assert real.count("ouvrir chez 1xBet") == 2
     mixed = fmt.fair_combo(3.0, [pronos[0], pronos[1]], 0.4, 0.5)
     assert "À VÉRIFIER CHEZ 1XBET" in mixed and "Kelly n'a pas vu toutes les cotes" in mixed
     old = C.XBET_ENABLED

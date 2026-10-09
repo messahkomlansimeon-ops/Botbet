@@ -227,13 +227,19 @@ def _events(gid):
 def prices(game, markets, home, away):
     """Cotes 1xBet d'un match pour les marchés Kelly voulus : {(marché, côté, ligne): cote} ; `home` / `away` : noms Kelly (double
     chance). Une requête pour le marché principal, une de plus par famille statistique demandée (sous-match ouvert seulement :
-    ils ouvrent la veille ou le jour du match)."""
+    ils ouvrent la veille ou le jour du match). L'id permanent du match (lien vers sa page) est noté dans game["cid"]."""
     data = _events(game["gid"])
+    game["cid"] = data.get("constId")
     out, subs = parse_main(data, home, away)
     for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}):
         if t in subs:
             _ladder((_events(subs[t]) or {}).get("eventGroups"), *SUBGAMES[t], out)
     return out
+
+
+def match_url(const_id):
+    """Page publique du match chez 1xBet (l'id du championnat et les noms sont complétés par le site) ; None sans id."""
+    return f"{BASE}/fr/line/football/1/{const_id}" if const_id else None
 
 
 def book_prob(px, market, name, point):
@@ -414,8 +420,8 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
             if not g:
                 continue
         try:
-            out[ev["id"]] = {"gid": g["gid"], "px": ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"],
-                                                             ev["away_team"])} | {"home": g["home"], "away": g["away"]}
+            px = ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])
+            out[ev["id"]] = {"gid": g["gid"], "px": px, "cid": g.get("cid"), "home": g["home"], "away": g["away"]}
         except XbetError as e:
             errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")
     ses.close(f"cotes de {len(out)} match(s)")

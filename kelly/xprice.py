@@ -91,6 +91,8 @@ def apply(pronos, fetch=None):
             for k in ("xodds", "xev", "xp", "xnone"):
                 c.pop(k, None)
             c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
+            if m.get("cid"):
+                c["xcid"] = m["cid"]                # id permanent : lien « ouvrir chez 1xBet » (xbet.match_url)
         r = price(c, m["px"]) if m else None
         if r:
             out[r] += 1
