@@ -295,6 +295,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=()):
         picks_ = []
         for b in best_per_family(opts, families, bases):
             c = make_pick(ev, *b, src)
+            c["n_min"] = min(f.get("n_home") or 0, f.get("n_away") or 0)      # matchs de données de l'équipe la moins connue
             base = bases.get((b[0], b[1], b[2]))
             if base is not None:
                 _with_base(c, base, stat_q(f, b[0]))          # qualité de la statistique du pari (pas celle des buts)
@@ -372,7 +373,7 @@ def load():
     return rows if isinstance(rows, list) else []
 
 
-def record(pronos, day):
+def record(pronos, day, shown=None):
     """Enregistre dans data/fair.json les C.FAIR_TRACK meilleurs pronostics du jour, plus jusqu'à C.FAIR_TRACK_FREE pronostics
     de marchés réglés avec le seul score, suivis en silence (« x » : absents du message de résultats, comptés dans le bilan et la
     fiabilité). Fantômes sans cote : seuls leurs résultats servent, jamais la cote de clôture ni l'apprentissage. Garde
@@ -381,9 +382,11 @@ def record(pronos, day):
     rows = load()
     known = {r["key"] for r in rows}
     n = 0
-    extra = [c for c in pronos[C.FAIR_TRACK:] if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
-    extra += [c for c in pronos[C.FAIR_TRACK:] if c["market"].startswith(("team_shots_", "team_sot_"))][:C.FAIR_TRACK_SHOTS]
-    for c in pronos[:C.FAIR_TRACK] + extra:
+    main = list(shown) if shown is not None else pronos[:C.FAIR_TRACK]     # `shown` : pronostics montrés (un viable par match)
+    rest = [c for c in pronos if c not in main]
+    extra = [c for c in rest if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
+    extra += [c for c in rest if c["market"].startswith(("team_shots_", "team_sot_"))][:C.FAIR_TRACK_SHOTS]
+    for c in main + extra:
         if c["key"] not in known:
             known.add(c["key"])
             rows.append({k: c.get(k) for k in ROW} | {"date": str(day), "result": None}

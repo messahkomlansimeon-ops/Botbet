@@ -1299,7 +1299,8 @@ def test_morning_always_useful():
         assert data["day"] == WDAY and data["brk"] == 1 and data["paid"] == [k for k in data["leagues"] if k in paid_leagues] \
             and sum(len(v) for v in data["leagues"].values()) == 50 and os.path.getsize(store.path("monde.json")) < 20_000
         fair_rows = store.load("fair.json", [])
-        assert len([r for r in fair_rows if not r.get("x")]) == C.FAIR_TRACK and all(r["result"] is None for r in fair_rows)
+        shown_rows = [r for r in fair_rows if not r.get("x")]                     # les montrés : un pronostic viable par match
+        assert shown_rows and len({r["id"] for r in shown_rows}) == len(shown_rows) and all(r["result"] is None for r in fair_rows)
         assert all(r["market"] in fair.FREE_MARKETS for r in fair_rows if r.get("x")) and all("p0" in r for r in fair_rows)
         # --- commandes lues dans le cache du matin (aucun appel réseau)
         sb.serve(lambda url, **kw: (_ for _ in ()).throw(AssertionError(f"requête inattendue : {url}")))

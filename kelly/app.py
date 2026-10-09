@@ -98,7 +98,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
             head.append(fmt.i(fmt.esc(CB.ev_line(rejected))))
         messages.append(telegram.with_buttons(Html("\n".join(head)), chat.menu()))
     if world:
-        messages.append(monde.tour_du_monde(world, len(pronos), why_no_odds))
+        messages.append(monde.tour_du_monde(world, len(CB.best_per_match(pronos)), why_no_odds))
     if top:
         if money.active():                          # mise 0 : notée telle quelle (stake 0, sans devise) = pas de mise sur le budget
             top["stake"] = stakes.get("pari", 0)
@@ -121,7 +121,9 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                                                                stake_txt=mise(stakes.get(("fair", target))), title=CB.shots_title(target)),
                                                 f"v{target}", day, funded=bool(stakes.get(("fair", target)))))
     if pronos:
-        messages.append(fmt.pronos(pronos, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
+        shown = CB.best_per_match(pronos)          # un seul pronostic par match : le meilleur, s'il est viable
+        if shown:
+            messages.append(fmt.pronos(shown, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
     if not messages:
         messages.append(Html(fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}") + "\nPas de cotes réelles aujourd'hui"
                              + (f" — {fmt.esc(why_no_odds)}" if why_no_odds else "")
@@ -369,7 +371,7 @@ def world_report(scan, picks, day, now):
             print(f"[monde] prochains matchs ignorés : {e}", file=sys.stderr)
     try:
         pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.SCAN_SECONDS, africa=africa)
-        fair.record(pronos, day)
+        fair.record(pronos, day, shown=CB.best_per_match(pronos))     # suivis : les montrés + d'autres en silence (fiabilité)
     except Exception as e:                          # noqa: BLE001
         print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)
     data = monde.build(scan, day, now, paid=scan.get("paid", []), africa=africa, ahead=ahead)     # sans crédits : technique
@@ -815,7 +817,7 @@ def analyse(picks, query, pronos=()):
         head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))}\n{fmt.i(fmt.hhmm(free[0]['start']) + ' · ' + fmt.esc(free[0]['league']))}"
         fl = [] if deep else features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"]))
         body = ("\n" + fmt.esc(deep)) if deep else ("\n".join(fl) if fl else "\nPas assez de données pour une analyse approfondie de ce match.")
-        return Html(comma(head + "\n" + body) + "\n\n" + fmt.pronos(free, 6))
+        return Html(comma(head + "\n" + body) + "\n\n" + fmt.pronos(CB.best_per_match(free), 6))
     events = list(dict.fromkeys(c["event"] for c in found))
     if len(events) > 1:
         return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
@@ -912,7 +914,7 @@ def _handle_command(text):
     if cmd == "/top":
         live, live_pronos = upcoming(picks), upcoming(pronos)
         if not live:
-            return fmt.pronos(live_pronos, 10) if live_pronos else "Tous les matchs du jour ont commencé : rendez-vous demain à 08:00."
+            return fmt.pronos(CB.best_per_match(live_pronos), 10) if live_pronos else "Tous les matchs du jour ont commencé : rendez-vous demain à 08:00."
         best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10]
         if not best:
             return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
@@ -926,7 +928,7 @@ def _handle_command(text):
         if not found:
             free = event_matches(pronos, " ".join(args))
             if free:
-                return fmt.pronos(free, 8)
+                return fmt.pronos(CB.best_per_match(free), 8)
             return f"Aucun match du jour ne contient « {' '.join(args)} »."
         found = sorted(found, key=lambda c: c["score"], reverse=True)[:8]
         lines = [f"🔎 {fmt.b(fmt.event_name(found[0]))} · {fmt.hhmm(found[0]['start'])} · {fmt.esc(found[0]['league'])}"]

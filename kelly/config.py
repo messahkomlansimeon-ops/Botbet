@@ -164,6 +164,12 @@ FM_SETTLE_PAGES = 15                              # pages lues au plus par passa
 XG_MIN_MATCHES = _int("XG_MIN_MATCHES", 4)        # matchs portant un xG, par équipe, pour que exp_xg_* vienne des matchs (sinon classement de saison)
 XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir de là ; en dessous, régression vers les buts : n/XG_FULL_N xG + le reste en buts
 # ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
+# Pronostic « viable » (combos.viable) : le seul montré pour un match est son meilleur pronostic viable ; les combinés à vérifier
+# n'utilisent que des pronostics viables. Niveau « modéré » choisi par l'utilisateur.
+VIABLE_MIN_P = _float("VIABLE_MIN_P", 0.58)       # chances minimales (après correction de fiabilité)
+VIABLE_MIN_N = _int("VIABLE_MIN_N", 4)            # matchs de données minimum pour chacune des deux équipes
+VIABLE_MIN_Q = _float("VIABLE_MIN_Q", 0.25)       # qualité minimale des données (0 à 1)
+VIABLE_MIN_K = _float("VIABLE_MIN_K", 0.85)       # marché (ou championnat) où Kelly s'est montrée trop sûre d'elle : écarté
 FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
 FAIR_COMBO_TIERS = ((5, 5.0, 6.5), (12, 12.0, 15.0), (25, 25.0, 32.0))   # (cote mini visée, fourchette de la cote mini totale)

@@ -235,15 +235,23 @@ def single(c, reason=None, title="⭐ PARI DU JOUR", hint=None, stake_txt=None):
 def pronos(items, limit=10):
     """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale."""
     shown = items[:limit]
+    if not shown:
+        return Html(b("🎲 Pronostics Kelly sans cote") + "\n" + i("Aucun pronostic assez solide : Kelly ne montre que des pronostics "
+                                                                 "viables (assez de chances et de données)."))
     lines = [b("🎲 Pronostics Kelly sans cote"),
-             i("À comparer chez 1xBet : joue seulement si la cote est au moins celle indiquée.")]
+             i("Le meilleur pronostic de chaque match, s'il est solide. À comparer chez 1xBet : joue seulement si la cote est au "
+               "moins celle indiquée.")]
     by = {}
     for c in shown:
         by.setdefault(c["id"], []).append(c)
     for cs in by.values():
         lines.append("")
         lines.append(_match_line(None, cs[0]))
-        lines += [f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}" for c in cs]
+        for c in cs:
+            lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")
+            q = c.get("conf")
+            data = "" if q is None else (" · données solides" if q >= 0.4 else " · données correctes")
+            lines.append(i(f"   {pct(c['prob'])} de chances{data}"))
     if len(items) > len(shown):
         lines += ["", i(f"+ {len(items) - len(shown)} autres : écris un nom d'équipe pour voir un match")]
     return Html("\n".join(lines))

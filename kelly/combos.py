@@ -282,6 +282,29 @@ def skip_line(missing, n_events, anything=True):
 # minimales) et une proba. Jamais mélangé aux combinés à cotes réelles (autres jambes, autres messages, autre suivi) et
 # jamais de mise calculée sur la bankroll : seulement une mise indicative.
 
+def viable(c):
+    """Pronostic sans cote assez solide pour être montré ou joué (C.VIABLE_*) : assez de chances après correction de fiabilité, assez
+    de matchs de données pour les deux équipes, données de qualité suffisante, match plus favorable au pari qu'un match moyen du
+    championnat (c["base"], modèle approfondi), et marché ou championnat où Kelly ne s'est pas montrée trop sûre d'elle."""
+    from . import calib
+    if c.get("prob", 0) < C.VIABLE_MIN_P or c.get("conf", 1.0) < C.VIABLE_MIN_Q:
+        return False
+    if c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N:
+        return False
+    if c.get("base") is not None and c["prob"] < c["base"]:
+        return False
+    return calib.factor(c["market"], sport_key=c.get("sport_key")) >= C.VIABLE_MIN_K
+
+
+def best_per_match(pronos):
+    """Le meilleur pronostic viable de chaque match (le mieux classé), dans l'ordre du classement : un seul par match."""
+    best = {}
+    for c in sorted(pronos, key=lambda c: -c.get("score", 0)):
+        if c["id"] not in best and viable(c):
+            best[c["id"]] = c
+    return list(best.values())
+
+
 def fair_eligible(c):
     """Pronostic assez solide pour un combiné : proba Kelly >= FAIR_COMBO_MIN_P, qualité des données >= FAIR_COMBO_MIN_Q."""
     return (c.get("prob", 0) >= C.FAIR_COMBO_MIN_P and c.get("conf", C.FAIR_COMBO_MIN_Q) >= C.FAIR_COMBO_MIN_Q
@@ -290,7 +313,7 @@ def fair_eligible(c):
 
 def fair_legs(pronos):
     """Jambes d'un combiné à cote juste : les pronostics solides, avec la cote minimale comme « cote » de l'optimiseur."""
-    return [c | {"odds": c["min_odds"]} for c in pronos if fair_eligible(c)]
+    return [c | {"odds": c["min_odds"]} for c in pronos if fair_eligible(c) and viable(c)]
 
 
 def fair_stake(min_total):
