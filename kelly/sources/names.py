@@ -22,6 +22,9 @@ _EXTRA = {
     "sp gijon": "sporting gijon", "la coruna": "deportivo la coruna", "hertha": "hertha berlin", "for sittard": "fortuna sittard",
     "nijmegen": "nec nijmegen", "hibs": "hibernian", "sporting cp": "sporting",
     "greuther furth": "furth", "spvgg greuther furth": "furth", "austria wien": "austria vienna",
+    # 365scores appelle « Chivas » le club que FotMob / 1xBet appellent « Guadalajara » ; et sans l'alias d'Atlas, « Guadalajara » seul
+    # ressemblerait (mot distinctif commun) à « Atlas Guadalajara » quand Chivas n'a pas encore de profil : un autre club
+    "chivas": "guadalajara", "atlas guadalajara": "atlas",
 }
 _SUFFIX = {"jr", "junior", "sr", "filho"}
 

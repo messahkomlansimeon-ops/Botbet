@@ -1,6 +1,6 @@
 import time
 
-from . import betexplorer, fbref, fmmatch, footballdata, fotmob, names, understat
+from . import betexplorer, fbref, fmmatch, footballdata, fotmob, names, s365, understat
 from .. import apistats, catalogue, config as C, store
 
 MIN_N = 3
@@ -427,16 +427,58 @@ def _fmmatch(out, home, away, sport_key):
     out.setdefault("n_away", n_a)
 
 
+S365_STATS = ("corners", "shots", "sot", "fouls", "cards", "throws", "offsides")      # pas les buts : le modèle de buts garde ses sources
+S365_LABEL = "365scores"
+
+
+def _s365(out, home, away, sport_key):
+    """Stats de match 365scores accumulées (s365) : DERNIÈRE source, elle ne complète que les chiffres qu'aucune autre n'a donnés (football-data,
+    classements et matchs FotMob, API-Football passent avant elle). Mêmes seuils que les profils FotMob : APISTATS_MIN_N matchs par équipe
+    (s365.profiles), aps_quality, moyennes d'une stat sur au moins APISTATS_MIN_N matchs qui la portent. Les clés vont dans aps_keys (la
+    qualité et l'effectif suivent, comme pour FotMob et API-Football : le plus prudent des profils courts) ET dans out["s365_keys"] (provenance :
+    les textes peuvent dire « 365scores » pour ces chiffres-là seulement)."""
+    data = ((_p("s3", s365).get("leagues") or {}).get(sport_key) or {}).get("teams") or {}
+    h, a = names.best_team(home, data), names.best_team(away, data)
+    if not h or not a or data[h] is data[a]:
+        return
+    ht, at = data[h], data[a]
+    tmp = {}
+    for stat in S365_STATS:
+        hv, av = _expect(ht, at, stat)
+        _put_pair(tmp, stat, stat, hv, av, total=True)
+    new = {k: v for k, v in tmp.items() if k not in out}
+    if not new:
+        return
+    out.update(new)
+    if "exp_cards" in new:
+        out.setdefault("exp_cards_team", out["exp_cards"])
+    n_h, n_a = ht["all"]["n"], at["all"]["n"]
+    out["sources"].append(S365_LABEL)
+    q = aps_quality(min(n_h, n_a))
+    if out.get("aps_keys"):                              # d'autres chiffres d'un profil court déjà là : on garde l'effectif et la qualité les plus prudents
+        o = tuple(out.get("aps_n") or (n_h, n_a))
+        q, n_h, n_a = min(q, out.get("aps_q", q)), min(n_h, o[0]), min(n_a, o[1])
+    out["aps_keys"] = sorted(set(out.get("aps_keys") or ()) | set(new))
+    out["s365_keys"] = sorted(set(out.get("s365_keys") or ()) | set(new))
+    out["aps_n"] = (n_h, n_a)
+    out["aps_q"] = q
+    out.setdefault("home_team", h)
+    out.setdefault("away_team", a)
+    out.setdefault("n_home", n_h)
+    out.setdefault("n_away", n_a)
+
+
 def match_features(home, away, sport_key, referee=None):
     out = {"sources": []}
     if sport_key.startswith("africa"):
-        steps = [(_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key))]
+        steps = [(_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key)), (_s365, (home, away, sport_key))]
         if sport_key in AFR_XB:                         # championnat vu par 1xBet : aussi les buts du classement FotMob
             steps.insert(0, (_fotmob, (home, away, sport_key)))
     else:
         steps = [(_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
                  (_fotmob, (home, away, sport_key)), (_fbref, (home, away, sport_key)),
-                 (_deep, (home, away, sport_key, referee)), (_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key))]
+                 (_deep, (home, away, sport_key, referee)), (_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key)),
+                 (_s365, (home, away, sport_key))]
     for fn, args in steps:
         try:
             fn(out, *args)

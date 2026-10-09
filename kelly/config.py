@@ -230,6 +230,27 @@ FM_SETTLE_PAGES = 15                              # pages lues au plus par passa
 # xG par match (fmmatch -> features._fmmatch) : meilleur prédicteur des buts futurs que les buts ou le total de saison du classement FotMob
 XG_MIN_MATCHES = _int("XG_MIN_MATCHES", 4)        # matchs portant un xG, par équipe, pour que exp_xg_* vienne des matchs (sinon classement de saison)
 XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir de là ; en dessous, régression vers les buts : n/XG_FULL_N xG + le reste en buts
+# ---- Stats de match 365scores (kelly/sources/s365.py) : corners, tirs, tirs cadrés, fautes, touches, hors-jeu, cartons par équipe ----
+# Complète FotMob / API-Football là où Kelly n'a pas (assez) de matchs : championnats 1xBet, Amérique du Sud, Mexique, USL... Accès poli
+# seulement (robots.txt, identité KellyBot déclarée, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
+# Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
+S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
+S365_GAMES_PER_RUN = _int("S365_GAMES_PER_RUN", 20)   # statistiques de match lues par passage horaire (0 = désactivé)
+S365_LISTS_PER_RUN = _int("S365_LISTS_PER_RUN", 4)    # listes de résultats (ou pages plus anciennes) lues par passage
+S365_SECONDS = _int("S365_SECONDS", 100)          # durée maximale du remplissage d'un passage (3 s entre deux requêtes)
+S365_DAILY = _int("S365_DAILY", 240)              # plafond de requêtes par jour (UTC), listes comprises, tous passages confondus
+S365_HOURS = (os.environ.get("S365_HOURS") or "").strip()   # heures UTC permises, « 0-6,22-23 » ; vide = tous les passages
+S365_LEAGUES = _list("S365_LEAGUES", "")          # clés de ligue suivies (« all » : toutes celles du catalogue 365) ; vide = celles sans statistiques football-data
+S365_WINDOW_DAYS = _int("S365_WINDOW_DAYS", 28)   # remplissage : jusqu'à 4 semaines en arrière, pages plus anciennes comprises
+S365_FRESH_DAYS = 7                               # un match de moins de 7 jours est toujours lu, même pour une équipe déjà bien fournie
+S365_TARGET_N = _int("S365_TARGET_N", 8)          # au-delà de ce nombre de matchs lus par équipe, seuls les matchs récents (S365_FRESH_DAYS) sont lus
+S365_KEEP_MATCHES = 12                            # derniers matchs gardés par équipe
+S365_RECENT_DAYS = 10                             # matchs gardés en entier pour le règlement des paris (s365.match_stats)
+S365_SETTLE_REQUESTS = _int("S365_SETTLE_REQUESTS", 8)    # statistiques lues au plus par exécution pour régler un pari dont le match n'est pas encore lu
+S365_KEEP_DAYS = 150                              # équipe oubliée sans mise à jour depuis ce nombre de jours
+S365_LIST_HOURS = _int("S365_LIST_HOURS", 20)     # une liste de résultats n'est relue qu'après ce délai (x3 pour un championnat sans match depuis 2 semaines)
+S365_BACKFILL_REQUESTS = _int("S365_BACKFILL_REQUESTS", 150)    # `python -m kelly.sources.s365 backfill` : requêtes au plus (listes comprises)
+S365_BACKFILL_SECONDS = _int("S365_BACKFILL_SECONDS", 900)      # ... et durée au plus
 # ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
 # Pronostic « viable » (combos.viable) : le seul montré pour un match est son meilleur pronostic viable ; les combinés à vérifier
 # n'utilisent que des pronostics viables. Niveau « modéré » choisi par l'utilisateur.

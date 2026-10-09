@@ -2,7 +2,7 @@ import sys
 from datetime import date, datetime
 
 from .. import config as C
-from . import betexplorer, fbref, features, footballdata, fotmob, http, state, understat
+from . import betexplorer, fbref, features, footballdata, fotmob, http, s365, state, understat
 from .features import match_features, player_features, team_profile
 
 SOURCES = (footballdata, understat, fbref, fotmob, betexplorer)
@@ -120,4 +120,20 @@ def report():
             lines.append(f"✅ {m.LABEL} : {h['rows']} lignes, maj {_short(h['last_success'])} UTC{warn}")
         else:
             lines.append(f"⚠️ {m.LABEL} : {h['last_error'] or 'échec'}")
+    lines += _s365_lines()
     return "\n".join(lines)
+
+
+def _s365_lines():
+    """365scores (stats de match, s365.fill du passage horaire) n'est pas dans SOURCES (il n'a pas de rafraîchissement du matin) : une ligne
+    seulement une fois lancé ou s'il est bloqué, pour ne pas alourdir le rapport d'une source qui n'a encore rien lu."""
+    h = s365.health()
+    if h["blocked_until"]:
+        err = h["last_error"] or "accès refusé"
+        return ["⛔ " + (err if err.startswith(s365.LABEL) else f"{s365.LABEL} : {err}")]
+    if h["ok"] is None:
+        return []
+    warn = f" ; ⚠️ {h['last_error']}" if h["last_error"] else ""
+    if h["ok"]:
+        return [f"✅ {s365.LABEL} (stats de match) : {h['rows']} matchs lus, maj {_short(h['last_success'])} UTC{warn}"]
+    return [f"⚠️ {s365.LABEL} : {h['last_error'] or 'échec'}"]
