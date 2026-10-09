@@ -117,8 +117,13 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
                             "stake": st} | ({"cur": cur} if money.active() and st else {}))
     for target, (legs, min_total, prob) in built_fair:
+        coupon = None
+        if all(c.get("xref") for c in legs):
+            from .sources import xbet
+            coupon = xbet.save_coupon(legs)
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                               stake_txt=mise(stakes.get(("fair", target))), title=CB.shots_title(target)),
+                                                               stake_txt=mise(stakes.get(("fair", target))),
+                                                               title=CB.shots_title(target), coupon=coupon),
                                                 f"v{target}", day, funded=bool(stakes.get(("fair", target)))))
     if pronos:
         shown = CB.best_per_match(pronos)          # un seul pronostic par match : le meilleur, s'il est viable
@@ -1037,7 +1042,11 @@ def custom_combo(picks, pronos, target, day, started=False):
         head = (f"{real} : voici un combiné bâti sur les pronostics de Kelly, aux cotes 1xBet relevées par Kelly "
                 f"(cote {fmt.trim(min_total, 1)})." if all(c.get("xodds") for c in legs) else
                 f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier chez 1xBet.")
-        return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total)))
+        coupon = None
+        if all(c.get("xref") for c in legs):
+            from .sources import xbet
+            coupon = xbet.save_coupon(legs)
+        return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), coupon=coupon))
     sf = CB.fair_shortfall(pronos, target)
     if sf["matches"] >= 2:
         reach.append(sf["best_total"])
