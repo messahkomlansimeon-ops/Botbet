@@ -229,16 +229,17 @@ def parse_main(data, home, away, refs=None, gid=0):
     return out, subs
 
 
-_ODDS_TTL = [TTL_ODDS]           # 0 pendant live_mode : cotes relues à l'instant
+_ODDS_TTL = [TTL_ODDS]           # C.XBET_FRESH_MIN min pendant live_mode : cotes relues sauf si elles viennent d'être lues
 
 
 @contextmanager
 def live_mode():
-    """Vérification en direct (combi N, bouton « 🔄 Cotes à jour ») : cotes relues sans cache, même pendant une commande Telegram
-    (hors ligne par ailleurs : seul 1xBet est relu), C.XBET_LIVE_DELAY s entre deux requêtes. Tout est rétabli à la sortie."""
+    """Vérification en direct (combi N, boutons « 🔄 ») : cotes relues même pendant une commande Telegram (hors ligne par ailleurs :
+    seul 1xBet est relu), C.XBET_LIVE_DELAY s entre deux requêtes ; celles lues il y a moins de C.XBET_FRESH_MIN min (relevé,
+    « Actualiser les cotes » ou combi juste avant) sont reprises du cache : pas de proxy pour rien. Tout est rétabli à la sortie."""
     from .. import cache as kcache
     old = (kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE.get(DOMAIN))
-    kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE[DOMAIN] = False, 0, C.XBET_LIVE_DELAY
+    kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE[DOMAIN] = False, C.XBET_FRESH_MIN * 60, C.XBET_LIVE_DELAY
     try:
         yield
     finally:

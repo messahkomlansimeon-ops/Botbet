@@ -440,7 +440,22 @@ def test_live_mode_and_patch():
     from kelly.sources import http as H
     cache.OFFLINE = True
     with xbet.live_mode():
-        assert not cache.OFFLINE and xbet._ODDS_TTL[0] == 0 and H.delay_for(xbet.DOMAIN) == C.XBET_LIVE_DELAY
+        assert not cache.OFFLINE and xbet._ODDS_TTL[0] == C.XBET_FRESH_MIN * 60 and H.delay_for(xbet.DOMAIN) == C.XBET_LIVE_DELAY
+        # cotes lues il y a 2 min : reprises du cache (aucune requête) ; il y a 6 min : relues
+        import requests
+        from kelly.sources import state as S
+        u = xbet.url("gameEvents", gameId=4242)
+        H._write(H._key(u, xbet.JSON_H), {"url": u, "fetched_at": S.clock() - 120, "status": 200}, b'{"eventGroups": []}')
+        old_get, calls = requests.get, []
+        requests.get = lambda *a, **k: calls.append(a) or (_ for _ in ()).throw(requests.ConnectionError("pas de réseau"))
+        try:
+            assert H.fetch(u, xbet.SOURCE, xbet._ODDS_TTL[0], headers=xbet.JSON_H).from_cache and not calls
+            H._write(H._key(u, xbet.JSON_H), {"url": u, "fetched_at": S.clock() - 360, "status": 200}, b'{"eventGroups": []}')
+            H.PROXIES.pop(xbet.DOMAIN, None)
+            H.fetch(u, xbet.SOURCE, xbet._ODDS_TTL[0], headers=xbet.JSON_H, check_robots=False)
+            assert calls, "plus de 5 min : relu chez 1xBet"
+        finally:
+            requests.get = old_get
     assert cache.OFFLINE and xbet._ODDS_TTL[0] == xbet.TTL_ODDS and xbet.DOMAIN not in H.DELAY_OVERRIDE
     cache.OFFLINE = False
     store.save(calib.FILE, {})
