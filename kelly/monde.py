@@ -47,6 +47,8 @@ def build(scan, day, now, paid=(), africa=(), ahead=None, spent=None, allowance=
             "africa": [[f["lg"], f["home"], f["away"], _hhmm(f.get("ts"))] for f in africa if not _dup_africa(f, scan)][:40]}
     if scan.get("error"):
         data["error"] = scan["error"][:160]
+    if scan.get("failed"):
+        data["fail"] = len(scan["failed"])             # ligues dont /events a échoué : « relevé partiel », jamais « aucun match »
     if spent is not None:
         data["spent"], data["allow"] = spent, allowance
     if ahead:
@@ -158,6 +160,9 @@ def tour_du_monde(data, n_prono=0, why_no_odds=None):
     if data.get("error") and not data.get("leagues"):
         return Html(f"{head}\n\n⚠️ Impossible de lister les matchs du jour ({_esc(data['error'])}). Kelly réessaiera au prochain passage.")
     n_tot = total(data)
+    if not n_tot and data.get("fail"):                 # des ligues n'ont pas pu être interrogées : on ne sait pas qu'il n'y a pas de match
+        return Html(f"{head}\n\n⚠️ Aucun match relevé, mais {data['fail']} ligue(s) n'ont pas pu être interrogées (The Odds API "
+                    "injoignable ou en erreur) : ce n'est pas forcément une journée sans match. Kelly réessaiera au prochain passage.")
     if not n_tot:
         return Html(f"{head}\n\n😴 Aucun match aujourd'hui dans les {len(data.get('act', []))} ligues en saison que Kelly suit.\n"
                     f"{_esc(_ahead(data))}")
@@ -166,7 +171,9 @@ def tour_du_monde(data, n_prono=0, why_no_odds=None):
     lines = [head, f"{_plural(n_tot, 'match')} aujourd'hui dans {_plural(n_lg, 'ligue')}"]
     if data.get("brk") and "monde" in dict(groups(data)):
         lines.append("<i>Trêve internationale : pas de grande affiche en Europe, les sélections passent d'abord.</i>")
-    if not data.get("complete", 1):
+    if data.get("fail"):
+        lines.append(f"<i>Relevé partiel ({_plural(data['fail'], 'ligue')} en erreur chez The Odds API).</i>")
+    elif not data.get("complete", 1):
         lines.append("<i>Relevé partiel (délai atteint).</i>")
     for r, leagues in groups(data):
         lines += _block(catalogue.region_label(r),
@@ -200,7 +207,8 @@ def fmt_monde(data, arg=""):
     d = date.fromisoformat(data["day"])
     paid = set(data.get("paid", []))
     lines = [f"🌍 MATCHS DU {fr_date(d)} ({total(data)} matchs, relevé de {data.get('at', '?')} UTC)"
-             + (" — relevé partiel" if not data.get("complete", 1) else "")]
+             + (f" — relevé partiel ({_plural(data['fail'], 'ligue')} en erreur)" if data.get("fail")
+                else " — relevé partiel" if not data.get("complete", 1) else "")]
     for r, leagues in groups(data):
         if want and r != want:
             continue
@@ -211,8 +219,12 @@ def fmt_monde(data, arg=""):
         af = _africa_lines(data, limit=15)
         lines += ([""] + af) if af else []
     if len(lines) == 1:
-        lines.append("Aucun match dans cette région aujourd'hui." if want else "Aucun match aujourd'hui."
-                     + f"\n{_ahead(data)}")
+        if data.get("fail") or data.get("error"):        # relevé en panne : ne pas annoncer une journée sans match
+            lines.append("Aucun match relevé : " + (f"{data['fail']} ligue(s) n'ont pas pu être interrogées" if data.get("fail")
+                                                    else "liste des matchs indisponible") + " (The Odds API). Réessaie plus tard.")
+        else:
+            lines.append("Aucun match dans cette région aujourd'hui." if want else "Aucun match aujourd'hui."
+                         + f"\n{_ahead(data)}")
     lines.append(f"\n{FLAG_PAID} = cotes réelles payées aujourd'hui · /ligues pour le catalogue")
     return "\n".join(lines)
 

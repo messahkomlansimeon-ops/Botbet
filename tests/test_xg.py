@@ -178,7 +178,11 @@ def test_features_falls_back_to_season_table():
     season_and_matches(n_xg=3)                                  # 3 matchs avec xG < XG_MIN_MATCHES (4)
     f = features.match_features("Arsenal", "Chelsea", SK)
     assert f["xg_src"] == "fotmob-classement", f
-    assert close(f["exp_xg_home"], (1.5 + 1.4) / 2) and close(f["exp_xg_away"], (1.2 + 1.0) / 2), f
+    # le classement de saison mêle domicile et extérieur : l'avantage du terrain (home_share, ici la moyenne mondiale faute de matchs récents) y est
+    # remis pour TOUTES les ligues, pas seulement celles vues par 1xBet (lot J, point 6 : avant, ce test attendait l'xG symétrique)
+    hs = features.home_share([])
+    assert close(f["exp_xg_home"], (1.5 + 1.4) / 2 * 2 * hs) and close(f["exp_xg_away"], (1.2 + 1.0) / 2 * 2 * (1 - hs)), f
+    assert f["exp_xg_home"] > f["exp_xg_away"] and f["exp_xg_home"] > (1.5 + 1.4) / 2, f
     assert "FotMob" in f["sources"]
     assert not {"exp_xg_home", "exp_xg_total"} & set(f.get("aps_keys") or ())  # le classement n'est pas un profil de matchs
     # aucun xG du tout, aucun classement : pas d'exp_xg_*

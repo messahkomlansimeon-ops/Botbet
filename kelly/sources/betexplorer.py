@@ -10,7 +10,7 @@ au plus BETEXPLORER_KEEP matchs par ligue. Les matchs reportés ou sans cote son
 """
 import os
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .. import store
 from . import http, state
@@ -141,28 +141,40 @@ def parse_results(html, today=None):
 
 
 def _keep(matches):
-    return matches[-BETEXPLORER_KEEP:]
+    """Les BETEXPLORER_KEEP matchs les plus RÉCENTS, du plus ancien au plus récent. La page /results/ liste le plus récent EN PREMIER :
+    garder la fin de la liste (matches[-80:]) gardait les plus anciens (Brésil : janvier à avril sur 289 matchs). Sans date, un match passe
+    après les datés (le plus ancien par défaut) ; à date égale l'ordre de la page est conservé."""
+    newest = sorted(matches, key=lambda m: m.get("d") or "", reverse=True)[:BETEXPLORER_KEEP]
+    return newest[::-1]
+
+
+def results_url(key):
+    path = EXTRA_PATHS.get(key) or PATHS.get(key)
+    return f"{BASE}/football/{path}/results/" if path else None
 
 
 def refresh(sport_keys=None):
-    """Actualise les ligues mappées (1 page results par ligue, cache 12 h). Ne lève jamais."""
+    """Actualise les ligues mappées (1 page results par ligue, cache 12 h). Ne lève jamais. Comme FotMob, les ligues qui jouent aujourd'hui
+    ou demain passent d'abord (state.set_priority), puis la page la plus ancienne : les championnats africains de fin de liste ne sont
+    plus condamnés à rester périmés ; une page servie depuis le cache faute de temps ou d'accès est signalée (profil : stale, rapport)."""
     try:
         if not enabled():
             return health()
         keys = [k for k in (list(PATHS) if sport_keys is None else sport_keys)
                 if k in PATHS and not k.endswith("_")]
         keys = sorted(set(keys)) + [k for k in sorted(EXTRA_PATHS) if k not in keys]
+        keys = state.order(keys, lambda k: http.age(results_url(k)))
         prof = store.load(PROFILE_FILE, {})
         prof = prof if isinstance(prof, dict) else {}
         prof.setdefault("leagues", {})
-        errors, rows = [], 0
+        errors, rows, stale = [], 0, []
         for key in keys:
             if state.is_blocked(NAME):
                 break
             path = EXTRA_PATHS.get(key) or PATHS.get(key)
             if not path:
                 continue
-            u = f"{BASE}/football/{path}/results/"
+            u = results_url(key)
             res = http.fetch(u, NAME, http.TTL_BETEXPLORER)
             if not res.ok:
                 errors.append(f"{key} : {res.error}")
@@ -172,14 +184,24 @@ def refresh(sport_keys=None):
                 errors.append(f"{key} : structure de la page modifiée : aucun match avec cotes")
                 http.invalidate(u)
                 continue
-            prof["leagues"][key] = {"path": path, "matches": _keep(matches)}
+            entry = {"path": path, "matches": _keep(matches)}
+            t = http.fetched_at(u)
+            if t is not None:
+                entry["at"] = datetime.fromtimestamp(t, tz=timezone.utc).isoformat(timespec="minutes")
+            if getattr(res, "stale", False):
+                entry["stale"] = True
+                stale.append(key)
+            prof["leagues"][key] = entry
             rows += len(matches)
         prof["leagues"] = {k: v for k, v in prof["leagues"].items() if k in _LEAGUE_PATHS}
         if rows:
             prof["updated"] = state.now().isoformat(timespec="minutes")
             if state.save_profile(PROFILE_FILE, prof) > state.MAX_PROFILE_BYTES:
                 errors.append("profil trop volumineux (réduire BETEXPLORER_KEEP)")
-        return state.record_run(NAME, rows, errors)
+        if stale:
+            errors.insert(0, f"{len(stale)} ligue(s) servie(s) depuis un cache périmé (téléchargement reporté ou refusé) : "
+                             + ", ".join(stale[:4]) + ("…" if len(stale) > 4 else ""))
+        return state.record_run(NAME, rows, errors, stale=len(stale))
     except Exception as e:
         return state.record_run(NAME, 0, [f"erreur interne ({type(e).__name__}: {e})"])
 

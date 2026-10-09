@@ -72,8 +72,13 @@ def previous_season(code):
 
 
 def default_seasons(today=None):
+    """Saison en cours et les DEUX précédentes : les trois que lit strength.load_matches (modèle de force, réglage `bot.py --tune` qui exige
+    TUNE_MIN_SPAN_DAYS = 540 jours d'historique). Avec deux saisons seulement, une ligue hors BOOT_LEAGUES n'avait en octobre que 13 mois
+    de CSV : « historique trop court » au réglage. Les saisons passées se gardent pour toujours en cache (http.FOREVER) : le coût en
+    téléchargements n'est payé qu'une fois."""
     cur = current_season(today)
-    return [cur, previous_season(cur)]
+    p1 = previous_season(cur)
+    return [cur, p1, previous_season(p1)]
 
 
 def url(div, season):

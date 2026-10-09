@@ -46,6 +46,21 @@ def set_deadline(seconds=None):
     _deadline = time.monotonic() + seconds if seconds else None
 
 
+def monotonic():
+    """Horloge du délai global (celle que fetch compare à get_deadline) ; remplaçable en bloc dans les tests en remplaçant `http.time`."""
+    return time.monotonic()
+
+
+def get_deadline():
+    """Fin (time.monotonic) du délai global des téléchargements, ou None (sources.refresh_all le découpe entre les sources)."""
+    return _deadline
+
+
+def set_deadline_at(instant):
+    global _deadline
+    _deadline = instant
+
+
 def cache_dir():
     return os.environ.get("SOURCES_CACHE_DIR") or os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".cache", "sources")
@@ -93,6 +108,69 @@ def _read(key):
             return meta, f.read()
     except (OSError, ValueError):
         return None
+
+
+def _read_meta(key):
+    """Seulement les métadonnées d'une entrée du cache (pas son corps, qui pèse jusqu'à ~1 Mo) ; None si absente."""
+    try:
+        with open(os.path.join(cache_dir(), key + ".json")) as f:
+            meta = json.load(f)
+        return meta if isinstance(meta, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def fetched_at(url, headers=None):
+    """Instant (état de l'horloge, voir state.clock) du dernier téléchargement de `url` gardé en cache, ou None s'il n'y en a pas."""
+    meta = _read_meta(_key(url, headers))
+    return meta.get("fetched_at") if meta else None
+
+
+def age(url, headers=None):
+    """Secondes écoulées depuis le dernier téléchargement de `url` ; None s'il n'a jamais été téléchargé (la page la plus ancienne qui soit)."""
+    t = fetched_at(url, headers)
+    return None if t is None else max(0.0, state.clock() - t)
+
+
+def _touch(key):
+    """Marque l'entrée comme utilisée maintenant (date de modification du fichier de métadonnées) : prune() oublie celles qu'on n'utilise plus."""
+    try:
+        os.utime(os.path.join(cache_dir(), key + ".json"))
+    except OSError:
+        pass
+
+
+def prune(max_age_days, now=None):
+    """Efface du cache disque les entrées inutilisées depuis plus de `max_age_days` jours (ni téléchargées ni relues : saisons de CSV hors de
+    la fenêtre, anciennes pages de ligue, anciens chemins), ainsi que les fichiers temporaires et corps orphelins. Une entrée utilisée
+    chaque matin (CSV des trois saisons suivies, pages de ligue) n'est jamais effacée : le dossier ne grossit plus sans fin. -> nombre
+    d'entrées effacées."""
+    now = time.time() if now is None else now
+    cut = now - max_age_days * 86400
+    d, n = cache_dir(), 0
+    try:
+        files = os.listdir(d)
+    except OSError:
+        return 0
+    for f in files:
+        path = os.path.join(d, f)
+        try:
+            if f.endswith(".tmp"):
+                if os.path.getmtime(path) < now - 3600:              # reste d'une écriture interrompue (pas celle d'un autre processus en cours)
+                    os.remove(path)
+            elif f.endswith(".json"):
+                if os.path.getmtime(path) < cut:
+                    for ext in (".json", ".bin"):
+                        try:
+                            os.remove(os.path.join(d, f[:-5] + ext))
+                        except OSError:
+                            pass
+                    n += 1
+            elif f.endswith(".bin") and not os.path.exists(os.path.join(d, f[:-4] + ".json")):
+                os.remove(path)
+        except OSError:
+            continue
+    return n
 
 
 def _write(key, meta, body):
@@ -295,6 +373,8 @@ def _fail(url, cached, msg, blocked=False, status=None):
 def fetch(url, source, ttl, headers=None, check_robots=True):
     key = _key(url, headers)
     cached = _read(key)
+    if cached:
+        _touch(key)                       # « utilisée » (même servie périmée) : prune() n'efface que ce qu'on ne relit plus
     if state.is_blocked(source):
         return _fail(url, cached, state.health(source)["last_error"] or "source bloquée", blocked=True)
     if cached and _fresh(cached[0], ttl):

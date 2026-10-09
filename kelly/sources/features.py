@@ -1,14 +1,22 @@
+import time
+
 from . import betexplorer, fbref, fmmatch, footballdata, fotmob, names, understat
-from .. import apistats, catalogue, config as C
+from .. import apistats, catalogue, config as C, store
 
 MIN_N = 3
 REF_MIN_N = 3
 REF_WEIGHT = 0.3
-_cache = {}
+_cache = {}                          # nom court de source -> profils (dict) ; les tests y posent directement des profils fictifs
+_sig = {}                            # nom court -> (id des profils chargés, signature du document dans la base au chargement)
+_checked = {}                        # nom court -> instant de la dernière interrogation du document
+RECHECK_SECONDS = 1.0                # pas plus d'une interrogation par seconde et par source (match_features appelle _p des dizaines de fois par match)
+_clock = time.monotonic
 
 
 def reload():
     _cache.clear()
+    _sig.clear()
+    _checked.clear()
     try:
         from .. import strength
         strength.reload()
@@ -16,13 +24,32 @@ def reload():
         pass
 
 
+def _doc(mod):
+    """Nom du document de profils (table `docs` de la base) qu'une source lit, ou None."""
+    return getattr(mod, "PROFILE_FILE", None) or getattr(mod, "FILE", None)
+
+
 def _p(name, mod):
-    if name not in _cache:
-        try:
-            _cache[name] = mod.profiles() or {}
-        except Exception:
-            _cache[name] = {}
-    return _cache[name]
+    """Profils d'une source, gardés en mémoire MAIS relus dès que leur document change dans la base (store.version, comme strength.tuning) :
+    le bot Telegram qui tourne en continu (--serve) voit ainsi les profils que le passage du matin ou le relevé horaire viennent d'écrire,
+    sans attendre un redémarrage. Des profils posés à la main dans _cache (tests) ne sont jamais écrasés."""
+    have, now = _cache.get(name), _clock()
+    if have is not None and now - _checked.get(name, float("-inf")) < RECHECK_SECONDS:
+        return have
+    doc = _doc(mod)
+    sig = store.version(doc) if doc else None
+    _checked[name] = now
+    if have is not None:
+        loaded = _sig.get(name)
+        if loaded is None or loaded[0] != id(have) or loaded[1] == sig:
+            return have
+    try:
+        data = mod.profiles() or {}
+    except Exception:
+        data = {}
+    _cache[name] = data
+    _sig[name] = (id(data), sig)
+    return data
 
 
 def _r(x):
@@ -123,17 +150,18 @@ def _fotmob(out, home, away, sport_key):
         return
     hv, av = data[h], data[a]
     extra = sport_key not in fotmob.SPORT_TO_LEAGUE
+    matches = ((_p("fm", fotmob).get("leagues") or {}).get(sport_key) or {}).get("matches") or []
     if extra:
-        matches = ((_p("fm", fotmob).get("leagues") or {}).get(sport_key) or {}).get("matches") or []
         _standings_goals(out, h, a, hv, av, matches, league=data)
-        hs = home_share(matches)
     # Le classement xG de FotMob donne des TOTAUX de saison : par match = total / matchs joués.
     per = lambda t, k: t[k] / t["n"] if t.get(k) is not None and (t.get("n") or 0) >= MIN_N else None      # noqa: E731
     eh, ea = _mix(per(hv, "xg"), per(av, "xga")), _mix(per(av, "xg"), per(hv, "xga"))
     if eh is None or ea is None:
         return
-    if extra:                                     # classement saison (domicile + extérieur mêlés) : avantage du terrain du championnat
-        eh, ea = eh * 2 * hs, ea * 2 * (1 - hs)
+    # classement saison (domicile + extérieur mêlés, donc symétrique) : l'avantage du terrain du championnat y est remis pour TOUTES les ligues
+    # (Incheon - Pohang donnait le même xG aux deux équipes), seulement ici où aucune source meilleure (Understat) n'a fourni d'xG
+    hs = home_share(matches)
+    eh, ea = eh * 2 * hs, ea * 2 * (1 - hs)
     new = {k: _r(v) for k, v in (("exp_xg_home", eh), ("exp_xg_away", ea), ("exp_xg_total", eh + ea))
            if k not in out}
     if not new:

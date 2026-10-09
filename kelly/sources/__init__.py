@@ -1,10 +1,16 @@
-from datetime import datetime
+import sys
+from datetime import date, datetime
 
-from . import betexplorer, fbref, features, footballdata, fotmob, state, understat
+from .. import config as C
+from . import betexplorer, fbref, features, footballdata, fotmob, http, state, understat
 from .features import match_features, player_features, team_profile
 
 SOURCES = (footballdata, understat, fbref, fotmob, betexplorer)
 SOCCER_PREFIX = "soccer_"
+# Part du délai SOURCES_SECONDS de chaque source (poids) : sans partage, les sources de tête (football-data, FotMob) épuisaient tout le délai à froid
+# et BetExplorer, en queue, n'était jamais actualisé. Le temps qu'une source n'utilise pas passe aux suivantes.
+SLICE_WEIGHTS = {"footballdata": 3, "understat": 1, "fbref": 1, "fotmob": 4, "betexplorer": 3}
+MONDE_MAX_AGE_DAYS = 3             # le relevé du dernier matin (data/monde.json) ne guide la priorité des ligues que s'il date de moins de 3 jours
 
 
 def soccer_leagues(leagues=None):
@@ -22,15 +28,68 @@ def soccer_leagues(leagues=None):
     return [k for k in dict.fromkeys(out) if k.startswith(SOCCER_PREFIX) and k in known]
 
 
-def refresh_all(leagues=None):
+def priority_leagues(keys, explicit=()):
+    """Ligues (parmi `keys`) à actualiser en premier : celles qui jouent aujourd'hui ou demain. Sources d'information, sans réseau :
+    `explicit` (relevé du jour des matchs, quand l'appelant l'a déjà), le relevé du dernier matin (data/monde.json : les ligues qui jouaient
+    jouent le plus souvent encore dans la semaine), et les pages de ligue FotMob déjà en cache (un match non joué prévu aujourd'hui ou demain)."""
+    keys = set(keys)
+    out = set(explicit or ()) & keys
+    try:
+        from .. import monde
+        d = monde.load()
+        if d and 0 <= (state.now().date() - date.fromisoformat(d["day"])).days <= MONDE_MAX_AGE_DAYS:
+            out |= set(d.get("leagues") or {}) & keys
+    except Exception:                                    # noqa: BLE001 - un indice, jamais bloquant
+        pass
+    if fotmob.enabled():
+        for k in sorted(keys - out):
+            try:
+                if fotmob.playing_soon(k):
+                    out.add(k)
+            except Exception:                            # noqa: BLE001
+                pass
+    return out
+
+
+def _slice(i, t_end):
+    """Fin du délai de la source n° `i` : sa part (SLICE_WEIGHTS) de ce qui reste jusqu'à `t_end` (fin du délai global), le reliquat passe aux suivantes."""
+    if t_end is None:
+        return
+    now = http.monotonic()
+    w = [SLICE_WEIGHTS.get(m.NAME, 1) for m in SOURCES[i:]]
+    http.set_deadline_at(now + max(0.0, t_end - now) * w[0] / sum(w))
+
+
+def refresh_all(leagues=None, priority=()):
+    """Actualise toutes les sources dans le délai global http.set_deadline (SOURCES_SECONDS). `priority` : clés des ligues qui jouent aujourd'hui
+    (relevé des matchs du jour, si l'appelant l'a) ; en plus de lui, priority_leagues les cherche lui-même. À froid le délai ne suffit pas à
+    tout : chaque source a sa part (SLICE_WEIGHTS), les ligues qui jouent bientôt passent d'abord puis la page la plus ancienne (state.order),
+    de sorte que le reste est repris les jours suivants ; ce qui a été servi depuis un cache périmé est signalé (health, report)."""
     keys = soccer_leagues(leagues)
     out = {}
-    for mod in SOURCES:
-        try:
-            out[mod.NAME] = mod.refresh(keys)
-        except Exception as e:
-            out[mod.NAME] = state.record_run(mod.NAME, 0, [f"erreur interne ({type(e).__name__}: {e})"])
+    try:                                                 # le dossier .cache/sources ne grossit plus sans fin
+        n = http.prune(C.SOURCES_CACHE_KEEP_DAYS)
+        if n:
+            print(f"[sources] cache : {n} entrée(s) inutilisée(s) depuis {C.SOURCES_CACHE_KEEP_DAYS} jours effacée(s)", file=sys.stderr)
+    except Exception:                                    # noqa: BLE001
+        pass
+    t_end = http.get_deadline()
+    state.set_priority(priority_leagues(keys, priority))
+    try:
+        for i, mod in enumerate(SOURCES):
+            _slice(i, t_end)
+            try:
+                out[mod.NAME] = mod.refresh(keys)
+            except Exception as e:
+                out[mod.NAME] = state.record_run(mod.NAME, 0, [f"erreur interne ({type(e).__name__}: {e})"])
+    finally:
+        http.set_deadline_at(t_end)
+        state.set_priority(())
     features.reload()
+    for mod in SOURCES:
+        n = state.stale_count(mod.NAME)
+        if n:
+            print(f"[sources] {mod.LABEL} : {n} page(s) servie(s) depuis un cache périmé (délai ou accès refusé)", file=sys.stderr)
     return out
 
 

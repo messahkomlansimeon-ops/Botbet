@@ -256,13 +256,20 @@ def run(divs=None, loader=None, seconds=None, force=False, log=None):
             continue
         left.remove(div)
         r["tuned"] = _stamp()
-        cur["report"][div] = r
-        if "skipped" in r:
-            skipped[div] = r["skipped"]
-            cur["half_life"].pop(div, None)
+        prev = cur["report"].get(div)
+        if "skipped" in r and isinstance(prev, dict) and "skipped" not in prev and div in cur["half_life"]:
+            # historique momentanément insuffisant (CSV purgés, changement de saison, trop peu de matchs prédits) : le DERNIER réglage mesuré est
+            # conservé tel quel (demi-vie, courbes du poids des buts, date de mesure : la ligue sera retentée au prochain passage) au lieu d'être effacé
+            cur["report"][div] = prev | {"last_skip": r["skipped"], "last_skip_at": r["tuned"]}
+            skipped[div] = r["skipped"] + " (dernier réglage conservé)"
         else:
-            cur["half_life"][div] = r["chosen"]
-            done.append(div)
+            cur["report"][div] = r
+            if "skipped" in r:
+                skipped[div] = r["skipped"]
+                cur["half_life"].pop(div, None)
+            else:
+                cur["half_life"][div] = r["chosen"]
+                done.append(div)
         _write(cur)
         if log:
             log(f"{div} : " + (r.get("skipped") or f"demi-vie {r['chosen']} j"))

@@ -185,8 +185,10 @@ def scan_today(day, after=None, sports=None, seconds=None):
     """Relevé GRATUIT (0 crédit) des matchs du jour Kelly `day` (voir day_window) dans toutes les ligues suivies et en saison : /sports puis
     /events de chaque ligue, dans l'ordre de priorité de C.SPORTS (le plus important d'abord), au plus `seconds`
     (C.SCAN_SECONDS) pour tenir le passage du matin. Une ligue en erreur est sautée.
-    -> {day, sports: [clés en saison], leagues: {clé: [matchs]}, complete, error}."""
-    out = {"day": str(day), "sports": [], "leagues": {}, "complete": True, "error": None}
+    -> {day, sports: [clés en saison], leagues: {clé: [matchs]}, complete, error, failed}. Une ligue dont /events échoue (panne, réseau, quota)
+    n'est PLUS silencieuse : sa clé va dans `failed` et `complete` passe à False (le tour du monde dit « relevé partiel », jamais « aucun
+    match » pour une ligue qu'on n'a pas pu interroger) ; si AUCUNE ligue n'a répondu, `error` le dit comme une panne de la liste des sports."""
+    out = {"day": str(day), "sports": [], "leagues": {}, "complete": True, "error": None, "failed": []}
     window = day_window(day, after)
     try:
         sports = list_sports(limit=False) if sports is None else sports
@@ -195,19 +197,28 @@ def scan_today(day, after=None, sports=None, seconds=None):
         print(f"[odds] liste des sports indisponible : {e}", file=sys.stderr)
         return out
     out["sports"] = [s["key"] for s in sports]
-    limit, t0 = C.SCAN_SECONDS if seconds is None else seconds, time.monotonic()
+    limit, t0, tried, first_err = C.SCAN_SECONDS if seconds is None else seconds, time.monotonic(), 0, None
     for i, s in enumerate(sports):
         if time.monotonic() - t0 > limit:
             out["complete"] = False
             print(f"[odds] relevé des matchs coupé après {limit} s : {len(sports) - i} ligue(s) non relevée(s).", file=sys.stderr)
             break
+        tried += 1
         try:
             evs = league_events(s["key"], window)
         except Exception as e:                          # noqa: BLE001 - une ligue ne tue pas le run
             print(f"[{s['key']}] matchs du jour indisponibles : {e}", file=sys.stderr)
+            out["failed"].append(s["key"])
+            out["complete"] = False
+            first_err = first_err or str(e)
             continue
         if evs:
             out["leagues"][s["key"]] = [dict(ev, sport_key=s["key"]) for ev in evs]
+    if tried and len(out["failed"]) == tried:           # aucune ligue n'a répondu : /events est en panne, pas « aucun match aujourd'hui »
+        out["error"] = f"/events injoignable pour les {tried} ligues ({(first_err or '?')[:100]})"
+        print(f"[odds] {out['error']}", file=sys.stderr)
+    elif out["failed"]:
+        print(f"[odds] relevé partiel : {len(out['failed'])} ligue(s) sur {tried} en erreur.", file=sys.stderr)
     return out
 
 

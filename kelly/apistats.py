@@ -23,11 +23,14 @@ APISTATS_LAST derniers matchs, et sources.features les consomme tels quels.
 Si le forfait refuse les statistiques (erreur de plan), tous les appels de la journée s'arrêtent (stats.get), le journal du matin et
 --check le disent une fois, en français, et le bot continue avec football-data et les cotes.
 
+Cadence : le forfait gratuit limite à ~10 requêtes par minute. stats.get espace deux appels d'au moins STATS_MIN_GAP (6,2 s) et, sur un HTTP 429
+quand même, attend STATS_RATE_WAIT (60 s) avant UN nouvel essai ; tout cela dans le délai APISTATS_SECONDS du passage (360 s : 55 requêtes
+espacées de 6,2 s tiennent en ~340 s). Un second 429 arrête l'API « pour ce passage » (pas pour la journée) ; le délai épuisé s'appelle « time ».
+
 Stockage compact : data/apistats_profiles.json, < 300 Ko. Une ligne de match = [jour AAMMJJ, ligue, domicile (1/0), buts pour, contre,
 tirs pour, contre, tirs cadrés, corners, fautes, cartons (chaque fois pour, contre)] ; None quand l'API n'a pas la statistique.
 """
 import sys
-import time
 from datetime import datetime, timedelta, timezone
 
 from . import apileagues, catalogue, config as C, stats, store
@@ -318,11 +321,15 @@ def fill(day, scan, deadline=None):
     if not rep["enabled"]:
         rep["stop"] = "off" if stats.enabled() else "nokey"
         return rep
+    deadline = deadline or stats._clock() + C.APISTATS_SECONDS
+    stats.set_deadline(deadline)                      # get() n'attend (écart de STATS_MIN_GAP entre deux appels, 60 s après un 429) jamais au-delà
     try:
-        _fill(str(day)[:10], scan, deadline or time.monotonic() + C.APISTATS_SECONDS, rep)
+        _fill(str(day)[:10], scan, deadline, rep)
     except Exception as e:                            # noqa: BLE001 - les stats mondiales sont facultatives
         print(f"[apistats] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
         rep["stop"] = "error"
+    finally:
+        stats.set_deadline(None)                      # le règlement et les autres appels de la journée ne sont pas bornés par ce délai
     q = stats._quota()
     rep["used_today"], rep["aps_today"], rep["err"] = q["n"], q.get("aps", 0), q.get("err")
     return rep
@@ -342,7 +349,7 @@ def _fill(day, scan, deadline, rep):
             rep["stop"] = "halt"
             return
         if not lists.get(yday) and not lists.get(day):
-            rep["stop"] = "budget" if budget.left() < 1 else "empty"
+            rep["stop"] = "budget" if budget.left() < 1 else "time" if stats.deferred() else "empty"
         else:
             _accumulate(d, lists, day, budget, deadline, rep)
         items, rep["unmatched"] = today_matches(day, scan, lists[day]) if lists.get(day) else ([], 0)      # sans liste du jour : aucune requête de plus
@@ -370,12 +377,17 @@ def _accumulate(d, lists, day, budget, deadline, rep):
             rep["added"] += 1
     miss, ok = {}, {}                                 # par ligue : matchs sans statistiques / avec
     dead = lambda lk: miss.get(lk, 0) >= MISS_STOP and not ok.get(lk)        # noqa: E731 - ligue sans statistiques chez l'API aujourd'hui
+
+    def stopped(why, rest):
+        """Arrêt du passage (délai, budget, API arrêtée) : les matchs d'HIER qui restent ne reviendront pas demain (la liste d'hier sort de
+        la fenêtre du forfait gratuit), quelle que soit la cause ; ceux d'aujourd'hui, si. Les ligues abandonnées (sans statistiques) ne comptent pas."""
+        rep["stop"] = why
+        rep["lost"] = sum(1 for x in rest if x["day"] != day and not dead(x["lk"]))
+
     for i, e in enumerate(paid):
-        stop = "time" if time.monotonic() > deadline else "halt" if stats._halted else "budget" if budget.left() < 1 else None
+        stop = "time" if stats._clock() > deadline else "halt" if stats._halted else "budget" if budget.left() < 1 else None
         if stop:
-            rep["stop"] = stop
-            if stop != "halt":                        # les matchs d'hier ne reviendront pas demain (ceux d'aujourd'hui, si)
-                rep["lost"] = sum(1 for x in paid[i:] if x["day"] != day and not dead(x["lk"]))
+            stopped(stop, paid[i:])
             return
         if dead(e["lk"]):
             continue
@@ -384,7 +396,10 @@ def _accumulate(d, lists, day, budget, deadline, rep):
             rep["added"] += 1
             ok[e["lk"]] = ok.get(e["lk"], 0) + 1
         elif stats._halted:
-            rep["stop"] = "halt"
+            stopped("halt", paid[i:])
+            return
+        elif stats.deferred():                        # pas le temps d'attendre l'écart entre deux appels ou la fin d'une limite de fréquence
+            stopped("time", paid[i:])
             return
         else:
             rep["nostats"] += 1
@@ -419,9 +434,10 @@ def progress_line(rep):
     if rep.get("unmatched"):
         line += f" ({rep['unmatched']} introuvables chez API-Football)"
     line += {"budget": f" — budget du jour atteint ({C.APISTATS_DAILY} requêtes), suite demain", "time": " — délai atteint, suite demain",
-             "halt": " — API arrêtée pour aujourd'hui", "empty": " — liste des matchs vide"}.get(rep.get("stop"), "")
+             "halt": " — API arrêtée pour ce passage, suite demain", "empty": " — liste des matchs vide"}.get(rep.get("stop"), "")
     if rep.get("lost"):
-        line += (f" ; {_plural(rep['lost'], 'match d’hier perdu', 'matchs d’hier perdus')} faute de budget (le forfait gratuit ne "
+        why = {"time": "faute de temps", "halt": "l'API s'étant arrêtée"}.get(rep.get("stop"), "faute de budget")
+        line += (f" ; {_plural(rep['lost'], 'match d’hier perdu', 'matchs d’hier perdus')} {why} (le forfait gratuit ne "
                  "remonte pas plus loin)")
     return line
 

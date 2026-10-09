@@ -14,6 +14,7 @@ IDs vérifiés un par un sur /leagues/{id} (champs `country` + `name`), le 8 oct
 import json
 import os
 import re
+from datetime import datetime, timedelta, timezone
 
 from .. import config as C, store
 from . import http, state
@@ -90,8 +91,67 @@ def _lines(v):
     return []
 
 
+STAGE_MIN_N = 3                       # matchs joués minimum d'une équipe dans la phase en cours ; sinon sa phase précédente (plus fournie) sert de repli
+
+
+def _stage(round_name):
+    """Phase d'un tour FotMob : « Clausura - Round 11 » -> « Clausura », « Relegation Round - Round 1 » -> « Relegation Round ».
+    Un tour numéroté (« 4 », 4) n'en nomme aucune : None."""
+    if not isinstance(round_name, str) or " - " not in round_name:
+        return None
+    return round_name.rsplit(" - ", 1)[0].strip() or None
+
+
+def _stage_dates(matches):
+    """{phase: date (AAAA-MM-JJ) du dernier match joué} d'après les tours de la page ; sert à reconnaître la phase en cours."""
+    out = {}
+    for m in matches:
+        st = _stage(m.get("roundName") or m.get("round"))
+        d = str((m.get("status") or {}).get("utcTime") or "")[:10]
+        if st and d and (m.get("status") or {}).get("finished"):
+            out[st] = max(out.get(st, ""), d)
+    return out
+
+
+def _sub_score(name, stage_dates):
+    """Date du dernier match joué de la phase que nomme la sous-table `name` (« Clausura Group A » <- phase « Clausura »), « » si inconnue."""
+    name = str(name or "")
+    best = ""
+    for stage, d in stage_dates.items():
+        if name == stage or name.startswith(stage + " ") or stage.startswith(name + " "):
+            best = max(best, d)
+    return best
+
+
+def _sub_teams(sub):
+    """{nom: {n, gf, ga, w, pts[, xg, xga, xpts]}} d'UNE sous-table de classement (xG de la même sous-table) ; {} si elle est vide."""
+    nested = sub.get("table")
+    table = nested if isinstance(nested, dict) and (nested.get("all") or nested.get("xg")) else sub
+    teams = {}
+    for r in _lines(table.get("all")):
+        name = r.get("name")
+        if not name:
+            continue
+        gf, ga = _f(str(r.get("scoresStr") or "").split("-")[0]), _f(str(r.get("scoresStr") or "").split("-")[-1])
+        teams[name] = {"n": _f(r.get("played")), "gf": gf, "ga": ga, "w": _f(r.get("wins")), "pts": _f(r.get("pts"))}
+    for r in _lines(table.get("xg")):
+        rec, xg = teams.get(r.get("name")), _f(r.get("xg"))
+        # Lignes sans xG (FotMob ne sert pas de xG pour toutes les ligues, ex. Argentine) : ne rien écrire.
+        if rec is not None and xg is not None:
+            rec["xg"], rec["xga"], rec["xpts"] = xg, _f(r.get("xgConceded")), _f(r.get("xPoints"))
+    return teams
+
+
 def parse_league(html):
-    """-> ({"teams": {nom: {...}}, "matches": [...]}, problèmes) depuis le `__NEXT_DATA__` d'une page de ligue."""
+    """-> ({"teams": {nom: {...}}, "matches": [...], "stages": [...]}, problèmes) depuis le `__NEXT_DATA__` d'une page de ligue.
+
+    Une page peut porter plusieurs sous-tables (data.tables) : conférences ou groupes (équipes différentes dans chacune), mais aussi des
+    PHASES successives où la même équipe figure plusieurs fois (Apertura / Clausura de Colombie, du Pérou, du Paraguay, du Venezuela,
+    d'Argentine ; phase régulière puis poules de titre / de relégation de l'Équateur et de la Finlande). FotMob les liste la plus récente
+    en premier ; plutôt que de parier sur cet ordre, on garde pour chaque équipe la ligne de la sous-table dont la phase a le match joué le plus
+    récent (les tours « Clausura - Round 11 » nomment la phase), sinon la première listée. Une équipe qui n'a joué que STAGE_MIN_N - 1 matchs
+    ou moins dans la phase en cours garde sa phase précédente (un xG par match ne se calcule pas sur 2 matchs). Les totaux (matchs joués, buts,
+    xG) d'une équipe viennent tous de la MÊME sous-table. `stages` : noms des sous-tables retenues quand la page en a plusieurs."""
     m = PREFIX.search(html or "")
     if not m:
         return None, ["structure de la page modifiée : __NEXT_DATA__ introuvable"]
@@ -103,57 +163,56 @@ def parse_league(html):
     if not isinstance(tabs, list) or not tabs or not isinstance(tabs[0], dict):
         return None, ["structure de la page modifiée : classement introuvable"]
     data = tabs[0].get("data") or {}
-    lines, xgv = [], []
-    for sub in [data.get("table")] + list(data.get("tables") or []):
-        # Une ligue FotMob : soit data.table unique, soit data.tables = conférences / groupes.
-        # Deux formats de sous-table selon la structure du site : sous-clé table (ancien format,
-        # all + xg) ou directement le dict de lignes (nouveau format, all + xg).
+    all_matches = [x for x in (pp.get("fixtures") or {}).get("allMatches") or [] if isinstance(x, dict)]
+    stage_dates = _stage_dates(all_matches)
+    subs = []
+    # Une ligue FotMob : soit data.table unique, soit data.tables = conférences / groupes / phases.
+    for i, sub in enumerate([data.get("table")] + list(data.get("tables") or [])):
         if not isinstance(sub, dict):
             continue
-        nested = sub.get("table")
-        table = nested if isinstance(nested, dict) and (nested.get("all") or nested.get("xg")) else sub
-        lines += _lines(table.get("all"))
-        xg = table.get("xg")
-        if xg:
-            xgv += _lines(xg)
-    if not lines:
+        teams = _sub_teams(sub)
+        if teams:
+            subs.append((_sub_score(sub.get("leagueName") or data.get("leagueName"), stage_dates), i, str(sub.get("leagueName") or ""), teams))
+    if not subs:
         return None, ["aucun classement (coupe sans classement)"]
-    teams = {}
-    for r in lines:
-        name = r.get("name")
-        gf, ga = _f(str(r.get("scoresStr") or "").split("-")[0]), _f(str(r.get("scoresStr") or "").split("-")[-1])
-        if not name:
-            continue
-        teams[name] = {"n": _f(r.get("played")), "gf": gf, "ga": ga,
-                       "w": _f(r.get("wins")), "pts": _f(r.get("pts"))}
-    for r in xgv:
-        name, rec = r.get("name"), teams.get(r.get("name"))
-        xg, xga = _f(r.get("xg")), _f(r.get("xgConceded"))
-        # Lignes sans xG (FotMob ne sert pas de xG pour toutes les ligues, ex. Argentine) : ne rien
-        # écrire, pour ne pas écraser le xG d'une sous-table qui en a (conférences, groupes).
-        if name and rec is not None and xg is not None:
-            rec["xg"], rec["xga"] = xg, xga
-            rec["xpts"] = _f(r.get("xPoints"))
+    subs.sort(key=lambda t: t[0], reverse=True)                      # phase la plus récente d'abord ; à égalité (ou sans date) l'ordre de la page (tri stable)
+    teams, chosen = {}, []
+    for name in dict.fromkeys(n for _, _, _, tm in subs for n in tm):
+        cands = [(sub_name, tm[name]) for _, _, sub_name, tm in subs if name in tm]
+        sub_name, rec = next(((sn, r) for sn, r in cands if (r.get("n") or 0) >= STAGE_MIN_N), cands[0])
+        teams[name] = rec
+        chosen.append(sub_name)
     matches, seen = [], set()
-    for m in (pp.get("fixtures") or {}).get("allMatches") or []:
-        st = m.get("status") or {}
+    for x in all_matches:
+        st = x.get("status") or {}
         if not st.get("finished") or st.get("cancelled"):
             continue
-        home, away = (m.get("home") or {}).get("name"), (m.get("away") or {}).get("name")
-        if not home or not away or (home, away) in seen:
+        home, away = (x.get("home") or {}).get("name"), (x.get("away") or {}).get("name")
+        if not home or not away:
             continue
         hg, ag = _f(str(st.get("scoreStr") or "").replace(" ", "").split("-")[0]), \
             _f(str(st.get("scoreStr") or "").replace(" ", "").split("-")[-1])
         if hg is None or ag is None:
             continue
-        seen.add((home, away))
-        matches.append({"d": str(st.get("utcTime") or "")[:10], "home": home, "away": away, "hg": hg, "ag": ag})
-    return {"teams": teams, "matches": matches}, []
+        d = str(st.get("utcTime") or "")[:10]
+        key = str(x["id"]) if x.get("id") else (home, away, d)      # un même duel rejoué à une autre date est un autre match (Celtic - Rangers 3-4 fois)
+        if key in seen:
+            continue
+        seen.add(key)
+        matches.append({"d": d, "home": home, "away": away, "hg": hg, "ag": ag, "_t": str(st.get("utcTime") or "")})
+    matches.sort(key=lambda r: r["_t"])                              # chronologique : FOTMOB_KEEP garde les PLUS RÉCENTS
+    for r in matches:
+        del r["_t"]
+    out = {"teams": teams, "matches": matches}
+    if len(subs) > 1:
+        out["stages"] = [n for n in dict.fromkeys(chosen) if n]
+    return out, []
 
 
 def build(data):
-    """Profil compact d'une ligue : équipes (classement + xG) et FOTMOB_KEEP derniers matchs."""
-    return {"teams": data["teams"], "matches": data["matches"][-FOTMOB_KEEP:]}
+    """Profil compact d'une ligue : équipes (classement + xG) et FOTMOB_KEEP derniers matchs (les plus récents ; les phases d'un classement
+    à plusieurs phases : `stages`)."""
+    return {"teams": data["teams"], "matches": data["matches"][-FOTMOB_KEEP:]} | ({"stages": data["stages"]} if data.get("stages") else {})
 
 
 def leagues_for(sport_keys=None):
@@ -169,23 +228,47 @@ def leagues_for(sport_keys=None):
     return keys + [k for k in sorted(EXTRA_LEAGUES) if k not in keys]
 
 
+def league_url(key):
+    lgid = EXTRA_LEAGUES.get(key) or SPORT_TO_LEAGUE.get(key)
+    return f"{BASE}/leagues/{lgid}" if lgid else None
+
+
+def playing_soon(key, today=None, days=1):
+    """Vrai si la page de ligue gardée en cache (aucun téléchargement) annonce un match non joué entre aujourd'hui et dans `days` jours :
+    la ligue est à actualiser avant les autres, c'est elle qui sert aux pronostics du jour."""
+    u = league_url(key)
+    res = http.cached(u) if u else None
+    m = PREFIX.search(res.text) if res and res.ok else None
+    if not m:
+        return False
+    today = today or state.now().date()
+    lo, hi = today.isoformat(), (today + timedelta(days=days)).isoformat()
+    try:
+        matches = json.loads(m.group(1)).get("props", {}).get("pageProps", {}).get("fixtures", {}).get("allMatches") or []
+    except (ValueError, AttributeError):
+        return False
+    return any(isinstance(x, dict) and not (x.get("status") or {}).get("finished") and not (x.get("status") or {}).get("cancelled")
+               and lo <= str((x.get("status") or {}).get("utcTime") or "")[:10] <= hi for x in matches)
+
+
 def refresh(sport_keys=None):
-    """Actualise les ligues mappées (1 page HTML par ligue, cache 12 h). Ne lève jamais."""
+    """Actualise les ligues mappées (1 page HTML par ligue, cache 12 h). Ne lève jamais. Le délai du passage (http.set_deadline) ne suffit
+    pas à toutes les ligues à froid : celles qui jouent aujourd'hui ou demain passent d'abord (state.set_priority), puis la page la plus
+    ancienne ; une page non rafraîchie faute de temps ou d'accès reste servie depuis le cache mais est SIGNALÉE (profil : stale, rapport)."""
     try:
         if not enabled():
             return health()
-        keys = leagues_for(sport_keys)
+        keys = [k for k in leagues_for(sport_keys) if league_url(k)]
+        keys = state.order(keys, lambda k: http.age(league_url(k)))
         prof = store.load(PROFILE_FILE, {})
         prof = prof if isinstance(prof, dict) else {}
         prof.setdefault("leagues", {})
-        errors, rows = [], 0
+        errors, rows, stale = [], 0, []
         for key in keys:
             if state.is_blocked(NAME):
                 break
             lgid = EXTRA_LEAGUES.get(key) or SPORT_TO_LEAGUE.get(key)
-            if not lgid:
-                continue
-            u = f"{BASE}/leagues/{lgid}"
+            u = league_url(key)
             res = http.fetch(u, NAME, http.TTL_FOTMOB)
             if not res.ok:
                 errors.append(f"{key} : {res.error}")
@@ -196,6 +279,12 @@ def refresh(sport_keys=None):
                 http.invalidate(u)
                 continue
             built = build(data) | {"id": lgid}               # id : une ligue dont l'id a changé (ex. 123 -> 48) n'est plus servie
+            t = http.fetched_at(u)
+            if t is not None:
+                built["at"] = datetime.fromtimestamp(t, tz=timezone.utc).isoformat(timespec="minutes")
+            if getattr(res, "stale", False):
+                built["stale"] = True
+                stale.append(key)
             prof["leagues"][key] = built
             rows += len(built["teams"]) + len(built["matches"])
             if probs:
@@ -205,7 +294,10 @@ def refresh(sport_keys=None):
             prof["updated"] = state.now().isoformat(timespec="minutes")
             if state.save_profile(PROFILE_FILE, prof) > state.MAX_PROFILE_BYTES:
                 errors.append("profil trop volumineux (réduire FOTMOB_KEEP)")
-        return state.record_run(NAME, rows, errors)
+        if stale:
+            errors.insert(0, f"{len(stale)} ligue(s) servie(s) depuis un cache périmé (téléchargement reporté ou refusé) : "
+                             + ", ".join(stale[:4]) + ("…" if len(stale) > 4 else ""))
+        return state.record_run(NAME, rows, errors, stale=len(stale))
     except Exception as e:
         return state.record_run(NAME, 0, [f"erreur interne ({type(e).__name__}: {e})"])
 

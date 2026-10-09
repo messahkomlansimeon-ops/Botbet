@@ -15,7 +15,9 @@ Fichier data/fm_matches.json (compact) :
          des paris sur touches, hors-jeu et fautes (match_stats).
 Les profils servis (profiles()) ont le format de football-data (n, throws_for, throws_against...) et sources.features les consomme.
 """
+import contextlib
 import json
+import os
 import re
 import sys
 import time
@@ -266,17 +268,33 @@ def _read_page(url, budget=None):
     return parse_match(res.text), None
 
 
+OWN_LOCK_ENV = "KELLY_OWN_LOCK"      # posé par `bot.py --track --own-lock` : le processus ne tient PAS le verrou des données pendant tout son passage
+
+
+def _locked():
+    """Verrou des données pour une lecture-modification-écriture de fm_matches.json. Seulement en mode OWN_LOCK_ENV (le processus n'est pas lancé
+    sous `flock` : le bot Telegram n'attend plus les ~3 minutes de téléchargement des pages) ; sinon le `flock` de l'unité systemd tient déjà
+    le verrou pour tout le processus et en reprendre un ici bloquerait."""
+    if not os.environ.get(OWN_LOCK_ENV):
+        return contextlib.nullcontext()
+    return store.data_lock(wait=C.LOCK_WAIT_MIN * 60)
+
+
 def fill(max_pages=None, seconds=None):
     """Lit au plus `max_pages` pages de match (FM_PAGES_PER_RUN) en `seconds` secondes (FM_SECONDS). Ne lève jamais.
-    -> {added, pages, left, errors, tracked, usable, good}."""
+    -> {added, pages, left, errors, tracked, usable, good}.
+    Trois temps : choisir les matchs (document lu sous le verrou), TÉLÉCHARGER les pages (6 s d'attente entre deux : jusqu'à 3 minutes, SANS le
+    verrou), puis fusionner dans le document rechargé et l'écrire (verrou repris, quelques millisecondes). Sans mode OWN_LOCK_ENV le verrou
+    est celui de l'unité systemd et ces trois temps se suivent comme avant."""
     rep = {"added": 0, "pages": 0, "left": 0, "errors": []}
     if not fotmob.enabled() or not C.FM_PAGES_PER_RUN:
         return rep | {"off": True}
     max_pages = C.FM_PAGES_PER_RUN if max_pages is None else max_pages
     deadline = time.monotonic() + (C.FM_SECONDS if seconds is None else seconds)
-    d = load()
+    got_pages = []                                   # (clé de ligue, match, page lue | None si sans statistiques)
     try:
-        todo = candidates(d)
+        with _locked():
+            todo = candidates(load())
         rep["left"] = len(todo)
         for sk, m in todo:
             if rep["pages"] >= max_pages or time.monotonic() > deadline or state.is_blocked(fotmob.NAME):
@@ -288,17 +306,29 @@ def fill(max_pages=None, seconds=None):
                 if len(rep["errors"]) >= 3:
                     break
                 continue
-            if got is None:                          # page sans statistiques : notée « vue » pour ne pas la relire
-                d["seen"][m["id"]] = _d2i(m["d"] or str(_today()))
-                continue
-            got["id"] = got["id"] or m["id"]
-            rep["added"] += record(d, got, sk)
+            got_pages.append((sk, m, got))
         rep["left"] -= rep["pages"]
+    except store.LockTimeout:
+        rep["errors"].append("verrou des données occupé : passage reporté")
     except Exception as e:                            # noqa: BLE001 - facultatif
         rep["errors"].append(f"erreur interne ({type(e).__name__}: {e})")
-    finally:
-        save(d)
-    return rep | summary(d)
+    d = None
+    if got_pages:                                     # rien de lu : rien à écrire (et pas d'attente du verrou pour rien)
+        try:
+            with _locked():
+                d = load()                            # rechargé : les commandes Telegram ont pu écrire entre-temps
+                for sk, m, got in got_pages:
+                    if got is None:                  # page sans statistiques : notée « vue » pour ne pas la relire
+                        d["seen"][m["id"]] = _d2i(m["d"] or str(_today()))
+                        continue
+                    got["id"] = got["id"] or m["id"]
+                    rep["added"] += record(d, got, sk)
+                save(d)
+        except store.LockTimeout:
+            rep["errors"].append(f"verrou des données occupé : {len(got_pages)} page(s) lue(s) perdue(s), relues au prochain passage")
+        except Exception as e:                        # noqa: BLE001
+            rep["errors"].append(f"erreur interne ({type(e).__name__}: {e})")
+    return rep | summary(d or load())
 
 
 def report_line(rep):

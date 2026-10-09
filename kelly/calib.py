@@ -13,6 +13,8 @@ ramené vers 1 tant que les pronostics sont peu nombreux (poids n / (n + FAIR_CA
 FAIR_CALIB_MIN pronostics réglés. k < 1 : Kelly est trop sûre d'elle sur ce marché, ses probas sont rapprochées de 50 % et la
 « cote mini » à exiger chez 1xBet monte.
 """
+import time
+
 from . import catalogue, config as C, store
 
 FILE = "calib.json"
@@ -25,6 +27,8 @@ LABELS = {"goals": "buts", "btts": "les 2 marquent", "dc": "double chance", "h2h
           "player": "stats joueurs"}
 
 _memo = {}
+RECHECK_SECONDS = 1.0       # le document n'est pas reinterrogé plus d'une fois par seconde (calibrate() est appelé des milliers de fois par passage)
+_clock = time.monotonic
 
 
 def family(market):
@@ -36,9 +40,16 @@ def family(market):
 
 
 def load():
-    if "data" not in _memo:
+    """Cumul de fiabilité (data/calib.json), gardé en mémoire et relu dès que le document change dans la base (store.version, comme
+    strength.tuning) : le bot Telegram qui tourne en continu voit le cumul que le règlement du matin vient d'écrire."""
+    now = _clock()
+    if "data" in _memo and now - _memo.get("checked", float("-inf")) < RECHECK_SECONDS:
+        return _memo["data"]
+    sig = store.version(FILE)
+    _memo["checked"] = now
+    if "data" not in _memo or _memo.get("sig") != sig:
         d = store.load(FILE, {})
-        _memo["data"] = d if isinstance(d, dict) else {}
+        _memo["data"], _memo["sig"] = (d if isinstance(d, dict) else {}), sig
     return _memo["data"]
 
 
@@ -60,6 +71,7 @@ def add(rows):
         n += 1
     if n:
         store.save(FILE, data, compact=True)
+        _memo["sig"], _memo["checked"] = store.version(FILE), _clock()          # ce qu'on vient d'écrire est déjà en mémoire
     return n
 
 

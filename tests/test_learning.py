@@ -10,7 +10,7 @@ os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-learning-cache-
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-learning-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
-from kelly import calib, config as C, freeclose, learn, store, weekly  # noqa: E402
+from kelly import calib, config as C, freeclose, learn, odds, store, weekly  # noqa: E402
 
 NOW = datetime(2026, 10, 12, 8, tzinfo=timezone.utc)
 
@@ -43,7 +43,10 @@ def test_free_closing_odds():
                                                                 "o1": 2.9, "ox": 3.3, "o2": 2.5}]}}}
     assert freeclose.fill(rows, NOW, FakeFD(), bx) == 3
     by = {r["key"]: r for r in rows}
-    p_home = (1 / 1.8) / (1 / 1.8 + 1 / 3.8 + 1 / 4.6)
+    # marge retirée par la méthode de Shin, comme prob_book (lot J, point 14 : avant, normalisation proportionnelle des deux côtés différents)
+    p_home = odds.shin_probs([1.8, 3.8, 4.6])[0]
+    p_prop = (1 / 1.8) / (1 / 1.8 + 1 / 3.8 + 1 / 4.6)
+    assert abs(p_home - p_prop) > 1e-3, "Shin et proportionnel doivent différer sur ce marché, sinon le test ne prouve rien"
     assert abs(by["h"]["clv"] - round(math.log(p_home / 0.5), 4)) < 1e-9 and by["h"]["close_src"] == "football-data/ps"
     assert by["h"]["closed_at"] == "free:football-data" and by["h"]["w"] == C.FREE_CLOSE_WEIGHT and by["h"]["clv"] > 0
     assert by["o"]["close_src"] == "football-data/avg" and by["b"]["close_src"] == "betexplorer" and by["b"]["clv"] < 0

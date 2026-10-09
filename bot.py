@@ -3,6 +3,9 @@
   python bot.py --daily      matin : actualise les stats gratuites, règle hier, bilan, combinés du jour (Telegram)
                              déjà fait aujourd'hui = ignoré ; --force le refait. Code 1 si aucun message n'a pu partir (en attente)
   python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote, puis stats de match FotMob
+                             --own-lock : le processus prend lui-même le verrou des données (pour la clôture et les alertes, puis quelques
+                             millisecondes pour fusionner les pages FotMob lues) au lieu d'être lancé sous `flock` pendant ~3 minutes ;
+                             à utiliser SANS le `flock` de l'unité systemd (voir README), sinon inter-blocage
   python bot.py --snapshot   relevé des cotes du lendemain (désactivé sur forfait gratuit : budget 0)
   python bot.py --alert      balayage large pour alertes (désactivé sur forfait gratuit : budget 0)
   python bot.py --commands   traite les commandes Telegram reçues (une passe)
@@ -43,8 +46,20 @@ def main(argv):
     elif "--snapshot" in argv:
         app.run_snapshot()
     elif "--track" in argv:
-        app.run_track()
-        app.fill_match_stats()
+        if "--own-lock" in argv:
+            from kelly import store
+            from kelly.sources import fmmatch
+            os.environ[fmmatch.OWN_LOCK_ENV] = "1"      # fmmatch.fill télécharge SANS le verrou et ne le reprend que pour fusionner
+            try:
+                with store.data_lock(wait=600, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):
+                    app.run_track()                     # clôture + alertes : lire-modifier-écrire sous le verrou (comme avant sous flock)
+            except store.LockTimeout:
+                print("Kelly travaille depuis plus de 10 minutes : passage horaire abandonné", file=sys.stderr)
+                sys.exit(1)
+            app.fill_match_stats()
+        else:
+            app.run_track()
+            app.fill_match_stats()
     elif "--xbet" in argv:
         app.run_xbet_refresh()
     elif "--alert" in argv:

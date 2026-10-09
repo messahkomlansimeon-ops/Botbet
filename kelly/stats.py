@@ -16,6 +16,11 @@ Garde-fous : plafond par exécution
 (STATS_BUDGET), plafond par jour UTC (STATS_DAILY_CAP, défaut 90, compteur dans
 data/stats_quota.json), en-tête x-ratelimit-requests-remaining, et arrêt net
 dès que l'API renvoie une erreur (HTTP 200 avec `errors` non vide).
+
+Fréquence : le forfait gratuit limite à ~10 requêtes par MINUTE (au-delà : HTTP 429, ou HTTP 200 avec `errors.rateLimit`). get() espace donc
+deux appels d'au moins STATS_MIN_GAP secondes (6,2 s) ; un 429 malgré cela n'est pas un arrêt définitif : il est journalisé (corps compris),
+get() attend STATS_RATE_WAIT secondes (60 s) puis réessaie UNE fois, dans la limite du délai du passage (set_deadline : apistats.fill y met
+APISTATS_SECONDS) ; un second 429 arrête les appels pour ce passage seulement (le suivant repart).
 """
 import difflib
 import json
@@ -35,8 +40,15 @@ BASE = "https://v3.football.api-sports.io"
 BUDGET = int(os.environ.get("STATS_BUDGET", 90))     # appels max par exécution (le plafond du jour reste STATS_DAILY_CAP)
 MIN_MATCHES = C.APISTATS_MIN_N                       # sous ce seuil : pas de moyenne
 DONE = ("FT", "AET", "PEN")                          # matchs terminés
+MIN_GAP = C.STATS_MIN_GAP                            # secondes entre deux appels (forfait gratuit : 10 requêtes par minute)
+RATE_WAIT = C.STATS_RATE_WAIT                        # attente avant l'unique nouvel essai après un HTTP 429
+_clock, _sleep = time.monotonic, time.sleep          # remplaçables (tests : horloge simulée)
 _calls = 0
-_halted = False                                      # erreur API : plus aucun appel
+_halted = False                                      # erreur API : plus aucun appel pour cette exécution (le passage suivant repart)
+_last_call = None                                    # instant (_clock) du dernier appel parti
+_deadline = None                                     # fin (_clock) du budget de temps du passage : get() n'attend jamais au-delà (set_deadline)
+_deferred = False                                    # get() a renoncé à un appel faute de temps (ni erreur de l'API, ni arrêt)
+RATE_ERROR = re.compile(r"rate ?limit|too many requests|per minute", re.I)       # limite de fréquence annoncée dans `errors` (HTTP 200)
 _neg = {}                                            # (chemin, paramètres) -> (instant, résultat) : erreurs et réponses vides, brièvement
 _refused = set()                                     # demandes écartées par refused() déjà signalées pendant cette exécution
 FORBIDDEN_PARAMS = ("last", "ids")                   # refusés par le forfait gratuit d'API-Football : jamais envoyés
@@ -55,6 +67,58 @@ def _halt(msg):
     if not _halted:
         _warn(f"{msg} Arrêt des appels API-Football pour cette exécution.")
     _halted = True
+
+
+def set_deadline(instant=None):
+    """Fin (instant _clock) du budget de temps du passage en cours, ou None : get() n'attend plus (écart entre deux appels, nouvel essai
+    après un 429) au-delà ; il renvoie alors None sans rien arrêter (voir deferred)."""
+    global _deadline, _deferred
+    _deadline, _deferred = instant, False
+
+
+def deferred():
+    """Vrai si get() a renoncé à un appel faute de temps depuis set_deadline : le passage s'arrête (délai), l'API n'est pas en cause."""
+    return _deferred
+
+
+def _wait(seconds):
+    """Dort `seconds` ; False, sans dormir, si cela dépasserait la fin du passage (set_deadline)."""
+    global _deferred
+    if seconds <= 0:
+        return True
+    if _deadline is not None and _clock() + seconds > _deadline:
+        _deferred = True
+        return False
+    _sleep(seconds)
+    return True
+
+
+def _pace():
+    """Respecte l'écart minimal MIN_GAP depuis le dernier appel. False si le temps du passage ne le permet pas."""
+    return MIN_GAP <= 0 or _last_call is None or _wait(MIN_GAP - (_clock() - _last_call))
+
+
+def _json(r):
+    try:
+        return r.json()
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _rate_limited(r, data):
+    """Limite de fréquence : HTTP 429, ou HTTP 200 dont `errors` annonce la limite par minute (« rateLimit »)."""
+    if r.status_code == 429:
+        return True
+    errors = data.get("errors") if isinstance(data, dict) else None
+    return bool(errors) and bool(RATE_ERROR.search(str(errors)))
+
+
+def _body(r, data):
+    """Début du corps de la réponse pour le journal (texte brut sinon JSON)."""
+    text = getattr(r, "text", None)
+    if not isinstance(text, str) or not text:
+        text = json.dumps(data, ensure_ascii=False, default=str) if data is not None else ""
+    return text.strip().replace("\n", " ")[:200]
 
 
 def _today():
@@ -98,9 +162,10 @@ def refused(path, params):
 
 def get(path, **params):
     """Appel API-Football. Renvoie `response` (liste, éventuellement vide) ou
-    None (désactivé, demande refusée d'avance par refused(), quota atteint, erreur). Une erreur API stoppe tout. L'erreur est
-    gardée dans data/stats_quota.json (clé « err ») : --check et le journal du matin la relisent."""
-    global _calls
+    None (désactivé, demande refusée d'avance par refused(), quota atteint, erreur, réponse de type inattendu, temps du passage épuisé).
+    Une erreur API stoppe tout pour cette exécution ; une limite de fréquence (429) attend puis réessaie une fois (voir l'en-tête du
+    module). L'erreur est gardée dans data/stats_quota.json (clé « err ») : --check et le journal du matin la relisent. Ne lève jamais."""
+    global _calls, _last_call
     if not enabled() or _halted or _calls >= BUDGET or cache.OFFLINE:
         return None
     why = refused(path, params)
@@ -119,43 +184,61 @@ def get(path, **params):
     if q["n"] >= _cap() or q.get("remaining") == 0:
         _halt(f"plafond quotidien atteint ({q['n']}/{_cap()} appels aujourd'hui).")
         return None
-    _calls += 1
-    q["n"] += 1
-    cache.miss("api-football", 1)
-    try:
-        r = requests.get(f"{BASE}{path}", params=params, timeout=30,
-                         headers={"x-apisports-key": os.environ["STATS_API_KEY"]})
-    except requests.RequestException as e:
+    for attempt in (0, 1):                         # 2e tour : l'unique nouvel essai après une limite de fréquence
+        if not _pace():
+            return None                            # plus le temps d'attendre l'écart minimal : le passage s'arrête (deferred)
+        _calls += 1
+        q["n"] += 1
+        cache.miss("api-football", 1)
+        try:
+            r = requests.get(f"{BASE}{path}", params=params, timeout=30,
+                             headers={"x-apisports-key": os.environ["STATS_API_KEY"]})
+        except requests.RequestException as e:
+            _last_call = _clock()
+            store.save("stats_quota.json", q)
+            _warn(f"réseau indisponible ({type(e).__name__}).")
+            _neg[nk] = (time.monotonic(), None)
+            return None
+        _last_call = _clock()
+        h = getattr(r, "headers", None) or {}
+        try:                                   # quota réel annoncé par l'API (journalier)
+            rem, lim = int(h["x-ratelimit-requests-remaining"]), h.get("x-ratelimit-requests-limit")
+            q["remaining"] = rem
+            if lim is not None:
+                q["n"] = max(q["n"], int(lim) - rem)
+        except (KeyError, TypeError, ValueError):
+            q.pop("remaining", None)
         store.save("stats_quota.json", q)
-        _warn(f"réseau indisponible ({type(e).__name__}).")
-        _neg[nk] = (time.monotonic(), None)
-        return None
-    h = getattr(r, "headers", None) or {}
-    try:                                   # quota réel annoncé par l'API (journalier)
-        rem, lim = int(h["x-ratelimit-requests-remaining"]), h.get("x-ratelimit-requests-limit")
-        q["remaining"] = rem
-        if lim is not None:
-            q["n"] = max(q["n"], int(lim) - rem)
-    except (KeyError, TypeError, ValueError):
-        q.pop("remaining", None)
-    store.save("stats_quota.json", q)
-    if r.status_code in (401, 403, 429):
-        _halt(f"HTTP {r.status_code} (clé invalide, accès refusé ou limite atteinte).")
-        return None
+        data = _json(r)
+        if r.status_code in (401, 403):
+            _halt(f"HTTP {r.status_code} (clé invalide ou accès refusé).")
+            return None
+        if _rate_limited(r, data):
+            _warn(f"limite de fréquence sur {path} (HTTP {r.status_code}) : {_body(r, data)}")
+            if attempt == 0 and _wait(RATE_WAIT):
+                _warn(f"attente de {RATE_WAIT:g} s puis un seul nouvel essai.")
+                continue
+            if not _deferred:
+                _halt("limite de fréquence (10 requêtes par minute) toujours atteinte après l'attente.")
+            return None
+        break
     if r.status_code >= 400:
         _warn(f"HTTP {r.status_code} sur {path}.")
         _neg[nk] = (time.monotonic(), None)
         return None
-    try:
-        data = r.json()
-    except ValueError:
-        _warn(f"réponse illisible sur {path}.")
+    if not isinstance(data, dict):                 # JSON absent, liste, chaîne... (proxy, WAF, panne) : une erreur, jamais une exception
+        _warn(f"réponse illisible ou de type inattendu sur {path} ({type(data).__name__ if data is not None else 'pas du JSON'}).")
         _neg[nk] = (time.monotonic(), None)
         return None
     errors = data.get("errors")                 # liste ou dict, vide si tout va bien
     if errors:
         plan = bool(PLAN_ERROR.search(str(errors)))
-        text = "; ".join(f"{k}: {v}" for k, v in errors.items()) if isinstance(errors, dict) else "; ".join(map(str, errors))
+        if isinstance(errors, dict):
+            text = "; ".join(f"{k}: {v}" for k, v in errors.items())
+        elif isinstance(errors, (list, tuple)):
+            text = "; ".join(map(str, errors))
+        else:
+            text = str(errors)
         q["err"] = {"path": path, "msg": text[:200], "plan": plan}
         store.save("stats_quota.json", q)
         _halt(f"erreur API sur {path} ({errors}) : clé, quota ou saison non incluse dans le plan.")
@@ -163,6 +246,10 @@ def get(path, **params):
     if q.get("remaining") == 0:
         _halt("quota quotidien épuisé.")
     out = data.get("response") or []
+    if not isinstance(out, list):                  # les éléments sont vérifiés par ceux qui les lisent (_day_fixtures, fixture_stats)
+        _warn(f"réponse de type inattendu sur {path} (response : {type(out).__name__}).")
+        _neg[nk] = (time.monotonic(), None)
+        return None
     if not out:
         _neg[nk] = (time.monotonic(), out)         # réponse vide : pas redemandée pendant quelques minutes
     return out
@@ -201,6 +288,12 @@ _ALIAS = {
     "sp lisbon": "sporting", "qpr": "queens park rangers", "nott m forest": "nottingham forest", "mgladbach": "monchengladbach",
     "m gladbach": "monchengladbach", "sp gijon": "sporting gijon", "la coruna": "deportivo la coruna", "hertha": "hertha berlin",
     "for sittard": "fortuna sittard", "nijmegen": "nec nijmegen", "hibs": "hibernian",
+    # Écarts constatés entre The Odds API, football-data, FotMob et API-Football (audit du 9 octobre 2026), tous le MÊME club :
+    "stade lavallois": "laval", "al qadisiyah": "al qadsiah",
+    "shanghai sipg": "shanghai port",                                   # rebaptisé Shanghai Port (2021) ; certains books gardent l'ancien nom
+    "shenzhen xinpengcheng": "shenzhen peng city", "henan songshan longmen": "henan",
+    "chongqing tongliang long": "chongqing tonglianglong",
+    # JAMAIS d'alias entre Qingdao Hainiu, Qingdao West Coast et Qingdao Jonoon : trois clubs différents (tests/test_sources_fix.py).
 }
 # Sigles d'États brésiliens en fin de nom (« Nautico PE », « Atletico MG ») : retirés pour comparer, jamais pour confondre deux
 # États (« Atletico MG » n'est pas « Atletico GO »).
@@ -216,7 +309,10 @@ _TOKEN_ALIAS = {"utd": "united", "dynamo": "dinamo", "jrs": "juniors", "rvs": "r
                 "sint": "st", "saint": "st", "sankt": "st", "san": "st"}      # « Sint Truiden » = « St Truiden », « Saint-Etienne » = « St Etienne »
 _TRANSLIT = str.maketrans({"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "ł": "l", "Ł": "L", "đ": "d", "Đ": "D",
                            "ß": "ss", "ı": "i", "ð": "d", "Ð": "D", "þ": "th", "Þ": "Th", "ħ": "h", "Ħ": "H"})   # lettres sans décomposition NFKD
-_MARK = re.compile(r"^(w|women|fem|ii|iii|b|u\d\d|youth|reserves|res)$")
+# Marqueurs d'équipe féminine, de jeunes ou de réserve : « Jong Ajax » n'est pas « Ajax », « Real Madrid Castilla » pas « Real Madrid »,
+# « Newcastle U-21 » pas « Newcastle ». Deux noms dont les marqueurs diffèrent ne se ressemblent pas (team_sim = 0).
+_MARK = re.compile(r"^(w|women|fem|ii|iii|b|u\d\d|youth|reserves|res|jong|castilla|amateure|amateurs|primavera|next|gen)$")
+_U_AGE = re.compile(r"\bu[ -]?(\d\d)\b")      # « U-21 », « U 21 », « U21 » -> « u21 »
 
 
 def _norm(s):
@@ -247,6 +343,7 @@ def _initials(toks):
 def _team_key(name):
     """(nom canonique, marqueurs femmes/jeunes/réserve) d'une équipe."""
     n = _norm(str(name).replace("'", "").replace("\u2019", "").replace("\u2018", "").replace("`", ""))     # « Newell's » = « Newells »
+    n = _U_AGE.sub(r"u\1", n)
     n = _ALIAS.get(n, n)
     toks = _initials(n.split())
     if len(toks) >= 2 and toks[-1] in _STATES:
@@ -258,14 +355,19 @@ def _team_key(name):
 
 def _fold_initials(na, nb):
     """« estudiantes la plata » ~ « estudiantes lp » : une suite de mots d'un nom dont les initiales forment un sigle de l'autre est
-    remplacée par ce sigle (« L.P. » = « La Plata »). -> (na, nb) repliés."""
+    remplacée par ce sigle (« L.P. » = « La Plata »). -> (na, nb) repliés. Le sigle doit être un mot ENTIER de l'autre nom, et le reste des deux
+    noms doit partager au moins un mot distinctif (non générique) : « Atalanta BC » n'est ni « Bristol City » ni « Barracas Central »
+    (leurs initiales font « bc », mais rien d'autre ne les rapproche) ; un sigle ne l'emporte donc jamais sur un mot distinctif commun."""
     def fold(x, y):                       # y dont les suites de mots épelant un sigle de x sont remplacées par ce sigle
         xs, ys = x.split(), y.split()
         for t in xs:
             if 2 <= len(t) <= 4 and t not in ys:
                 for i in range(len(ys) - len(t) + 1):
-                    if "".join(w[0] for w in ys[i:i + len(t)]) == t and all(len(w) > 1 for w in ys[i:i + len(t)]):
-                        ys = ys[:i] + [t] + ys[i + len(t):]
+                    run = ys[i:i + len(t)]
+                    if "".join(w[0] for w in run) == t and all(len(w) > 1 for w in run):
+                        anchor = (set(w for w in xs if w != t) & set(ys[:i] + ys[i + len(t):])) - GENERIC
+                        if anchor:
+                            ys = ys[:i] + [t] + ys[i + len(t):]
                         break
         return " ".join(ys)
     return fold(nb, na), fold(na, nb)
@@ -369,6 +471,8 @@ def _entry(f):
          "home": f["teams"]["home"]["name"], "home_id": f["teams"]["home"]["id"],
          "away": f["teams"]["away"]["name"], "away_id": f["teams"]["away"]["id"],
          "gh": pick("home"), "ga": pick("away")}
+    if not (isinstance(e["home"], str) and e["home"] and isinstance(e["away"], str) and e["away"]):
+        raise ValueError("équipe sans nom")
     lg = african_league(f)
     if lg:
         e["lg"], e["lk"] = lg, "africa"
@@ -426,7 +530,16 @@ def _day_fixtures(day):
     raw = get("/fixtures", date=str(day), timezone="UTC")
     if not raw:                                 # erreur ou rien : on garde l'ancien cache
         return old or []
-    lst = [_entry(f) for f in raw]
+    lst, bad = [], 0
+    for f in raw:
+        try:
+            lst.append(_entry(f))
+        except (KeyError, TypeError, AttributeError, ValueError):       # match sans équipes, sans nom, d'un type inattendu : sauté
+            bad += 1
+    if bad:
+        _warn(f"{bad} match(s) illisible(s) dans la liste du {day} (sur {len(raw)}).")
+    if not lst:                                 # rien d'exploitable : comme une erreur, l'ancien cache est gardé
+        return old or []
     keep = str((datetime.fromisoformat(_today()) - timedelta(days=10)).date())
     cache_ = {d: v for d, v in cache_.items() if d >= keep}
     cache_[str(day)] = lst
@@ -583,12 +696,18 @@ def _save_stats_cache(cache_):
         if isinstance(v, dict) and not v.get("d") and not v.get("missing"):
             v["d"] = _today()                       # ancien format : daté à la première réécriture
     keep = {k: v for k, v in cache_.items() if not isinstance(v, dict) or (v.get("d") or v.get("missing") or "9") >= cut}
-    try:
-        os.makedirs(os.path.dirname(_stats_path()), exist_ok=True)
-        with open(_stats_path(), "w") as f:
+    path, tmp = _stats_path(), f"{_stats_path()}.{os.getpid()}.tmp"
+    try:                                            # écriture atomique : fichier temporaire puis os.replace (un arrêt en cours d'écriture ne tronque jamais le cache)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(tmp, "w") as f:
             json.dump(keep, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, path)
     except OSError as e:                            # le cache est facultatif : sans lui, on redemande
         _warn(f"cache des statistiques non écrit ({type(e).__name__}).")
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def stats_known(fixture_id):
@@ -621,7 +740,11 @@ def fixture_stats(fixture_id, players=True):
         teams = get("/fixtures/statistics", fixture=fixture_id)
         if teams is None:                           # erreur ou quota : on réessaiera
             return None
-        out = _entry_from(teams)
+        try:
+            out = _entry_from(teams)
+        except (KeyError, TypeError, AttributeError, ValueError):       # réponse d'un type inattendu : une erreur, pas « pas de statistiques »
+            _warn(f"statistiques illisibles pour le match {fixture_id} (réessayé plus tard).")
+            return None
         if out is None:
             cache_[str(fixture_id)] = {"missing": _today()}
             _save_stats_cache(cache_)
@@ -629,17 +752,22 @@ def fixture_stats(fixture_id, players=True):
     if players:
         resp = get("/fixtures/players", fixture=fixture_id)
         if resp is not None:
-            for team in resp:
-                for p in team.get("players") or []:
-                    s = (p.get("statistics") or [{}])[0]
-                    if not (s.get("games") or {}).get("minutes"):      # remplaçant jamais entré (minutes null ou 0) : pas de stats, pas un « 0 tir »
-                        continue
-                    out["players"][p["player"]["name"]] = {
-                        "shots": _num((s.get("shots") or {}).get("total")),
-                        "shots_on_target": _num((s.get("shots") or {}).get("on")),
-                        "fouls": _num((s.get("fouls") or {}).get("committed")),
-                    }
-            out["players_done"] = True
+            try:
+                got = {}
+                for team in resp:
+                    for p in team.get("players") or []:
+                        s = (p.get("statistics") or [{}])[0]
+                        if not (s.get("games") or {}).get("minutes"):      # remplaçant jamais entré (minutes null ou 0) : pas de stats, pas un « 0 tir »
+                            continue
+                        got[p["player"]["name"]] = {
+                            "shots": _num((s.get("shots") or {}).get("total")),
+                            "shots_on_target": _num((s.get("shots") or {}).get("on")),
+                            "fouls": _num((s.get("fouls") or {}).get("committed")),
+                        }
+                out["players"].update(got)
+                out["players_done"] = True
+            except (KeyError, TypeError, AttributeError, IndexError, ValueError):
+                _warn(f"stats joueurs illisibles pour le match {fixture_id} (réessayées plus tard).")
     cache_[str(fixture_id)] = out
     _save_stats_cache(cache_)
     return out

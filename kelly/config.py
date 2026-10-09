@@ -177,7 +177,8 @@ LOCK_WAIT_MIN = _int("LOCK_WAIT_MIN", 20)         # le bot Telegram attend au pl
 OUTBOX_MAX_HOURS = _int("OUTBOX_MAX_HOURS", 36)   # un message resté en attente d'envoi (réseau coupé) plus longtemps que ça est abandonné
 SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de toutes les ligues
 FAIR_SECONDS = _int("FAIR_SECONDS", 300)          # calcul des pronostics de tous les matchs du jour (championnats 1xBet compris)
-SOURCES_SECONDS = _int("SOURCES_SECONDS", 720)    # téléchargements des stats gratuites (le reste vient du cache)
+SOURCES_SECONDS = _int("SOURCES_SECONDS", 720)    # téléchargements des stats gratuites (le reste vient du cache) : partagé entre les sources, les ligues qui jouent bientôt d'abord
+SOURCES_CACHE_KEEP_DAYS = _int("SOURCES_CACHE_KEEP_DAYS", 45)   # .cache/sources : une entrée ni téléchargée ni relue depuis ce nombre de jours est effacée
 # Pronostics Kelly sans cote de bookmaker (kelly/fair.py) : proba du modèle + « cote juste » = 1 / proba.
 FAIR_MAX = _int("FAIR_MAX", 10)                   # pronostics détaillés dans le message du matin (5 si des combinés existent)
 FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json), montrés le matin
@@ -204,7 +205,9 @@ APISTATS_GOOD_N = 6                               # à partir de là le profil e
 APISTATS_SAT_N = 10                               # équipe « saturée » : au moins autant de matchs que la fenêtre des moyennes (APISTATS_LAST)
 APISTATS_MAX_TEAMS = 300                          # équipes gardées dans data/apistats_profiles.json (< 300 Ko avec 15 matchs chacune)
 APISTATS_KEEP_DAYS = 120                          # équipe oubliée si elle n'a pas joué (ni été mise à jour) depuis
-APISTATS_SECONDS = _int("APISTATS_SECONDS", 150)  # durée maximale du remplissage du matin
+APISTATS_SECONDS = _int("APISTATS_SECONDS", 360)  # durée maximale du remplissage du matin (55 requêtes x STATS_MIN_GAP = ~340 s)
+STATS_MIN_GAP = _float("STATS_MIN_GAP", 6.2)      # secondes entre deux appels API-Football : le forfait gratuit limite à 10 requêtes par minute (HTTP 429 au-delà)
+STATS_RATE_WAIT = _float("STATS_RATE_WAIT", 60)   # attente (s) après un HTTP 429 avant l'unique nouvel essai, dans la limite du délai du passage
 STATS_DATE_WINDOW = _int("STATS_DATE_WINDOW", 1)  # jours demandés autour d'aujourd'hui à /fixtures?date= (forfait gratuit : hier, aujourd'hui, demain)
 # ---- Stats de match FotMob (kelly/sources/fmmatch.py) : touches, hors-jeu, fautes, corners, tirs, cartons par équipe ----
 # Une page de match (~1 Mo) par match lu, jamais gardée brute ; remplissage étalé sur les passages horaires (pas celui de 08:00).

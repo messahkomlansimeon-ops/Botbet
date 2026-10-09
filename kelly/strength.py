@@ -22,6 +22,7 @@ import json
 import math
 import os
 import sys
+import time
 from datetime import date, timedelta
 
 from . import store
@@ -57,12 +58,13 @@ RELEGATED = {"E0": 3, "SP1": 3, "I1": 3, "D1": 2, "F1": 2, "N1": 2, "P1": 2, "E1
 
 FITS = 0                         # nombre d'ajustements faits par ce processus (tests : le cache évite de recalculer)
 _memo = {}                       # div -> (jour, modèle | None)
+_memo_stamp = {}                 # div -> empreinte des CSV (_stamp) au moment où le modèle de _memo a été fait
 _names = {}
 
 
 def reload():
     """Oublie les modèles et les réglages mesurés en mémoire (après une actualisation des sources)."""
-    _memo.clear(), _names.clear(), _stamp_memo.clear(), _tuned.clear()
+    _memo.clear(), _memo_stamp.clear(), _names.clear(), _stamp_memo.clear(), _tuned.clear()
 
 
 # ---------- réglages mesurés (data/tuning.json, écrit par kelly/tune.py) ----------
@@ -608,18 +610,27 @@ def load_matches(div):
     return fd.cached_history([div], [cur, p1, fd.previous_season(p1)])
 
 
-_stamp_memo = []
+_stamp_memo = []                 # [(signature du document, date d'actualisation, instant de la dernière interrogation)]
+STAMP_RECHECK_SECONDS = 1.0      # le document des profils football-data n'est pas reinterrogé plus d'une fois par seconde
+_stamp_clock = time.monotonic
 
 
 def _stamp():
-    """Date d'actualisation des profils football-data (change quand refresh_all a téléchargé de nouveaux CSV)."""
-    if not _stamp_memo:
-        try:
-            from .sources import footballdata as fd
-            _stamp_memo.append(str(fd.profiles().get("updated") or ""))
-        except Exception:                                # noqa: BLE001
-            return ""
-    return _stamp_memo[0]
+    """Date d'actualisation des profils football-data (change quand refresh_all a téléchargé de nouveaux CSV), relue dès que leur document
+    change dans la base : un bot qui tourne en continu ne garde plus l'empreinte de son démarrage."""
+    try:
+        now = _stamp_clock()
+        if _stamp_memo and now - _stamp_memo[0][2] < STAMP_RECHECK_SECONDS:
+            return _stamp_memo[0][1]
+        from .sources import footballdata as fd
+        sig = store.version(fd.PROFILE_FILE)
+        if not _stamp_memo or _stamp_memo[0][0] != sig:
+            _stamp_memo[:] = [(sig, str(fd.profiles().get("updated") or ""), now)]
+        else:
+            _stamp_memo[0] = _stamp_memo[0][:2] + (now,)
+    except Exception:                                    # noqa: BLE001
+        return ""
+    return _stamp_memo[0][1]
 
 
 def get(div, on=None, loader=None):
@@ -629,7 +640,7 @@ def get(div, on=None, loader=None):
     try:
         on = on or today()
         hit = _memo.get(div)
-        if hit and hit[0] == on.isoformat():
+        if hit and hit[0] == on.isoformat() and _memo_stamp.get(div) == _stamp():     # CSV actualisés depuis (autre processus) : modèle refait
             return hit[1]
         hl = hl_for(div)
         key = f"{on.isoformat()}|{_stamp()}" + ("" if hl == HALF_LIFE else f"|hl{hl}")        # demi-vie mesurée : cache du jour refait une fois
@@ -637,6 +648,7 @@ def get(div, on=None, loader=None):
         disk = disk if isinstance(disk, dict) and disk.get("v") == VERSION else None
         if disk and disk.get("key") == key:
             _memo[div] = (key.split("|")[0], disk)
+            _memo_stamp[div] = _stamp()
             return disk
         model = build((loader or load_matches)(div), on, hl, div=div)
         if model:
@@ -645,6 +657,7 @@ def get(div, on=None, loader=None):
         elif disk and 0 <= (on - date.fromisoformat(disk["on"])).days <= STALE_DAYS:
             model = dict(disk, stale=(on - date.fromisoformat(disk["on"])).days)
         _memo[div] = (key.split("|")[0], model)
+        _memo_stamp[div] = _stamp()
         return model
     except Exception as e:                               # noqa: BLE001 - jamais bloquant
         print(f"[strength] {div} ignoré : {type(e).__name__}: {e}", file=sys.stderr)

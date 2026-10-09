@@ -5,7 +5,10 @@ Sources, dans cet ordre :
 - football-data (CSV déjà en cache) : cotes de clôture Pinnacle, sinon moyenne du marché ; 1N2 et plus/moins 2,5 buts ;
 - BetExplorer (pages de résultats déjà lues le matin) : cotes de clôture 1N2, petits championnats et Afrique compris.
 
-Mesure : mouvement du marché en probabilité sans marge, clv = log(proba de clôture / proba des books à la prise). C'est la cote
+Mesure : mouvement du marché en probabilité sans marge, clv = log(proba de clôture / proba des books à la prise). La marge est retirée par
+la MÊME méthode des deux côtés, celle de Shin (odds.shin_probs) : la proba à la prise (prob_book, consensus des books) l'est, et la cote de
+clôture aussi (avant, football-data / BetExplorer étaient dé-margés proportionnellement : un biais de méthode, pas un mouvement du marché,
+qui pesait surtout sur les outsiders et les petits favoris). C'est la cote
 finale « log(cote prise / cote de clôture) » des paris relevés, si l'écart entre cote typique et cote juste ne bouge pas entre les
 deux moments. Les lignes ainsi clôturées sont marquées (closed_at = « free:<source> », close_src) et pèsent C.FREE_CLOSE_WEIGHT dans
 l'apprentissage (learn.train_clv) : un pari vraiment relevé reste la meilleure mesure.
@@ -17,6 +20,18 @@ from . import config as C, stats
 from .sources import betexplorer, footballdata as fd
 
 GOAL_LINE = 2.5                       # seule ligne de buts des cotes de clôture de football-data
+
+
+def devig(prices):
+    """Probas sans marge d'un marché de cotes décimales, méthode de Shin comme prob_book (odds.shin_probs) ; None si une cote manque ou est
+    invalide (≤ 1), comme fd.no_vig. Repli : normalisation proportionnelle si Shin échoue."""
+    if not prices or any(not isinstance(o, (int, float)) or isinstance(o, bool) or o != o or o <= 1 for o in prices):
+        return None
+    from . import odds                    # import tardif : freeclose est chargé par app avant que tout odds soit utile
+    try:
+        return odds.shin_probs(list(prices))
+    except Exception:                    # noqa: BLE001 - ne jamais arrêter le remplissage des suivantes
+        return fd.no_vig(list(prices))
 
 
 def _ts(s):
@@ -38,7 +53,7 @@ def _fd_close(r, fdata):
     m = fdata.match(r) if idx and fd.SPORT_TO_DIV.get(r["sport_key"]) else None
     close = ((m or {}).get("odds", {}).get(idx[0]) or {}).get("close", {}) if idx else {}
     for book in ("ps", "avg"):
-        p = fd.no_vig(close[book]) if close.get(book) else None
+        p = devig(close[book]) if close.get(book) else None
         if p:
             return p[idx[1]], f"football-data/{book}"
     return None
@@ -55,7 +70,7 @@ def _bx_close(r, matches):
         except (KeyError, TypeError, ValueError, AttributeError):     # date absente/invalide : ligne sautée, jamais d'arrêt
             continue
         if gap <= 1 and stats.team_sim(m["home"], r["home"]) >= 0.8 and stats.team_sim(m["away"], r["away"]) >= 0.8:
-            p = fd.no_vig([m.get("o1"), m.get("ox"), m.get("o2")])
+            p = devig([m.get("o1"), m.get("ox"), m.get("o2")])
             if p:
                 return p[_index(r)[1]], "betexplorer"
     return None
