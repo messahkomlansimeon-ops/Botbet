@@ -22,7 +22,7 @@ def _events(pronos):
         if c["id"] not in seen:
             seen.add(c["id"])
             out.append((c["sport_key"], {"id": c["id"], "home_team": c["home"], "away_team": c["away"],
-                                         "commence_time": c["commence"]}))
+                                         "commence_time": c["commence"]} | ({"xgid": c["xgid"]} if c.get("xgid") else {})))
     return out
 
 
@@ -89,6 +89,7 @@ def apply(pronos, fetch=None):
         if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
             for k in ("xodds", "xev", "xp"):
                 c.pop(k, None)
+            c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
         r = price(c, m["px"]) if m else None
         if r:
             out[r] += 1

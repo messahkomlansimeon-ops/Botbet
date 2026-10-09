@@ -15,15 +15,18 @@ Chemin (sans jeton). PIÈGE : l'API refuse (HTTP 400) une adresse dont les param
 Cartons : 1xBet ne compte que les jaunes (« Cartons jaunes ») alors que Kelly compte jaunes + rouges : pas de prix (non comparable).
 """
 import json
+import os
+import sys
 import time
 from datetime import datetime
 from urllib.parse import urlencode
 
-from .. import config as C, stats
+from .. import config as C, stats, store
 from . import http, state
 
 SOURCE = "xbet"
-BASE = "https://1xbet.ci"
+DOMAIN = "1xbet.ci"
+BASE = "https://" + DOMAIN
 FEED = BASE + "/service-api/main-line-feed/v3/"
 COMMON = {"fcountry": 96, "gr": 673, "lng": "fr", "ref": 286}
 JSON_H = {"Accept": "application/json"}
@@ -192,7 +195,9 @@ def parse_main(data, home, away):
 
 
 def _events(gid):
-    return _get_json(url("gameEvents", cfView=3, countEvents=250, gameId=gid, grMode=4, marketType=1), TTL_ODDS)
+    # marketType=2 (« Populaires ») : 1X2, double chance, toute l'échelle des buts, les 2 marquent, sous-matchs typés, et pour un
+    # sous-match statistique tout son plus/moins (match et équipes) ; 7 Ko compressés au lieu de 48 Ko pour « tous les marchés »
+    return _get_json(url("gameEvents", cfView=3, countEvents=250, gameId=gid, grMode=4, marketType=2), TTL_ODDS)
 
 
 def prices(game, markets, home, away):
@@ -219,38 +224,103 @@ def lookup(px, market, name, point):
     return px.get((market, name, None if point is None else float(point)))
 
 
+USAGE = "xbet_usage.json"       # données 1xBet du mois passées par le proxy : {"month", "bytes", "requests", "days": {jour: octets}}
+
+
+def proxy():
+    """Proxy de 1xBet : XBET_PROXY de l'environnement, sinon la ligne XBET_PROXY= de C.XBET_PROXY_FILE (fichier de scrap_stat). None
+    si introuvable. Jamais affiché (il contient le mot de passe)."""
+    if os.environ.get("XBET_PROXY"):
+        return os.environ["XBET_PROXY"].strip()
+    try:
+        with open(C.XBET_PROXY_FILE, encoding="utf-8") as f:
+            for line in f:
+                k, _, v = line.strip().partition("=")
+                if k.strip() == "XBET_PROXY" and v.strip():
+                    return v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return None
+
+
+def usage(today=None):
+    """Données 1xBet du mois en cours (dict USAGE remis à zéro au changement de mois)."""
+    today = str(today or state.now().date())
+    u = store.load(USAGE, {})
+    return u if isinstance(u, dict) and u.get("month") == today[:7] else {"month": today[:7], "bytes": 0, "requests": 0, "days": {}}
+
+
+def _spent(start):
+    w = http.WIRE.get(DOMAIN, {"bytes": 0, "requests": 0})
+    return w["bytes"] - start["bytes"], w["requests"] - start["requests"]
+
+
+def _save_usage(u, start):
+    b, n = _spent(start)
+    day = str(state.now().date())
+    u["bytes"], u["requests"] = int(u["bytes"] + b), u["requests"] + n
+    u["days"][day] = int(u["days"].get(day, 0) + b)
+    u["days"] = dict(sorted(u["days"].items())[-40:])
+    store.save(USAGE, u)
+    return b, n
+
+
+def usage_line(u=None):
+    u = u or usage()
+    return f"1xBet via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois ({u['requests']} requêtes), plafond {C.XBET_MONTH_MB:.0f} Mo"
+
+
 def fetch_day(events, deadline=None, max_matches=None, wanted=None):
-    """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}.
-    `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là). S'arrête au délai
-    `deadline` (time.monotonic) ou après `max_matches` matchs. Ne lève pas : erreurs dans state (rapport des sources)."""
-    out, errors, leagues = {}, [], {}
+    """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
+    événement qui porte "xgid" (id 1xBet trouvé au relevé du matin) est lu directement, sans menu ni liste du championnat.
+    `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là). Passe par le proxy
+    (proxy() ; introuvable = aucun relevé, sauf C.XBET_DIRECT) ; s'arrête au délai `deadline` (time.monotonic), après
+    `max_matches` matchs ou au plafond mensuel C.XBET_MONTH_MB. Ne lève pas : erreurs dans state (rapport des sources)."""
+    out, errors, leagues, cat = {}, [], {}, None
     max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches
     if state.is_blocked(SOURCE):
         return out
-    try:
-        cat = menu()
-    except XbetError as e:
-        state.record_run(SOURCE, 0, [f"menu : {e}"])
+    px_url = proxy()
+    if not px_url and not C.XBET_DIRECT:
+        state.record_run(SOURCE, 0, [f"proxy introuvable (XBET_PROXY ou {C.XBET_PROXY_FILE}) : aucun relevé, jamais en direct"])
+        return out
+    if px_url:
+        http.PROXIES[DOMAIN] = px_url
+    else:
+        http.PROXIES.pop(DOMAIN, None)
+    u, cap = usage(), C.XBET_MONTH_MB * 1e6
+    start = dict(http.WIRE.get(DOMAIN, {"bytes": 0, "requests": 0}))
+    if u["bytes"] >= cap:
+        state.record_run(SOURCE, 0, [f"plafond mensuel atteint ({usage_line(u)}) : relevé sauté"])
         return out
     for key, ev in events:
-        if len(out) >= max_matches or (deadline and time.monotonic() > deadline) or state.is_blocked(SOURCE):
+        if (len(out) >= max_matches or (deadline and time.monotonic() > deadline) or state.is_blocked(SOURCE)
+                or u["bytes"] + _spent(start)[0] >= cap):
             break
-        if key not in LEAGUES:
-            continue
-        if key not in leagues:
-            try:
-                leagues[key] = games(key, cat)
-            except XbetError as e:
-                errors.append(f"{key} : {e}")
-                leagues[key] = []
-        g = find(ev, leagues[key])
-        if not g:
-            continue
+        if ev.get("xgid"):
+            g = {"gid": ev["xgid"], "home": ev["home_team"], "away": ev["away_team"]}
+        else:
+            if key not in LEAGUES:
+                continue
+            if key not in leagues:
+                try:
+                    cat = cat if cat is not None else menu()
+                    leagues[key] = games(key, cat)
+                except XbetError as e:
+                    errors.append(f"{key} : {e}")
+                    leagues[key] = []
+                    if cat is None:                 # menu illisible : inutile d'insister
+                        break
+            g = find(ev, leagues[key])
+            if not g:
+                continue
         try:
             out[ev["id"]] = {"gid": g["gid"], "px": prices(g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])} | {
                 "home": g["home"], "away": g["away"]}
         except XbetError as e:
             errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")
+    b, n = _save_usage(u, start)
+    print(f"[1xbet] {n} requête(s), {b / 1e3:.0f} Ko via {'le proxy' if px_url else 'la connexion directe'} ; {usage_line()}",
+          file=sys.stderr)
     state.record_run(SOURCE, len(out), errors)
     return out
-

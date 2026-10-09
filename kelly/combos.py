@@ -320,6 +320,12 @@ def fair_legs(pronos):
     return [c | {"odds": c.get("xodds") or c["min_odds"]} for c in pronos if fair_eligible(c) and viable(c)]
 
 
+def _fair_best(legs, lo, hi):
+    """Combiné à cote juste : d'abord avec les seules jambes aux cotes 1xBet relevées par Kelly (rien d'inventé), sinon avec toutes."""
+    real = [c for c in legs if c.get("xodds")]
+    return best_combo(real, lo, hi) or best_combo(legs, lo, hi)
+
+
 def fair_stake(min_total):
     """Mise indicative (unités, pas la bankroll) : plus la cote mini est haute, plus elle est petite."""
     return next(s for limit, s in C.FAIR_COMBO_STAKE if min_total < limit)
@@ -332,7 +338,7 @@ def fair_plan(pronos, tiers=None, usage=None):
     legs = fair_legs(pronos)
     out = []
     for target, lo, hi in (tiers if tiers is not None else C.FAIR_COMBO_TIERS):
-        combo = best_combo(usage.filter(legs), lo, hi)
+        combo = _fair_best(usage.filter(legs), lo, hi)
         if combo:
             usage.add(combo[0])
         out.append((target, combo))
@@ -345,7 +351,7 @@ def fair_shots_plan(pronos, tiers=None):
     out = []
     for target, prefix, _, lo, hi in (tiers if tiers is not None else C.FAIR_SHOTS_TIERS):
         legs = [c for c in fair_legs(pronos) if c["market"].startswith(prefix)]
-        out.append((target, best_combo(legs, lo, hi)))
+        out.append((target, _fair_best(legs, lo, hi)))
     return out
 
 
@@ -358,7 +364,7 @@ def fair_custom(pronos, target, usage=None):
     """/combi <cote> sans cotes réelles : combiné à cote juste dont la cote mini est au moins la cote visée (jusqu'à
     + C.CUSTOM_TOLERANCE) : on ne promet jamais moins que demandé, puisque c'est un minimum."""
     legs = (usage or Usage()).filter(fair_legs(pronos))
-    return best_combo(legs, target, target * (1 + C.CUSTOM_TOLERANCE))
+    return _fair_best(legs, target, target * (1 + C.CUSTOM_TOLERANCE))
 
 
 def fair_shortfall(pronos, target):

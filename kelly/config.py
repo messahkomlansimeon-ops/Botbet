@@ -181,6 +181,12 @@ FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadré
 XBET_ENABLED = os.environ.get("XBET_ENABLED", "1") != "0"
 XBET_SECONDS = _int("XBET_SECONDS", 480)            # temps maximal du relevé 1xBet du matin (3 s entre requêtes)
 XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 60)     # matchs relevés au plus (les mieux classés d'abord)
+# Proxy de l'utilisateur pour 1xBet (celui de scrap_stat) : les relevés ne partent jamais de la connexion du compte 1xBet. XBET_PROXY
+# (variable d'environnement), sinon la ligne XBET_PROXY= de XBET_PROXY_FILE. Introuvable : pas de relevé (jamais en direct), sauf
+# XBET_DIRECT=1.
+XBET_PROXY_FILE = os.environ.get("XBET_PROXY_FILE") or os.path.expanduser("~/.config/scrap_stat/sofa.env")
+XBET_DIRECT = _bool("XBET_DIRECT", False)
+XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)        # plafond mensuel de données 1xBet via le proxy (forfait 1 Go partagé avec SofaScore)
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
 FAIR_COMBO_KEEP_DAYS = 14
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}

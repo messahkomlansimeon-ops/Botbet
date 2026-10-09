@@ -11,6 +11,8 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-")
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)
+os.environ["XBET_PROXY_FILE"] = os.path.join(os.environ["DATA_DIR"], "pas-de-fichier.env")      # jamais le vrai proxy de la machine
+os.environ["XBET_PROXY"] = "http://user:secret@proxy.test:80"
 
 from kelly import calib, combos as CB, config as C, fmt, store, xprice  # noqa: E402
 from kelly.sources import http, state, xbet  # noqa: E402
@@ -121,6 +123,48 @@ def test_fetch_day_requests():
     assert got["e1"]["px"][("alternate_totals_corners", "Over", 9.5)] == 1.99
     assert state.health("xbet")["rows"] == 1
     print("ok  requêtes limitées aux familles voulues")
+
+
+def test_proxy_cap_and_reuse():
+    """Proxy obligatoire (jamais en direct), plafond mensuel, id 1xBet du matin relu sans menu ni liste, données comptées."""
+    store.save(state.FILE, {})
+    store.save(xbet.USAGE, {})
+    saved = os.environ.pop("XBET_PROXY")
+    try:
+        calls = with_net(lambda net: (xbet.fetch_day([("soccer_spain_la_liga", EV)]), net.calls)[1])
+        assert calls == [] and "proxy introuvable" in state.health("xbet")["last_error"]
+        with open(C.XBET_PROXY_FILE, "w") as f:
+            f.write("SOFA_PROXY=http://a:b@x:80\nXBET_PROXY=http://u:p@from-file:80\n")
+        assert xbet.proxy() == "http://u:p@from-file:80"
+    finally:
+        os.environ["XBET_PROXY"] = saved
+        os.remove(C.XBET_PROXY_FILE)
+    assert xbet.proxy() == saved
+    # id 1xBet déjà connu : seulement le marché principal (pas de menu, pas de liste du championnat)
+    http.WIRE[xbet.DOMAIN] = {"bytes": 0, "requests": 0}
+
+    def run(net):
+        def counted(*a, **k):
+            http.WIRE[xbet.DOMAIN]["bytes"] += 7000
+            http.WIRE[xbet.DOMAIN]["requests"] += 1
+            return FakeNet.fetch(net, *a, **k)
+        old, http.fetch = http.fetch, counted
+        try:
+            got = xbet.fetch_day([("soccer_spain_la_liga", EV | {"xgid": 900})])
+        finally:
+            http.fetch = old
+        return got, net.calls
+    got, calls = with_net(run)
+    assert set(got) == {"e1"} and [urlparse(u).path.rsplit("/", 1)[-1] for u in calls] == ["gameEvents"], calls
+    assert "marketType=2" in calls[0] and http.PROXIES[xbet.DOMAIN] == saved
+    u = xbet.usage()
+    assert u["bytes"] == 7000 and u["requests"] == 1 and sum(u["days"].values()) == 7000
+    # plafond du mois atteint : aucun relevé
+    store.save(xbet.USAGE, u | {"bytes": int(C.XBET_MONTH_MB * 1e6)})
+    assert with_net(lambda net: (xbet.fetch_day([("soccer_spain_la_liga", EV)]), net.calls)[1]) == []
+    assert "plafond mensuel" in state.health("xbet")["last_error"]
+    store.save(xbet.USAGE, {})
+    print("ok  proxy obligatoire, plafond mensuel, id du matin relu directement")
 
 
 def prono(market, name, point, p0, alts=None, **kw):
@@ -237,6 +281,7 @@ def main():
     test_parse_and_url()
     test_find_match()
     test_fetch_day_requests()
+    test_proxy_cap_and_reuse()
     test_choose_line_and_viability()
     test_apply_and_messages()
     test_afternoon_refresh()

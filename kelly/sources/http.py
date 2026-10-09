@@ -3,6 +3,7 @@ import json
 import os
 import re
 import time
+import zlib
 from dataclasses import dataclass
 from urllib import robotparser
 from urllib.parse import urlparse
@@ -28,6 +29,11 @@ FOREVER = None
 ROBOTS_TTL = 24 * HOUR
 MAX_CRAWL_DELAY = 60.0
 
+# Proxy par domaine (sources/xbet.py : 1xbet.ci passe par le proxy de l'utilisateur, jamais en direct) : connexion gardée ouverte
+# (une seule poignée de main TLS) ; WIRE compte ce qui passe réellement par le réseau (octets compressés + en-têtes), par domaine.
+PROXIES = {}
+WIRE = {}
+_sessions = {}
 _sleep = time.sleep
 _last = {}
 _crawl = {}
@@ -145,9 +151,15 @@ def _request(url, headers=None):
     r, err = None, None
     for attempt in (0, 1):
         _wait(domain)
+        proxy = PROXIES.get(domain)
         try:
-            r = requests.get(url, headers=h, timeout=TIMEOUT)
-        except requests.RequestException as e:
+            if proxy:
+                s = _sessions.get(domain) or _sessions.setdefault(domain, requests.Session())
+                r = s.get(url, headers=h, timeout=TIMEOUT, proxies={"http": proxy, "https": proxy})
+            else:
+                r = requests.get(url, headers=h, timeout=TIMEOUT)
+            _count(domain, r)
+        except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
             r, err = None, f"réseau indisponible ({type(e).__name__})"
         _last[domain] = state.clock()
         if r is not None and r.status_code < 500:
@@ -157,6 +169,18 @@ def _request(url, headers=None):
         if attempt == 0:
             continue
     return (r, None) if r is not None else (None, err)
+
+
+def _count(domain, r):
+    """Octets réellement transférés pour `r` (corps compressé + en-têtes, estimés) ajoutés à WIRE[domaine]."""
+    content = getattr(r, "content", None) or b""
+    enc = str((getattr(r, "headers", None) or {}).get("Content-Encoding") or "").lower()
+    # corps compressé par le site : sa taille réelle n'est pas exposée (transfert par morceaux) ; on la retrouve en recompressant,
+    # + 10 % de marge (compteur prudent pour le quota du proxy)
+    body = len(zlib.compress(content, 6)) * 1.1 if enc in ("gzip", "deflate", "br") else len(content)
+    w = WIRE.setdefault(domain, {"bytes": 0, "requests": 0})
+    w["bytes"] += int(body) + 600 + sum(len(k) + len(str(v)) + 4 for k, v in (getattr(r, "headers", None) or {}).items())
+    w["requests"] += 1
 
 
 def _load_robots(scheme, domain):
