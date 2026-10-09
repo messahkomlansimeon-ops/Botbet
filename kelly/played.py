@@ -73,7 +73,7 @@ def find(word, day):
         r = _pick(single_rows(rows, store.load("bets.json", {"combos": []}).get("combos", [])), day)
         if not r:
             return "Pas de pari du jour à noter (ni aujourd'hui ni en attente de résultat)."
-        st = bankroll.stake(r["prob"], r["odds"], "⭐", bankroll.load()["bankroll"])
+        st = r["stake"] if r.get("cur") else bankroll.stake(r["prob"], r["odds"], "⭐", bankroll.load()["bankroll"])
         return Target(r, r["odds"], st, f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
                       "cote typique")
     if w.startswith("v") and w[1:].isdigit():
@@ -81,7 +81,7 @@ def find(word, day):
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
         if not c:
             return f"Pas de combiné à vérifier « cote mini {w[1:]} » à noter (ni aujourd'hui ni en attente de résultat)."
-        return Target(c, c["min_odds"], CB.fair_stake(c["min_odds"]), f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])}) "
+        return Target(c, c["min_odds"], c["stake"] if c.get("cur") else CB.fair_stake(c["min_odds"]), f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])}) "
                       f"du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows), "cote mini")
     return None
 
@@ -116,16 +116,20 @@ def command(args, day, now=None):
         return f"Note annulée : {t.label}."
     if not 1.0 < odds <= MAX_ODDS:
         return "La cote doit être supérieure à 1. Exemple : /joue sur 5,40"
-    first = not bankroll.load().get("real")
+    on_budget = bool(t.item.get("cur"))              # pari misé sur le budget du jour : pas de bankroll, la cote corrige le bilan
+    first = not on_budget and not bankroll.load().get("real")
     t.item["played"] = {"odds": round(odds, 2), "stake": round(stake, 2),
                         "at": (now or datetime.now(timezone.utc)).isoformat(timespec="minutes")}
+    t.item.pop("skipped", None)
     t.save()
     if first:
         b = bankroll.load()
         b["real"] = True
         bankroll.save(b)
     gap = _gap(odds, t.ref)
-    lines = [f"✅ Noté : {t.label}, joué à {fmt.odds_txt(odds)} chez 1xBet, mise {fmt.units(stake)} "
+    from . import money
+    mise = money.money(stake, t.item["cur"]) if on_budget else fmt.units(stake)
+    lines = [f"✅ Noté : {t.label}, joué à {fmt.odds_txt(odds)} chez 1xBet, mise {mise} "
              f"({t.ref_word} {fmt.odds_txt(t.ref)} : {fmt.signed(gap * 100, ' %')})."]
     if t.ref_word == "cote mini" and odds < t.ref:
         lines.append("⚠️ 1xBet paie moins que la cote mini : Kelly conseillait de passer ton chemin.")
@@ -145,14 +149,36 @@ def todo(day):
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
     items_ += [(f"À vérifier (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"v{c['tier']}")
                for c in fair.load_combos() if c["date"] == day]
+    if not items_:
+        return "Rien à noter aujourd'hui : les paris du jour arrivent à 08:00."
+    if any(x.get("cur") for _, x, _, _ in items_):
+        return _budget_list(items_, day)
     for name, x, ref, what in items_:
         lines.append(_todo_line(name, x, ref, f"/joue {what} <cote>"))
         if not x.get("played") and x.get("result") is None:
             rows.append([(f"✅ {name} — {fmt.odds_txt(ref)}", f"joue|{what}|{day}")])
-    if not lines:
-        return "Rien à noter aujourd'hui : les paris du jour arrivent à 08:00."
     text = "\n".join(["🧾 Tes paris du jour", ""] + lines + ["", "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet."
                                                          if rows else "Tout est noté 👍"])
+    return telegram.with_buttons(text, telegram.inline(rows)) if rows else text
+
+
+def _budget_list(items_, day):
+    """Paris du jour misés sur le budget : comptés comme joués sauf « ❌ Pas joué » ; un bouton par pari pour changer d'avis."""
+    from . import money
+    lines, rows = ["🧾 Tes paris du jour", "Comptés comme joués, à la mise affichée. Touche un pari que tu n'as pas joué.", ""], []
+    for name, x, ref, what in items_:
+        if not x.get("cur"):
+            continue
+        p = x.get("played") or {}
+        odds = p.get("odds", ref)
+        if x.get("skipped"):
+            lines.append(f"❌ {name} : pas joué")
+            rows.append([(f"↩️ {name} : finalement joué", f"unskip|{what}|{day}|l")])
+        else:
+            lines.append(f"✅ {name} : {money.money(p.get('stake', x['stake']), x['cur'])} à {fmt.odds_txt(odds)}")
+            if x.get("result") is None:
+                rows.append([(f"❌ {name} pas joué", f"skip|{what}|{day}|l"), ("✏️ Autre cote", f"joue|{what}|{day}")])
+    text = "\n".join(lines)
     return telegram.with_buttons(text, telegram.inline(rows)) if rows else text
 
 

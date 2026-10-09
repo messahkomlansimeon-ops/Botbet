@@ -413,22 +413,23 @@ def load_combos():
     return rows if isinstance(rows, list) else []
 
 
-def combo_row(target, combo, day):
-    """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba) ; le résultat vient plus tard (settle_fair_combos)."""
+def combo_row(target, combo, day, stake=None, cur=None):
+    """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba ; mise sur le budget du jour et devise si elle existe) ;
+    le résultat vient plus tard (settle_fair_combos)."""
     legs, min_total, prob = combo
     return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
             "keys": [c["key"] for c in legs], "legs": [{k: c.get(k) for k in LEG_FIELDS} | {"result": None} for c in legs],
-            "result": None}
+            "result": None} | ({"stake": stake, "cur": cur} if stake else {})
 
 
-def record_combos(sent, day):
+def record_combos(sent, day, stakes=None, cur=None):
     """Enregistre les combinés à cote juste envoyés [(palier, combiné)] sans doublon, garde C.FAIR_COMBO_KEEP_DAYS jours.
-    -> nombre ajouté. Fichier à part de bets.json : ces combinés n'ont ni mise ni bankroll."""
+    `stakes` : {palier: mise sur le budget du jour}. -> nombre ajouté. Fichier à part de bets.json (pas de bankroll)."""
     from datetime import date, timedelta
     rows = load_combos()
     n = 0
     for target, combo in sent:
-        row = combo_row(target, combo, day)
+        row = combo_row(target, combo, day, (stakes or {}).get(target), cur)
         if not any(r["date"] == row["date"] and r["tier"] == target and r["keys"] == row["keys"] for r in rows):
             rows.append(row)
             n += 1

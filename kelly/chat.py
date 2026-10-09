@@ -11,14 +11,16 @@ from . import fmt, played, store, telegram
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 À noter"], ["❓ Aide"]]
-BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 À noter": "/joue", "❓ Aide": "/aide"}
+MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 Mes paris"], ["💰 Mon budget", "❓ Aide"]]
+BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
+           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide"}      # « À noter » : ancien libellé
 COMBI_TARGETS = (3, 5, 10, 20, 50)
 NUM = re.compile(r"^\s*(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?\s*$")
 WORDS = {"bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "top": "/top", "paris": "/top", "meilleurs": "/top",
          "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide", "bonjour": "/aide", "salut": "/aide",
          "joue": "/joue", "jouer": "/joue", "noter": "/joue", "bank": "/bank", "bankroll": "/bank", "monde": "/monde",
-         "ligues": "/ligues", "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi"}
+         "ligues": "/ligues", "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi",
+         "budget": "/budget"}
 
 
 def _now():
@@ -30,8 +32,13 @@ def menu():
 
 
 def played_button(what, day):
-    """Bouton « ✅ Je l'ai joué » d'un pari du jour `day` (what : sur, costaud..., pari, v5...)."""
-    return telegram.inline([[("✅ Je l'ai joué", f"joue|{what}|{str(day)[:10]}")]])
+    """Boutons d'un pari du jour `day` (what : sur, costaud..., pari, v5...). Avec un budget du jour : le pari compte comme joué,
+    « ❌ Pas joué » le retire et « ✏️ Autre cote » corrige la cote ; sans budget : « ✅ Je l'ai joué »."""
+    from . import money
+    day = str(day)[:10]
+    if money.active():
+        return telegram.inline([[("❌ Pas joué", f"skip|{what}|{day}"), ("✏️ Autre cote", f"joue|{what}|{day}")]])
+    return telegram.inline([[("✅ Je l'ai joué", f"joue|{what}|{day}")]])
 
 
 def combi_picker():
@@ -136,6 +143,19 @@ def on_callback(data, message_id=None):
         set_pending(parts[1], parts[2], message_id)
         return (f"À quelle cote as-tu joué le {t.label} chez 1xBet ?\nRéponds juste la cote, par exemple "
                 f"{fmt.num(t.ref)} (ou {fmt.num(t.ref)} 2000 pour donner aussi ta mise).")
+    if parts[0] in ("skip", "unskip") and len(parts) in (3, 4):
+        from . import money
+        reply = money.skip(parts[1], parts[2], undo=parts[0] == "unskip")
+        if message_id and not reply.startswith(("Pas de", "Ce pari")):
+            if len(parts) == 4:                       # depuis la liste « Mes paris » : la liste entière est rafraîchie
+                markup = getattr(played.todo(parts[2]), "markup", None) or {"inline_keyboard": []}
+            else:
+                markup = (telegram.inline([[("↩️ Finalement joué", f"unskip|{parts[1]}|{parts[2]}")]]) if parts[0] == "skip"
+                          else played_button(parts[1], parts[2]))
+            telegram.edit_buttons(message_id, markup)
+        return reply
+    if parts[0] == "budget" and len(parts) == 2:
+        return app.handle_command(f"/budget {parts[1]}")
     if parts[0] == "combi" and len(parts) == 2:
         return app.handle_command(f"/combi {parts[1]}")
     if parts[0] == "bilan":

@@ -6,7 +6,7 @@ data/weekly.json : {"week": "AAAA-Sss"} de la dernière semaine envoyée.
 """
 from datetime import datetime, timedelta, timezone
 
-from . import calib, config as C, fair, fmt, learn, played, settle, store, track
+from . import calib, config as C, fair, fmt, learn, money, played, settle, store, track
 
 FILE = "weekly.json"
 FAIR_GAP = 0.03            # écart réussite / annonce sous lequel une famille est « fiable »
@@ -59,8 +59,13 @@ def message(now=None):
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
         blocks.append([f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat "
-                       f"{fmt.b(fmt.signed(sum(map(settle._gain, combos))))}"])
+                       f"{fmt.b(settle._sum_txt(combos))}"])
+    n, total, staked = money.result(bets, rows, fair_combos, days=7, today=now.date())
+    if n:
+        blocks.append([f"💰 <b>Tes mises</b> : {fmt.b(money.signed(total))} sur {n} pari{'s' if n > 1 else ''}"
+                       + (f" ({round(total / staked * 100):+d} % de ce qui a été misé)" if staked else "")])
     pl = played.summary_lines(bets, rows, fair_combos, days=7, today=str(now.date()))
+    pl = [x for x in pl if not (money.active() and x.startswith("Joués chez 1xBet"))]
     if pl:
         blocks.append([f"💵 {fmt.esc(x)}" for x in pl])
     week = [r for r in rows if r.get("clv") is not None and (r.get("date") or "") >= cut]

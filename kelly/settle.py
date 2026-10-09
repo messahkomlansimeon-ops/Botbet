@@ -362,6 +362,15 @@ def _gain(c):
     return c["stake"] * (c.get("odds_final", c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
 
 
+def _sum_txt(cs):
+    """Résultat d'un groupe de combinés : en devise s'ils sont misés sur le budget du jour (seuls ceux-là comptent), sinon en unités."""
+    from . import money
+    mine = [c for c in cs if c.get("cur")]
+    if mine:
+        return money.signed(sum(money.gain(c) or 0 for c in mine), mine[0]["cur"])
+    return fmt.signed(sum(map(_gain, cs)))
+
+
 def _bilan_simple(days, rows, picks, combos):
     """Bilan en mots simples, par blocs séparés d'une ligne vide : combinés, paris envoyés, paris joués chez 1xBet, pronostics sans
     cote, fiabilité par marché."""
@@ -369,18 +378,27 @@ def _bilan_simple(days, rows, picks, combos):
     blocks = [[f"📊 <b>Bilan</b>{f' — {days} derniers jours' if days else ''}"]]
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
-        b = [f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat {fmt.b(fmt.signed(sum(map(_gain, combos))))}"]
+        b = [f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat {fmt.b(_sum_txt(combos))}"]
         tiers = {}
         for c in combos:
             tiers.setdefault(fmt.tier_name(c["tier"]), []).append(c)
-        b += [f"      {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)} ({fmt.signed(sum(map(_gain, cs)))})"
+        b += [f"      {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)} ({_sum_txt(cs)})"
               for tier, cs in tiers.items()]
         blocks.append(b)
     if sent:
         w = sum(1 for r in sent if r["result"] == "win")
         blocks.append([f"✅ <b>Paris envoyés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(sent)} ({fmt.pct(w / len(sent))})"])
-    pl = played.summary_lines(store.load("bets.json", {"combos": []}), rows, fair.load_combos(), days)
-    if pl:
+    from . import money
+    bets_ = store.load("bets.json", {"combos": []})
+    ml = money.summary_lines(bets_, rows, fair.load_combos())
+    if ml:
+        blocks.append(["💰 <b>Tes mises</b> " + fmt.i("(tout ce que Kelly a proposé, sauf « pas joué »)")] + [f"• {fmt.esc(x)}" for x in ml])
+    pl = played.summary_lines(bets_, rows, fair.load_combos(), days)
+    if money.active():                              # le résultat en argent est au-dessus : ne garder que l'écart de cote 1xBet
+        pl = [x for x in pl if not x.startswith("Joués chez 1xBet")]
+        if pl:
+            blocks.append([f"💵 {fmt.esc(x)}" for x in pl])
+    elif pl:
         blocks.append([f"💵 <b>{fmt.esc(pl[0])}</b>"] + [f"      {fmt.esc(x)}" for x in pl[1:]])
     free = [x for x in (fair_line(fair.load(), days), fair_combo_line(fair.load_combos(), days)) if x]
     if free:
