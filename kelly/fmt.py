@@ -274,7 +274,7 @@ def fair_leg(n, c):
     return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 
-def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=None):
+def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=None, coupon=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
     (mise indicative seulement), chaque jambe avec sa cote minimale. `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »)."""
     real = all(c.get("xodds") for c in picks)          # toutes les cotes relevées chez 1xBet par Kelly : la cote totale est réelle
@@ -287,5 +287,6 @@ def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=N
              ("⚠️ Kelly n'a pas vu toutes les cotes de 1xBet : " if any(c.get("xodds") for c in picks) else
               "⚠️ Kelly n'a pas vu les cotes de 1xBet : ") + "joue seulement si CHAQUE pari atteint sa cote mini "
              f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)) + "\n\n" + foot
-                + played_hint(hint))
+    c_line = f"\n\n🎟️ Code coupon 1xBet : {b(esc(coupon))}" if coupon else ""
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1))
+                + c_line + "\n\n" + foot + played_hint(hint))
