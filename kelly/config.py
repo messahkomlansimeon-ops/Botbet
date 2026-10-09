@@ -260,6 +260,7 @@ STREAK_WARNING = 5
 
 # Suivi et apprentissage par la cote de clôture.
 CLOSE_WINDOW_MIN = 90      # relevé de clôture : matchs qui démarrent dans les 90 min (tolère un passage horaire en retard)
+TRACK_KEEP_DAYS = _int("TRACK_KEEP_DAYS", 180)   # jours gardés dans tracked.json (réglés plus anciens : data/archive/tracked-AAAA.json)
 TRACK_TOP = 50             # paris fantômes suivis par jour (en plus des envoyés)
 LEARN_MIN_ROWS = 40        # lignes avec clôture avant d'entraîner un modèle
 FREE_CLOSE_DAYS = 10       # cote finale gratuite (football-data, BetExplorer) des paris fantômes : matchs des 10 derniers jours

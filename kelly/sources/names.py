@@ -3,9 +3,9 @@ import re
 import unicodedata
 
 try:
-    from ..stats import team_sim as _team_sim
+    from ..stats import distinct_overlap as _overlap, team_sim as _team_sim
 except Exception:
-    _team_sim = None
+    _team_sim = _overlap = None
 
 _TRANSLIT = str.maketrans({"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "ł": "l", "Ł": "L",
                            "đ": "d", "Đ": "D", "ß": "ss", "ı": "i"})
@@ -18,7 +18,9 @@ _EXTRA = {
     "wolverhampton": "wolverhampton wanderers", "sheffield weds": "sheffield wednesday",
     "sheffield utd": "sheffield united", "west brom": "west bromwich albion", "qpr": "queens park rangers",
     "inter milan": "inter", "fc koln": "koln", "1 fc koln": "koln", "mainz 05": "mainz",
-    "1 fsv mainz 05": "mainz", "bielefeld": "arminia bielefeld",
+    "1 fsv mainz 05": "mainz", "bielefeld": "arminia bielefeld", "nottm forest": "nottingham forest",
+    "sp gijon": "sporting gijon", "la coruna": "deportivo la coruna", "hertha": "hertha berlin", "for sittard": "fortuna sittard",
+    "nijmegen": "nec nijmegen", "hibs": "hibernian", "sporting cp": "sporting",
     "greuther furth": "furth", "spvgg greuther furth": "furth", "austria wien": "austria vienna",
 }
 _SUFFIX = {"jr", "junior", "sr", "filho"}
@@ -71,7 +73,18 @@ def best_team(name, candidates, min_sim=0.8, margin=0.05):
     if len({ident(c) for c in close}) == 1:
         return best
     exact = [c for c in close if norm(c) == norm(name)]
-    return exact[0] if len({ident(c) for c in exact}) == 1 else None
+    if len({ident(c) for c in exact}) == 1:
+        return exact[0]
+    if _overlap:                    # « Cercle Brugge KSV » : « cercle » (mot distinctif) départage « Cercle Brugge » et « Club Brugge »
+        try:
+            ov = {c: _overlap(name, c) for c in close}
+            top = max(ov.values())
+            lead = [c for c in close if ov[c] == top]
+            if top and len({ident(c) for c in lead}) == 1 and top > max((v for c, v in ov.items() if ident(c) != ident(lead[0])), default=0):
+                return lead[0]
+        except Exception:
+            pass
+    return None
 
 
 def _pkey(name):

@@ -69,15 +69,15 @@ def message(now=None):
     if pl:
         blocks.append([f"💵 {fmt.esc(x)}" for x in pl])
     week = [r for r in rows if r.get("clv") is not None and (r.get("date") or "") >= cut]
-    sent = [r for r in week if r.get("sent") and not r.get("close_src")]
-    ghost = [r for r in week if r not in sent]
+    sent = [r for r in week if r.get("sent")]                      # envoyé ou fantôme : r["sent"] seul, la source de la cote finale n'y change rien
+    ghost = [r for r in week if not r.get("sent")]
     clv = []
+    free = lambda grp: sum(1 for r in grp if r.get("close_src"))    # noqa: E731
+    note = lambda grp: f" ({free(grp)} mesurés gratuitement)" if free(grp) else ""    # noqa: E731
     if sent:
-        clv.append(f"Paris envoyés : cote finale battue {sum(r['clv'] > 0 for r in sent)} fois sur {len(sent)}")
+        clv.append(f"Paris envoyés : cote finale battue {sum(r['clv'] > 0 for r in sent)} fois sur {len(sent)}" + note(sent))
     if ghost:
-        free = sum(1 for r in ghost if r.get("close_src"))
-        clv.append(f"Paris suivis en silence : {sum(r['clv'] > 0 for r in ghost)} sur {len(ghost)}"
-                   + (f" ({free} mesurés gratuitement)" if free else ""))
+        clv.append(f"Paris suivis en silence : {sum(r['clv'] > 0 for r in ghost)} sur {len(ghost)}" + note(ghost))
     if clv:
         blocks.append(["📉 <b>La cote finale</b> " + fmt.i("(le meilleur juge : le marché lui a-t-il donné raison ?)")]
                       + [f"• {x}" for x in clv])

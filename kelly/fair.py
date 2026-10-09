@@ -423,14 +423,15 @@ def combo_row(target, combo, day, stake=None, cur=None):
 
 
 def record_combos(sent, day, stakes=None, cur=None):
-    """Enregistre les combinés à cote juste envoyés [(palier, combiné)] sans doublon, garde C.FAIR_COMBO_KEEP_DAYS jours.
+    """Enregistre les combinés à cote juste envoyés [(palier, combiné)], un seul par palier et par jour (le premier, comme
+    settle.record_combos), garde C.FAIR_COMBO_KEEP_DAYS jours.
     `stakes` : {palier: mise sur le budget du jour}. -> nombre ajouté. Fichier à part de bets.json (pas de bankroll)."""
     from datetime import date, timedelta
     rows = load_combos()
     n = 0
     for target, combo in sent:
         row = combo_row(target, combo, day, (stakes or {}).get(target), cur)
-        if not any(r["date"] == row["date"] and r["tier"] == target and r["keys"] == row["keys"] for r in rows):
+        if not any(r["date"] == row["date"] and r["tier"] == target for r in rows):      # relance du matin : un seul combiné par palier et par jour (le premier)
             rows.append(row)
             n += 1
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
