@@ -1111,6 +1111,20 @@ def test_backfill_reduced_delay():
         http._crawl.pop(s365.HOST, None)
 
 
+def test_isolated_errors_do_not_stop_a_long_run():
+    """Des 504 passagers ÉPARS (jamais 3 d'affilée) n'arrêtent pas un long rattrapage : seul MAX_ERRORS d'affilée l'arrête (rattrapage du
+    9 octobre arrêté après 150 matchs sur deux ou trois 504 isolés)."""
+    net = fresh()
+    serve_uruguay()
+    s365.fill(max_lists=2, max_games=0, leagues=[UR])
+    order = s365.targets(s365.load(), [UR])
+    assert len(order) >= 7, order
+    for gid in (order[0], order[2], order[4]):
+        net.routes[s365.stats_url(int(gid))] = Resp(504, b"gateway")
+    rep = s365.fill(max_lists=0, max_games=7, leagues=[UR])
+    assert rep["games"] == 7 and len(rep["errors"]) == 3 and rep["added"] >= 3, rep
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     try:

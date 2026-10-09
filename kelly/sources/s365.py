@@ -65,7 +65,7 @@ NEVER_ZERO = ("throws", "shots", "fouls")      # 0-0 sur ces stats = non suivie 
 COUNT_KEYS = ("shots", "sot", "corners", "fouls", "throws", "offsides")
 MIN_STATS = 2                                  # statistiques de jeu au moins (hors cartons) pour qu'un match serve : cartons et corners seuls = rien de suivi
 R_DAY, R_HOME, R_STATS = fmmatch.R_DAY, fmmatch.R_HOME, fmmatch.R_STATS
-MAX_ERRORS = 3                                 # erreurs par passage avant de s'arrêter
+MAX_ERRORS = 3                                 # erreurs d'affilée avant d'arrêter le passage
 MAX_PENDING = 1500
 RETRY_FRESH = 3                                # essais d'un match d'hier sans statistiques encore publiées
 
@@ -600,6 +600,8 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
                 return max_requests is None or made < max_requests
             return used0 + made < C.S365_DAILY
 
+        streak = [0]                                      # erreurs D'AFFILÉE : un 504 passager de temps en temps n'arrête pas un long rattrapage
+
         def get(url, ttl):
             res = http.fetch(url, NAME, ttl)
             if res.blocked:
@@ -607,9 +609,11 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
             elif (res.error or "").startswith("robots.txt"):
                 stop.append(res.error)
             if res.ok and not res.stale:
+                streak[0] = 0
                 return res
             errors.append(res.error or "réponse vide")
-            if len([e for e in errors if not e.startswith("robots")]) >= MAX_ERRORS:
+            streak[0] += 1
+            if streak[0] >= MAX_ERRORS:
                 stop.append("trop d'erreurs")
             return None
 
