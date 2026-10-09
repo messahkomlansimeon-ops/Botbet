@@ -240,8 +240,10 @@ def skip(what, day, undo=False):
 
 # ---------- bilan en argent ----------
 
-def _won_odds(legs, key="min_odds"):
-    won = [leg[key] for leg in legs if leg.get("result") == "win"]
+def _won_odds(x):
+    """Cote payée par les jambes gagnées d'un combiné de fair_combos.json (cote 1xBet de chacune s'il est réel, cote mini sinon)."""
+    from .bankroll import won_odds
+    won = won_odds(x)
     return math.prod(won) if won else 1.0
 
 
@@ -255,8 +257,8 @@ def gain(x):
         return played_gain(x)
     if x["result"] == "loss":
         return -x["stake"]
-    if "legs" in x:                                   # combiné à vérifier : compté à la cote mini (1xBet a payé au moins ça)
-        return x["stake"] * (_won_odds(x["legs"]) - 1)
+    if "legs" in x:                                   # combiné aux cotes 1xBet : leurs cotes ; à vérifier : la cote mini (1xBet a payé au moins ça)
+        return x["stake"] * (_won_odds(x) - 1)
     return x["stake"] * (x.get("odds_final", x.get("xodds") or x["odds"]) - 1)      # pari du jour à la cote 1xBet (xodds) quand il en a une
 
 

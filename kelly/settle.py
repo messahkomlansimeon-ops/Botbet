@@ -398,6 +398,11 @@ def fair_combo_line(rows, days=None, today=None):
 
 
 def _gain(c):
+    """Gain (u) d'un combiné de bets.json : à la cote et à la mise notées avec /joue quand il y en a (comme bankroll.played_gain), sinon
+    à la mise conseillée."""
+    if c.get("played") and c["result"] in ("win", "loss"):
+        from .bankroll import played_gain
+        return played_gain(c)
     return c["stake"] * (c.get("odds_final", c.get("xodds") or c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
 
 

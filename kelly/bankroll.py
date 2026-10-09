@@ -22,16 +22,30 @@ def stake(prob, odds, tier, bankroll):
     share = max(C.MIN_STAKE_SHARE, min(cap, f * C.KELLY_FRACTION))
     return round(bankroll * share, 2)
 
+def real_legs(x):
+    """Combiné de fair_combos.json bâti aux cotes 1xBet relevées (toutes les jambes ont leur cote) : son total (« min_odds ») est le
+    produit de ces cotes, pas celui des cotes mini de Kelly."""
+    return bool(x.get("legs")) and all(leg.get("xodds") for leg in x["legs"])
+
+
+def won_odds(x):
+    """Cotes des jambes gagnées d'un combiné de fair_combos.json : la cote 1xBet de chacune pour un combiné réel (real_legs), sinon sa
+    cote mini (le total « min_odds » est alors le produit des cotes mini)."""
+    real = real_legs(x)
+    return [(leg.get("xodds") or leg.get("odds")) if real else leg["min_odds"] for leg in x["legs"] if leg.get("result") == "win"]
+
+
 def played_gain(x):
     """Gain réel (u) d'un pari noté avec /joue et réglé. Jambes annulées : la cote 1xBet baisse dans la même proportion que la
-    cote de référence (cote typique ; cote mini des jambes gagnées pour un combiné à vérifier)."""
+    cote de référence (cote typique ; cote 1xBet des jambes gagnées pour un combiné aux cotes 1xBet, cote mini pour un combiné à
+    vérifier)."""
     p = x["played"]
     if x["result"] == "loss":
         return -p["stake"]
     if x["result"] != "win":                        # push, void, unknown : mise rendue ou inconnue, rien ne bouge
         return 0.0
     if "legs" in x:                                 # combiné à vérifier chez 1xBet (data/fair_combos.json)
-        won = [leg["min_odds"] for leg in x["legs"] if leg.get("result") == "win"]
+        won = won_odds(x)
         if not won:                                 # aucune jambe gagnée (anciennes lignes « win » à tort) : rien à payer
             return 0.0
         ratio = math.prod(won) / x["min_odds"]

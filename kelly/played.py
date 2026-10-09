@@ -93,16 +93,18 @@ def find(word, day):
         c = _pick([c for c in bets["combos"] if c["tier"] == tiers[w]], day)
         if not c:
             return f"Pas de combiné {fmt.tier_word(tiers[w])} à noter (ni aujourd'hui ni en attente de résultat)."
-        return Target(c, c["odds"], c["stake"], f"{fmt.tier_word(c['tier'])} du {fmt.fr_day(c['date'])}",
-                      lambda: store.save("bets.json", bets), "cote typique")
+        px = price_info(w, c)
+        return Target(c, px["odds"], c["stake"], f"{fmt.tier_word(c['tier'])} du {fmt.fr_day(c['date'])}",
+                      lambda: store.save("bets.json", bets), "cote 1xBet" if px["real"] else "cote typique")
     if w in ("pari", "jour", "single"):
         rows = track.load()
         r = _pick(single_rows(rows, store.load("bets.json", {"combos": []}).get("combos", [])), day)
         if not r:
             return "Pas de pari du jour à noter (ni aujourd'hui ni en attente de résultat)."
         st = r["stake"] if r.get("cur") or r.get("stake") == 0 else bankroll.stake(r["prob"], r["odds"], "⭐", bankroll.load()["bankroll"])
-        return Target(r, r["odds"], st, f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
-                      "cote typique")
+        px = price_info("pari", r)
+        return Target(r, px["odds"], st, f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
+                      "cote 1xBet" if px["real"] else "cote typique")
     if w.startswith("v") and len(w) > 1:              # v5, v12, v25 ; vtc5 / vtv5 : combinés « spécial tirs »
         rows = fair.load_combos()
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
@@ -120,6 +122,33 @@ def find(word, day):
 def is_real(c):
     """Combiné de fair_combos.json bâti avec les cotes 1xBet relevées (toutes les jambes ont leur cote) : « cote », pas « cote mini »."""
     return bool(c.get("legs")) and all(leg.get("xodds") for leg in c["legs"])
+
+
+def price_info(what, x):
+    """Prix de la VERSION EN COURS d'un pari du jour pour « Mes paris » et « Autre cote » : {odds, real, label, coupon}.
+    - combiné à vérifier « v<palier> » (fair_combos.json) : sa ligne porte déjà la dernière version envoyée (fair.update_combo) ; aux
+      cotes 1xBet « cote 1xBet 5,60 (HH:MM) » et son code coupon, sinon « cote mini 5,00 » ;
+    - combiné réel (bets.json, « xlegs ») ou pari du jour (« xodds ») aux cotes 1xBet : la dernière vérification (x["xnow"], voir
+      app.refresh_real) ou celle du matin ; un combiné devenu injouable est signalé ;
+    - sinon « cote de référence 1,60 (pas 1xBet) » : la cote typique des autres bookmakers."""
+    if "legs" in x:
+        real = is_real(x)
+        odds = x["min_odds"]
+        if real:
+            at = x.get("updated") or x.get("at")
+            return {"odds": odds, "real": True, "coupon": x.get("coupon"),
+                    "label": f"cote 1xBet {fmt.odds_txt(odds)}" + (f" ({at})" if at else "")}
+        return {"odds": odds, "real": False, "coupon": None, "label": f"cote mini {fmt.odds_txt(odds)}"}
+    now = x.get("xnow") or {}
+    if x.get("xlegs") or x.get("xodds"):
+        odds = now.get("odds") or (x["odds"] if x.get("xlegs") else x["xodds"])
+        at = now.get("at") or x.get("at") or x.get("xat")
+        label = f"cote 1xBet {fmt.odds_txt(odds)}" + (f" ({at})" if at else "")
+        if now.get("dead"):
+            label = f"plus jouable chez 1xBet (vérifié à {now['at']})"
+        return {"odds": odds, "real": True, "dead": bool(now.get("dead")), "label": label,
+                "coupon": None if now.get("dead") else (now.get("coupon") if now else x.get("coupon"))}
+    return {"odds": x["odds"], "real": False, "coupon": None, "label": f"cote de référence {fmt.odds_txt(x['odds'])} (pas 1xBet)"}
 
 
 def _fair_name(tier, real=False):
@@ -193,8 +222,7 @@ def todo(day):
     lines, rows = [], []
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
-    items_ += [(f"{_fair_name(c['tier'], is_real(c))} (cote {'' if is_real(c) else 'mini '}{fmt.odds_txt(c['min_odds'])})", c, c["min_odds"],
-                f"v{c['tier']}") for c in fair.load_combos() if c["date"] == day]
+    items_ += [(_fair_name(c["tier"], is_real(c)), c, c["min_odds"], f"v{c['tier']}") for c in fair.load_combos() if c["date"] == day]
     if not items_:
         return f"Rien à noter aujourd'hui : les paris du jour arrivent à {C.DAY_END_HOUR:02d}h00."
     if any(x.get("cur") for _, x, _, _ in items_):
@@ -203,9 +231,11 @@ def todo(day):
         if not x.get("cur") and x.get("stake") == 0 and x.get("result") is None:     # budget du jour trop petit pour ce pari
             lines.append(f"▫️ {name} : pas de mise (trop petite pour ton budget)")
             continue
-        lines.append(_todo_line(name, x, ref, f"/joue {what} <cote>"))
+        px = price_info(what, x)
+        lines.append(_todo_line(name, x, px["label"], f"/joue {what} <cote>") + _coupon_line(px))
         if not x.get("played") and x.get("result") is None:
-            rows.append([(f"✅ {name} — {fmt.odds_txt(ref)}", f"joue|{what}|{day}")])
+            rows.append([(f"✅ {name} — {fmt.odds_txt(px['odds'])}", f"joue|{what}|{day}")])
+        rows += _verify_row(what, x, day, name)
     text = "\n".join(["🧾 Tes paris du jour", ""] + lines + ["", "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet."
                                                          if rows else ("Rien à jouer avec ton budget d'aujourd'hui."
                                                                        if any("pas de mise" in x for x in lines) else "Tout est noté 👍")])
@@ -220,25 +250,42 @@ def _budget_list(items_, day):
         if not x.get("cur"):
             continue
         p = x.get("played") or {}
-        odds = p.get("odds", ref)
+        px = price_info(what, x)
         if x.get("skipped"):
             lines.append(f"❌ {name} : pas joué")
             rows.append([(f"↩️ {name} : finalement joué", f"unskip|{what}|{day}|l")])
         else:
-            lines.append(f"✅ {name} : {money.money(p.get('stake', x['stake']), x['cur'])} à {fmt.odds_txt(odds)}")
+            lines.append(f"✅ {name} : {money.money(p.get('stake', x['stake']), x['cur'])} "
+                         + (f"joué à {fmt.odds_txt(p['odds'])}" if p else f"— {px['label']}") + _coupon_line(px))
             if x.get("result") is None:
                 rows.append([(f"❌ {name} pas joué", f"skip|{what}|{day}|l"), ("✏️ Autre cote", f"joue|{what}|{day}")])
+                rows += _verify_row(what, x, day, name)
     text = "\n".join(lines)
     return telegram.with_buttons(text, telegram.inline(rows)) if rows else text
 
 
-def _todo_line(name, x, ref, cmd):
+def _todo_line(name, x, label, cmd):
+    """Ligne d'un pari de « Mes paris » ; `label` : son prix honnête (price_info : « cote 1xBet 5,60 (09:30) », « cote mini 5,00 »...)."""
     p = x.get("played")
     if p:
         return f"✅ {name} : joué à {fmt.odds_txt(p['odds'])}, mise {fmt.units(p['stake'])}"
     if x.get("result") is not None:
-        return f"⏹ {name} (cote {fmt.odds_txt(ref)}) : déjà réglé, pas noté"
-    return f"▫️ {name} (cote {fmt.odds_txt(ref)}) : pas noté — {cmd}"
+        return f"⏹ {name} — {label} : déjà réglé, pas noté"
+    return f"▫️ {name} — {label} : pas noté — {cmd}"
+
+
+def _coupon_line(px):
+    """Code coupon 1xBet de la version en cours, sous la ligne du pari (rien sans code)."""
+    return f"\n      🎟️ Code coupon 1xBet : {px['coupon']}" if px.get("coupon") else ""
+
+
+def _verify_row(what, x, day, name):
+    """Ligne « 🎟️ Vérifier … » d'un combiné ou pari aux cotes 1xBet pas encore réglé (voir chat.refresh_button) ; [] sinon."""
+    if x.get("result") is not None or x.get("skipped"):
+        return []
+    from . import chat
+    b = chat.refresh_button(what, day, f"🎟️ Vérifier ce combiné : {name}")
+    return [[b]] if b else []
 
 
 # ---------- bilan ----------
@@ -288,9 +335,11 @@ def summary_lines(bets, rows, fair_rows, days=None, detail=False, today=None):
         lines.append(f"Cotes de 1xBet : {fmt.signed(g * 100, ' %')} en moyenne face à la cote typique du marché "
                      f"({len(real)} pari{'s' if len(real) > 1 else ''} noté{'s' if len(real) > 1 else ''})")
     ver = [x for x in its if x[0] == "vérif"]
-    if ver:
-        g = sum(_gap(x[2]["played"]["odds"], x[3]) for x in ver) / len(ver)
-        lines.append(f"Combinés à vérifier joués : 1xBet payait {fmt.signed(g * 100, ' %')} face à la cote mini ({len(ver)})")
+    for group, tmpl in (([x for x in ver if is_real(x[2])], "Combinés aux cotes 1xBet joués : cote obtenue {g} face à la cote lue par Kelly ({n})"),
+                        ([x for x in ver if not is_real(x[2])], "Combinés à vérifier joués : 1xBet payait {g} face à la cote mini ({n})")):
+        if group:
+            g = sum(_gap(x[2]["played"]["odds"], x[3]) for x in group) / len(group)
+            lines.append(tmpl.format(g=fmt.signed(g * 100, ' %'), n=len(group)))
     if detail and real:
         by = {}
         for x in real:

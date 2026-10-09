@@ -149,7 +149,8 @@ def test_build_day_coupon():
         msgs2, _, combos2 = app.build_day(picks, DAY)
     finally:
         xbet.save_coupon = old
-    assert "Code coupon" not in "\n".join(str(m) for m in msgs2) and combos2[0]["coupon"] is None
+    t2 = "\n".join(str(m) for m in msgs2)
+    assert "Code coupon 1xBet" not in t2 and "Code coupon indisponible pour l'instant" in t2 and combos2[0]["coupon"] is None
     plain, _ = world()                                                                    # sans cote 1xBet : aucun coupon, aucune nouvelle clé
     xbet.save_coupon = lambda legs: 1 / 0
     try:

@@ -148,9 +148,11 @@ def _pick_price(c, px, refs, model=None):
         if model and model.get("adopted"):
             from . import learn
             c["score"] = learn.predict(model, learn.features(c))
-    if c["edge"] > 0.03 and not str(c.get("why") or "").count("à la cote 1xBet"):         # même seuil que build_picks
-        c["why"] = ", ".join(w for w in (f"valeur {c['edge'] * 100:+.0f} % à la cote 1xBet", c.get("why")) if w)
-    ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+    # même seuil que build_picks ; une relecture remplace l'ancienne mention (sa valeur a pu changer avec la cote)
+    rest = [w for w in str(c.get("why") or "").split(", ") if w and "à la cote 1xBet" not in w]
+    c["why"] = ", ".join(([f"valeur {c['edge'] * 100:+.0f} % à la cote 1xBet"] if c["edge"] > 0.03 else []) + rest)
+    key = xbet.resolve(px, c["market"], c["name"], c["point"])          # nom de 1xBet (double chance : ordre des équipes)
+    ref = (refs or {}).get(key) if key else None
     if ref:
         c["xref"] = ref
     else:
@@ -219,3 +221,32 @@ def live_check(ids, now=None, fetch=None, fresh_min=None):
         apply(sel, fetch=run)
         store.save("today.json", today)
     return pronos, got, now.strftime("%H:%M")
+
+
+def live_picks(legs, now=None, fetch=None, fresh_min=None):
+    """Relit EN DIRECT chez 1xBet les matchs des paris RÉELS `legs` (jambes d'un combiné ou pari du jour, tirés de data/today.json) et
+    les remet au prix du moment, SANS toucher aux paris du jour : chaque jambe est relue sur une copie. Mêmes règles de fraîcheur que
+    live_check (`fresh_min`, matchs qui commencent dans moins de C.XBET_SOON_MIN min laissés de côté). -> [(jambe d'origine, état,
+    copie remise au prix)] avec état « ok » (prix relu), « gone » (match relu mais pari absent de 1xBet) ou « stale » (match pas relu : la
+    jambe garde sa cote du dernier relevé), puis l'heure « HH:MM ». `fetch` : injectable pour les tests."""
+    from datetime import datetime, timedelta, timezone
+    now = now or datetime.now(timezone.utc)
+    soon = now + timedelta(minutes=C.XBET_SOON_MIN)
+    sel = [c for c in legs if datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
+    found = {}
+    if sel:
+        try:
+            found = (fetch or xbet.fetch_day)(_events(sel), deadline=time.monotonic() + C.XBET_SECONDS, wanted=_wanted(sel),
+                                              live=True, fresh_min=fresh_min) or {}
+        except Exception as e:                      # noqa: BLE001 - 1xBet en panne : les jambes gardent leur dernière cote
+            print(f"[1xbet] vérification en direct impossible : {type(e).__name__}: {e}", file=sys.stderr)
+    out = []
+    for c in legs:
+        m = found.get(c["id"])
+        c2 = dict(c)
+        if not m:
+            out.append((c, "stale", c2))
+            continue
+        c2["xgid"] = m["gid"]
+        out.append((c, "ok" if _pick_price(c2, m["px"], m.get("refs")) else "gone", c2))
+    return out, now.strftime("%H:%M")

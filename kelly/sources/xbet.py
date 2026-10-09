@@ -263,6 +263,22 @@ def odds_time(gids):
     return min(ts) if ts else None
 
 
+def cached_cf(ref):
+    """Dernière cote 1xBet du pari `ref` ([GameId, Type, Param], c["xref"]) lue dans le CACHE du disque, sans aucune requête (alertes
+    horaires : pas de données de proxy pour rien) -> (cote, instant du relevé) ou None si le cache ne l'a pas."""
+    try:
+        gid, typ, param = ref
+        hit = http._read(http._key(_events_url(gid), JSON_H))
+        if not hit:
+            return None
+        for c in _cells(json.loads(hit[1]).get("eventGroups")):
+            if c.get("type") == typ and float(c.get("parameter") or 0) == float(param or 0):
+                return float(c["cf"]), hit[0].get("fetched_at")
+    except (TypeError, ValueError, KeyError, AttributeError):
+        pass
+    return None
+
+
 def _events(gid):
     # marketType=2 (« Populaires ») : 1X2, double chance, toute l'échelle des buts, les 2 marquent, sous-matchs typés, et pour un
     # sous-match statistique tout son plus/moins (match et équipes) ; 7 Ko compressés au lieu de 48 Ko pour « tous les marchés »
@@ -296,9 +312,30 @@ def book_prob(px, market, name, point):
     return round((1 / a) / (1 / a + 1 / b), 4) if a and b else None
 
 
+def _canon(market, name):
+    """Nom d'une issue sans casse, ni ordre pour une double chance (« Nul ou … » : « Draw or Arsenal » = « Arsenal or Draw »)."""
+    n = str(name).strip().casefold()
+    if market == "double_chance":
+        return frozenset(p.strip() for p in n.split(" or "))
+    return n
+
+
+def resolve(px, market, name, point):
+    """Clé du pari Kelly (marché, `name`, ligne) telle que 1xBet l'a dans `px`, ou None : le nom exact d'abord, puis, pour le 1X2 et la
+    double chance (The Odds API écrit « Draw or Arsenal » là où parse_main écrit « Arsenal or Draw »), sans casse ni ordre."""
+    pt = None if point is None else float(point)
+    if (market, name, pt) in px:
+        return (market, name, pt)
+    if market in ("h2h", "double_chance") and isinstance(name, str):
+        want = _canon(market, name)
+        return next((k for k in px if k[0] == market and k[2] == pt and isinstance(k[1], str) and _canon(market, k[1]) == want), None)
+    return None
+
+
 def lookup(px, market, name, point):
-    """Cote 1xBet d'un pari Kelly (None si 1xBet ne le propose pas)."""
-    return px.get((market, name, None if point is None else float(point)))
+    """Cote 1xBet d'un pari Kelly (None si 1xBet ne le propose pas). Voir resolve pour les noms de 1X2 et de double chance."""
+    k = resolve(px, market, name, point)
+    return px.get(k) if k else None
 
 
 USAGE = "xbet_usage.json"       # données 1xBet du mois passées par le proxy : {"month", "bytes", "requests", "days": {jour: octets}}

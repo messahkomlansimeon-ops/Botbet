@@ -57,14 +57,17 @@ def day_stakes(top, built, built_fair):
     return dict(zip(keys, stakes)), spent, kept, poor
 
 
-def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None, odds_time=None):
+RETRY_BUTTON = "touche « 🎟️ Vérifier ce combiné »"        # sous un combiné qui devait avoir son code coupon et ne l'a pas eu (fmt.coupon_block)
+
+
+def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None, odds_time=None, fair_coupons=None):
     """Messages du jour + enregistrement des paris envoyés. `world` : cache « tour du monde » (monde.build), `pronos` :
     pronostics sans cote (fair.make), `fair_combos` : [(palier, combiné à cote juste | None)] (combos.fair_plan), un message
     chacun, à part des combinés réels et sans mise de bankroll. Un message par combiné ; les paliers impossibles à bâtir avec
     des jambes de qualité sont signalés UNE fois, en une ligne, dans l'en-tête. Toujours au moins un message utile : le tour
     du monde et les pronostics remplacent les combinés les jours sans cotes réelles. Avec un budget du jour (money), les mises sont
-    prises dessus ; `fair_stakes` (dict) reçoit celles des combinés à vérifier, pour leur suivi. `odds_time` : heure « HH:MM » du relevé
-    1xBet, rappelée sous les combinés aux cotes 1xBet."""
+    prises dessus ; `fair_stakes` (dict) reçoit celles des combinés à vérifier, pour leur suivi, `fair_coupons` (dict) leurs codes coupon.
+    `odds_time` : heure « HH:MM » du relevé 1xBet, rappelée sous les combinés et les pronostics aux cotes 1xBet."""
     bank = bankroll.load()["bankroll"]
     quality = CB.make_pool(picks)
     n_events = len({c["id"] for c in picks})
@@ -111,35 +114,45 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
             top["stake"] = stakes.get("pari", 0)
             if top["stake"]:
                 top["cur"] = cur
-        if top.get("xref") and top.get("xodds"):    # pari du jour à la cote 1xBet : son code coupon (échec = pas de code)
+        xtop = bool(top.get("xref") and top.get("xodds"))
+        if xtop:                                    # pari du jour à la cote 1xBet : son code coupon (échec = pas de code)
             top["coupon"] = xbet.save_coupon([top])
+        if top.get("xodds") and odds_time:
+            top["xat"] = odds_time                  # heure de la cote 1xBet (« Mes paris »)
         messages.append(chat.with_played_button(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari")),
-                                                           coupon=top.get("coupon"), when=odds_time), "pari", day,
-                                                funded=bool(stakes.get("pari"))))
+                                                           coupon=top.get("coupon"), when=odds_time,
+                                                           retry=RETRY_BUTTON if xtop and not top.get("coupon") else None),
+                                                "pari", day, funded=bool(stakes.get("pari")), xrefresh=xtop))
         sent_picks.append(top)
     for title, combo in built:
         picks_, odds_, prob = combo
         st = stakes.get(title, 0) if money.active() else bankroll.stake(prob, odds_, title, bank)
-        coupon = xbet.save_coupon(picks_) if all(c.get("xref") and c.get("xodds") for c in picks_) else None      # combiné aux cotes 1xBet
+        xcombo = all(c.get("xref") and c.get("xodds") for c in picks_)
+        coupon = xbet.save_coupon(picks_) if xcombo else None      # combiné aux cotes 1xBet
         messages.append(chat.with_played_button(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
-                                                          stake_txt=mise(st), coupon=coupon, when=odds_time),
-                                                played.norm(fmt.tier_word(title)), day, funded=bool(st)))
+                                                          stake_txt=mise(st), coupon=coupon, when=odds_time,
+                                                          retry=RETRY_BUTTON if xcombo and not coupon else None),
+                                                played.norm(fmt.tier_word(title)), day, funded=bool(st), xrefresh=xcombo))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
                             "stake": st} | ({"cur": cur} if money.active() and st else {})
                            | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
-                               "coupon": coupon} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
+                               "coupon": coupon, "at": odds_time} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
     for target, (legs, min_total, prob) in built_fair:
-        coupon = xbet.save_coupon(legs) if all(c.get("xref") for c in legs) else None
+        xfair = all(c.get("xref") and c.get("xodds") for c in legs)
+        coupon = xbet.save_coupon(legs) if xfair else None
+        if fair_coupons is not None and coupon:
+            fair_coupons[target] = coupon
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
                                                                stake_txt=mise(stakes.get(("fair", target))),
-                                                               title=CB.shots_title(target), coupon=coupon, when=odds_time),
+                                                               title=CB.shots_title(target), coupon=coupon, when=odds_time,
+                                                               retry=RETRY_BUTTON if xfair and not coupon else None),
                                                 f"v{target}", day, funded=bool(stakes.get(("fair", target))),
                                                 refresh=target if all(c.get("xodds") for c in legs) else None))
     if pronos:
         shown = CB.best_per_match(pronos)          # un seul pronostic par match : le meilleur, s'il est viable
         if shown:
-            messages.append(fmt.pronos(shown, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
+            messages.append(fmt.pronos(shown, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2), when=odds_time))
     if not messages:
         messages.append(Html(fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}") + "\nPas de cotes réelles aujourd'hui"
                              + (f" — {fmt.esc(why_no_odds)}" if why_no_odds else "")
@@ -170,6 +183,31 @@ def _signed(x, item):
     return fmt.esc(money.signed(x, item["cur"]) if item.get("cur") else fmt.signed(x))
 
 
+def single_price(b):
+    """Prix du pari du jour dans le bilan du matin : la cote jouée chez 1xBet si elle est notée (/joue), sinon la cote 1xBet lue par
+    Kelly (xodds), sinon la cote de référence (typique, pas 1xBet)."""
+    if b.get("played"):
+        return f"cote {fmt.odds_txt(b['played']['odds'])} chez 1xBet"
+    if b.get("xodds"):
+        return f"cote 1xBet {fmt.odds_txt(b['xodds'])}"
+    return f"cote de référence {fmt.odds_txt(b['odds'])} (pas 1xBet)"
+
+
+def single_gain_txt(b):
+    """« · +1 500 FCFA » : gain du pari du jour s'il est joué (noté ou misé sur le budget) ; « · pas joué » s'il a été retiré ; '' sinon
+    (sans mise, le gain n'existe pas)."""
+    from .bankroll import played_gain
+    if b.get("skipped"):
+        return f" · {_signed(0, b)}"
+    if b.get("played") and b["result"] in ("win", "loss"):
+        g = played_gain(b)
+    elif b.get("cur") and b["result"] in ("win", "loss"):
+        g = money.gain(b)
+    else:
+        return ""
+    return f" · {_signed(g, b)}"
+
+
 def combo_result(c, by_key):
     """Bloc de résultat d'un combiné terminé."""
     name = fmt.tier_name(c["tier"]).split(" ", 1)[-1]
@@ -180,7 +218,8 @@ def combo_result(c, by_key):
         gain = stake * (odds_ - 1)
         if c.get("played"):
             odds_, gain = c["played"]["odds"] * odds_ / c["odds"], bankroll.played_gain(c)
-        where =" chez 1xBet" if c.get("played") else ""
+        where = (" chez 1xBet" if c.get("played") else " aux cotes 1xBet" if c.get("xlegs")
+                 else " (cotes de référence, pas 1xBet)")                 # le prix utilisé, dit clairement
         return "\n".join([f"{fmt.b(f'✅ {fmt.esc(name)} gagné — cote {fmt.odds_txt(odds_)}{where}')} · {_signed(gain, c)}"]
                          + [leg_result_line(r) for r in legs if r])
     if c["result"] == "void":
@@ -214,7 +253,7 @@ def results_message(bets, rows, settled):
                           f"{fmt.esc(b['away'])} (vérifie chez 1xBet)\n{leg_result_line(b)}")
             continue
         icon = "✅" if b["result"] == "win" else "❌"
-        blocks.append(f"{fmt.b(f'{icon} Pari du jour — cote {fmt.odds_txt(b['odds'])}')}\n{leg_result_line(b)}")
+        blocks.append(f"{fmt.b(f'{icon} Pari du jour — {single_price(b)}')}{single_gain_txt(b)}\n{leg_result_line(b)}")
     for c in done:
         c["reported"] = True
         blocks.append(combo_result(c, by_key))
@@ -315,7 +354,8 @@ def fair_combos_report(now):
         icon = {"win": "✅", "loss": "❌"}.get(c["result"], "❔")
         word = {"win": "gagné", "unknown": "non vérifiable (stats introuvables : vérifie chez 1xBet)"}.get(
             c["result"], f"perdu — {ok} sur {len(legs)}")
-        lines.append("\n" + fmt.b(f"{icon} Combiné à cote mini {fmt.odds_txt(c['min_odds'])} {word}"))
+        lines.append("\n" + fmt.b(f"{icon} Combiné " + (f"aux cotes 1xBet (cote {fmt.odds_txt(c['min_odds'])})" if played.is_real(c)
+                                                      else f"à cote mini {fmt.odds_txt(c['min_odds'])}") + f" {word}"))
         lines += [leg_result_line(r) for r in legs if r.get("result")]
     summ = settle.fair_combo_line(rows)
     if summ:
@@ -483,13 +523,19 @@ def run_daily(sample=False):
             fair_combos = CB.fair_plan(pronos) + CB.fair_shots_plan(pronos)
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
-    fair_stakes = {}
-    messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos, fair_stakes, odds_time=odds_at)
+    fair_stakes, fair_coupons = {}, {}
+    messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos, fair_stakes, odds_time=odds_at,
+                                                  fair_coupons=fair_coupons)
     track.record(picks, {c["key"] for c in sent_picks}, day, now, single_key=single_key(sent_picks))
     settle.record_combos(sent_combos, day)
-    fair.record_combos([(t, c) for t, c in fair_combos if c], day, fair_stakes, money.cur() if fair_stakes else None)
+    fair.record_combos([(t, c) for t, c in fair_combos if c], day, fair_stakes, money.cur() if fair_stakes else None,
+                       coupons=fair_coupons, at=odds_at)
     keep = keep_pronos(pronos, fair_combos)         # /top, /match, /combi et le relevé de 15:00 les relisent
-    store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
+    # xbet_at : heure du dernier relevé 1xBet des pronostics (relevés de l'après-midi compris), picks_at : celle des paris réels (le matin) ;
+    # affichées avec les cotes 1xBet (/top, /match, /analyse)
+    store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]}
+               | ({"xbet_at": odds_at} if odds_at and any(c.get("xodds") for c in keep) else {})
+               | ({"picks_at": odds_at} if odds_at and any(c.get("xodds") for c in picks) else {}))
     if not sample:                                  # avant l'envoi : mises et paris sont écrits, une relance ne les doublerait pas
         store.save(DAILY_FILE, {"day": str(day), "at": now.isoformat()})
     for m in report + messages:
@@ -632,10 +678,12 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
         seen = {_slot(k) for k in today["announced"]}                        # par match et marché : une ligne changée n'est pas annoncée deux fois
         new = [c for c in CB.best_per_match(upcoming_) if c.get("xodds") and _slot(c) not in seen]
         today["announced"] += [_slot(c) for c in new]
+    if got:
+        today["xbet_at"] = now.strftime("%H:%M")    # heure du dernier relevé 1xBet : affichée avec les cotes (/top, /match, /analyse)
     store.save("today.json", today)                 # mêmes objets : les pronostics à venir portent les nouvelles cotes
     if new:
         fair.record(new, today["day"], shown=new)
-        telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet",
+        telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet", when=now.strftime("%H:%M"),
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
                                        "depuis ce matin). Vérifie la cote avant de valider."))
     n_upd = _update_combos(today["day"], pronos, now, got)
@@ -678,16 +726,21 @@ def _stake_txt(row):
     return money.money(row["stake"], row.get("cur")) if row["stake"] else "pas de mise (trop petite pour ton budget)"
 
 
-def _record_version(sent, row, rows, combo, hhmm):
+def _record_version(sent, row, rows, combo, hhmm, coupon=None):
     """Nouvelle version envoyée d'un combiné : retenue dans COMBO_UPDATES (base des prochaines vérifications et du bouton « Vérifier ce
     combiné ») et dans sa ligne de suivi fair_combos.json (règlement et bilan comptent la version envoyée en dernier, avec la mise du
-    matin)."""
+    matin ; « Mes paris » y lit ses cotes et son code coupon `coupon`). -> la note « joué à … » de l'ancienne version est-elle tombée ?"""
     legs, total, prob = combo
     sent["tiers"][str(row["tier"])] = {"keys": [c["key"] for c in legs], "total": round(total, 3),
                                         "legs": [fair.combo_leg(c) for c in legs]}
-    fair.update_combo(row, combo, hhmm)
+    had = bool(row.get("played"))
+    fair.update_combo(row, combo, hhmm, coupon)
     store.save(fair.COMBOS_FILE, rows)
     store.save(COMBO_UPDATES, sent)
+    return had and not row.get("played")
+
+
+DROPPED_NOTE = " Ta note « joué à … » de l'ancienne version est retirée : note la nouvelle (✅ / ✏️) si tu la joues."
 
 
 def _update_combos(day, pronos, now, refreshed):
@@ -724,10 +777,12 @@ def _update_combos(day, pronos, now, refreshed):
         if (not last.get("dead") and set(keys) == set(last["keys"])
                 and abs(total / (last.get("total") or total) - 1) <= C.XBET_UPDATE_MOVE):
             continue
-        _record_version(sent, row, rows, (legs, total, prob), hhmm)
+        code = _coupon(legs)
+        dropped = _record_version(sent, row, rows, (legs, total, prob), hhmm, code)
         msg = _fair_reply((legs, total, prob), f"🔄 Un combiné du matin a changé chez 1xBet : le voici aux cotes de {hhmm} "
-                                               "(l'ancien code est remplacé).", fmt.combo_changes(removed, added, changed),
-                          title=f"🔄 COMBINÉ À JOUR {hhmm}", stake_txt=_stake_txt(row), when=hhmm)
+                                               "(l'ancien code est remplacé)." + (DROPPED_NOTE if dropped else ""),
+                          fmt.combo_changes(removed, added, changed), title=f"🔄 COMBINÉ À JOUR {hhmm}", stake_txt=_stake_txt(row),
+                          when=hhmm, code=code, retry=RETRY_BUTTON)
         telegram.send(chat.with_played_button(msg, f"v{tier}", day, funded=bool(row.get("stake")), refresh=tier))
         n += 1
     store.save(COMBO_UPDATES, sent)
@@ -785,7 +840,7 @@ def run_track(events_for=None, now=None):
     if calls and events_for is None:
         print(f"[budget] {budget.line()}", file=sys.stderr)
     if alerts:
-        telegram.send(alert_text(alerts))
+        telegram.send(alert_text(alerts, alert_xbet(alerts)))
     cache.flush()
     return n, alerts
 
@@ -852,18 +907,39 @@ def run_alert(sample=False):
     if not alerts:
         print("Aucun mouvement notable.")
         return []
-    text = alert_text(alerts)
+    text = alert_text(alerts, alert_xbet(alerts))
     telegram.send(text)
     return [text]
 
 
-def alert_text(alerts):
+def alert_xbet(alerts):
+    """Cote 1xBet des paris alertés, quand elle est connue SANS réseau : le pari figure dans data/today.json avec sa référence 1xBet
+    (xref) et la cote est dans le cache du disque (xbet.cached_cf). -> {clé du pari: (cote, "HH:MM" du relevé)} ; {} si rien."""
+    today = store.load("today.json", {})
+    by_key = {c["key"]: c for c in today.get("picks") or [] if c.get("xref")}
+    out = {}
+    for _, c, _ in alerts:
+        ref = (by_key.get(c["key"]) or {}).get("xref")
+        hit = xbet.cached_cf(ref) if ref else None
+        if hit and hit[1]:
+            out[c["key"]] = (hit[0], datetime.fromtimestamp(hit[1], tz=timezone.utc).strftime("%H:%M"))
+    return out
+
+
+def alert_text(alerts, xb=None):
+    """Alertes de mouvement de cote. Les cotes comparées viennent de The Odds API (le marché, pas 1xBet) : dit comme tel ; `xb`
+    (alert_xbet) ajoute la cote 1xBet du dernier relevé quand Kelly l'a."""
+    xb = xb or {}
     lines = [fmt.b("🚨 La cote chute : de l'argent arrive sur ces paris")]
     for _, c, prev in alerts:
+        x = xb.get(c["key"])
         lines.append(f"\n{fmt.b(fmt.event_name(c))} · {fmt.hhmm(c['start'])} · {fmt.esc(c['league'])}\n"
                      f"{fmt.esc(c['pick'])} : {fmt.num(prev['o'])} ➜ {fmt.b(fmt.num(c['odds']))} "
-                     f"({fmt.pct(prev['p'])} ➜ {fmt.pct(c['prob'])} de chances) depuis {fmt.hhmm(prev['t'][11:16])}")
-    lines.append("\n" + fmt.i("Une cote qui chute vite = beaucoup de mises sur ce pari. Vérifie les compositions avant de suivre."))
+                     f"({fmt.pct(prev['p'])} ➜ {fmt.pct(c['prob'])} de chances) depuis {fmt.hhmm(prev['t'][11:16])} "
+                     + fmt.i("(cote du marché, pas 1xBet)")
+                     + (f"\n💎 Chez 1xBet, au dernier relevé de {x[1]} : {fmt.b(fmt.num(x[0]))}" if x else ""))
+    lines.append("\n" + fmt.i("Une cote qui chute vite = beaucoup de mises sur ce pari. Ces cotes sont celles du marché : vérifie la cote "
+                              "chez 1xBet et les compositions avant de suivre."))
     return Html("\n".join(lines))
 
 
@@ -1032,8 +1108,9 @@ def event_matches(items, query):
     return [c for c in items if any(t and names.team_sim(query, t) >= 0.8 for t in (c.get("home"), c.get("away")))]
 
 
-def analyse(picks, query, pronos=()):
-    """Texte de /analyse : analyse approfondie d'un match du jour + ses meilleurs paris avec leur raison."""
+def analyse(picks, query, pronos=(), when=None, picks_when=None):
+    """Texte de /analyse : analyse approfondie d'un match du jour + ses meilleurs paris avec leur raison. `when` / `picks_when` : heures
+    « HH:MM » des derniers relevés 1xBet des pronostics et des paris réels (affichées avec leurs cotes)."""
     if not query:
         return "Exemple : /analyse Arsenal"
     found = event_matches(picks, query)
@@ -1048,7 +1125,7 @@ def analyse(picks, query, pronos=()):
         head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))}\n{fmt.i(fmt.hhmm(free[0]['start']) + ' · ' + fmt.esc(free[0]['league']))}"
         fl = [] if deep else features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"]))
         body = ("\n" + fmt.esc(deep)) if deep else ("\n".join(fl) if fl else "\nPas assez de données pour une analyse approfondie de ce match.")
-        return Html(comma(head + "\n" + body) + "\n\n" + fmt.pronos(CB.best_per_match(free), 6))
+        return Html(comma(head + "\n" + body) + "\n\n" + fmt.pronos(CB.best_per_match(free), 6, when=when))
     events = list(dict.fromkeys(c["event"] for c in found))
     if len(events) > 1:
         return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
@@ -1064,14 +1141,50 @@ def analyse(picks, query, pronos=()):
         lines += features_lines(f)
     else:
         lines.append("Pas de stats réelles pour ce match (équipes inconnues des sources ou sources indisponibles).")
-    best = sorted(found, key=lambda c: c["score"], reverse=True)[:6]
+    real = any(c.get("xodds") for c in picks)               # 1xBet a chiffré des paris du jour : les autres ne sont pas jouables
+    best = sorted(found, key=lambda c: (bool(c.get("xodds")), c["score"]), reverse=True)[:6] if real else \
+        sorted(found, key=lambda c: c["score"], reverse=True)[:6]
     lines += ["", fmt.b("🎯 Meilleurs paris")]
     for c in best:
-        why = fmt.why_line(c, CB.leg_reason(c))
-        lines.append(f"\n👉 {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances)"
+        why = "" if real and not c.get("xodds") else fmt.why_line(c, CB.leg_reason(c))      # pas de « cote plus haute… » d'un autre book
+        lines.append(f"\n👉 {fmt.esc(c['pick'])} — {fmt.price_txt(c, real, picks_when)} ({fmt.pct(c['prob'])} de chances)"
                      f"{'' if why else pm_note(c)}"
                      + (f"\n💡 {fmt.i(fmt.esc(why))}" if why else ""))
+    shown = _event_pronos(pronos, found)
+    if shown:
+        lines += ["", str(fmt.pronos(shown, 6, when=when))]
     return Html(comma("\n".join(lines)))
+
+
+def _event_pronos(pronos, found):
+    """Pronostics 💎 (cote 1xBet relevée) des matchs de `found` : de quoi montrer leurs prix 1xBet à côté des paris réels."""
+    ids = {c["id"] for c in found}
+    return CB.best_per_match([c for c in pronos if c["id"] in ids and c.get("xodds")])
+
+
+def top_reply(live, live_pronos, when=None, picks_when=None):
+    """/top : les meilleurs paris réels encore jouables (cotes 1xBet de `picks_when` quand 1xBet les a chiffrés ; sinon cotes de référence
+    des autres bookmakers, dites comme telles) ET les pronostics 💎 aux cotes 1xBet (`when`) des autres matchs. Un pari absent de
+    1xBet n'est pas montré comme jouable (CB.make_pool)."""
+    best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10] if live else []
+    shown = CB.best_per_match(live_pronos)
+    if best:                                        # avec des paris réels : seulement les 💎 d'autres matchs (jamais deux fois le même match)
+        ids = {c["id"] for c in best}
+        shown = [c for c in shown if c.get("xodds") and c["id"] not in ids]
+    parts = []
+    if best:
+        priced = all(c.get("xodds") for c in best)
+        note = (fmt.i(f"💎 Cotes 1xBet de {fmt.esc(picks_when)} : vérifie qu'elles n'ont pas baissé avant de valider.") if priced and picks_when
+                else fmt.i("💎 Cotes relevées chez 1xBet par Kelly : vérifie qu'elles n'ont pas baissé avant de valider.") if priced
+                else fmt.i("⚠️ Cotes de référence des autres bookmakers, pas celles de 1xBet : vérifie chaque cote chez 1xBet avant de jouer."))
+        parts.append(Html(fmt.b("🔝 Les meilleurs paris du jour") + "\n" + note + "\n\n" + "\n\n".join(
+            fmt.leg(k, c, CB.leg_reason(c), price=fmt.price_txt(c)) for k, c in enumerate(best, 1))))
+    if shown:
+        parts.append(fmt.pronos(shown, 10 if not best else 6, when=when))
+    if not parts:
+        return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
+                "ou une forte probabilité. /match <équipe> montre tout ce qui existe pour un match.")
+    return parts[0] if len(parts) == 1 else Html("\n\n".join(parts))
 
 
 def upcoming(items, now=None):
@@ -1145,25 +1258,21 @@ def _handle_command(text):
     if cmd in ("/joue", "/joué", "/jouer"):
         return played.command(args, today.get("day") or now_utc().date())
     if cmd in ("/monde", "/ligues"):
-        data = monde.load(monde.kelly_day(now_utc()))
+        # jour Kelly en cours ; après un rattrapage d'avant C.DAY_END_HOUR h (voir daily_skip_reason), today.json et monde.json portent la
+        # date UTC du jour : c'est elle qu'il faut lire, sinon /monde ne trouve rien
+        data = monde.load(monde.kelly_day(now_utc())) or (monde.load(today["day"]) if _current_day(today, now_utc()) and today.get("day") else None)
         return monde.fmt_monde(data, " ".join(args)) if cmd == "/monde" else monde.fmt_ligues(data)
     pronos = today.get("pronos") or []
     if not picks and not pronos:
         return f"Kelly n'a pas encore analysé la journée (ça arrive à {C.DAY_END_HOUR:02d}h00)."
+    when, picks_when = today.get("xbet_at"), today.get("picks_at") or today.get("xbet_at")      # heures des derniers relevés 1xBet
     if cmd == "/analyse":
-        return analyse(picks, " ".join(args), pronos)
+        return analyse(picks, " ".join(args), pronos, when, picks_when)
     if cmd == "/top":
         live, live_pronos = upcoming(picks), upcoming(pronos)
-        if not live:
-            if live_pronos:
-                return fmt.pronos(CB.best_per_match(live_pronos), 10)
+        if not live and not live_pronos:
             return waiting_note(today) or f"Tous les matchs du jour ont commencé : rendez-vous demain à {C.DAY_END_HOUR:02d}h00."
-        best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10]
-        if not best:
-            return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
-                    "ou une forte probabilité. /match <équipe> montre tout ce qui existe pour un match.")
-        return Html(fmt.b("🔝 Les meilleurs paris du jour") + "\n\n" + "\n\n".join(
-            fmt.leg(k, c, CB.leg_reason(c)) for k, c in enumerate(best, 1)))
+        return top_reply(live, live_pronos, when, picks_when)
     if cmd == "/match":
         if not args:
             return "Exemple : /match PSG"
@@ -1171,14 +1280,18 @@ def _handle_command(text):
         if not found:
             free = event_matches(pronos, " ".join(args))
             if free:
-                return fmt.pronos(CB.best_per_match(free), 8)
+                return fmt.pronos(CB.best_per_match(free), 8, when=when)
             return f"Aucun match du jour ne contient « {' '.join(args)} »."
-        found = sorted(found, key=lambda c: c["score"], reverse=True)[:8]
+        real = any(c.get("xodds") for c in picks)           # 1xBet a chiffré des paris du jour : les autres ne sont pas chez lui
+        found = sorted(found, key=lambda c: (bool(c.get("xodds")), c["score"]) if real else c["score"], reverse=True)[:8]
         lines = [f"🔎 {fmt.b(fmt.event_name(found[0]))} · {fmt.hhmm(found[0]['start'])} · {fmt.esc(found[0]['league'])}"]
         for c in found:
-            why = fmt.why_line(c, CB.leg_reason(c))
-            lines.append(f"• {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances)"
+            why = "" if real and not c.get("xodds") else fmt.why_line(c, CB.leg_reason(c))      # pas de « cote plus haute… » d'un autre book
+            lines.append(f"• {fmt.esc(c['pick'])} — {fmt.price_txt(c, real, picks_when)} ({fmt.pct(c['prob'])} de chances)"
                          + (f"\n   ↳ {fmt.esc(why)}" if why else ""))
+        shown = _event_pronos(pronos, found)
+        if shown:
+            lines += ["", str(fmt.pronos(shown, 8, when=when))]
         return Html("\n".join(lines))
     if cmd in ("/cotes", "/actualiser"):
         return manual_refresh()
@@ -1192,22 +1305,40 @@ def _handle_command(text):
         live = upcoming(picks)
         if not live and not upcoming(pronos) and waiting_note(today):
             return waiting_note(today)
-        return custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live)
+        return custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live,
+                            when=picks_when)
     return "Commande inconnue. /aide pour la liste."
 
 
-def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, when=None):
+def _coupon(legs):
+    """Code coupon 1xBet d'un combiné dont toutes les jambes ont leur référence et leur cote 1xBet (xbet.save_coupon : ticket sans mise) ;
+    None sinon, ou si l'enregistrement échoue (jamais d'erreur)."""
+    return xbet.save_coupon(legs) if legs and all(c.get("xref") and c.get("xodds") for c in legs) else None
+
+
+def _budget_stake_txt(prob, odds):
+    """Mise d'un combiné demandé à la main (« combi 20 ») sur le budget du jour ; None sans budget (mise indicative en unités)."""
+    if not money.active():
+        return None
+    st = money.allocate([{"kind": "fair", "tier": odds, "prob": prob, "odds": odds}])[0][0]
+    return money.money(st) + " (sur ton budget du jour)" if st else "pas de mise (trop petite pour ton budget)"
+
+
+def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, when=None, code=..., retry=None, stale=False, budget=False):
     """Réponse « combiné à cote juste » de custom_combo : phrase d'introduction, paris remplacés, combiné, et code coupon 1xBet quand
-    toutes les jambes ont leur référence 1xBet (xbet.save_coupon : ticket sans mise ; échec = pas de code, jamais d'erreur).
-    `stake_txt` : la mise du budget du jour (combiné du matin renvoyé), `when` : l'heure « HH:MM » des cotes 1xBet."""
+    toutes les jambes ont leur référence 1xBet (_coupon ; échec = pas de code, une ligne le dit avec `retry`). `code` : code déjà
+    enregistré (None : échec), sinon calculé ici. `stake_txt` : la mise du budget du jour (combiné du matin renvoyé), `budget` : la
+    calculer sur le budget du jour (combiné demandé à la main), `when` : l'heure « HH:MM » des cotes 1xBet, `stale` : cotes du dernier
+    relevé (1xBet injoignable), voir fmt.fair_combo."""
     legs, min_total, prob = fc
-    code = None
-    if coupon and all(c.get("xref") for c in legs):
-        from .sources import xbet
-        code = xbet.save_coupon(legs)
+    if code is ...:
+        code = _coupon(legs) if coupon else None
+    if budget and stake_txt is None:
+        stake_txt = _budget_stake_txt(prob, min_total)
+    expected = coupon and bool(retry) and all(c.get("xref") and c.get("xodds") for c in legs) and not code
     return Html(fmt.esc(head) + ("\n" + changes if changes else "") + "\n\n"
                 + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), stake_txt=stake_txt, coupon=code, title=title,
-                                 when=when))
+                                 when=when, retry=retry if expected else None, stale=stale))
 
 
 def _live_fair(legs, lo, hi, prefix=None, now=None, check=None, fresh_min=None):
@@ -1240,19 +1371,21 @@ def _live_reply(fc, lo, hi, now=None, check=None):
     if not ok and _all_soon(fc[0], now or now_utc()):
         return (f"Les matchs de ce combiné commencent dans moins de {C.XBET_SOON_MIN} minutes : 1xBet les retire de l'avant-match, "
                 "Kelly ne peut plus vérifier leurs cotes. Demande plutôt un autre « combi ».")
-    if not ok:
+    if not ok:                                      # cotes du dernier relevé : l'heure réelle de leur relevé (cache), sinon celle du relevé du jour
+        t0 = xbet.odds_time([(c.get("xref") or [c.get("xgid")])[0] for c in fc[0]])
+        last = datetime.fromtimestamp(t0, tz=timezone.utc).strftime("%H:%M") if t0 else store.load("today.json", {}).get("xbet_at") or ""
         return _fair_reply(fc, f"⚠️ 1xBet ne répond pas en ce moment : combiné aux cotes du dernier relevé (cote "
-                               f"{fmt.trim(fc[1], 1)}), sans code coupon. Vérifie chaque cote avant de jouer.", coupon=False)
+                               f"{fmt.trim(fc[1], 1)}), sans code coupon. Vérifie chaque cote avant de jouer.", coupon=False,
+                           when=last, stale=True, budget=True)
     if res is None:
         return (f"Les cotes 1xBet ont bougé depuis le dernier relevé : plus de combiné à la cote {fmt.trim(lo, 1)} avec des paris "
                 "encore jouables. Essaie une autre cote.")
     legs, total, prob, removed, added, changed = res
-    from .sources import xbet
     # GameId de la cote (sous-match des corners, tirs...) ; cotes de moins de 3 h reprises : l'heure réelle de leur relevé
     t0 = xbet.odds_time([(c.get("xref") or [c.get("xgid")])[0] for c in legs])
     when = datetime.fromtimestamp(t0, tz=timezone.utc).strftime("%H:%M") if t0 else hhmm
     return _fair_reply((legs, total, prob), f"Voici un combiné aux cotes 1xBet de {when} (cote {fmt.trim(total, 1)}).",
-                       fmt.combo_changes(removed, added, changed), when=when)
+                       fmt.combo_changes(removed, added, changed), when=when, retry="redemande le combi", budget=True)
 
 
 def _tier_range(tier):
@@ -1290,27 +1423,100 @@ def refresh_combo(tier, day, now=None, check=None):
         return ("Les paris de ce combiné ne sont plus jouables chez 1xBet et Kelly ne trouve pas de remplaçants dans la même "
                 "fourchette de cote. Demande plutôt un « combi » sur mesure.")
     legs, total, prob, removed, added, changed = res
-    _record_version(sent, row, rows, (legs, total, prob), hhmm)
+    code = _coupon(legs)
+    dropped = _record_version(sent, row, rows, (legs, total, prob), hhmm, code)
     head = (f"🔄 Combiné du matin remis aux cotes 1xBet de {hhmm}"
-            + (" : aucun pari à changer." if not (removed or added or changed) else "."))
+            + (" : aucun pari à changer." if not (removed or added or changed) else ".") + (DROPPED_NOTE if dropped else ""))
     msg = _fair_reply((legs, total, prob), head, fmt.combo_changes(removed, added, changed), title=f"🔄 COMBINÉ À JOUR {hhmm}",
-                      stake_txt=_stake_txt(row), when=hhmm)
+                      stake_txt=_stake_txt(row), when=hhmm, code=code, retry=RETRY_BUTTON)
     return chat.with_played_button(msg, f"v{tier}", str(day), funded=bool(row.get("stake")), refresh=tier)
 
 
-def custom_combo(picks, pronos, target, day, started=False):
-    """/combi <cote> : dès que les cotes 1xBet du jour sont connues, combiné aux cotes 1xBet (pronostics 💎, code coupon) ; sinon
-    combiné à cotes réelles (The Odds API) d'abord ; s'il est impossible, combiné à cote juste (pronostics Kelly, annoncé
-    « à vérifier chez 1xBet » et sans mise de bankroll) ; sinon l'explication précise de ce qui manque et une cote atteignable.
-    `picks` et `pronos` : matchs pas encore commencés seulement ; `started` : il y en avait d'autres, déjà commencés."""
+def refresh_real(what, day, now=None, fetch=None):
+    """Bouton « 🎟️ Vérifier ce combiné » sous un combiné réel du matin (The Odds API, remis aux cotes 1xBet : `what` = mot du palier, comme
+    « sur ») ou sous le pari du jour (`what` = « pari ») : ses matchs sont relus EN DIRECT chez 1xBet (xprice.live_picks, mêmes règles de
+    fraîcheur que les autres vérifications). Les paris ne sont pas remplacés (un combiné réel est suivi par ses paris) : la réponse donne
+    les cotes du moment, signale un pari qui n'est plus chez 1xBet (le combiné n'est alors plus jouable tel quel) ou qui a perdu son
+    avantage, et un NOUVEAU code coupon. Les cotes et le code du moment sont retenus dans la ligne du pari (« xnow », lu par « Mes
+    paris »). `fetch` : injectable pour les tests."""
+    now = now or now_utc()
+    day = str(day)[:10]
+    t = played.find(what, day)
+    if isinstance(t, str):
+        return t
+    if t is None or t.item.get("date") != day or not (t.item.get("xlegs") or t.item.get("xodds")):
+        return "Ce combiné n'est plus en mémoire (il date d'un autre jour)."
+    x = t.item
+    today = store.load("today.json", {})
+    by_key = {c["key"]: c for c in today.get("picks") or []}
+    legs = [by_key.get(k) for k in (x.get("keys") or [x["key"]])]
+    if today.get("day") != day or not all(legs):
+        return "Ce combiné n'est plus en mémoire (il date d'un autre jour)."
+    if _started(legs, now):
+        return "Ce combiné est en jeu : un match a commencé, Kelly ne peut plus le revérifier."
+    if _all_soon(legs, now):
+        return (f"Les matchs de ce combiné commencent dans moins de {C.XBET_SOON_MIN} minutes : 1xBet les retire de l'avant-match, "
+                "Kelly ne peut plus vérifier leurs cotes.")
+    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False)
+    res, hhmm = xprice.live_picks(legs, now, fetch)
+    if all(st == "stale" for _, st, _ in res):
+        return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné commencent) : réessaie dans quelques minutes."
+    gone = [c for c, st, _ in res if st == "gone"]
+    new = [c2 if st == "ok" else c for c, st, c2 in res]
+    changes = [f"❌ Plus chez 1xBet : {fmt.esc(c['home'])} – {fmt.esc(c['away'])} ({fmt.esc(c['pick'])})" for c in gone]
+    for c, st, c2 in res:
+        if st != "ok":
+            continue
+        old, cur = c.get("xodds") or c["odds"], c2["xodds"]
+        if not CB.leg_reason(c2):
+            changes.append(f"⚠️ Moins bien payé : {fmt.esc(c['pick'])} {fmt.odds_txt(old)} ➜ {fmt.odds_txt(cur)} (plus d'avantage clair)")
+        elif abs(cur / old - 1) >= 0.02:
+            changes.append(f"{'📈' if cur > old else '📉'} {fmt.esc(c['pick'])} : {fmt.odds_txt(old)} ➜ {fmt.odds_txt(cur)}")
+    label = "combiné" if x.get("keys") else "pari du jour"
+    if gone:                                        # un pari n'existe plus chez 1xBet : pas de nouveau code, le combiné n'est plus jouable tel quel
+        x["xnow"] = {"at": hhmm, "dead": True}
+        t.save()
+        return Html(fmt.esc(f"🔄 Ce {label} vérifié chez 1xBet à {hhmm} : il n'est plus jouable tel quel.") + "\n" + "\n".join(changes)
+                    + "\n\n" + fmt.i("Un pari n'est plus proposé par 1xBet. Demande un « combi » sur mesure, ou touche « 🔄 Mettre à jour "
+                                      "tous les paris »."))
+    total, prob = math.prod(c["odds"] for c in new), math.prod(c["prob"] for c in new)
+    code = _coupon(new)
+    x["xnow"] = {"at": hhmm, "odds": round(total, 3)} | ({"coupon": code} if code else {})
+    t.save()
+    head = f"🔄 Ce {label} remis aux cotes 1xBet de {hhmm}" + ("." if changes else " : aucun changement.")
+    if x.get("keys"):
+        body = fmt.combo(f"🔄 {fmt.tier_name(x['tier']).upper()} À JOUR {hhmm}", new, total, prob, x.get("stake") or 0,
+                         {c["key"]: CB.leg_reason(c) for c in new}, stake_txt=_stake_txt(x), coupon=code, when=hhmm, retry=RETRY_BUTTON)
+    else:
+        body = fmt.single(new[0], CB.leg_reason(new[0]), title=f"🔄 PARI DU JOUR À JOUR {hhmm}", stake_txt=_stake_txt(x), coupon=code,
+                          when=hhmm, retry=RETRY_BUTTON)
+    return chat.with_played_button(Html(fmt.esc(head) + ("\n" + "\n".join(changes) if changes else "") + "\n\n" + body),
+                                   what, day, funded=bool(x.get("stake")) or not money.active(), xrefresh=True)
+
+
+def custom_combo(picks, pronos, target, day, started=False, when=None):
+    """/combi <cote> : tout est joué chez 1xBet, donc aux cotes 1xBet. Dès que les cotes 1xBet du jour sont connues, combiné aux cotes
+    1xBet (pronostics 💎 ou paris réels remis à leur prix 1xBet, code coupon) ; jamais la cote typique d'un autre bookmaker : si aucun
+    combiné n'atteint la cote visée, la réponse donne la plus haute cote atteignable aux cotes 1xBet. Sans AUCUNE cote 1xBet (relevé en
+    panne) : combiné à cote juste (pronostics de Kelly, « à vérifier chez 1xBet », cote mini) d'abord, puis combiné aux cotes de référence
+    des autres bookmakers, annoncé comme tel et sans code coupon ; sinon l'explication précise de ce qui manque et une cote atteignable.
+    `picks` et `pronos` : matchs pas encore commencés seulement ; `started` : il y en avait d'autres, déjà commencés. `when` : heure
+    « HH:MM » du relevé 1xBet des paris réels."""
     t = fmt.trim(target, 1)
     real = "Pas de cotes réelles aujourd'hui" if not started else "Plus de cotes réelles jouables aujourd'hui (matchs commencés)"
     reach = []                                      # cotes les plus hautes atteignables (réelles, puis cote mini des pronostics)
-    if any(c.get("xodds") for c in pronos):        # cotes 1xBet du jour connues : le combiné se joue chez 1xBet, à SES cotes
+    xp, xk = any(c.get("xodds") for c in pronos), any(c.get("xodds") for c in picks)
+    if xp:                                          # cotes 1xBet du jour connues : le combiné se joue chez 1xBet, à SES cotes
         fc = CB.fair_custom(pronos, target)
         if fc:
             return _live_reply(fc, target, target * (1 + C.CUSTOM_TOLERANCE))
-    if picks:
+    if not (xp or xk):                              # aucune cote 1xBet : d'abord les pronostics de Kelly (cote mini), jamais un prix inventé
+        fc = CB.fair_custom(pronos, target)
+        if fc:
+            why = real if not picks else "Kelly n'a vu aucune cote de 1xBet aujourd'hui"
+            return _fair_reply(fc, f"{why} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier "
+                                   "chez 1xBet.", budget=True)
+    if picks and (xk or not xp):                    # paris réels : à leur prix 1xBet s'il existe, sinon cotes de référence (annoncées)
         usage, n_sent = _todays_usage(day, picks)
         combo = CB.custom(picks, target, usage)
         pool = CB.make_pool(picks)
@@ -1321,9 +1527,13 @@ def custom_combo(picks, pronos, target, day, started=False):
                 txt = money.money(st) + " (sur ton budget du jour)" if st else "pas de mise (trop petite pour ton budget)"
             else:
                 st, txt = bankroll.stake(prob, odds_, "🎯", bankroll.load()["bankroll"]), None
-            code = xbet.save_coupon(picks_) if all(c.get("xref") and c.get("xodds") for c in picks_) else None
+            xcombo = all(c.get("xref") and c.get("xodds") for c in picks_)
+            code = xbet.save_coupon(picks_) if xcombo else None
             msg = fmt.combo("🎯 COMBINÉ SUR MESURE", picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_}, stake_txt=txt,
-                            coupon=code)
+                            coupon=code, when=when, retry="redemande le combi" if xcombo and not code else None)
+            if not xk:                              # ni 1xBet ni code : les cotes affichées sont celles des autres bookmakers
+                msg = Html(msg + "\n\n" + fmt.i("⚠️ Ce sont des cotes de référence (pas celles de 1xBet) : vérifie chaque cote chez 1xBet "
+                                                "avant de jouer, la cote totale chez lui peut être plus basse."))
             if CB.ev(combo) < C.COMBO_MIN_EV:
                 msg = Html(msg + "\n\n" + fmt.i(f"⚠️ Espérance négative : à ces cotes, ce combiné rend en moyenne "
                                                 f"{fmt.pct(1 - CB.ev(combo))} de moins que la mise. Mise petit, ou vise une autre cote."))
@@ -1337,19 +1547,18 @@ def custom_combo(picks, pronos, target, day, started=False):
             best[c["id"]] = max(best.get(c["id"], 1.0), c["odds"])
         if len(best) >= 2:
             reach.append(math.prod(best.values()))
-        real = (f"Avec les cotes réelles, les {len(free)} paris de qualité encore jouables (sur {len(pool)}) ne "
-                f"permettent pas d'atteindre la cote {t} (les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs)")
-    fc = CB.fair_custom(pronos, target)             # ici aucun pronostic n'a de cote 1xBet (sinon le même appel a déjà répondu plus haut)
-    if fc:
-        return _fair_reply(fc, f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier "
-                               "chez 1xBet.")
+        real = (f"Avec les cotes {'1xBet' if xk else 'réelles'}, les {len(free)} paris de qualité encore jouables (sur {len(pool)}) ne "
+                f"permettent pas d'atteindre la cote {t}" + ("" if xk else " (cotes de référence des autres bookmakers, pas celles de 1xBet)")
+                + " (les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs)")
+    elif picks and xp:                              # 1xBet n'a chiffré que les pronostics : les paris réels n'ont pas de prix 1xBet
+        real = "Les paris réels du jour n'ont pas de cote chez 1xBet : ils ne sont pas proposés (jamais les cotes d'un autre bookmaker)"
     sf = CB.fair_shortfall(pronos, target)
     if sf["matches"] >= 2:
         reach.append(sf["best_total"])
     n_cov = apistats.counts()[1] + fmmatch.summary()["usable"]
     first = (f"Impossible de monter un combiné à la cote {t} aujourd'hui.\n• {real}." if picks else
              f"{real} et pas assez de pronostics solides pour un combiné à la cote {t}.")
-    kind = "Pronostics Kelly aux cotes 1xBet" if any(c.get("xodds") for c in pronos) else "Pronostics Kelly sans cote"
+    kind = "Pronostics Kelly aux cotes 1xBet" if xp else "Pronostics Kelly sans cote"
     fair_txt = (f"• {kind} : {sf['matches']} match{'s' if sf['matches'] > 1 else ''} avec un pari solide "
                 f"({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou plus) ; en les prenant tous, la cote monte à "
                 f"{fmt.trim(sf['best_total'], 1)} seulement, il en faudrait environ {sf['need']} pour viser {t}." if sf["matches"] else

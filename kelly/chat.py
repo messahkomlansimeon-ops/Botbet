@@ -48,24 +48,35 @@ def played_button(what, day, funded=True):
     return telegram.inline([[("✅ Je l'ai joué", f"joue|{what}|{day}")]])
 
 
-def with_played_button(text, what, day, funded=True, refresh=None):
+def with_played_button(text, what, day, funded=True, refresh=None, xrefresh=False):
     """Le message `text` avec ses boutons de pari ; sans bouton (texte seul) quand il n'y a rien à jouer. `refresh` : palier d'un
-    combiné aux cotes 1xBet -> bouton « 🎟️ Vérifier ce combiné » (cotes relues en direct, paris retirés remplacés, nouveau code)."""
+    combiné à cote juste aux cotes 1xBet -> bouton « 🎟️ Vérifier ce combiné » (cotes relues en direct, paris retirés remplacés, nouveau
+    code). `xrefresh` : combiné réel (ou pari du jour) remis aux cotes 1xBet -> même bouton, pour `what` (cotes relues, nouveau code)."""
     markup = played_button(what, day, funded)
-    if refresh is not None:
-        row = telegram.inline([[("🎟️ Vérifier ce combiné", f"xmaj|{refresh}|{str(day)[:10]}")]])["inline_keyboard"]
-        markup = {"inline_keyboard": (markup or {"inline_keyboard": []})["inline_keyboard"] + row}
+    extra = ([("🎟️ Vérifier ce combiné", f"xmaj|{refresh}|{str(day)[:10]}")] if refresh is not None
+             else [("🎟️ Vérifier ce combiné", f"xmajr|{what}|{str(day)[:10]}")] if xrefresh else None)
+    if extra:
+        markup = {"inline_keyboard": (markup or {"inline_keyboard": []})["inline_keyboard"] + telegram.inline([extra])["inline_keyboard"]}
     return telegram.with_buttons(text, markup) if markup else text
 
 
+def refresh_button(what, day, label="🎟️ Vérifier ce combiné"):
+    """Bouton « 🎟️ Vérifier ce combiné » du pari `what` du jour `day` : combiné à cote juste « v<palier> » ou combiné réel / pari du jour
+    aux cotes 1xBet (jamais pour un pari « à vérifier » à cote mini, ni réglé) ; None sinon."""
+    day = str(day)[:10]
+    t = played.find(what, day)
+    if t is None or isinstance(t, str) or t.item.get("result") is not None:
+        return None
+    if str(what).startswith("v"):
+        return (label, f"xmaj|{what[1:]}|{day}") if played.is_real(t.item) else None
+    return (label, f"xmajr|{what}|{day}") if t.item.get("xlegs") or t.item.get("xodds") else None
+
+
 def refresh_row(what, day):
-    """Ligne « 🎟️ Vérifier ce combiné » d'un combiné « v<palier> » aux cotes 1xBet, à garder quand les boutons du pari changent ([] sinon)."""
-    if not str(what).startswith("v"):
-        return []
-    t = played.find(what, str(day)[:10])
-    if t is None or isinstance(t, str) or not played.is_real(t.item):
-        return []
-    return telegram.inline([[("🎟️ Vérifier ce combiné", f"xmaj|{what[1:]}|{str(day)[:10]}")]])["inline_keyboard"]
+    """Ligne « 🎟️ Vérifier ce combiné » d'un combiné aux cotes 1xBet (« v<palier> », combiné réel, pari du jour), à garder quand les
+    boutons du pari changent ([] sinon)."""
+    b = refresh_button(what, day)
+    return telegram.inline([[b]])["inline_keyboard"] if b else []
 
 
 def keep_refresh(markup, what, day):
@@ -211,6 +222,8 @@ def on_callback(data, message_id=None):
         return app.handle_command(f"/combi {parts[1]}")
     if parts[0] == "xmaj" and len(parts) == 3:
         return app.refresh_combo(parts[1], parts[2])
+    if parts[0] == "xmajr" and len(parts) == 3:
+        return app.refresh_real(parts[1], parts[2])
     if parts[0] == "bilan":
         return app.handle_command("/bilan détail")
     if parts[0] == "noter":

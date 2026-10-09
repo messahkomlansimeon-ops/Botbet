@@ -1848,7 +1848,7 @@ def test_messages_human():
     lost = {"tier": C.COMBOS[4][0], "keys": ["k1", "k2", "k3", "k4"], "odds": 156.7, "stake": 0.2, "result": "loss", "date": "2026-10-07"}
     by = {r["key"]: r for r in rows}
     w, l_ = app.combo_result(won, by), app.combo_result(lost, by)
-    assert w.split("\n")[0] == "<b>✅ SÛR gagné — cote 6,12</b> · +10,2 u", w
+    assert w.split("\n")[0] == "<b>✅ SÛR gagné — cote 6,12 (cotes de référence, pas 1xBet)</b> · +10,2 u", w
     assert w.split("\n")[1:] == ["✅ Flamengo gagne (2-0)", "✅ Santos – Gremio : Plus de 2,5 buts (3-1)"], w
     assert l_ == "❌ <b>MONSTRE perdu</b> — 3 sur 4, raté : Nautico – Gremio &amp; Co (1-1) · −0,2 u", l_
     with Sandbox():
@@ -2131,7 +2131,7 @@ def test_replay_oct8():
         keep = pronos[:40] + [c for c in pronos[40:] if CB.fair_eligible(c)][:40]
         store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
         reply = app.handle_command("/combi 25")
-        assert isinstance(reply, telegram.Html) and "ne permettent pas d'atteindre la cote 25" in reply, reply
+        assert isinstance(reply, telegram.Html) and "Kelly n'a vu aucune cote de 1xBet aujourd'hui : voici un combiné" in reply, reply   # cote mini avant les cotes de référence
         assert "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET" in reply and "Cote mini <b>2" in reply and "à vérifier chez 1xBet" in reply
         mini = float(re.search(r"Cote mini <b>(\d+,\d+)", reply).group(1).replace(",", "."))
         assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and "Joue si 1xBet paie au moins" in reply and "ise indicative" in reply
@@ -2415,8 +2415,8 @@ def test_combo_expectation():
     (_, combo), = CB.plan(safe + [v1], tiers)
     C.COMBO_MIN_EV = old
     assert combo and CB.ev(combo) < 1                                   # 0 = filtre désactivé
-    msg = fmt.combo(tiers[0][0], combo[0], combo[1], combo[2], 2.0, hint="/joue sur <cote>")
-    assert "Espérance −6,2 %" in msg and "/joue sur &lt;cote&gt;" in msg, msg
+    msg = fmt.combo(tiers[0][0], combo[0], combo[1], combo[2], 2.0)
+    assert "Espérance −6,2 %" in msg and "Joué chez 1xBet ? Note-le" not in msg, msg
     print("espérance des combinés : OK")
 
 

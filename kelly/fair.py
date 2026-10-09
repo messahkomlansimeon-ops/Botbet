@@ -469,23 +469,32 @@ def combo_leg(c):
     return {k: c.get(k) for k in SENT_FIELDS if c.get(k) is not None or k in LEG_FIELDS}
 
 
-def combo_row(target, combo, day, stake=None, cur=None):
-    """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba ; mise sur le budget du jour et devise si elle existe) ;
-    le résultat vient plus tard (settle_fair_combos)."""
+def combo_row(target, combo, day, stake=None, cur=None, coupon=None, at=None):
+    """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba ; mise sur le budget du jour et devise si elle existe ; code
+    coupon 1xBet de la version envoyée, `coupon`, et heure « HH:MM » de ses cotes, `at`) ; le résultat vient plus tard (settle_fair_combos)."""
     legs, min_total, prob = combo
     return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
             "keys": [c["key"] for c in legs], "legs": [combo_leg(c) | {"result": None} for c in legs],
-            "result": None} | ({} if stake is None else {"stake": stake} | ({"cur": cur} if stake else {}))   # mise 0 : pari sans mise
+            "result": None} | ({} if stake is None else {"stake": stake} | ({"cur": cur} if stake else {})) \
+        | ({"coupon": coupon} if coupon else {}) | ({"at": at} if at else {})                 # mise 0 : pari sans mise
 
 
-def update_combo(row, combo, hhmm):
-    """Combiné du matin renvoyé à jour : la ligne de suivi prend la nouvelle version (jambes, clés, cote, proba) ; la mise et la devise
-    restent, les clés du matin sont gardées une fois (« orig_keys »), « updated » note l'heure. Un combiné déclaré mort qui revit
-    redevient un combiné normal."""
+def update_combo(row, combo, hhmm, coupon=None):
+    """Combiné du matin renvoyé à jour : la ligne de suivi prend la nouvelle version (jambes, clés, cote, proba, code coupon `coupon`) ; la
+    mise et la devise restent, les clés du matin sont gardées une fois (« orig_keys »), « updated » note l'heure. Un combiné déclaré mort qui revit
+    redevient un combiné normal. Si les paris ou la cote totale changent, la note « joué à … » (/joue) de l'ancienne version tombe : c'est
+    un autre ticket, l'utilisateur note la nouvelle version."""
     legs, min_total, prob = combo
+    if (set(row.get("keys") or []) != {c["key"] for c in legs}
+            or abs((row.get("min_odds") or 0) - round(min_total, 2)) > 1e-9):
+        row.pop("played", None)
     row.setdefault("orig_keys", list(row.get("keys") or []))
     row.update(min_odds=round(min_total, 2), prob=round(prob, 5), keys=[c["key"] for c in legs], updated=hhmm,
-               legs=[combo_leg(c) | {"result": None} for c in legs])
+               legs=[combo_leg(c) | {"result": None} for c in legs], at=hhmm)
+    if coupon:
+        row["coupon"] = coupon
+    else:
+        row.pop("coupon", None)                      # l'ancien code ne correspond plus à cette version
     if row.pop("dead", None):
         row["result"] = None
         if row.pop("auto_skipped", None):
@@ -503,15 +512,15 @@ def kill_combo(row):
     return row
 
 
-def record_combos(sent, day, stakes=None, cur=None):
+def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
     """Enregistre les combinés à cote juste envoyés [(palier, combiné)], un seul par palier et par jour (le premier, comme
     settle.record_combos), garde C.FAIR_COMBO_KEEP_DAYS jours.
-    `stakes` : {palier: mise sur le budget du jour}. -> nombre ajouté. Fichier à part de bets.json (pas de bankroll)."""
+    `stakes` : {palier: mise sur le budget du jour}, `coupons` : {palier: code coupon envoyé}, `at` : heure « HH:MM » du relevé 1xBet. -> nombre ajouté. Fichier à part de bets.json (pas de bankroll)."""
     from datetime import date, timedelta
     rows = load_combos()
     n = 0
     for target, combo in sent:
-        row = combo_row(target, combo, day, (stakes or {}).get(target), cur)
+        row = combo_row(target, combo, day, (stakes or {}).get(target), cur, (coupons or {}).get(target), at)
         if not any(r["date"] == row["date"] and r["tier"] == target for r in rows):      # relance du matin : un seul combiné par palier et par jour (le premier)
             rows.append(row)
             n += 1

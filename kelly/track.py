@@ -13,7 +13,7 @@ from . import combos as CB, config as C, learn, store
 
 FIELDS = ("key", "id", "sport_key", "group", "event", "home", "away", "league", "commence", "market",
           "who", "point", "name", "pick", "odds", "best_odds", "prob", "prob_book", "book", "edge", "spread", "steam", "weight",
-          "score", "why", "n_books", "stake", "cur", "xodds", "xref", "coupon")
+          "score", "why", "n_books", "stake", "cur", "xodds", "xref", "coupon", "xat")
 
 
 def load():
