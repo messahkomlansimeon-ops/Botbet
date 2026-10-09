@@ -361,6 +361,63 @@ def test_xworld_scan():
     print("ok  championnats hors The Odds API ajoutés depuis 1xBet")
 
 
+def test_save_coupon():
+    """Enregistrement d'un combiné chez 1xBet : corps exact, code extrait, affichage et repli sans code."""
+    from unittest.mock import patch
+    from kelly.sources.http import Result
+
+    posted = []
+
+    def mock_post(url, body, headers=None, timeout=None):
+        posted.append({"url": url, "body": body, "headers": headers})
+        if "SaveCoupon" in url:
+            return Result(url, json.dumps({"Value": "FGCGE", "Id": 0, "Success": True, "Error": "", "ErrorCode": 0}).encode("utf-8"), 200)
+        return Result(url, b"{}", 200)
+
+    legs = [
+        {"id": "e1", "home": "Qatar SC", "away": "Al Rayyan", "pick": "Moins de 3,5 buts", "xodds": 1.68, "prob": 0.65, "xref": [757965452, 10, 3.5]},
+        {"id": "e2", "home": "Corvinul", "away": "Voluntari", "pick": "Moins de 3,5 buts", "xodds": 1.36, "prob": 0.75, "xref": [755936175, 10, 3.5]},
+    ]
+    with patch("kelly.sources.http.post", side_effect=mock_post):
+        code = xbet.save_coupon(legs)
+    assert code == "FGCGE"
+    assert len(posted) == 1
+    req = posted[0]
+    assert req["url"] == "https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon"
+    b = req["body"]
+    assert b["Summ"] == 0 and b["Vid"] == 1 and b["Kind"] == 3 and b["partner"] == 286 and b["CheckCf"] == 1 and b["notWait"] is True
+    assert len(b["Events"]) == 2
+    assert b["Events"][0] == {
+        "GameId": 757965452, "Type": 10, "Coef": 1.68, "Param": 3.5,
+        "PV": None, "PlayerId": 0, "Kind": 3, "InstrumentId": 0, "Seconds": 0, "Price": 0, "Expired": 0, "PlayersDuel": None
+    }
+    assert b["Events"][1]["GameId"] == 755936175 and b["Events"][1]["Type"] == 10 and b["Events"][1]["Coef"] == 1.36
+
+    # Format avec code coupon
+    msg = fmt.fair_combo(2.28, legs, 0.45, 0.5, coupon=code)
+    assert f"🎟️ Code coupon 1xBet : <b>{code}</b>" in msg
+    assert "<a href" not in msg
+
+    # Format sans coupon
+    msg_no = fmt.fair_combo(2.28, legs, 0.45, 0.5)
+    assert "🎟️ Code coupon" not in msg_no
+
+    # Échec réseau -> None, ne lève jamais
+    with patch("kelly.sources.http.post", return_value=Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", None, error="HTTP 500")):
+        assert xbet.save_coupon(legs) is None
+
+    # Échec applicatif Success: false -> None
+    err_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": False, "Error": "Erreur"}).encode("utf-8"), 200)
+    with patch("kelly.sources.http.post", return_value=err_res):
+        assert xbet.save_coupon(legs) is None
+
+    # Entrées invalides -> None, ne lève jamais
+    assert xbet.save_coupon([]) is None
+    assert xbet.save_coupon([{"home": "A"}]) is None
+    assert xbet.save_coupon(None) is None
+    print("ok  save_coupon 1xBet (corps exact, code extrait, affichage et repli)")
+
+
 def main():
     test_parse_and_url()
     test_find_match()
@@ -370,6 +427,7 @@ def main():
     test_apply_and_messages()
     test_afternoon_refresh()
     test_xworld_scan()
+    test_save_coupon()
     print("tests 1xBet : OK")
 
 
