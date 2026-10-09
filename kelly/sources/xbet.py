@@ -187,17 +187,22 @@ def _cells(groups):
                     yield c
 
 
-def _ladder(groups, total, home, away, out):
-    """Plus/moins d'une famille (total du match, de l'équipe 1, de l'équipe 2) -> out[(marché, côté, ligne)] = cote."""
+def _ladder(groups, total, home, away, out, refs=None, gid=0):
+    """Plus/moins d'une famille (total du match, de l'équipe 1, de l'équipe 2) -> out[(marché, côté, ligne)] = cote.
+    `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] (GameId = sous-match statistique, pas le match)."""
     for c in _cells(groups):
         side = T_TOTAL.get(c.get("type"))
         market = side and {"total": total, "home": home, "away": away}[side[0]]
         if market and c.get("parameter") is not None:
-            out[(market, side[1], float(c["parameter"]))] = float(c["cf"])
+            p = float(c["parameter"])
+            out[(market, side[1], p)] = float(c["cf"])
+            if refs is not None:
+                refs[(market, side[1], p)] = [gid, c.get("type"), p]
 
 
-def parse_main(data, home, away):
-    """Marché principal (premier niveau de gameEvents) -> ({(marché Kelly, côté, ligne): cote}, {type de sous-match: id})."""
+def parse_main(data, home, away, refs=None, gid=0):
+    """Marché principal (premier niveau de gameEvents) -> ({(marché Kelly, côté, ligne): cote}, {type de sous-match: id}).
+    `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] du pari (référence pour un ticket enregistré)."""
     out = {}
     names = {"home": home, "draw": "Draw", "away": away}
     dc = {"1X": f"{home} or Draw", "X2": f"Draw or {away}", "12": f"{home} or {away}"}
@@ -205,12 +210,17 @@ def parse_main(data, home, away):
     for c in _cells(groups):
         t, cf = c.get("type"), float(c["cf"])
         if t in T_1X2:
-            out[("h2h", names[T_1X2[t]], None)] = cf
+            key = ("h2h", names[T_1X2[t]], None)
         elif t in T_DC:
-            out[("double_chance", dc[T_DC[t]], None)] = cf
+            key = ("double_chance", dc[T_DC[t]], None)
         elif t in T_BTTS:
-            out[("btts", T_BTTS[t], None)] = cf
-    _ladder(groups, "totals", None, None, out)
+            key = ("btts", T_BTTS[t], None)
+        else:
+            continue
+        out[key] = cf
+        if refs is not None:
+            refs[key] = [gid, t, 0]
+    _ladder(groups, "totals", None, None, out, refs, gid)
     subs = {}
     for s in data.get("subGamesForMainGame") or []:
         if s.get("gameTypeId") in SUBGAMES and not s.get("period") and s.get("id"):
@@ -227,13 +237,15 @@ def _events(gid):
 def prices(game, markets, home, away):
     """Cotes 1xBet d'un match pour les marchés Kelly voulus : {(marché, côté, ligne): cote} ; `home` / `away` : noms Kelly (double
     chance). Une requête pour le marché principal, une de plus par famille statistique demandée (sous-match ouvert seulement :
-    ils ouvrent la veille ou le jour du match). L'id permanent du match (lien vers sa page) est noté dans game["cid"]."""
+    ils ouvrent la veille ou le jour du match). L'id permanent du match (lien vers sa page) est noté dans game["cid"], la
+    référence 1xBet de chaque cote ([GameId, Type, Param], pour un ticket enregistré) dans game["refs"]."""
     data = _events(game["gid"])
     game["cid"] = data.get("constId")
-    out, subs = parse_main(data, home, away)
+    out, subs = parse_main(data, home, away, refs := {}, game["gid"])
     for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}):
         if t in subs:
-            _ladder((_events(subs[t]) or {}).get("eventGroups"), *SUBGAMES[t], out)
+            _ladder((_events(subs[t]) or {}).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t])
+    game["refs"] = refs
     return out
 
 
@@ -341,10 +353,10 @@ class _Session:
         """Plafond du mois atteint (avec ce relevé) ou source bloquée en cours de route."""
         return self.u["bytes"] + _spent(self.start)[0] >= self.cap or state.is_blocked(SOURCE)
 
-    def call(self, fn, *a):
+    def call(self, fn, *a, **kw):
         while True:
             try:
-                return fn(*a)
+                return fn(*a, **kw)
             except XbetError as e:
                 nxt = with_session(http.PROXIES.get(DOMAIN), (session_no(http.PROXIES.get(DOMAIN)) or 0) + 1)
                 if not nxt or self.switches >= MAX_SWITCH or not any(k in str(e) for k in PROXY_FAIL):
@@ -421,9 +433,71 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
                 continue
         try:
             px = ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])
-            out[ev["id"]] = {"gid": g["gid"], "px": px, "cid": g.get("cid"), "home": g["home"], "away": g["away"]}
+            out[ev["id"]] = {"gid": g["gid"], "px": px, "refs": g.get("refs"), "cid": g.get("cid"),
+                             "home": g["home"], "away": g["away"]}
         except XbetError as e:
             errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")
     ses.close(f"cotes de {len(out)} match(s)")
     state.record_run(SOURCE, len(out), errors)
     return out
+
+
+def save_coupon(legs):
+    """Enregistre un combiné chez 1xBet (ticket sans mise, Summ 0, sans connexion) et retourne son code (str) ou None.
+    Ne lève jamais (un échec de coupon ne bloque jamais l'envoi du combiné).
+    `legs` : liste de pronostics avec 'xref' ([GameId, Type, Param]) et 'xodds' (cote/Coef), ou événements bruts."""
+    if not legs:
+        return None
+    events = []
+    for c in legs:
+        if isinstance(c, dict) and "GameId" in c:
+            events.append(c)
+        elif isinstance(c, dict) and c.get("xref") and c.get("xodds"):
+            gid, t, p = c["xref"]
+            events.append({
+                "GameId": gid,
+                "Type": int(t),
+                "Coef": float(c["xodds"]),
+                "Param": 0.0 if p is None else float(p),
+                "PV": None,
+                "PlayerId": 0,
+                "Kind": 3,
+                "InstrumentId": 0,
+                "Seconds": 0,
+                "Price": 0,
+                "Expired": 0,
+                "PlayersDuel": None,
+            })
+        else:
+            return None
+    if not events:
+        return None
+    body = {
+        "Events": events,
+        "Summ": 0,
+        "Vid": 1,
+        "Kind": 3,
+        "partner": COMMON["ref"],
+        "notWait": True,
+        "CheckCf": 1,
+    }
+    ses = _Session()
+    if ses.why:
+        return None
+    try:
+        r = ses.call(http.post, BASE + "/service-api/LiveBet/Open/SaveCoupon", body)
+        if not r or not r.ok or not r.content:
+            return None
+        data = json.loads(r.content)
+        if not data.get("Success"):
+            return None
+        val = data.get("Value")
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        if isinstance(val, dict) and val.get("Guid"):
+            return str(val["Guid"]).strip()
+        return None
+    except Exception:
+        return None
+    finally:
+        ses.close("enregistrement du coupon")
