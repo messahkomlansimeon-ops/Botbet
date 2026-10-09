@@ -76,10 +76,11 @@ def test_skip_and_money_bilan():
                                      "legs": [{"key": "f1", "min_odds": 2.2, "result": "win"}, {"key": "f2", "min_odds": 2.5, "result": "win"}]}])
     n, total, staked = money.result(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []))
     assert n == 4 and total == 1000 * 4 - 500 - 800 + 400 * 4.5 and staked == 1000 + 500 + 800 + 400, (n, total, staked)
-    # ❌ Pas joué sur le Costaud perdu : il sort du bilan ; ↩️ le remet
-    assert "retiré de ton bilan" in chat.on_callback("skip|costaud|2026-10-09")
-    assert money.result(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []))[1] == total + 500
-    assert "compté comme joué" in chat.on_callback("unskip|costaud|2026-10-09")
+    # ❌ Pas joué sur le Costaud perdu : refusé, il est déjà réglé (la perte reste au bilan) ; accepté sur le Méchant en attente, ↩️ le remet
+    assert "déjà réglé" in chat.on_callback("skip|costaud|2026-10-09")
+    assert money.result(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []))[1] == total
+    assert "retiré de ton bilan" in chat.on_callback("skip|mechant|2026-10-09")
+    assert "compté comme joué" in chat.on_callback("unskip|mechant|2026-10-09")
     # ✏️ autre cote : le gain suit la cote de 1xBet
     assert "déjà réglé" in played.command(["sur", "5,5"], "2026-10-09")               # trop tard : le Sûr est réglé
     assert "Noté" in played.command(["mechant", "60"], "2026-10-09")                 # le Méchant n'est pas encore réglé

@@ -40,9 +40,13 @@ def played_gain(x):
     return p["stake"] * (p["odds"] * ratio - 1)
 
 def apply_results(items, played_only=False):
-    """Met à jour la bankroll avec les paris réglés non encore comptés (marqués « counted »). Mode réel : seuls les paris notés
+    """Met à jour la bankroll avec les paris réglés non encore comptés (marqués « counted »). Un pari misé sur le budget du jour
+    (« cur », en devise) est ignoré et marqué « counted » : l'argent du budget ne touche jamais la bankroll en unités. Mode réel : seuls les paris notés
     comptent (played_gain). Sinon : les combinés gagnés ou perdus, à la mise conseillée. Un résultat « unknown » (non vérifiable) ne change rien. `played_only` : éléments qui ne
     comptent qu'en mode réel (pari du jour, combinés à vérifier chez 1xBet)."""
+    for c in items:
+        if c.get("cur"):                            # misé sur le budget du jour (devise) : jamais dans la bankroll en unités
+            c["counted"] = True
     b = load()
     real = b.get("real")
     if played_only and not real:
