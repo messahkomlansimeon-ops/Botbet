@@ -52,7 +52,7 @@ def picks_of(events, **kw):
 # ---------- 1. jour Kelly ----------
 
 def test_kelly_day():
-    assert C.DAY_END_HOUR == 8
+    C.DAY_END_HOUR = 8                                    # les heures ci-dessous supposent une journée Kelly qui finit à 8 h
     after = datetime(2026, 10, 8, 8, 0, tzinfo=UTC)
     w = odds.day_window(DAY, after)
     assert w["commenceTimeFrom"] == "2026-10-08T08:00:00Z", w

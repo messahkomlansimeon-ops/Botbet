@@ -151,7 +151,7 @@ def _iso(d):
 
 
 def day_end(day):
-    """Fin (exclue) du « jour Kelly » `day` : le lendemain à C.DAY_END_HOUR h UTC. Le run du matin (08:00 UTC) couvre ainsi
+    """Fin (exclue) du « jour Kelly » `day` : le lendemain à C.DAY_END_HOUR h UTC. Le run du matin (C.DAY_END_HOUR h UTC) couvre ainsi
     les matchs du soir des Amériques (00:30 UTC = 21:30 locale), qui sinon tomberaient entre deux runs."""
     return datetime(day.year, day.month, day.day, tzinfo=timezone.utc) + timedelta(days=1, hours=C.DAY_END_HOUR)
 

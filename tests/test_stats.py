@@ -7,6 +7,8 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-")
+os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-cache-")     # jamais le vrai cache (CSV du PC)
+os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-odds-")
 os.environ.pop("STATS_API_KEY", None)
 os.environ.pop("STATS_DAILY_CAP", None)
 

@@ -188,7 +188,7 @@ def todo(day):
     items_ += [(f"{_fair_name(c['tier'])} (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"v{c['tier']}")
                for c in fair.load_combos() if c["date"] == day]
     if not items_:
-        return "Rien à noter aujourd'hui : les paris du jour arrivent à 08:00."
+        return f"Rien à noter aujourd'hui : les paris du jour arrivent à {C.DAY_END_HOUR:02d}h00."
     if any(x.get("cur") for _, x, _, _ in items_):
         return _budget_list(items_, day)
     for name, x, ref, what in items_:

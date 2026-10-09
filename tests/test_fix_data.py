@@ -224,7 +224,7 @@ def test_tracked_pruned_to_archive():
 
 def test_monde_uses_kelly_day():
     wipe()
-    assert C.DAY_END_HOUR == 8
+    C.DAY_END_HOUR = 8                                    # les heures ci-dessous supposent une journée Kelly qui finit à 8 h
     monde.save({"day": "2026-10-08", "at": "08:00", "leagues": {}, "africa": []})
     k = monde.kelly_day
     assert k(datetime(2026, 10, 9, 3, 30, tzinfo=UTC)) == date(2026, 10, 8)                  # nuit : toujours le jour Kelly d'hier

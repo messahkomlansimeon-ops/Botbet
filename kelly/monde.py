@@ -1,6 +1,6 @@
 """Tour du monde : relevé gratuit des matchs du jour (cache data/monde.json), messages du matin, /monde et /ligues.
 
-Le cache est écrit par le passage de 08:00 (run_daily) à partir de /events (gratuit) : une entrée par ligue en
+Le cache est écrit par le passage du matin (run_daily) à partir de /events (gratuit) : une entrée par ligue en
 saison avec ses matchs [domicile, extérieur, "HH:MM" UTC], les ligues payées en cotes réelles, les matchs africains
 d'API-Football (sans cotes) et, les jours sans match, les prochains jours. Petit : une journée chargée tient dans
 ~15 Ko. Les passages horaires et les commandes ne le relisent que, sans appel réseau.
@@ -54,7 +54,7 @@ def save(data):
 
 
 def kelly_day(now=None):
-    """Jour Kelly en cours : le relevé de 08:00 UTC du jour D vaut jusqu'au lendemain C.DAY_END_HOUR h UTC, donc avant cette heure
+    """Jour Kelly en cours : le relevé du matin du jour D vaut jusqu'au lendemain C.DAY_END_HOUR h UTC, donc avant cette heure
     le jour courant est celui de la veille (datetime aware UTC ou naïf ; défaut : maintenant)."""
     from datetime import timezone
     now = now or datetime.now(timezone.utc)
@@ -184,7 +184,7 @@ def fmt_monde(data, arg=""):
     """Texte de /monde : tous les matchs du jour par région et par ligue (cache du matin). `arg` : région à filtrer
     (europe, ameriques, asie, afrique, international)."""
     if not data:
-        return "Pas encore de relevé aujourd'hui (Kelly le fait à 08:00 UTC). Réessaie plus tard."
+        return f"Pas encore de relevé aujourd'hui (Kelly le fait à {C.DAY_END_HOUR:02d}h00 UTC). Réessaie plus tard."
     want = catalogue.norm_region(arg) if arg else None
     d = date.fromisoformat(data["day"])
     paid = set(data.get("paid", []))
@@ -216,7 +216,7 @@ def fmt_ligues(data):
              f"{FLAG_PAID} payée en cotes réelles aujourd'hui · ⚽ joue aujourd'hui (analyse gratuite) · · en saison, pas de "
              "match · 💤 hors saison"]
     if not data:
-        lines.append("(pas encore de relevé aujourd'hui : le statut apparaît après 08:00 UTC)")
+        lines.append(f"(pas encore de relevé aujourd'hui : le statut apparaît après {C.DAY_END_HOUR:02d}h00 UTC)")
     elif data.get("spent") is not None and data.get("allow") is not None:
         lines.append(f"Crédits du matin dépensés : {data['spent']} (allocation du jour : {data['allow']})")
     for r in catalogue.REGION_ORDER:

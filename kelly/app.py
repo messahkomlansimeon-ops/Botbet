@@ -388,10 +388,10 @@ DELIVERY = {"sent": 0, "failed": 0}        # messages du dernier run_daily : env
 def daily_skip_reason(now):
     """Pourquoi le matin ne doit PAS tourner maintenant (None = il peut). run_daily note dans data/daily_done.json le jour UTC `day`
     (= now.date()) qu'il a terminé. Règle : (1) déjà terminé pour la date du jour -> doublon (rattrapage systemd Persistent au
-    démarrage du PC puis timer de 08:00, ou relance manuelle) ; (2) lancé avant C.DAY_END_HOUR h UTC alors que le jour précédent est
-    terminé -> son « jour Kelly » court jusqu'à C.DAY_END_HOUR h : ces matchs sont déjà couverts, le vrai passage de 08:00 suivra ;
+    démarrage du PC puis timer du matin, ou relance manuelle) ; (2) lancé avant C.DAY_END_HOUR h UTC alors que le jour précédent est
+    terminé -> son « jour Kelly » court jusqu'à C.DAY_END_HOUR h : ces matchs sont déjà couverts, le vrai passage du matin suivra ;
     (3) lancé avant C.DAY_END_HOUR h sans que la veille ait été faite -> rattrapage de la veille manquée : il tourne et compte pour
-    la date du jour, donc le passage de 08:00 qui suit est ignoré par (1). `--force` passe outre."""
+    la date du jour, donc le passage du matin qui suit est ignoré par (1). `--force` passe outre."""
     done = store.load(DAILY_FILE, {}).get("day")
     today = now.date()
     if done == str(today):
@@ -562,7 +562,7 @@ def run_track(events_for=None, now=None):
 
 
 def fill_match_stats():
-    """Passage horaire : quelques pages de match FotMob (touches, hors-jeu, fautes, tirs...) pour les profils d'équipe. Jamais à 08:00 :
+    """Passage horaire : quelques pages de match FotMob (touches, hors-jeu, fautes, tirs...) pour les profils d'équipe. Jamais au passage du matin :
     la page des ligues, lue le matin, est relue depuis le cache. Ne casse jamais le passage."""
     try:
         rep = fmmatch.fill()
@@ -698,7 +698,7 @@ def fmt_team(p, query):
         return "Exemple : /stats Arsenal"
     if not p:
         return (f"Aucune stat pour « {query} » (équipe inconnue ou sources pas encore actualisées : "
-                "elles le sont chaque matin à 08:00).")
+                f"elles le sont chaque matin à {C.DAY_END_HOUR:02d}h00).")
     if "many" in p:
         return f"Plusieurs équipes correspondent à « {query} » : {', '.join(p['many'])}. Précise le nom."
     league = LEAGUES.get(p["div"], p["div"]) if p.get("div") else None
@@ -918,7 +918,7 @@ def _handle_command(text):
         return monde.fmt_monde(data, " ".join(args)) if cmd == "/monde" else monde.fmt_ligues(data)
     pronos = today.get("pronos") or []
     if not picks and not pronos:
-        return "Kelly n'a pas encore analysé la journée (ça arrive à 08:00)."
+        return f"Kelly n'a pas encore analysé la journée (ça arrive à {C.DAY_END_HOUR:02d}h00)."
     if cmd == "/analyse":
         return analyse(picks, " ".join(args), pronos)
     if cmd == "/top":
@@ -926,7 +926,7 @@ def _handle_command(text):
         if not live:
             if live_pronos:
                 return fmt.pronos(CB.best_per_match(live_pronos), 10)
-            return waiting_note(today) or "Tous les matchs du jour ont commencé : rendez-vous demain à 08:00."
+            return waiting_note(today) or f"Tous les matchs du jour ont commencé : rendez-vous demain à {C.DAY_END_HOUR:02d}h00."
         best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10]
         if not best:
             return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "

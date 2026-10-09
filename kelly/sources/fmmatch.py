@@ -4,7 +4,7 @@ les ligues mappées dans fotmob.py (Europe, Brésil A et B, Argentine, Mexique, 
 Pages HTML /matches/<slug>/<id> autorisées par robots.txt (seul /api/* est interdit, jamais utilisé). La page d'une ligue (téléchargée
 le matin par fotmob.refresh, relue ici depuis le cache) liste tous les matchs de la saison avec leur lien : contrairement au forfait
 gratuit d'API-Football, Kelly peut donc remonter l'historique d'une équipe. Une page de match pèse ~1 Mo : le remplissage est étalé sur
-les passages horaires (fill, FM_PAGES_PER_RUN pages au plus), jamais sur celui de 08:00, et la page brute n'est jamais gardée.
+les passages horaires (fill, FM_PAGES_PER_RUN pages au plus), jamais sur celui du matin, et la page brute n'est jamais gardée.
 
 Fichier data/fm_matches.json (compact) :
   teams  {id FotMob: {nm, sk: [clés de ligue], d: mise à jour, m: [[jour AAMMJJ, domicile 1/0, puis (pour, contre) pour chaque stat de

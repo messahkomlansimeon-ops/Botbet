@@ -119,7 +119,7 @@ SPORTS = _list("SPORTS", ",".join(LEAGUE_KEYS)) + _list("SPORTS_EXTRA", "")     
 BOOT_LEAGUES = _list("BOOT_LEAGUES", "soccer_epl,soccer_spain_la_liga,soccer_italy_serie_a,soccer_germany_bundesliga,"
                                      "soccer_france_ligue_one")
 # Durées maximales (secondes) pour tenir le passage de 08:00 sous les 15 minutes du workflow.
-DAY_END_HOUR = _int("DAY_END_HOUR", 8)            # le « jour Kelly » du run du matin (08:00 UTC) va jusqu'au lendemain à cette heure UTC (matchs du soir des Amériques)
+DAY_END_HOUR = _int("DAY_END_HOUR", 4)            # heure du passage du matin ; le « jour Kelly » du run du matin (04:00 UTC) va jusqu'au lendemain à cette heure UTC (matchs du soir des Amériques)
 LOCK_WAIT_MIN = _int("LOCK_WAIT_MIN", 20)         # le bot Telegram attend au plus ce temps (minutes) que le matin / le relevé horaire libère les données
 OUTBOX_MAX_HOURS = _int("OUTBOX_MAX_HOURS", 36)   # un message resté en attente d'envoi (réseau coupé) plus longtemps que ça est abandonné
 SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de toutes les ligues
