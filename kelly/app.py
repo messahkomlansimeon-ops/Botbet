@@ -124,7 +124,8 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
                                                                stake_txt=mise(stakes.get(("fair", target))),
                                                                title=CB.shots_title(target), coupon=coupon),
-                                                f"v{target}", day, funded=bool(stakes.get(("fair", target)))))
+                                                f"v{target}", day, funded=bool(stakes.get(("fair", target))),
+                                                refresh=target if all(c.get("xodds") for c in legs) else None))
     if pronos:
         shown = CB.best_per_match(pronos)          # un seul pronostic par match : le meilleur, s'il est viable
         if shown:
@@ -516,32 +517,90 @@ def plan_closing(due, combos, bulk=True):
     return sorted(calls, key=lambda c: (c["rank"], c["cost"]))
 
 
-def run_xbet_refresh(now=None, fetch=None):
-    """Second relevé 1xBet de la journée (15:00, kelly-xbet.timer) : les pronostics du matin (data/today.json) dont
-    le match n'a pas commencé sont remis aux cotes 1xBet du moment (les marchés tirs, fautes... ouvrent souvent le jour même) ;
-    /top et /combi les relisent. Message seulement s'il y a de NOUVEAUX paris 💎 (jouables à la cote 1xBet), suivis comme ceux du
-    matin. `fetch` : injectable pour les tests (voir xprice.apply). -> nombre de nouveaux 💎."""
+COMBO_UPDATES = "combo_updates.json"     # dernière version envoyée de chaque combiné du matin : {"day", "tiers": {palier: {...}}}
+
+
+def run_xbet_refresh(now=None, fetch=None, announce=None):
+    """Relevé 1xBet de la journée (toutes les 2 h de 07:00 à 21:00, kelly-xbet.timer) : les pronostics du matin (data/today.json)
+    dont le match n'a pas commencé sont remis aux cotes 1xBet du moment ; /top et /combi les relisent. Puis :
+    - au relevé de 15:00 seulement (`announce`), la liste des paris 💎 devenus jouables depuis la dernière liste (suivis comme ceux
+      du matin) ;
+    - à chaque relevé, les combinés 💎 du matin sont contrôlés (_update_combos) : renvoyés avec un nouveau code s'ils ont changé.
+    `fetch` : injectable pour les tests (voir xprice.apply). -> nombre de nouveaux 💎 annoncés."""
+    from .sources import xbet
     now = now or now_utc()
+    announce = now.hour == 15 if announce is None else announce
     today = store.load("today.json", {})
     kday = now.date() if now.hour >= C.DAY_END_HOUR else now.date() - timedelta(days=1)
     if today.get("day") != str(kday) or not today.get("pronos"):
-        print(f"[1xbet] pas de pronostics du jour Kelly {kday} : relevé de l'après-midi sauté", file=sys.stderr)
+        print(f"[1xbet] pas de pronostics du jour Kelly {kday} : relevé sauté", file=sys.stderr)
         return 0
     telegram.flush_outbox()
     pronos = today["pronos"]
-    soon = now + timedelta(minutes=10)
-    upcoming = [c for c in pronos if datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
-    before = {c["key"] for c in CB.best_per_match(upcoming) if c.get("xodds")}
-    xprice.apply(upcoming, fetch=fetch)
+    soon = now + timedelta(minutes=C.XBET_SOON_MIN)
+    upcoming_ = [c for c in pronos if datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
+    if "announced" not in today:                    # premier relevé du jour : les 💎 du matin sont déjà connus
+        today["announced"] = [c["key"] for c in CB.best_per_match(upcoming_) if c.get("xodds")]
+    got = set()
+
+    def run(events, deadline=None, wanted=None):
+        found = (fetch or xbet.fetch_day)(events, deadline=deadline, wanted=wanted)
+        got.update(found)
+        return found
+    xprice.apply(upcoming_, fetch=run)
+    new = []
+    if announce:
+        new = [c for c in CB.best_per_match(upcoming_) if c.get("xodds") and c["key"] not in set(today["announced"])]
+        today["announced"] += [c["key"] for c in new]
     store.save("today.json", today)                 # mêmes objets : les pronostics à venir portent les nouvelles cotes
-    new = [c for c in CB.best_per_match(upcoming) if c.get("xodds") and c["key"] not in before]
     if new:
         fair.record(new, today["day"], shown=new)
         telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet",
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
                                        "depuis ce matin). Vérifie la cote avant de valider."))
-    print(f"[1xbet] relevé de l'après-midi : {len(upcoming)} pronostic(s) à venir, {len(new)} nouveau(x) 💎", file=sys.stderr)
+    n_upd = _update_combos(today["day"], pronos, now, got)
+    print(f"[1xbet] relevé : {len(upcoming_)} pronostic(s) à venir, {len(new)} nouveau(x) 💎 annoncé(s), "
+          f"{n_upd} combiné(s) du matin renvoyé(s) à jour", file=sys.stderr)
     return len(new)
+
+
+def _update_combos(day, pronos, now, refreshed):
+    """Combinés 💎 du matin (fair_combos.json, toutes les jambes aux cotes 1xBet) remis aux cotes du relevé : un combiné dont un pari
+    a été retiré ou est devenu mal payé, ou dont la cote totale a bougé de plus de C.XBET_UPDATE_MOVE depuis sa dernière version
+    envoyée, part à jour avec un nouveau code coupon. Un combiné dont un match a commencé n'est plus touché (il est en jeu).
+    -> nombre de combinés renvoyés."""
+    sent = store.load(COMBO_UPDATES, {})
+    sent = sent if isinstance(sent, dict) and sent.get("day") == day else {"day": day, "tiers": {}}
+    t_now, n = now.isoformat()[:16], 0
+    for row in fair.load_combos():
+        legs0 = row.get("legs") or []
+        rng = _tier_range(row["tier"])
+        if (row["date"] != day or not legs0 or not rng or not all(l.get("xodds") for l in legs0)
+                or any((l.get("commence") or "9")[:16] <= t_now for l in legs0)):
+            continue
+        lo, hi, prefix = rng
+        tier = str(row["tier"])
+        last = sent["tiers"].get(tier) or {"keys": row.get("keys") or [], "total": row.get("min_odds") or 1.0}
+        res = CB.patch_combo(legs0, upcoming(pronos, now), lo, hi, fresh_ids=refreshed, prefix=prefix)
+        if res is None:
+            if not last.get("dead"):
+                telegram.send(f"⚠️ Le combiné du matin (cote {fmt.trim(row.get('min_odds') or lo, 1)}) n'est plus jouable chez 1xBet "
+                              "(paris retirés ou devenus mal payés) et Kelly ne trouve pas de remplaçants : ne le joue pas.")
+                sent["tiers"][tier] = last | {"dead": True}
+            continue
+        legs, total, prob, removed, added = res
+        keys = [c["key"] for c in legs]
+        if set(keys) == set(last["keys"]) and abs(total / (last.get("total") or total) - 1) <= C.XBET_UPDATE_MOVE:
+            continue
+        hhmm = now.strftime("%H:%M")
+        msg = _fair_reply((legs, total, prob), f"🔄 Un combiné du matin a changé chez 1xBet : le voici aux cotes de {hhmm} "
+                                               "(l'ancien code est remplacé).", fmt.combo_changes(removed, added),
+                          title=f"🔄 COMBINÉ À JOUR {hhmm}")
+        telegram.send(telegram.with_buttons(msg, telegram.inline([[("🔄 Cotes à jour", f"xmaj|{tier}|{day}")]])))
+        sent["tiers"][tier] = {"keys": keys, "total": round(total, 3)}
+        n += 1
+    store.save(COMBO_UPDATES, sent)
+    return n
 
 
 def run_track(events_for=None, now=None):
@@ -1002,15 +1061,84 @@ def _handle_command(text):
     return "Commande inconnue. /aide pour la liste."
 
 
-def _fair_reply(fc, head):
-    """Réponse « combiné à cote juste » de custom_combo : phrase d'introduction, combiné, et code coupon 1xBet quand toutes les
-    jambes ont leur référence 1xBet (xbet.save_coupon : ticket sans mise ; échec = pas de code, jamais d'erreur)."""
+def _fair_reply(fc, head, changes="", coupon=True, title=None):
+    """Réponse « combiné à cote juste » de custom_combo : phrase d'introduction, paris remplacés, combiné, et code coupon 1xBet quand
+    toutes les jambes ont leur référence 1xBet (xbet.save_coupon : ticket sans mise ; échec = pas de code, jamais d'erreur)."""
     legs, min_total, prob = fc
-    coupon = None
-    if all(c.get("xref") for c in legs):
+    code = None
+    if coupon and all(c.get("xref") for c in legs):
         from .sources import xbet
-        coupon = xbet.save_coupon(legs)
-    return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), coupon=coupon))
+        code = xbet.save_coupon(legs)
+    return Html(fmt.esc(head) + ("\n" + changes if changes else "") + "\n\n"
+                + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), coupon=code, title=title))
+
+
+def _live_fair(legs, lo, hi, prefix=None, now=None, check=None):
+    """Combiné `legs` vérifié EN DIRECT chez 1xBet : ses matchs + C.XBET_LIVE_SPARES remplaçants (les meilleurs autres paris 💎 du
+    jour) relus à l'instant (xprice.live_check), puis CB.patch_combo dans [lo, hi]. -> (résultat de patch_combo ou None, heure,
+    relu : faux si 1xBet n'a rien rendu). `check` : injectable pour les tests."""
+    from . import xprice
+    pool = upcoming(store.load("today.json", {}).get("pronos") or [], now)
+    mine = {l["id"] for l in legs}
+    spares = []
+    for c in sorted((c for c in CB.fair_legs(pool) if c["id"] not in mine and (not prefix or c["market"].startswith(prefix))),
+                    key=lambda c: -(c.get("xev") or 0) * c["prob"]):
+        if c["id"] not in spares:
+            spares.append(c["id"])
+    pronos, got, hhmm = (check or xprice.live_check)(mine | set(spares[:C.XBET_LIVE_SPARES]), now)
+    if not got:
+        return None, hhmm, False
+    return CB.patch_combo(legs, upcoming(pronos, now), lo, hi, fresh_ids=got, prefix=prefix), hhmm, True
+
+
+def _live_reply(fc, lo, hi, now=None, check=None):
+    """combi N aux cotes 1xBet : « ⏳ » tout de suite, puis le combiné vérifié en direct (paris retirés ou mal payés remplacés) et son
+    code coupon aux cotes de l'instant. 1xBet injoignable : le combiné aux cotes du dernier relevé, sans code, en le disant."""
+    telegram.send("⏳ Je vérifie les cotes 1xBet en direct…", queue=False)
+    try:
+        res, hhmm, ok = _live_fair(fc[0], lo, hi, now=now, check=check)
+    except Exception as e:                          # noqa: BLE001 - la réponse part quand même
+        print(f"[1xbet] vérification en direct impossible : {type(e).__name__}: {e}", file=sys.stderr)
+        res, hhmm, ok = None, "", False
+    if not ok:
+        return _fair_reply(fc, f"⚠️ 1xBet ne répond pas en ce moment : combiné aux cotes du dernier relevé (cote "
+                               f"{fmt.trim(fc[1], 1)}), sans code coupon. Vérifie chaque cote avant de jouer.", coupon=False)
+    if res is None:
+        return (f"Les cotes 1xBet ont bougé depuis le dernier relevé : plus de combiné à la cote {fmt.trim(lo, 1)} avec des paris "
+                "encore jouables. Essaie une autre cote.")
+    legs, total, prob, removed, added = res
+    return _fair_reply((legs, total, prob), f"Voici un combiné aux cotes 1xBet vérifiées à {hhmm} (cote {fmt.trim(total, 1)}).",
+                       fmt.combo_changes(removed, added))
+
+
+def _tier_range(tier):
+    """(cote mini, cote maxi, préfixe de marché ou None) d'un palier de combiné à cote juste (5, 12, 25, tc5, tv5)."""
+    for t, lo, hi in C.FAIR_COMBO_TIERS:
+        if str(t) == str(tier):
+            return lo, hi, None
+    for k, prefix, _, lo, hi in C.FAIR_SHOTS_TIERS:
+        if str(k) == str(tier):
+            return lo, hi, prefix
+    return None
+
+
+def refresh_combo(tier, day, now=None, check=None):
+    """Bouton « 🔄 Cotes à jour » sous un combiné du matin : ses paris relus en direct chez 1xBet, ceux retirés ou devenus mal payés
+    remplacés (même fourchette de cote que le palier), nouveau code coupon. Le suivi garde le combiné du matin."""
+    row = next((r for r in fair.load_combos() if r["date"] == str(day) and str(r["tier"]) == str(tier)), None)
+    rng = _tier_range(tier)
+    if not row or not rng:
+        return "Ce combiné n'est plus en mémoire (il date d'un autre jour)."
+    lo, hi, prefix = rng
+    res, hhmm, ok = _live_fair(row["legs"], lo, hi, prefix, now, check)
+    if not ok:
+        return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné ont commencé) : réessaie dans quelques minutes."
+    if res is None:
+        return ("Les paris de ce combiné ne sont plus jouables chez 1xBet et Kelly ne trouve pas de remplaçants dans la même "
+                "fourchette de cote. Demande plutôt un « combi » sur mesure.")
+    legs, total, prob, removed, added = res
+    head = (f"🔄 Combiné du matin remis aux cotes 1xBet de {hhmm}" + (" : aucun pari à changer." if not (removed or added) else "."))
+    return _fair_reply((legs, total, prob), head, fmt.combo_changes(removed, added), title=f"🔄 COMBINÉ À JOUR {hhmm}")
 
 
 def custom_combo(picks, pronos, target, day, started=False):
@@ -1024,7 +1152,7 @@ def custom_combo(picks, pronos, target, day, started=False):
     if any(c.get("xodds") for c in pronos):        # cotes 1xBet du jour connues : le combiné se joue chez 1xBet, à SES cotes
         fc = CB.fair_custom(pronos, target)
         if fc:
-            return _fair_reply(fc, f"Voici un combiné aux cotes 1xBet relevées par Kelly (cote {fmt.trim(fc[1], 1)}).")
+            return _live_reply(fc, target, target * (1 + C.CUSTOM_TOLERANCE))
     if picks:
         usage, n_sent = _todays_usage(day, picks)
         combo = CB.custom(picks, target, usage)

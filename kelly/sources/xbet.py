@@ -17,6 +17,7 @@ Cartons : 1xBet ne compte que les jaunes (« Cartons jaunes ») alors que Kelly 
 import json
 import os
 import re
+from contextlib import contextmanager
 import sys
 import time
 from datetime import datetime
@@ -228,10 +229,30 @@ def parse_main(data, home, away, refs=None, gid=0):
     return out, subs
 
 
+_ODDS_TTL = [TTL_ODDS]           # 0 pendant live_mode : cotes relues à l'instant
+
+
+@contextmanager
+def live_mode():
+    """Vérification en direct (combi N, bouton « 🔄 Cotes à jour ») : cotes relues sans cache, même pendant une commande Telegram
+    (hors ligne par ailleurs : seul 1xBet est relu), C.XBET_LIVE_DELAY s entre deux requêtes. Tout est rétabli à la sortie."""
+    from .. import cache as kcache
+    old = (kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE.get(DOMAIN))
+    kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE[DOMAIN] = False, 0, C.XBET_LIVE_DELAY
+    try:
+        yield
+    finally:
+        kcache.OFFLINE, _ODDS_TTL[0] = old[0], old[1]
+        if old[2] is None:
+            http.DELAY_OVERRIDE.pop(DOMAIN, None)
+        else:
+            http.DELAY_OVERRIDE[DOMAIN] = old[2]
+
+
 def _events(gid):
     # marketType=2 (« Populaires ») : 1X2, double chance, toute l'échelle des buts, les 2 marquent, sous-matchs typés, et pour un
     # sous-match statistique tout son plus/moins (match et équipes) ; 7 Ko compressés au lieu de 48 Ko pour « tous les marchés »
-    return _get_json(url("gameEvents", cfView=3, countEvents=250, gameId=gid, grMode=4, marketType=2), TTL_ODDS)
+    return _get_json(url("gameEvents", cfView=3, countEvents=250, gameId=gid, grMode=4, marketType=2), _ODDS_TTL[0])
 
 
 def prices(game, markets, home, away):
@@ -399,12 +420,15 @@ def list_leagues(keys, deadline=None):
     return out
 
 
-def fetch_day(events, deadline=None, max_matches=None, wanted=None):
+def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False):
     """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
     événement qui porte "xgid" (id 1xBet déjà connu : relevé du matin, championnat vu par 1xBet) est lu directement, sans menu ni
     liste du championnat. `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là).
-    Voir _Session (proxy, plafond) ; s'arrête au délai `deadline` (time.monotonic) ou après `max_matches` matchs. Ne lève pas :
-    erreurs dans state (rapport des sources)."""
+    Voir _Session (proxy, plafond) ; s'arrête au délai `deadline` (time.monotonic) ou après `max_matches` matchs. `live` : cotes
+    relues à l'instant (live_mode). Ne lève pas : erreurs dans state (rapport des sources)."""
+    if live:
+        with live_mode():
+            return fetch_day(events, deadline, max_matches, wanted)
     out, errors, leagues, cat = {}, [], {}, None
     max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches
     ses = _Session()

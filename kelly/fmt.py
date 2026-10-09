@@ -266,6 +266,13 @@ def pronos(items, limit=10, title=None, intro=None):
     return Html("\n".join(lines))
 
 
+def combo_changes(removed, added):
+    """Paris retirés d'un combiné remis aux cotes du moment (retirés par 1xBet ou devenus mal payés) et leurs remplaçants."""
+    lines = [f"❌ Retiré : {esc(c.get('home', '?'))} – {esc(c.get('away', '?'))} ({esc(c.get('pick', ''))})" for c in removed]
+    lines += [f"➕ Ajouté : {esc(c['home'])} – {esc(c['away'])} ({esc(c['pick'])})" for c in added]
+    return "\n".join(lines)
+
+
 def fair_leg(n, c):
     """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
     chances = i(f"({pct(c['prob'])} de chances)")

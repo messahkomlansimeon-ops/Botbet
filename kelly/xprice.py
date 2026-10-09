@@ -110,3 +110,27 @@ def apply(pronos, fetch=None):
     print(f"[1xbet] {out['matches']} match(s) trouvé(s) chez 1xBet : {out['value']} pronostic(s) jouable(s) à la cote 1xBet, "
           f"{out['low']} trop mal payé(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
     return out
+
+
+def live_check(ids, now=None, fetch=None):
+    """Relit EN DIRECT chez 1xBet les matchs `ids` du jour (data/today.json : id 1xBet connu, un gameEvents + les sous-matchs utiles),
+    remet leurs pronostics à la cote du moment (meilleure ligne, trop mal payé, absent), enregistre today.json. Les matchs qui
+    commencent dans moins de C.XBET_SOON_MIN min sont laissés de côté (1xBet les retire de l'avant-match).
+    -> (pronostics du jour à jour, ids relus, heure « HH:MM » du relevé). `fetch` : injectable pour les tests."""
+    from datetime import datetime, timedelta, timezone
+    from . import store
+    now = now or datetime.now(timezone.utc)
+    today = store.load("today.json", {})
+    pronos = today.get("pronos") or []
+    soon = now + timedelta(minutes=C.XBET_SOON_MIN)
+    sel = [c for c in pronos if c["id"] in ids and datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
+    got = set()
+
+    def run(events, deadline=None, wanted=None):
+        found = (fetch or xbet.fetch_day)(events, deadline=deadline, wanted=wanted, live=True)
+        got.update(found)
+        return found
+    if sel:
+        apply(sel, fetch=run)
+        store.save("today.json", today)
+    return pronos, got, now.strftime("%H:%M")

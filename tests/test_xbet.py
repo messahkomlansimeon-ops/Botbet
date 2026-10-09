@@ -14,7 +14,7 @@ os.environ.pop("TELEGRAM_TOKEN", None)
 os.environ["XBET_PROXY_FILE"] = os.path.join(os.environ["DATA_DIR"], "pas-de-fichier.env")      # jamais le vrai proxy de la machine
 os.environ["XBET_PROXY"] = "http://user:secret@proxy.test:80"
 
-from kelly import calib, combos as CB, config as C, fmt, store, xprice  # noqa: E402
+from kelly import calib, combos as CB, config as C, fair, fmt, store, xprice  # noqa: E402
 from kelly.sources import http, state, xbet  # noqa: E402
 
 KO = 1791572400                                     # 2026-10-09 19:00 UTC
@@ -418,25 +418,117 @@ def test_save_coupon():
     print("ok  save_coupon 1xBet (corps exact, code extrait, affichage et repli)")
 
 
-def test_combi_prefers_1xbet():
-    """« combi N » : cotes 1xBet du jour connues -> combiné aux cotes 1xBet, avec le code coupon si toutes les jambes ont leur
-    référence 1xBet (xbet.save_coupon simulé : aucun appel réel)."""
-    from datetime import date
+DAY2 = "2030-01-01"
+KO2 = f"{DAY2}T19:00:00Z"
+
+
+def live_pronos(n=7):
+    """Pronostics 💎 d'un jour à venir (moins de 3,5 buts à 1,55), match m0..m(n-1), id 1xBet 900+i."""
+    return [prono("totals", "Under", 3.5, 0.72) | {"id": f"m{i}", "home": f"H{i}", "away": f"A{i}", "commence": KO2, "xodds": 1.55,
+                                                    "xev": 0.12, "xgid": 900 + i, "xref": [900 + i, 10, 3.5],
+                                                    "key": f"m{i}|totals||3.5|Under"} for i in range(n)]
+
+
+def fake_px(drop=()):
+    """Cotes 1xBet relues : moins de 3,5 buts à 1,55 partout, sauf les matchs de `drop` (pari retiré par 1xBet)."""
+    return {f"m{i}": {"gid": 900 + i, "px": {} if f"m{i}" in drop else {("totals", "Under", 3.5): 1.55, ("totals", "Over", 3.5): 2.4},
+                      "refs": {} if f"m{i}" in drop else {("totals", "Under", 3.5): [900 + i, 10, 3.5]}} for i in range(7)}
+
+
+def test_live_mode_and_patch():
+    from kelly import cache
+    from kelly.sources import http as H
+    cache.OFFLINE = True
+    with xbet.live_mode():
+        assert not cache.OFFLINE and xbet._ODDS_TTL[0] == 0 and H.delay_for(xbet.DOMAIN) == C.XBET_LIVE_DELAY
+    assert cache.OFFLINE and xbet._ODDS_TTL[0] == xbet.TTL_ODDS and xbet.DOMAIN not in H.DELAY_OVERRIDE
+    cache.OFFLINE = False
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    pool = live_pronos()
+    legs = pool[:4]
+    same = CB.patch_combo(legs, pool, 5.0, 6.5)
+    assert [c["id"] for c in same[0]] == ["m0", "m1", "m2", "m3"] and not same[3] and not same[4]
+    pool[1]["xnone"] = 1                                                    # retiré par 1xBet
+    res = CB.patch_combo(legs, pool, 5.0, 6.5, fresh_ids={f"m{i}" for i in range(7)})
+    assert [c["id"] for c in res[3]] == ["m1"] and len(res[4]) == 1 and res[1] >= 5.0 and "m1" not in [c["id"] for c in res[0]]
+    assert CB.patch_combo(legs, pool[:4], 5.0, 6.5) is None, "pas de remplaçant : impossible"
+    print("ok  mode direct (cache, hors ligne, délai) et combiné remis à jour")
+
+
+def with_fakes(fn, drop=(), got=True):
+    """Exécute fn avec : today.json du jour DAY2, live_check simulé (matchs `drop` retirés), save_coupon simulé, envoi capturé."""
+    from kelly import telegram, xprice
+    store.save("today.json", {"day": DAY2, "picks": [], "pronos": live_pronos()})
+    sent, coupons = [], []
+    real_check = xprice.live_check
+
+    def check(ids, now=None, fetch=None):
+        return real_check(ids, now, fetch=lambda ev, deadline=None, wanted=None, live=True:
+                                 {k: v for k, v in fake_px(drop).items() if k in {e["id"] for _, e in ev}} if got else {})
+    old = (xbet.save_coupon, telegram.send, xprice.live_check)
+    xbet.save_coupon = lambda ls: (coupons.append([c["id"] for c in ls]), "K7Q2X")[1]
+    telegram.send = lambda text, *a, **k: sent.append(str(text))
+    xprice.live_check = check
+    try:
+        return fn(), sent, coupons
+    finally:
+        xbet.save_coupon, telegram.send, xprice.live_check = old
+
+
+def test_combi_live():
+    """« combi N » : « ⏳ », cotes relues en direct, pari retiré remplacé, code coupon aux cotes de l'instant ; 1xBet muet : sans code."""
+    from datetime import datetime, timezone
     from kelly import app
     store.save(calib.FILE, {})
     calib._memo.clear()
     store.save("bets.json", {"picks": [], "combos": []})
-    legs = [prono("totals", "Under", 3.5, 0.72) | {"id": f"m{i}", "home": f"H{i}", "away": f"A{i}", "xodds": 1.55, "xev": 0.12,
-                                                    "xref": [900 + i, 10, 3.5]} for i in range(4)]
-    old = xbet.save_coupon
-    xbet.save_coupon = lambda ls: "K7Q2X" if all(c.get("xref") for c in ls) else None
+    now = datetime(2030, 1, 1, 13, 0, tzinfo=timezone.utc)
+    fc = (live_pronos()[:4], 1.55 ** 4, 0.72 ** 4)
+    msg, sent, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), drop=("m1",))
+    assert sent and sent[0].startswith("⏳"), sent
+    assert msg.startswith("Voici un combiné aux cotes 1xBet vérifiées à 13:00"), msg[:200]
+    assert "❌ Retiré : H1 – A1" in msg and "➕ Ajouté" in msg and "🎟️ Code coupon 1xBet : <b>K7Q2X</b>" in msg
+    assert coupons and "m1" not in coupons[0], "le code est créé avec les paris encore jouables"
+    msg, _, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), got=False)
+    assert "1xBet ne répond pas" in msg and "Code coupon" not in msg and not coupons
+    print("ok  combi N vérifié en direct (paris remplacés, code aux cotes de l'instant)")
+
+
+def test_refresh_button_and_updates():
+    """Bouton « 🔄 Cotes à jour » et relevés de 2 h : combiné du matin remis aux cotes du moment, renvoyé seulement s'il change ;
+    liste des 💎 nouveaux seulement à 15:00."""
+    from datetime import datetime, timezone
+    from kelly import app, chat
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    now = datetime(2030, 1, 1, 13, 0, tzinfo=timezone.utc)
+    legs = live_pronos()[:4]
+    store.save(fair.COMBOS_FILE, [fair.combo_row(5, (legs, 1.55 ** 4, 0.72 ** 4), DAY2)])
+    msg, _, coupons = with_fakes(lambda: app.refresh_combo("5", DAY2, now=now), drop=("m2",))
+    assert "🔄 COMBINÉ À JOUR 13:00" in msg and "❌ Retiré : H2 – A2" in msg and "K7Q2X" in msg, msg[:300]
+    assert len(fair.load_combos()) == 1, "le suivi garde le combiné du matin"
+    btn = chat.with_played_button("x", "v5", DAY2, funded=False, refresh=5)
+    assert any(b["callback_data"] == f"xmaj|5|{DAY2}" for row in btn.markup["inline_keyboard"] for b in row)
+    # relevé de 13:00 : un pari retiré -> combiné renvoyé à jour ; 2e relevé identique -> rien ; pas de liste 💎 avant 15:00
+    store.save(app.COMBO_UPDATES, {})
+
+    def refresh(drop, hour):
+        return app.run_xbet_refresh(now=now.replace(hour=hour), fetch=lambda ev, deadline=None, wanted=None:
+                                    {k: v for k, v in fake_px(drop).items() if k in {e["id"] for _, e in ev}})
+    _, sent, _ = with_fakes(lambda: refresh(("m3",), 13))
+    assert len(sent) == 1 and "🔄 COMBINÉ À JOUR 13:00" in sent[0] and "❌ Retiré : H3 – A3" in sent[0], sent
+    from kelly import telegram
+    old = telegram.send
+    again = []
+    telegram.send = lambda text, *a, **k: again.append(str(text))
     try:
-        msg = app.custom_combo([], legs, 5.0, date(2026, 10, 9))
+        app.run_xbet_refresh(now=now.replace(hour=13, minute=30), fetch=lambda ev, deadline=None, wanted=None:
+                             {k: v for k, v in fake_px(("m3",)).items() if k in {e["id"] for _, e in ev}})
     finally:
-        xbet.save_coupon = old
-    assert msg.startswith("Voici un combiné aux cotes 1xBet relevées par Kelly"), msg[:200]
-    assert "🎟️ Code coupon 1xBet : <b>K7Q2X</b>" in msg and "<a href" not in msg
-    print("ok  combi N aux cotes 1xBet d'abord, avec code coupon")
+        telegram.send = old
+    assert not again, "rien n'a changé depuis la dernière version envoyée : pas de message"
+    print("ok  bouton « Cotes à jour » et combinés du matin renvoyés seulement s'ils changent")
 
 
 def main():
@@ -448,7 +540,9 @@ def main():
     test_apply_and_messages()
     test_afternoon_refresh()
     test_xworld_scan()
-    test_combi_prefers_1xbet()
+    test_live_mode_and_patch()
+    test_combi_live()
+    test_refresh_button_and_updates()
     test_save_coupon()
     print("tests 1xBet : OK")
 

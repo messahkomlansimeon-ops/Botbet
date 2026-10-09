@@ -130,8 +130,13 @@ def _fresh(meta, ttl):
     return ttl is None or state.clock() - meta.get("fetched_at", 0) < ttl
 
 
+DELAY_OVERRIDE = {}       # domaine -> écart imposé (xbet.live_mode : 1 s pendant une vérification en direct demandée sur Telegram)
+
+
 def delay_for(domain):
     domain = domain.lower().split(":")[0]
+    if domain in DELAY_OVERRIDE:
+        return DELAY_OVERRIDE[domain]
     floor = next((v for k, v in FLOOR.items() if domain.endswith(k)), DEFAULT_DELAY)
     conf = next((v for k, v in MIN_DELAY.items() if domain.endswith(k)), DEFAULT_DELAY)
     return max(floor, conf, min(_crawl.get(domain, 0.0), MAX_CRAWL_DELAY))

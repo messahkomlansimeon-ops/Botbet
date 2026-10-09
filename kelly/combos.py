@@ -334,6 +334,39 @@ def _fair_best(legs, lo, hi):
     return best_combo(real, lo, hi) or best_combo(legs, lo, hi)
 
 
+def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None):
+    """Combiné `legs` remis aux cotes du moment : `pool` = pronostics à jour (xprice.live_check). Une jambe reste si son match a
+    encore un pari viable du même marché à sa cote 1xBet (la ligne a pu changer) ; sinon elle sort. Cote totale encore >= `lo` :
+    on garde les survivants ; sinon ils sont complétés par le meilleur combiné des remplaçants (`fresh_ids` : matchs relus à
+    l'instant seulement ; `prefix` : marchés permis, combinés spécial tirs) pour revenir dans [lo, hi].
+    -> (jambes, cote, proba, retirées, ajoutées) ou None si impossible."""
+    fresh = {}
+    for c in fair_legs(pool):
+        if c.get("xodds") and (fresh_ids is None or c["id"] in fresh_ids) and (not prefix or c["market"].startswith(prefix)):
+            k = (c["id"], c["market"])
+            if k not in fresh or c["prob"] > fresh[k]["prob"]:
+                fresh[k] = c
+    keep, removed = [], []
+    for l in legs:
+        c = fresh.get((l["id"], l["market"]))
+        (keep if c else removed).append(c or l)
+    total = math.prod(c["odds"] for c in keep) if keep else 1.0
+    added = []
+    if not keep or total < lo:
+        used = {c["id"] for c in keep}
+        spares = [c for c in fresh.values() if c["id"] not in used]
+        rlo = max(lo / total, 1.01)
+        rhi = max(hi / total, rlo * 1.3)
+        one = max((c for c in spares if rlo <= c["odds"] <= rhi), key=lambda c: c["prob"], default=None)   # un seul remplaçant suffit ?
+        extra = ([one], one["odds"], one["prob"]) if one else best_combo(spares, rlo, rhi)               # sinon plusieurs (2 au moins)
+        if not extra:
+            return None
+        added = extra[0]
+        keep += added
+        total = math.prod(c["odds"] for c in keep)
+    return keep, total, math.prod(c["prob"] for c in keep), removed, added
+
+
 def fair_stake(min_total):
     """Mise indicative (unités, pas la bankroll) : plus la cote mini est haute, plus elle est petite."""
     return next(s for limit, s in C.FAIR_COMBO_STAKE if min_total < limit)

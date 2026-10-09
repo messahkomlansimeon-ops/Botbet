@@ -45,9 +45,13 @@ def played_button(what, day, funded=True):
     return telegram.inline([[("✅ Je l'ai joué", f"joue|{what}|{day}")]])
 
 
-def with_played_button(text, what, day, funded=True):
-    """Le message `text` avec ses boutons de pari ; sans bouton (texte seul) quand il n'y a rien à jouer."""
+def with_played_button(text, what, day, funded=True, refresh=None):
+    """Le message `text` avec ses boutons de pari ; sans bouton (texte seul) quand il n'y a rien à jouer. `refresh` : palier d'un
+    combiné aux cotes 1xBet -> bouton « 🔄 Cotes à jour » (cotes relues en direct, paris retirés remplacés, nouveau code)."""
     markup = played_button(what, day, funded)
+    if refresh is not None:
+        row = telegram.inline([[("🔄 Cotes à jour", f"xmaj|{refresh}|{str(day)[:10]}")]])["inline_keyboard"]
+        markup = {"inline_keyboard": (markup or {"inline_keyboard": []})["inline_keyboard"] + row}
     return telegram.with_buttons(text, markup) if markup else text
 
 
@@ -182,6 +186,8 @@ def on_callback(data, message_id=None):
         return app.handle_command(f"/budget {parts[1]}")
     if parts[0] == "combi" and len(parts) == 2:
         return app.handle_command(f"/combi {parts[1]}")
+    if parts[0] == "xmaj" and len(parts) == 3:
+        return app.refresh_combo(parts[1], parts[2])
     if parts[0] == "bilan":
         return app.handle_command("/bilan détail")
     if parts[0] == "noter":
