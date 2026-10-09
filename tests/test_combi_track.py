@@ -270,7 +270,17 @@ def test_tap_without_budget():
     assert any("Combinés aux cotes 1xBet joués" in x for x in lines) and "1 noté" in lines[0], lines
     # annuler la note
     assert "Note annulée" in played.command(["vm1", "0"], DAY)
-    print("ok  2 appui sans budget : suivi + question « À quelle cote as-tu joué… », réponse 5,40 notée avec la mise du message")
+    # gros combiné (« combi 10000 » à 11 061,90) : la réponse « 11061,90 100 » est acceptée (cote maxi : le double de la sienne)
+    legs = [prono(i, xodds=x) for i, x in enumerate((9.5, 9.7, 12.0, 10.0))]
+    with Fakes():
+        cid = custom.remember(DAY, 10000.0, 10000.0, 12500.0, (legs, 11061.9, 0.0001), 1.0, None, "BIG", "16:27")
+        chat.on_callback(f"cjoue|{cid}|{DAY}", 79)
+        out = chat.route("11061,90 100")[1]
+        assert out.startswith("✅ Noté : combi sur mesure (cote 10000)") and "joué à 11061,9" in out, out
+        chat.on_callback(f"joue|v{cid}|{DAY}", 79)
+        assert "par exemple 11061,90" in chat.route("99999")[1]           # au-delà du double de sa cote : redemandée
+    print("ok  2 appui sans budget : suivi + question « À quelle cote as-tu joué… », réponse 5,40 notée avec la mise du message ; "
+          "gros combiné à 11 061,90 accepté")
 
 
 def test_tap_unfunded_and_gone():

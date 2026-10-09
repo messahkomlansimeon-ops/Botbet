@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import bankroll, combos as CB, config as C, fair, fmt, money as M, store, telegram, track
 
-MAX_ODDS = 10000.0
+MAX_ODDS = 1000000.0           # « combi 10000 » peut monter à 12 500 (fourchette de /combi)
 
 
 def norm(s):

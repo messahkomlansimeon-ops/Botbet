@@ -118,11 +118,15 @@ def clear_pending():
 def _answer(p, text):
     """La réponse envoyée après un appui sur ✅ / ✏️ (« 5,40 », « 5,40 2 000 »...) : notée avec played.command ; le bouton du
     message devient « ✅ Joué à … » (avec « ❌ Pas joué » en budget). Cote douteuse ou ambiguë (« 2 000 ») : on redemande, l'attente
-    reste ouverte."""
+    reste ouverte. Cote maxi : 1000, ou le double de la cote du pari pour un gros combiné (« combi 10000 » : 11 061,90)."""
     from . import money
     odds, stake, err = played.parse_odds_stake([text], strict=True)
-    if err or odds is None or not 1 < odds < 1000:
-        return ("Je n'ai pas compris la cote. Réponds juste la cote, par exemple 5,40 (ou 5,40 2 000 pour donner aussi ta mise). "
+    t = played.find(p["what"], p["day"])
+    ref = t.ref if t is not None and not isinstance(t, str) and t.ref else None
+    top = min(played.MAX_ODDS, max(1000.0, 2 * (ref or 0)))
+    if err or odds is None or not 1 < odds < top:
+        ex = fmt.num(ref) if ref else "5,40"
+        return (f"Je n'ai pas compris la cote. Réponds juste la cote, par exemple {ex} (ou {ex} 2 000 pour donner aussi ta mise). "
                 "Une cote entière avec une mise s'écrit avec ses décimales : 2,00 500.")
     clear_pending()
     reply = played.command([p["what"], text], p["day"])
