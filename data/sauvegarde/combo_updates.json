@@ -1,0 +1,220 @@
+{
+"day": "2026-10-09",
+"tiers": {
+"m8": {
+"keys": [
+"22ce0c24a7181089c924cf68110e2203|double_chance|||Avellino or Draw",
+"13f6082d5c8639fefe5928313d221b44|totals||3.5|Under",
+"39478bfc9dc4e2767ed96a755fbaf25f|totals||3.5|Under",
+"17694e68f399fdf9c5030021ec9bb595|alternate_totals_corners||9.5|Over",
+"xb758914733|totals||3.5|Under",
+"838aaa8567409b87835ad22ed9255e61|team_shots_away||10.5|Over",
+"b4d52d1abd5efcd669a093139239c7b0|alternate_totals_corners||8.5|Under",
+"f87773f0aca0cfaa154985be26336c21|totals||1.5|Over"
+],
+"total": 58.531,
+"legs": [
+{
+"key": "22ce0c24a7181089c924cf68110e2203|double_chance|||Avellino or Draw",
+"id": "22ce0c24a7181089c924cf68110e2203",
+"sport_key": "soccer_italy_serie_b",
+"home": "Avellino",
+"away": "Sampdoria",
+"commence": "2026-10-09T18:30:00Z",
+"market": "double_chance",
+"name": "Avellino or Draw",
+"point": null,
+"prob": 0.7498,
+"p0": 0.7498,
+"xodds": 1.43,
+"pick": "Double chance : Avellino ou Nul",
+"min_odds": 1.4,
+"start": "18:30",
+"league": "Serie B",
+"odds": 1.43,
+"xref": [
+754897243,
+4,
+0
+],
+"xgid": 754897243
+},
+{
+"key": "13f6082d5c8639fefe5928313d221b44|totals||3.5|Under",
+"id": "13f6082d5c8639fefe5928313d221b44",
+"sport_key": "soccer_belgium_first_div",
+"home": "SK Beveren",
+"away": "Lommel SK",
+"commence": "2026-10-09T18:45:00Z",
+"market": "totals",
+"name": "Under",
+"point": 3.5,
+"prob": 0.7555,
+"p0": 0.7555,
+"xodds": 1.47,
+"pick": "Moins de 3,5 buts",
+"min_odds": 1.39,
+"start": "18:45",
+"league": "Pro League belge",
+"odds": 1.47,
+"xref": [
+755196560,
+10,
+3.5
+],
+"xgid": 755196560
+},
+{
+"key": "39478bfc9dc4e2767ed96a755fbaf25f|totals||3.5|Under",
+"id": "39478bfc9dc4e2767ed96a755fbaf25f",
+"sport_key": "soccer_league_of_ireland",
+"home": "Shelbourne Dublin",
+"away": "Sligo Rovers",
+"commence": "2026-10-09T18:45:00Z",
+"market": "totals",
+"name": "Under",
+"point": 3.5,
+"prob": 0.7606,
+"p0": 0.7606,
+"xodds": 1.72,
+"pick": "Moins de 3,5 buts",
+"min_odds": 1.38,
+"start": "18:45",
+"league": "Ligue irlandaise",
+"odds": 1.72,
+"xref": [
+754908937,
+10,
+3.5
+],
+"xgid": 754908937
+},
+{
+"key": "17694e68f399fdf9c5030021ec9bb595|alternate_totals_corners||9.5|Over",
+"id": "17694e68f399fdf9c5030021ec9bb595",
+"sport_key": "soccer_france_ligue_one",
+"home": "RC Lens",
+"away": "Lyon",
+"commence": "2026-10-09T18:45:00Z",
+"market": "alternate_totals_corners",
+"name": "Over",
+"point": 9.5,
+"prob": 0.6742,
+"p0": 0.6742,
+"xodds": 1.59,
+"pick": "Plus de 9,5 corners",
+"min_odds": 1.56,
+"start": "18:45",
+"league": "Ligue 1",
+"odds": 1.59,
+"xref": [
+759608098,
+9,
+9.5
+],
+"xgid": 753387505
+},
+{
+"key": "xb758914733|totals||3.5|Under",
+"id": "xb758914733",
+"sport_key": "soccer_xb_bolivia",
+"home": "San Antonio Bulo Bulo",
+"away": "Real Tomayapo",
+"commence": "2026-10-09T19:00:00Z",
+"market": "totals",
+"name": "Under",
+"point": 3.5,
+"prob": 0.6547,
+"p0": 0.6547,
+"xodds": 1.64,
+"pick": "Moins de 3,5 buts",
+"min_odds": 1.6,
+"start": "19:00",
+"league": "Primera bolivienne",
+"odds": 1.64,
+"xref": [
+758914733,
+10,
+3.5
+],
+"xgid": 758914733
+},
+{
+"key": "838aaa8567409b87835ad22ed9255e61|team_shots_away||10.5|Over",
+"id": "838aaa8567409b87835ad22ed9255e61",
+"sport_key": "soccer_efl_champ",
+"home": "West Ham United",
+"away": "Queens Park Rangers",
+"commence": "2026-10-09T19:00:00Z",
+"market": "team_shots_away",
+"name": "Over",
+"point": 10.5,
+"prob": 0.714,
+"p0": 0.714,
+"xodds": 1.909,
+"pick": "Queens Park Rangers : plus de 10,5 tirs vers le but",
+"min_odds": 1.47,
+"start": "19:00",
+"league": "Championship",
+"odds": 1.909,
+"xref": [
+759367622,
+13,
+10.5
+],
+"xgid": 754363136
+},
+{
+"key": "b4d52d1abd5efcd669a093139239c7b0|alternate_totals_corners||8.5|Under",
+"id": "b4d52d1abd5efcd669a093139239c7b0",
+"sport_key": "soccer_portugal_primeira_liga",
+"home": "Braga",
+"away": "Sporting Lisbon",
+"commence": "2026-10-09T19:15:00Z",
+"market": "alternate_totals_corners",
+"name": "Under",
+"point": 8.5,
+"prob": 0.6331,
+"p0": 0.6331,
+"xodds": 2.09,
+"pick": "Moins de 8,5 corners",
+"min_odds": 1.66,
+"start": "19:15",
+"league": "Liga portugaise",
+"odds": 2.09,
+"xref": [
+759611966,
+10,
+8.5
+],
+"xgid": 755067662
+},
+{
+"key": "f87773f0aca0cfaa154985be26336c21|totals||1.5|Over",
+"id": "f87773f0aca0cfaa154985be26336c21",
+"sport_key": "soccer_argentina_primera_division",
+"home": "Instituto de Córdoba",
+"away": "Boca Juniors",
+"commence": "2026-10-09T22:30:00Z",
+"market": "totals",
+"name": "Over",
+"point": 1.5,
+"prob": 0.6844,
+"p0": 0.6844,
+"xodds": 1.556,
+"pick": "Plus de 1,5 buts",
+"min_odds": 1.53,
+"start": "22:30",
+"league": "Primera argentine",
+"odds": 1.556,
+"xref": [
+757316656,
+9,
+1.5
+],
+"xgid": 757316656
+}
+]
+}
+}
+}

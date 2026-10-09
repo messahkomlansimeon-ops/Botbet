@@ -1,0 +1,135 @@
+{
+"built": "2026-10-09T09:42:27+00:00",
+"half_life": {},
+"goal_weight": {},
+"report": {
+"E0": {
+"skipped": "historique trop court (401 j < 540)",
+"tuned": "2026-10-09T09:42:22+00:00"
+},
+"SP1": {
+"skipped": "historique trop court (401 j < 540)",
+"tuned": "2026-10-09T09:42:22+00:00"
+},
+"I1": {
+"skipped": "historique trop court (393 j < 540)",
+"tuned": "2026-10-09T09:42:22+00:00"
+},
+"D1": {
+"skipped": "historique trop court (394 j < 540)",
+"tuned": "2026-10-09T09:42:22+00:00"
+},
+"F1": {
+"skipped": "historique trop court (401 j < 540)",
+"tuned": "2026-10-09T09:42:22+00:00"
+},
+"ARG": {
+"skipped": "historique trop court (389 j < 540)",
+"tuned": "2026-10-09T09:42:23+00:00"
+},
+"AUT": {
+"skipped": "historique trop court (372 j < 540)",
+"tuned": "2026-10-09T09:42:23+00:00"
+},
+"B1": {
+"skipped": "historique trop court (422 j < 540)",
+"tuned": "2026-10-09T09:42:23+00:00"
+},
+"BRA": {
+"skipped": "historique trop court (385 j < 540)",
+"tuned": "2026-10-09T09:42:23+00:00"
+},
+"CHN": {
+"skipped": "historique trop court (371 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"D2": {
+"skipped": "historique trop court (415 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"DNK": {
+"skipped": "historique trop court (373 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"E1": {
+"skipped": "historique trop court (408 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"E2": {
+"skipped": "historique trop court (428 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"E3": {
+"skipped": "historique trop court (427 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"F2": {
+"skipped": "historique trop court (406 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"FIN": {
+"skipped": "historique trop court (371 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"G1": {
+"skipped": "historique trop court (393 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"I2": {
+"skipped": "historique trop court (394 j < 540)",
+"tuned": "2026-10-09T09:42:24+00:00"
+},
+"IRL": {
+"skipped": "historique trop court (390 j < 540)",
+"tuned": "2026-10-09T09:42:25+00:00"
+},
+"JPN": {
+"skipped": "historique trop court (373 j < 540)",
+"tuned": "2026-10-09T09:42:25+00:00"
+},
+"MEX": {
+"skipped": "historique trop court (380 j < 540)",
+"tuned": "2026-10-09T09:42:25+00:00"
+},
+"N1": {
+"skipped": "historique trop court (408 j < 540)",
+"tuned": "2026-10-09T09:42:25+00:00"
+},
+"NOR": {
+"skipped": "historique trop court (373 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"P1": {
+"skipped": "historique trop court (408 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"POL": {
+"skipped": "historique trop court (373 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"SC0": {
+"skipped": "historique trop court (414 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"SP2": {
+"skipped": "historique trop court (416 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"SWE": {
+"skipped": "historique trop court (372 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"SWZ": {
+"skipped": "historique trop court (372 j < 540)",
+"tuned": "2026-10-09T09:42:26+00:00"
+},
+"T1": {
+"skipped": "historique trop court (408 j < 540)",
+"tuned": "2026-10-09T09:42:27+00:00"
+},
+"USA": {
+"skipped": "historique trop court (390 j < 540)",
+"tuned": "2026-10-09T09:42:27+00:00"
+}
+}
+}

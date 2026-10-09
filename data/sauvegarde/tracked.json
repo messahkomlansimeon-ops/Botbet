@@ -1141,7 +1141,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1195,7 +1195,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1249,7 +1249,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1301,7 +1301,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1351,10 +1351,10 @@
 "book=GTbets": 1.0,
 "xg_diff": 1.23
 },
-"close_odds": null,
-"close_prob": null,
-"closed_at": null,
-"clv": null,
+"close_odds": 1.36,
+"close_prob": 0.7185,
+"closed_at": "2026-10-09T17:05+00:00",
+"clv": -0.0223,
 "result": null,
 "single": true
 },
@@ -1408,7 +1408,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1462,7 +1462,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1514,7 +1514,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 },
@@ -1568,7 +1568,7 @@
 },
 "close_odds": null,
 "close_prob": null,
-"closed_at": null,
+"closed_at": "missed",
 "clv": null,
 "result": null
 }

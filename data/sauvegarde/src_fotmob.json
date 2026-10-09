@@ -20422,7 +20422,14440 @@
 }
 ],
 "id": 69
+},
+"soccer_xb_algeria": {
+"teams": {
+"CR Bélouizdad": {
+"n": 4.0,
+"gf": 6.0,
+"ga": 3.0,
+"w": 3.0,
+"pts": 10.0
+},
+"CS Constantine": {
+"n": 4.0,
+"gf": 9.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 7.0
+},
+"MC Oran": {
+"n": 3.0,
+"gf": 3.0,
+"ga": 0.0,
+"w": 2.0,
+"pts": 7.0
+},
+"USM Alger": {
+"n": 4.0,
+"gf": 5.0,
+"ga": 3.0,
+"w": 2.0,
+"pts": 7.0
+},
+"ES Ben Aknoun": {
+"n": 4.0,
+"gf": 6.0,
+"ga": 5.0,
+"w": 1.0,
+"pts": 6.0
+},
+"MB Rouissat": {
+"n": 4.0,
+"gf": 3.0,
+"ga": 3.0,
+"w": 2.0,
+"pts": 6.0
+},
+"ES Sétif": {
+"n": 4.0,
+"gf": 5.0,
+"ga": 3.0,
+"w": 1.0,
+"pts": 4.0
+},
+"JS El Biar": {
+"n": 4.0,
+"gf": 6.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Olympique Akbou": {
+"n": 4.0,
+"gf": 4.0,
+"ga": 5.0,
+"w": 1.0,
+"pts": 4.0
+},
+"CR Temouchent": {
+"n": 3.0,
+"gf": 2.0,
+"ga": 3.0,
+"w": 1.0,
+"pts": 4.0
+},
+"MC Alger": {
+"n": 1.0,
+"gf": 2.0,
+"ga": 0.0,
+"w": 1.0,
+"pts": 3.0
+},
+"JS Kabylie": {
+"n": 2.0,
+"gf": 1.0,
+"ga": 1.0,
+"w": 1.0,
+"pts": 3.0
+},
+"USM Khenchela": {
+"n": 3.0,
+"gf": 1.0,
+"ga": 2.0,
+"w": 0.0,
+"pts": 2.0
+},
+"JS Saoura": {
+"n": 3.0,
+"gf": 0.0,
+"ga": 4.0,
+"w": 0.0,
+"pts": 2.0
+},
+"US Biskra": {
+"n": 4.0,
+"gf": 2.0,
+"ga": 7.0,
+"w": 0.0,
+"pts": 2.0
+},
+"ASO Chlef": {
+"n": 3.0,
+"gf": 3.0,
+"ga": 7.0,
+"w": 0.0,
+"pts": 1.0
 }
 },
-"updated": "2026-10-09T05:33+00:00"
+"matches": [
+{
+"d": "2026-09-03",
+"home": "ES Sétif",
+"away": "ES Ben Aknoun",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-03",
+"home": "JS El Biar",
+"away": "Olympique Akbou",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "USM Khenchela",
+"away": "USM Alger",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "JS Kabylie",
+"away": "MB Rouissat",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "CR Temouchent",
+"away": "CS Constantine",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "ASO Chlef",
+"away": "CR Bélouizdad",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-10",
+"home": "ES Ben Aknoun",
+"away": "US Biskra",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-10",
+"home": "USM Alger",
+"away": "JS El Biar",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "MC Oran",
+"away": "CR Temouchent",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "CR Bélouizdad",
+"away": "ES Sétif",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "MB Rouissat",
+"away": "Olympique Akbou",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "CS Constantine",
+"away": "ASO Chlef",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-17",
+"home": "US Biskra",
+"away": "CR Bélouizdad",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-17",
+"home": "CR Temouchent",
+"away": "JS Kabylie",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "JS El Biar",
+"away": "JS Saoura",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "USM Khenchela",
+"away": "ES Ben Aknoun",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "MC Alger",
+"away": "MB Rouissat",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "ASO Chlef",
+"away": "MC Oran",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Olympique Akbou",
+"away": "USM Alger",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "ES Sétif",
+"away": "CS Constantine",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-22",
+"home": "US Biskra",
+"away": "JS Saoura",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-07",
+"home": "CS Constantine",
+"away": "US Biskra",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-07",
+"home": "ES Ben Aknoun",
+"away": "JS El Biar",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-07",
+"home": "CR Bélouizdad",
+"away": "USM Khenchela",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-08",
+"home": "JS Saoura",
+"away": "Olympique Akbou",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-08",
+"home": "MB Rouissat",
+"away": "USM Alger",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-08",
+"home": "MC Oran",
+"away": "ES Sétif",
+"hg": 0.0,
+"ag": 0.0
+}
+],
+"id": 516
+},
+"soccer_xb_argentina_2": {
+"teams": {
+"Ferro Carril Oeste": {
+"n": 32.0,
+"gf": 36.0,
+"ga": 27.0,
+"w": 18.0,
+"pts": 61.0
+},
+"Deportivo Morón": {
+"n": 32.0,
+"gf": 51.0,
+"ga": 32.0,
+"w": 17.0,
+"pts": 58.0
+},
+"Godoy Cruz": {
+"n": 32.0,
+"gf": 42.0,
+"ga": 29.0,
+"w": 16.0,
+"pts": 56.0
+},
+"Deportivo Madryn": {
+"n": 32.0,
+"gf": 46.0,
+"ga": 28.0,
+"w": 14.0,
+"pts": 53.0
+},
+"Colón": {
+"n": 32.0,
+"gf": 39.0,
+"ga": 25.0,
+"w": 14.0,
+"pts": 52.0
+},
+"Almirante Brown": {
+"n": 32.0,
+"gf": 25.0,
+"ga": 21.0,
+"w": 12.0,
+"pts": 46.0
+},
+"Club Atlético Estudiantes": {
+"n": 32.0,
+"gf": 29.0,
+"ga": 27.0,
+"w": 12.0,
+"pts": 45.0
+},
+"Ciudad de Bolívar": {
+"n": 32.0,
+"gf": 27.0,
+"ga": 28.0,
+"w": 11.0,
+"pts": 45.0
+},
+"Los Andes": {
+"n": 32.0,
+"gf": 25.0,
+"ga": 23.0,
+"w": 9.0,
+"pts": 40.0
+},
+"CA Chaco For Ever": {
+"n": 32.0,
+"gf": 30.0,
+"ga": 33.0,
+"w": 9.0,
+"pts": 37.0
+},
+"CA Defensores de Belgrano": {
+"n": 32.0,
+"gf": 25.0,
+"ga": 29.0,
+"w": 8.0,
+"pts": 37.0
+},
+"San Telmo": {
+"n": 32.0,
+"gf": 28.0,
+"ga": 36.0,
+"w": 9.0,
+"pts": 37.0
+},
+"Racing de Córdoba": {
+"n": 32.0,
+"gf": 29.0,
+"ga": 39.0,
+"w": 9.0,
+"pts": 37.0
+},
+"Club Atlético Mitre": {
+"n": 32.0,
+"gf": 29.0,
+"ga": 39.0,
+"w": 7.0,
+"pts": 35.0
+},
+"Central Norte": {
+"n": 32.0,
+"gf": 20.0,
+"ga": 29.0,
+"w": 6.0,
+"pts": 33.0
+},
+"All Boys": {
+"n": 32.0,
+"gf": 18.0,
+"ga": 28.0,
+"w": 6.0,
+"pts": 33.0
+},
+"CA San Miguel": {
+"n": 32.0,
+"gf": 25.0,
+"ga": 38.0,
+"w": 6.0,
+"pts": 31.0
+},
+"Acassuso": {
+"n": 32.0,
+"gf": 22.0,
+"ga": 35.0,
+"w": 7.0,
+"pts": 29.0
+},
+"Tristán Suárez": {
+"n": 32.0,
+"gf": 32.0,
+"ga": 15.0,
+"w": 15.0,
+"pts": 58.0
+},
+"Temperley": {
+"n": 32.0,
+"gf": 38.0,
+"ga": 26.0,
+"w": 15.0,
+"pts": 56.0
+},
+"Atlanta": {
+"n": 32.0,
+"gf": 38.0,
+"ga": 30.0,
+"w": 17.0,
+"pts": 55.0
+},
+"Gimnasia Jujuy": {
+"n": 32.0,
+"gf": 48.0,
+"ga": 40.0,
+"w": 15.0,
+"pts": 54.0
+},
+"CA Ferrocarril Midland": {
+"n": 32.0,
+"gf": 34.0,
+"ga": 26.0,
+"w": 13.0,
+"pts": 48.0
+},
+"Gimnasia y Tiro": {
+"n": 32.0,
+"gf": 32.0,
+"ga": 28.0,
+"w": 13.0,
+"pts": 48.0
+},
+"Deportivo Maipú": {
+"n": 32.0,
+"gf": 39.0,
+"ga": 31.0,
+"w": 13.0,
+"pts": 47.0
+},
+"Colegiales": {
+"n": 32.0,
+"gf": 32.0,
+"ga": 31.0,
+"w": 13.0,
+"pts": 46.0
+},
+"San Martín San Juan": {
+"n": 32.0,
+"gf": 34.0,
+"ga": 32.0,
+"w": 12.0,
+"pts": 45.0
+},
+"San Martín de Tucumán": {
+"n": 32.0,
+"gf": 35.0,
+"ga": 32.0,
+"w": 10.0,
+"pts": 43.0
+},
+"Atlético Rafaela": {
+"n": 32.0,
+"gf": 27.0,
+"ga": 30.0,
+"w": 11.0,
+"pts": 42.0
+},
+"Quilmes": {
+"n": 32.0,
+"gf": 30.0,
+"ga": 27.0,
+"w": 10.0,
+"pts": 39.0
+},
+"Almagro": {
+"n": 32.0,
+"gf": 28.0,
+"ga": 38.0,
+"w": 10.0,
+"pts": 38.0
+},
+"Agropecuario": {
+"n": 32.0,
+"gf": 26.0,
+"ga": 35.0,
+"w": 9.0,
+"pts": 37.0
+},
+"Nueva Chicago": {
+"n": 32.0,
+"gf": 23.0,
+"ga": 30.0,
+"w": 9.0,
+"pts": 36.0
+},
+"Patronato de Parana": {
+"n": 32.0,
+"gf": 27.0,
+"ga": 32.0,
+"w": 6.0,
+"pts": 34.0
+},
+"Chacarita Juniors": {
+"n": 32.0,
+"gf": 24.0,
+"ga": 33.0,
+"w": 9.0,
+"pts": 33.0
+},
+"Atlético Güemes": {
+"n": 32.0,
+"gf": 23.0,
+"ga": 54.0,
+"w": 5.0,
+"pts": 23.0
+}
+},
+"matches": [
+{
+"d": "2026-09-26",
+"home": "Colegiales",
+"away": "Chacarita Juniors",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Almagro",
+"away": "Nueva Chicago",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Atlanta",
+"away": "Agropecuario",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "CA Defensores de Belgrano",
+"away": "Ferro Carril Oeste",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Los Andes",
+"away": "Deportivo Morón",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Club Atlético Mitre",
+"away": "San Telmo",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "Patronato de Parana",
+"away": "San Martín San Juan",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "CA Ferrocarril Midland",
+"away": "Tristán Suárez",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Deportivo Maipú",
+"away": "Temperley",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Racing de Córdoba",
+"away": "Godoy Cruz",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "Gimnasia y Tiro",
+"away": "Atlético Rafaela",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-28",
+"home": "Gimnasia Jujuy",
+"away": "San Martín de Tucumán",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-02",
+"home": "Ferro Carril Oeste",
+"away": "Deportivo Madryn",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Acassuso",
+"away": "Ciudad de Bolívar",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "CA San Miguel",
+"away": "Club Atlético Mitre",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Colón",
+"away": "Club Atlético Estudiantes",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Deportivo Morón",
+"away": "All Boys",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Temperley",
+"away": "Gimnasia Jujuy",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Tristán Suárez",
+"away": "Quilmes",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Agropecuario",
+"away": "CA Ferrocarril Midland",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Chacarita Juniors",
+"away": "Patronato de Parana",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "San Telmo",
+"away": "Almirante Brown",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Central Norte",
+"away": "Racing de Córdoba",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Atlético Güemes",
+"away": "Colegiales",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "San Martín San Juan",
+"away": "Almagro",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "CA Chaco For Ever",
+"away": "CA Defensores de Belgrano",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Atlético Rafaela",
+"away": "Atlanta",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-04",
+"home": "Godoy Cruz",
+"away": "Los Andes",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "San Martín de Tucumán",
+"away": "Gimnasia y Tiro",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-05",
+"home": "Nueva Chicago",
+"away": "Deportivo Maipú",
+"hg": 0.0,
+"ag": 1.0
+}
+],
+"id": 8965
+},
+"soccer_xb_austria_2": {
+"teams": {
+"BW Linz": {
+"n": 7.0,
+"gf": 20.0,
+"ga": 4.0,
+"w": 6.0,
+"pts": 18.0
+},
+"First Vienna FC": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 7.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Floridsdorfer AC": {
+"n": 7.0,
+"gf": 13.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 13.0
+},
+"SKU Amstetten": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Austria Wien II": {
+"n": 7.0,
+"gf": 13.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 12.0
+},
+"FC Wacker Innsbruck": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Austria Salzburg": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 12.0,
+"w": 3.0,
+"pts": 10.0
+},
+"FC Liefering": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 10.0
+},
+"SW Bregenz": {
+"n": 7.0,
+"gf": 11.0,
+"ga": 12.0,
+"w": 3.0,
+"pts": 10.0
+},
+"SKN St. Pölten": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 6.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Admira Wacker": {
+"n": 7.0,
+"gf": 7.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Voitsberg": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Sturm Graz II": {
+"n": 7.0,
+"gf": 15.0,
+"ga": 18.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Rapid Wien II": {
+"n": 7.0,
+"gf": 7.0,
+"ga": 17.0,
+"w": 2.0,
+"pts": 6.0
+},
+"FC Hertha Wels": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 17.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Kapfenberger SV": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 17.0,
+"w": 1.0,
+"pts": 3.0
+}
+},
+"matches": [
+{
+"d": "2026-08-21",
+"home": "SKU Amstetten",
+"away": "FC Hertha Wels",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-21",
+"home": "Austria Salzburg",
+"away": "Kapfenberger SV",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-21",
+"home": "Admira Wacker",
+"away": "First Vienna FC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Rapid Wien II",
+"away": "Floridsdorfer AC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-22",
+"home": "SW Bregenz",
+"away": "Sturm Graz II",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "BW Linz",
+"away": "Voitsberg",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "First Vienna FC",
+"away": "SKU Amstetten",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-28",
+"home": "Kapfenberger SV",
+"away": "BW Linz",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "SKN St. Pölten",
+"away": "Austria Salzburg",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-28",
+"home": "Voitsberg",
+"away": "FC Liefering",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-28",
+"home": "FC Hertha Wels",
+"away": "Admira Wacker",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-29",
+"home": "Floridsdorfer AC",
+"away": "FC Wacker Innsbruck",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Austria Wien II",
+"away": "SW Bregenz",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Sturm Graz II",
+"away": "Rapid Wien II",
+"hg": 5.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Admira Wacker",
+"away": "Kapfenberger SV",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Rapid Wien II",
+"away": "First Vienna FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "SKU Amstetten",
+"away": "Austria Wien II",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "FC Wacker Innsbruck",
+"away": "Voitsberg",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Austria Salzburg",
+"away": "Sturm Graz II",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "SW Bregenz",
+"away": "Floridsdorfer AC",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "BW Linz",
+"away": "FC Hertha Wels",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Liefering",
+"away": "SKN St. Pölten",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-18",
+"home": "FC Hertha Wels",
+"away": "First Vienna FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-18",
+"home": "Floridsdorfer AC",
+"away": "FC Liefering",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Kapfenberger SV",
+"away": "SKU Amstetten",
+"hg": 3.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-18",
+"home": "BW Linz",
+"away": "Admira Wacker",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Sturm Graz II",
+"away": "FC Wacker Innsbruck",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Voitsberg",
+"away": "Austria Salzburg",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "SKN St. Pölten",
+"away": "SW Bregenz",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Austria Wien II",
+"away": "Rapid Wien II",
+"hg": 4.0,
+"ag": 1.0
+}
+],
+"id": 119
+},
+"soccer_xb_belgium_2": {
+"teams": {
+"Beerschot": {
+"n": 6.0,
+"gf": 13.0,
+"ga": 5.0,
+"w": 5.0,
+"pts": 15.0,
+"xg": 11.6349,
+"xga": 5.6626,
+"xpts": 11.635054104693694
+},
+"FCV Dender EH": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 2.0,
+"w": 5.0,
+"pts": 15.0,
+"xg": 11.0517,
+"xga": 5.416799999999999,
+"xpts": 12.583934906488217
+},
+"Eupen": {
+"n": 5.0,
+"gf": 11.0,
+"ga": 5.0,
+"w": 4.0,
+"pts": 12.0,
+"xg": 9.2767,
+"xga": 5.6572,
+"xpts": 9.403697275892926
+},
+"Francs Borains": {
+"n": 5.0,
+"gf": 9.0,
+"ga": 4.0,
+"w": 4.0,
+"pts": 12.0,
+"xg": 10.9308,
+"xga": 6.381500000000001,
+"xpts": 9.772162398415595
+},
+"Virton": {
+"n": 5.0,
+"gf": 8.0,
+"ga": 2.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 7.497699999999999,
+"xga": 5.8387,
+"xpts": 8.052239721958465
+},
+"KSC Lokeren": {
+"n": 6.0,
+"gf": 13.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 10.4681,
+"xga": 9.1009,
+"xpts": 9.351073651372788
+},
+"Sporting Hasselt": {
+"n": 6.0,
+"gf": 4.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 9.0,
+"xg": 10.014300000000002,
+"xga": 10.3241,
+"xpts": 8.454752638056032
+},
+"Club Brugge NXT": {
+"n": 5.0,
+"gf": 11.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 5.928299999999999,
+"xga": 9.435899999999998,
+"xpts": 4.49593345173655
+},
+"Genk U23": {
+"n": 6.0,
+"gf": 12.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 9.914000000000001,
+"xga": 13.607,
+"xpts": 6.59190704820586
+},
+"FC Liège": {
+"n": 6.0,
+"gf": 10.0,
+"ga": 13.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 11.860800000000001,
+"xga": 11.7946,
+"xpts": 8.086853482248667
+},
+"Gent U23": {
+"n": 5.0,
+"gf": 6.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 4.5597,
+"xga": 7.5934,
+"xpts": 4.488162403215172
+},
+"K. Lierse SK": {
+"n": 5.0,
+"gf": 4.0,
+"ga": 8.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 5.6382,
+"xga": 8.0498,
+"xpts": 5.085741161893272
+},
+"Patro Eisden": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 3.0,
+"xg": 7.7136000000000005,
+"xga": 9.2534,
+"xpts": 7.893810558750909
+},
+"RFC Seraing": {
+"n": 6.0,
+"gf": 6.0,
+"ga": 12.0,
+"w": 0.0,
+"pts": 2.0,
+"xg": 7.152699999999999,
+"xga": 8.872599999999998,
+"xpts": 7.116041976431623
+},
+"Anderlecht Futures": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 15.0,
+"w": 0.0,
+"pts": 1.0,
+"xg": 5.532300000000001,
+"xga": 12.1853,
+"xpts": 4.092345331679429
+}
+},
+"matches": [
+{
+"d": "2026-08-23",
+"home": "Genk U23",
+"away": "FC Liège",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-23",
+"home": "Francs Borains",
+"away": "Sporting Hasselt",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "KSC Lokeren",
+"away": "Genk U23",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-08-28",
+"home": "Sporting Hasselt",
+"away": "Gent U23",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Anderlecht Futures",
+"away": "Beerschot",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "FC Liège",
+"away": "FCV Dender EH",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Patro Eisden",
+"away": "Club Brugge NXT",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "Virton",
+"away": "Francs Borains",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "RFC Seraing",
+"away": "K. Lierse SK",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Beerschot",
+"away": "Patro Eisden",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "FCV Dender EH",
+"away": "RFC Seraing",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Gent U23",
+"away": "Anderlecht Futures",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Club Brugge NXT",
+"away": "Eupen",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Genk U23",
+"away": "Sporting Hasselt",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "K. Lierse SK",
+"away": "FC Liège",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Francs Borains",
+"away": "KSC Lokeren",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Beerschot",
+"away": "K. Lierse SK",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Gent U23",
+"away": "FCV Dender EH",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Anderlecht Futures",
+"away": "KSC Lokeren",
+"hg": 2.0,
+"ag": 6.0
+},
+{
+"d": "2026-09-12",
+"home": "RFC Seraing",
+"away": "Sporting Hasselt",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Virton",
+"away": "Genk U23",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Liège",
+"away": "Club Brugge NXT",
+"hg": 4.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-13",
+"home": "Patro Eisden",
+"away": "Eupen",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Club Brugge NXT",
+"away": "Gent U23",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Francs Borains",
+"away": "Anderlecht Futures",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Genk U23",
+"away": "RFC Seraing",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Sporting Hasselt",
+"away": "Beerschot",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Eupen",
+"away": "FC Liège",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "KSC Lokeren",
+"away": "Virton",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "FCV Dender EH",
+"away": "Patro Eisden",
+"hg": 1.0,
+"ag": 0.0
+}
+],
+"id": 264
+},
+"soccer_xb_bolivia": {
+"teams": {
+"Bolívar": {
+"n": 20.0,
+"gf": 54.0,
+"ga": 22.0,
+"w": 14.0,
+"pts": 45.0
+},
+"Always Ready": {
+"n": 20.0,
+"gf": 47.0,
+"ga": 13.0,
+"w": 13.0,
+"pts": 45.0
+},
+"The Strongest": {
+"n": 20.0,
+"gf": 39.0,
+"ga": 22.0,
+"w": 12.0,
+"pts": 42.0
+},
+"Real Potosí": {
+"n": 20.0,
+"gf": 27.0,
+"ga": 14.0,
+"w": 8.0,
+"pts": 32.0
+},
+"Oriente Petrolero": {
+"n": 20.0,
+"gf": 36.0,
+"ga": 27.0,
+"w": 9.0,
+"pts": 30.0
+},
+"Aurora": {
+"n": 20.0,
+"gf": 31.0,
+"ga": 27.0,
+"w": 7.0,
+"pts": 30.0
+},
+"Guabirá": {
+"n": 20.0,
+"gf": 32.0,
+"ga": 39.0,
+"w": 8.0,
+"pts": 29.0
+},
+"Nacional Potosí": {
+"n": 20.0,
+"gf": 30.0,
+"ga": 28.0,
+"w": 8.0,
+"pts": 27.0
+},
+"Blooming": {
+"n": 20.0,
+"gf": 30.0,
+"ga": 22.0,
+"w": 6.0,
+"pts": 27.0
+},
+"Independiente Petrolero": {
+"n": 20.0,
+"gf": 27.0,
+"ga": 35.0,
+"w": 7.0,
+"pts": 25.0
+},
+"CDT Real Oruro": {
+"n": 20.0,
+"gf": 32.0,
+"ga": 50.0,
+"w": 6.0,
+"pts": 21.0
+},
+"ABB": {
+"n": 20.0,
+"gf": 31.0,
+"ga": 45.0,
+"w": 6.0,
+"pts": 20.0
+},
+"San Antonio Bulo Bulo": {
+"n": 20.0,
+"gf": 21.0,
+"ga": 40.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Universitario de Vinto": {
+"n": 20.0,
+"gf": 26.0,
+"ga": 39.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Real Tomayapo": {
+"n": 20.0,
+"gf": 15.0,
+"ga": 39.0,
+"w": 4.0,
+"pts": 16.0
+},
+"GV San José": {
+"n": 20.0,
+"gf": 21.0,
+"ga": 37.0,
+"w": 2.0,
+"pts": 14.0
+}
+},
+"matches": [
+{
+"d": "2026-08-26",
+"home": "San Antonio Bulo Bulo",
+"away": "The Strongest",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-26",
+"home": "Real Potosí",
+"away": "Real Tomayapo",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-27",
+"home": "Blooming",
+"away": "CDT Real Oruro",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-27",
+"home": "Always Ready",
+"away": "Aurora",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-27",
+"home": "Independiente Petrolero",
+"away": "Guabirá",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Bolívar",
+"away": "ABB",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "CDT Real Oruro",
+"away": "San Antonio Bulo Bulo",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "ABB",
+"away": "Universitario de Vinto",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Guabirá",
+"away": "Real Potosí",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Aurora",
+"away": "GV San José",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Oriente Petrolero",
+"away": "Always Ready",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Independiente Petrolero",
+"away": "Bolívar",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-06",
+"home": "The Strongest",
+"away": "Real Tomayapo",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Nacional Potosí",
+"away": "Blooming",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "San Antonio Bulo Bulo",
+"away": "Aurora",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Real Potosí",
+"away": "Oriente Petrolero",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "GV San José",
+"away": "Nacional Potosí",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "The Strongest",
+"away": "CDT Real Oruro",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Blooming",
+"away": "ABB",
+"hg": 6.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Always Ready",
+"away": "Guabirá",
+"hg": 6.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Universitario de Vinto",
+"away": "Independiente Petrolero",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Real Tomayapo",
+"away": "Bolívar",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-15",
+"home": "CDT Real Oruro",
+"away": "Real Potosí",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-15",
+"home": "ABB",
+"away": "The Strongest",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-16",
+"home": "Guabirá",
+"away": "Aurora",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-16",
+"home": "Nacional Potosí",
+"away": "Always Ready",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-17",
+"home": "Blooming",
+"away": "Universitario de Vinto",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-17",
+"home": "Real Tomayapo",
+"away": "Oriente Petrolero",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Bolívar",
+"away": "GV San José",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Independiente Petrolero",
+"away": "San Antonio Bulo Bulo",
+"hg": 1.0,
+"ag": 3.0
+}
+],
+"id": 144
+},
+"soccer_xb_brazil_c": {
+"teams": {
+"Santa Cruz": {
+"n": 19.0,
+"gf": 20.0,
+"ga": 15.0,
+"w": 8.0,
+"pts": 29.0
+},
+"Maringá": {
+"n": 19.0,
+"gf": 32.0,
+"ga": 30.0,
+"w": 8.0,
+"pts": 30.0
+},
+"Floresta": {
+"n": 19.0,
+"gf": 22.0,
+"ga": 20.0,
+"w": 8.0,
+"pts": 30.0
+},
+"Botafogo-PB": {
+"n": 19.0,
+"gf": 28.0,
+"ga": 19.0,
+"w": 10.0,
+"pts": 33.0
+},
+"Ferroviária": {
+"n": 19.0,
+"gf": 22.0,
+"ga": 15.0,
+"w": 8.0,
+"pts": 30.0
+},
+"Inter de Limeira": {
+"n": 19.0,
+"gf": 22.0,
+"ga": 20.0,
+"w": 8.0,
+"pts": 30.0
+},
+"Brusque": {
+"n": 19.0,
+"gf": 28.0,
+"ga": 22.0,
+"w": 9.0,
+"pts": 32.0
+},
+"Paysandu": {
+"n": 19.0,
+"gf": 26.0,
+"ga": 27.0,
+"w": 9.0,
+"pts": 29.0
+},
+"Ypiranga RS": {
+"n": 19.0,
+"gf": 27.0,
+"ga": 24.0,
+"w": 8.0,
+"pts": 29.0
+},
+"Guarani-SP": {
+"n": 19.0,
+"gf": 34.0,
+"ga": 24.0,
+"w": 7.0,
+"pts": 28.0
+},
+"Figueirense": {
+"n": 19.0,
+"gf": 19.0,
+"ga": 22.0,
+"w": 7.0,
+"pts": 28.0
+},
+"Maranhão": {
+"n": 19.0,
+"gf": 19.0,
+"ga": 18.0,
+"w": 7.0,
+"pts": 27.0
+},
+"Amazonas": {
+"n": 19.0,
+"gf": 21.0,
+"ga": 23.0,
+"w": 7.0,
+"pts": 26.0
+},
+"Caxias": {
+"n": 19.0,
+"gf": 17.0,
+"ga": 16.0,
+"w": 6.0,
+"pts": 25.0
+},
+"Ituano": {
+"n": 19.0,
+"gf": 18.0,
+"ga": 21.0,
+"w": 6.0,
+"pts": 22.0
+},
+"Volta Redonda": {
+"n": 19.0,
+"gf": 13.0,
+"ga": 25.0,
+"w": 6.0,
+"pts": 21.0
+},
+"Barra FC": {
+"n": 19.0,
+"gf": 21.0,
+"ga": 21.0,
+"w": 5.0,
+"pts": 21.0
+},
+"Anápolis": {
+"n": 19.0,
+"gf": 17.0,
+"ga": 22.0,
+"w": 5.0,
+"pts": 19.0
+},
+"Itabaiana": {
+"n": 19.0,
+"gf": 14.0,
+"ga": 27.0,
+"w": 4.0,
+"pts": 17.0
+},
+"Confiança": {
+"n": 19.0,
+"gf": 11.0,
+"ga": 20.0,
+"w": 3.0,
+"pts": 13.0
+}
+},
+"matches": [
+{
+"d": "2026-08-22",
+"home": "Botafogo-PB",
+"away": "Guarani-SP",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Ituano",
+"away": "Paysandu",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Volta Redonda",
+"away": "Floresta",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-22",
+"home": "Confiança",
+"away": "Anápolis",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Santa Cruz",
+"away": "Caxias",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-23",
+"home": "Brusque",
+"away": "Amazonas",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "Inter de Limeira",
+"away": "Figueirense",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-23",
+"home": "Maringá",
+"away": "Barra FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "Maranhão",
+"away": "Itabaiana",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "Ypiranga RS",
+"away": "Ferroviária",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Amazonas",
+"away": "Ypiranga RS",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Anápolis",
+"away": "Santa Cruz",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Barra FC",
+"away": "Volta Redonda",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Caxias",
+"away": "Inter de Limeira",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Ferroviária",
+"away": "Confiança",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Figueirense",
+"away": "Maranhão",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Floresta",
+"away": "Ituano",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Guarani-SP",
+"away": "Brusque",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Itabaiana",
+"away": "Botafogo-PB",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Paysandu",
+"away": "Maringá",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Inter de Limeira",
+"away": "Ferroviária",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Santa Cruz",
+"away": "Botafogo-PB",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Maringá",
+"away": "Botafogo-PB",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Santa Cruz",
+"away": "Floresta",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Inter de Limeira",
+"away": "Paysandu",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Brusque",
+"away": "Ferroviária",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Floresta",
+"away": "Botafogo-PB",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Santa Cruz",
+"away": "Maringá",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Inter de Limeira",
+"away": "Brusque",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Paysandu",
+"away": "Ferroviária",
+"hg": 1.0,
+"ag": 0.0
+}
+],
+"id": 8971
+},
+"soccer_xb_bulgaria": {
+"teams": {
+"Levski Sofia": {
+"n": 9.0,
+"gf": 21.0,
+"ga": 4.0,
+"w": 8.0,
+"pts": 25.0
+},
+"CSKA Sofia": {
+"n": 10.0,
+"gf": 24.0,
+"ga": 7.0,
+"w": 7.0,
+"pts": 24.0
+},
+"Ludogorets Razgrad": {
+"n": 9.0,
+"gf": 16.0,
+"ga": 7.0,
+"w": 7.0,
+"pts": 23.0
+},
+"CSKA 1948": {
+"n": 10.0,
+"gf": 19.0,
+"ga": 10.0,
+"w": 7.0,
+"pts": 22.0
+},
+"Arda Kardzhali": {
+"n": 10.0,
+"gf": 15.0,
+"ga": 12.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Botev Plovdiv": {
+"n": 10.0,
+"gf": 16.0,
+"ga": 14.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Slavia Sofia": {
+"n": 10.0,
+"gf": 9.0,
+"ga": 8.0,
+"w": 2.0,
+"pts": 11.0
+},
+"Spartak Varna": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 15.0,
+"w": 2.0,
+"pts": 10.0
+},
+"Botev Vratsa": {
+"n": 10.0,
+"gf": 9.0,
+"ga": 19.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Septemvri Sofia": {
+"n": 10.0,
+"gf": 8.0,
+"ga": 18.0,
+"w": 2.0,
+"pts": 8.0
+},
+"PFC Lokomotiv Sofia 1929": {
+"n": 10.0,
+"gf": 11.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Lokomotiv Plovdiv": {
+"n": 10.0,
+"gf": 5.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Cherno More Varna": {
+"n": 10.0,
+"gf": 11.0,
+"ga": 20.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Dunav Ruse": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 19.0,
+"w": 1.0,
+"pts": 5.0
+}
+},
+"matches": [
+{
+"d": "2026-08-24",
+"home": "Lokomotiv Plovdiv",
+"away": "Arda Kardzhali",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Slavia Sofia",
+"away": "Septemvri Sofia",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "CSKA 1948",
+"away": "Lokomotiv Plovdiv",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Botev Plovdiv",
+"away": "Levski Sofia",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-30",
+"home": "Spartak Varna",
+"away": "Ludogorets Razgrad",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "CSKA Sofia",
+"away": "Cherno More Varna",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-31",
+"home": "Dunav Ruse",
+"away": "PFC Lokomotiv Sofia 1929",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-31",
+"home": "Arda Kardzhali",
+"away": "Botev Vratsa",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Slavia Sofia",
+"away": "Levski Sofia",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Septemvri Sofia",
+"away": "Botev Vratsa",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-04",
+"home": "Arda Kardzhali",
+"away": "Botev Plovdiv",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-05",
+"home": "Spartak Varna",
+"away": "CSKA Sofia",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Levski Sofia",
+"away": "CSKA 1948",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Lokomotiv Plovdiv",
+"away": "Cherno More Varna",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "PFC Lokomotiv Sofia 1929",
+"away": "Ludogorets Razgrad",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-07",
+"home": "Dunav Ruse",
+"away": "Slavia Sofia",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Cherno More Varna",
+"away": "PFC Lokomotiv Sofia 1929",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "CSKA 1948",
+"away": "Dunav Ruse",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "CSKA Sofia",
+"away": "Arda Kardzhali",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Slavia Sofia",
+"away": "Spartak Varna",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Botev Vratsa",
+"away": "Levski Sofia",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Botev Plovdiv",
+"away": "Lokomotiv Plovdiv",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-14",
+"home": "Ludogorets Razgrad",
+"away": "Septemvri Sofia",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-16",
+"home": "PFC Lokomotiv Sofia 1929",
+"away": "CSKA Sofia",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Slavia Sofia",
+"away": "CSKA 1948",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Dunav Ruse",
+"away": "Botev Vratsa",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Septemvri Sofia",
+"away": "Botev Plovdiv",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Arda Kardzhali",
+"away": "Cherno More Varna",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Spartak Varna",
+"away": "PFC Lokomotiv Sofia 1929",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Lokomotiv Plovdiv",
+"away": "CSKA Sofia",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 270
+},
+"soccer_xb_canada": {
+"teams": {
+"Cavalry FC": {
+"n": 25.0,
+"gf": 51.0,
+"ga": 19.0,
+"w": 16.0,
+"pts": 53.0
+},
+"Forge FC": {
+"n": 25.0,
+"gf": 41.0,
+"ga": 20.0,
+"w": 15.0,
+"pts": 51.0
+},
+"Atlético Ottawa": {
+"n": 25.0,
+"gf": 38.0,
+"ga": 41.0,
+"w": 12.0,
+"pts": 40.0
+},
+"Vancouver FC": {
+"n": 25.0,
+"gf": 35.0,
+"ga": 33.0,
+"w": 9.0,
+"pts": 33.0
+},
+"Supra du Québec": {
+"n": 25.0,
+"gf": 38.0,
+"ga": 45.0,
+"w": 9.0,
+"pts": 31.0
+},
+"HFX Wanderers FC": {
+"n": 25.0,
+"gf": 38.0,
+"ga": 42.0,
+"w": 7.0,
+"pts": 27.0
+},
+"Inter Toronto FC": {
+"n": 25.0,
+"gf": 40.0,
+"ga": 56.0,
+"w": 6.0,
+"pts": 27.0
+},
+"Pacific FC": {
+"n": 25.0,
+"gf": 30.0,
+"ga": 55.0,
+"w": 2.0,
+"pts": 14.0
+}
+},
+"matches": [
+{
+"d": "2026-05-24",
+"home": "Cavalry FC",
+"away": "Pacific FC",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-29",
+"home": "Supra du Québec",
+"away": "Inter Toronto FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-30",
+"home": "HFX Wanderers FC",
+"away": "Vancouver FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-30",
+"home": "Pacific FC",
+"away": "Atlético Ottawa",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-06-06",
+"home": "Vancouver FC",
+"away": "Atlético Ottawa",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-06-06",
+"home": "Cavalry FC",
+"away": "HFX Wanderers FC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-06-06",
+"home": "Supra du Québec",
+"away": "Pacific FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-06-07",
+"home": "Inter Toronto FC",
+"away": "Forge FC",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-06-09",
+"home": "Atlético Ottawa",
+"away": "Supra du Québec",
+"hg": 5.0,
+"ag": 3.0
+},
+{
+"d": "2026-06-10",
+"home": "Forge FC",
+"away": "HFX Wanderers FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-06-10",
+"home": "Inter Toronto FC",
+"away": "Cavalry FC",
+"hg": 1.0,
+"ag": 5.0
+},
+{
+"d": "2026-06-14",
+"home": "Vancouver FC",
+"away": "Pacific FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-07-01",
+"home": "Forge FC",
+"away": "Vancouver FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-07-01",
+"home": "HFX Wanderers FC",
+"away": "Atlético Ottawa",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-07-04",
+"home": "Atlético Ottawa",
+"away": "Cavalry FC",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-07-04",
+"home": "Vancouver FC",
+"away": "Inter Toronto FC",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-07-05",
+"home": "Supra du Québec",
+"away": "Forge FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-07-05",
+"home": "Pacific FC",
+"away": "HFX Wanderers FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-07-17",
+"home": "Atlético Ottawa",
+"away": "Inter Toronto FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-07-17",
+"home": "Supra du Québec",
+"away": "Vancouver FC",
+"hg": 1.0,
+"ag": 5.0
+},
+{
+"d": "2026-07-24",
+"home": "HFX Wanderers FC",
+"away": "Supra du Québec",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-07-26",
+"home": "Atlético Ottawa",
+"away": "Pacific FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-07-29",
+"home": "Cavalry FC",
+"away": "Supra du Québec",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-15",
+"home": "Cavalry FC",
+"away": "Forge FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Forge FC",
+"away": "Pacific FC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-23",
+"home": "Inter Toronto FC",
+"away": "Supra du Québec",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Cavalry FC",
+"away": "Vancouver FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Forge FC",
+"away": "Inter Toronto FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "HFX Wanderers FC",
+"away": "Cavalry FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-09",
+"home": "Inter Toronto FC",
+"away": "Pacific FC",
+"hg": 3.0,
+"ag": 3.0
+}
+],
+"id": 9986
+},
+"soccer_xb_china_2": {
+"teams": {
+"Guangdong GZ-Power": {
+"n": 25.0,
+"gf": 52.0,
+"ga": 21.0,
+"w": 17.0,
+"pts": 57.0
+},
+"Guangxi Hengchen": {
+"n": 25.0,
+"gf": 40.0,
+"ga": 27.0,
+"w": 13.0,
+"pts": 45.0
+},
+"Nantong Zhiyun FC": {
+"n": 25.0,
+"gf": 34.0,
+"ga": 20.0,
+"w": 12.0,
+"pts": 45.0
+},
+"Shenzhen Juniors": {
+"n": 25.0,
+"gf": 40.0,
+"ga": 29.0,
+"w": 12.0,
+"pts": 44.0
+},
+"Shaanxi Union": {
+"n": 25.0,
+"gf": 42.0,
+"ga": 27.0,
+"w": 11.0,
+"pts": 39.0
+},
+"Yanbian Longding": {
+"n": 25.0,
+"gf": 34.0,
+"ga": 28.0,
+"w": 9.0,
+"pts": 36.0
+},
+"Shijiazhuang Gongfu": {
+"n": 25.0,
+"gf": 23.0,
+"ga": 25.0,
+"w": 9.0,
+"pts": 34.0
+},
+"Wuxi Wugo": {
+"n": 25.0,
+"gf": 38.0,
+"ga": 31.0,
+"w": 9.0,
+"pts": 33.0
+},
+"Changchun Yatai": {
+"n": 25.0,
+"gf": 38.0,
+"ga": 41.0,
+"w": 10.0,
+"pts": 30.0
+},
+"Ningbo Professional": {
+"n": 25.0,
+"gf": 27.0,
+"ga": 31.0,
+"w": 9.0,
+"pts": 29.0
+},
+"Dalian K'un City": {
+"n": 25.0,
+"gf": 30.0,
+"ga": 37.0,
+"w": 7.0,
+"pts": 29.0
+},
+"Suzhou Dongwu": {
+"n": 25.0,
+"gf": 30.0,
+"ga": 35.0,
+"w": 7.0,
+"pts": 27.0
+},
+"Dingnan United": {
+"n": 25.0,
+"gf": 35.0,
+"ga": 46.0,
+"w": 4.0,
+"pts": 24.0
+},
+"Nanjing City FC": {
+"n": 25.0,
+"gf": 21.0,
+"ga": 37.0,
+"w": 5.0,
+"pts": 21.0
+},
+"Meizhou Hakka": {
+"n": 25.0,
+"gf": 25.0,
+"ga": 50.0,
+"w": 7.0,
+"pts": 16.0
+},
+"Foshan Nanshi": {
+"n": 25.0,
+"gf": 25.0,
+"ga": 49.0,
+"w": 3.0,
+"pts": 16.0
+}
+},
+"matches": [
+{
+"d": "2026-09-06",
+"home": "Suzhou Dongwu",
+"away": "Nanjing City FC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Guangxi Hengchen",
+"away": "Shijiazhuang Gongfu",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Changchun Yatai",
+"away": "Dingnan United",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Ningbo Professional",
+"away": "Shaanxi Union",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Suzhou Dongwu",
+"away": "Foshan Nanshi",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Guangdong GZ-Power",
+"away": "Dalian K'un City",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Guangxi Hengchen",
+"away": "Yanbian Longding",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Wuxi Wugo",
+"away": "Nantong Zhiyun FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-13",
+"home": "Meizhou Hakka",
+"away": "Nanjing City FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Shijiazhuang Gongfu",
+"away": "Shenzhen Juniors",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Yanbian Longding",
+"away": "Guangdong GZ-Power",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Dalian K'un City",
+"away": "Ningbo Professional",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Nantong Zhiyun FC",
+"away": "Guangxi Hengchen",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Shaanxi Union",
+"away": "Suzhou Dongwu",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Shenzhen Juniors",
+"away": "Changchun Yatai",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Dingnan United",
+"away": "Foshan Nanshi",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Meizhou Hakka",
+"away": "Shijiazhuang Gongfu",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Nanjing City FC",
+"away": "Wuxi Wugo",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-25",
+"home": "Wuxi Wugo",
+"away": "Guangxi Hengchen",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Nantong Zhiyun FC",
+"away": "Changchun Yatai",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Shaanxi Union",
+"away": "Dalian K'un City",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-29",
+"home": "Wuxi Wugo",
+"away": "Ningbo Professional",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-06",
+"home": "Changchun Yatai",
+"away": "Yanbian Longding",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-06",
+"home": "Wuxi Wugo",
+"away": "Suzhou Dongwu",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-06",
+"home": "Dingnan United",
+"away": "Meizhou Hakka",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-06",
+"home": "Nantong Zhiyun FC",
+"away": "Ningbo Professional",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-06",
+"home": "Shijiazhuang Gongfu",
+"away": "Dalian K'un City",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-07",
+"home": "Shenzhen Juniors",
+"away": "Guangdong GZ-Power",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-10-07",
+"home": "Foshan Nanshi",
+"away": "Guangxi Hengchen",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-07",
+"home": "Nanjing City FC",
+"away": "Shaanxi Union",
+"hg": 1.0,
+"ag": 4.0
+}
+],
+"id": 9137
+},
+"soccer_xb_colombia": {
+"teams": {
+"América de Cali": {
+"n": 19.0,
+"gf": 25.0,
+"ga": 15.0,
+"w": 10.0,
+"pts": 33.0,
+"xg": 21.971799999999998,
+"xga": 18.1016,
+"xpts": 28.81826118060282
+},
+"Deportivo Cali": {
+"n": 19.0,
+"gf": 20.0,
+"ga": 16.0,
+"w": 7.0,
+"pts": 27.0,
+"xg": 20.4378,
+"xga": 17.723100000000002,
+"xpts": 27.858678149508453
+},
+"Atlético Nacional": {
+"n": 19.0,
+"gf": 35.0,
+"ga": 15.0,
+"w": 13.0,
+"pts": 40.0,
+"xg": 28.37,
+"xga": 14.717200000000002,
+"xpts": 36.163740357825574
+},
+"Bucaramanga": {
+"n": 19.0,
+"gf": 26.0,
+"ga": 20.0,
+"w": 5.0,
+"pts": 23.0,
+"xg": 19.780400000000004,
+"xga": 14.796000000000003,
+"xpts": 30.494711015088406
+},
+"Millonarios": {
+"n": 19.0,
+"gf": 31.0,
+"ga": 23.0,
+"w": 7.0,
+"pts": 26.0,
+"xg": 27.3417,
+"xga": 17.54,
+"xpts": 33.65596697824475
+},
+"Santa Fe": {
+"n": 19.0,
+"gf": 29.0,
+"ga": 22.0,
+"w": 7.0,
+"pts": 29.0,
+"xg": 22.270699999999994,
+"xga": 17.6889,
+"xpts": 29.071040356006765
+},
+"Independiente Medellín": {
+"n": 19.0,
+"gf": 26.0,
+"ga": 24.0,
+"w": 7.0,
+"pts": 26.0,
+"xg": 22.632199999999997,
+"xga": 18.165199999999995,
+"xpts": 29.13745725832612
+},
+"Tolima": {
+"n": 19.0,
+"gf": 27.0,
+"ga": 17.0,
+"w": 8.0,
+"pts": 31.0,
+"xg": 24.941799999999997,
+"xga": 14.962799999999998,
+"xpts": 33.24257553113203
+},
+"Cúcuta": {
+"n": 19.0,
+"gf": 22.0,
+"ga": 35.0,
+"w": 3.0,
+"pts": 16.0,
+"xg": 17.1382,
+"xga": 26.243499999999997,
+"xpts": 19.05715438779255
+},
+"Llaneros FC": {
+"n": 19.0,
+"gf": 17.0,
+"ga": 20.0,
+"w": 4.0,
+"pts": 22.0,
+"xg": 18.078200000000002,
+"xga": 24.1126,
+"xpts": 21.941516934406273
+},
+"Águilas Doradas": {
+"n": 19.0,
+"gf": 20.0,
+"ga": 25.0,
+"w": 7.0,
+"pts": 26.0,
+"xg": 20.923,
+"xga": 21.294399999999996,
+"xpts": 25.980974065245437
+},
+"Once Caldas": {
+"n": 19.0,
+"gf": 31.0,
+"ga": 22.0,
+"w": 8.0,
+"pts": 33.0,
+"xg": 21.519800000000004,
+"xga": 21.109500000000004,
+"xpts": 26.081290828824805
+},
+"Internacional de Bogotá": {
+"n": 19.0,
+"gf": 26.0,
+"ga": 26.0,
+"w": 7.0,
+"pts": 28.0,
+"xg": 19.155900000000003,
+"xga": 20.957500000000003,
+"xpts": 24.292373872154872
+},
+"Chicó FC": {
+"n": 19.0,
+"gf": 15.0,
+"ga": 32.0,
+"w": 5.0,
+"pts": 17.0,
+"xg": 13.6514,
+"xga": 23.3155,
+"xpts": 18.628235786145364
+},
+"Fortaleza FC": {
+"n": 19.0,
+"gf": 22.0,
+"ga": 27.0,
+"w": 5.0,
+"pts": 22.0,
+"xg": 17.363699999999998,
+"xga": 23.041399999999996,
+"xpts": 21.574381775679367
+},
+"Alianza FC": {
+"n": 19.0,
+"gf": 13.0,
+"ga": 27.0,
+"w": 3.0,
+"pts": 17.0,
+"xg": 14.378499999999999,
+"xga": 19.39,
+"xpts": 21.331504300904793
+},
+"Junior FC": {
+"n": 19.0,
+"gf": 31.0,
+"ga": 24.0,
+"w": 11.0,
+"pts": 35.0,
+"xg": 22.6396,
+"xga": 23.626100000000008,
+"xpts": 24.745702384692372
+},
+"Deportivo Pasto": {
+"n": 19.0,
+"gf": 29.0,
+"ga": 25.0,
+"w": 10.0,
+"pts": 34.0,
+"xg": 21.914800000000003,
+"xga": 17.904,
+"xpts": 28.296492520859882
+},
+"Deportivo Pereira": {
+"n": 19.0,
+"gf": 15.0,
+"ga": 32.0,
+"w": 1.0,
+"pts": 10.0,
+"xg": 12.532,
+"xga": 26.5186,
+"xpts": 15.34983125840874
+},
+"CD Jaguares": {
+"n": 19.0,
+"gf": 20.0,
+"ga": 33.0,
+"w": 5.0,
+"pts": 18.0,
+"xg": 17.449399999999997,
+"xga": 23.283,
+"xpts": 21.62920390219272
+}
+},
+"matches": [
+{
+"d": "2026-09-20",
+"home": "Fortaleza FC",
+"away": "Junior FC",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-20",
+"home": "Bucaramanga",
+"away": "Internacional de Bogotá",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Tolima",
+"away": "América de Cali",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-21",
+"home": "Llaneros FC",
+"away": "Atlético Nacional",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-22",
+"home": "Independiente Medellín",
+"away": "CD Jaguares",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-23",
+"home": "Santa Fe",
+"away": "Deportivo Cali",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-24",
+"home": "América de Cali",
+"away": "Águilas Doradas",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "Atlético Nacional",
+"away": "Millonarios",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-25",
+"home": "Chicó FC",
+"away": "Deportivo Pasto",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Once Caldas",
+"away": "Bucaramanga",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-26",
+"home": "Deportivo Pereira",
+"away": "Internacional de Bogotá",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Cúcuta",
+"away": "Llaneros FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Junior FC",
+"away": "Independiente Medellín",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "CD Jaguares",
+"away": "Alianza FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "Fortaleza FC",
+"away": "Tolima",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-28",
+"home": "Deportivo Cali",
+"away": "Águilas Doradas",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-29",
+"home": "Deportivo Pereira",
+"away": "Santa Fe",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-30",
+"home": "Independiente Medellín",
+"away": "Millonarios",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-01",
+"home": "Atlético Nacional",
+"away": "Junior FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Deportivo Cali",
+"away": "Alianza FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Águilas Doradas",
+"away": "CD Jaguares",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Tolima",
+"away": "Chicó FC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Deportivo Pasto",
+"away": "Fortaleza FC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Cúcuta",
+"away": "Deportivo Pereira",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Internacional de Bogotá",
+"away": "Once Caldas",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Bucaramanga",
+"away": "Junior FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-05",
+"home": "Llaneros FC",
+"away": "América de Cali",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-06",
+"home": "Independiente Medellín",
+"away": "Santa Fe",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Atlético Nacional",
+"away": "Tolima",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-09",
+"home": "Fortaleza FC",
+"away": "Millonarios",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 274
+},
+"soccer_xb_costa_rica": {
+"teams": {
+"Deportivo Saprissa": {
+"n": 9.0,
+"gf": 20.0,
+"ga": 10.0,
+"w": 7.0,
+"pts": 21.0
+},
+"C.S. Cartaginés": {
+"n": 9.0,
+"gf": 18.0,
+"ga": 10.0,
+"w": 6.0,
+"pts": 18.0
+},
+"Sporting FC": {
+"n": 9.0,
+"gf": 16.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Deportiva San Carlos": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 15.0
+},
+"LD Alajuelense": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Inter San Carlos": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Puntarenas FC": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Municipal Pérez Zeledón": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Club Sport Herediano": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Escorpiones": {
+"n": 9.0,
+"gf": 6.0,
+"ga": 15.0,
+"w": 1.0,
+"pts": 4.0
+}
+},
+"matches": [
+{
+"d": "2026-08-15",
+"home": "Deportiva San Carlos",
+"away": "Club Sport Herediano",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-15",
+"home": "LD Alajuelense",
+"away": "Puntarenas FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-16",
+"home": "Deportivo Saprissa",
+"away": "C.S. Cartaginés",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-16",
+"home": "Municipal Pérez Zeledón",
+"away": "Inter San Carlos",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-18",
+"home": "Sporting FC",
+"away": "Escorpiones",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Puntarenas FC",
+"away": "Municipal Pérez Zeledón",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Escorpiones",
+"away": "C.S. Cartaginés",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-08-23",
+"home": "Club Sport Herediano",
+"away": "Sporting FC",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-23",
+"home": "Inter San Carlos",
+"away": "Deportivo Saprissa",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-24",
+"home": "LD Alajuelense",
+"away": "Deportiva San Carlos",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Sporting FC",
+"away": "Inter San Carlos",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Municipal Pérez Zeledón",
+"away": "LD Alajuelense",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "C.S. Cartaginés",
+"away": "Club Sport Herediano",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Deportiva San Carlos",
+"away": "Puntarenas FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-31",
+"home": "Deportivo Saprissa",
+"away": "Escorpiones",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Escorpiones",
+"away": "Inter San Carlos",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Club Sport Herediano",
+"away": "Municipal Pérez Zeledón",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "LD Alajuelense",
+"away": "Deportivo Saprissa",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Puntarenas FC",
+"away": "C.S. Cartaginés",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-07",
+"home": "Deportiva San Carlos",
+"away": "Sporting FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Municipal Pérez Zeledón",
+"away": "Deportiva San Carlos",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Inter San Carlos",
+"away": "Puntarenas FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Escorpiones",
+"away": "Club Sport Herediano",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Sporting FC",
+"away": "Deportivo Saprissa",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-14",
+"home": "C.S. Cartaginés",
+"away": "LD Alajuelense",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Municipal Pérez Zeledón",
+"away": "Sporting FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Puntarenas FC",
+"away": "Escorpiones",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Deportivo Saprissa",
+"away": "Club Sport Herediano",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "LD Alajuelense",
+"away": "Inter San Carlos",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-21",
+"home": "Deportiva San Carlos",
+"away": "C.S. Cartaginés",
+"hg": 1.0,
+"ag": 0.0
+}
+],
+"id": 121
+},
+"soccer_xb_croatia": {
+"teams": {
+"Dinamo Zagreb": {
+"n": 7.0,
+"gf": 17.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Hajduk Split": {
+"n": 8.0,
+"gf": 16.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Osijek": {
+"n": 8.0,
+"gf": 17.0,
+"ga": 11.0,
+"w": 5.0,
+"pts": 16.0
+},
+"NK Varaždin": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Rijeka": {
+"n": 7.0,
+"gf": 13.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 14.0
+},
+"NK Istra 1961": {
+"n": 8.0,
+"gf": 14.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 9.0
+},
+"NK Lokomotiva": {
+"n": 8.0,
+"gf": 11.0,
+"ga": 16.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Slaven": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 16.0,
+"w": 2.0,
+"pts": 7.0
+},
+"HNK Gorica": {
+"n": 8.0,
+"gf": 5.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Rudeš": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 24.0,
+"w": 1.0,
+"pts": 4.0
+}
+},
+"matches": [
+{
+"d": "2026-08-14",
+"home": "Dinamo Zagreb",
+"away": "Rudeš",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-15",
+"home": "NK Istra 1961",
+"away": "Slaven",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-15",
+"home": "Osijek",
+"away": "NK Lokomotiva",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-16",
+"home": "NK Varaždin",
+"away": "Rijeka",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-16",
+"home": "HNK Gorica",
+"away": "Hajduk Split",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-21",
+"home": "Rudeš",
+"away": "NK Lokomotiva",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Slaven",
+"away": "HNK Gorica",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Dinamo Zagreb",
+"away": "NK Varaždin",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "Rijeka",
+"away": "NK Istra 1961",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-23",
+"home": "Hajduk Split",
+"away": "Osijek",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "NK Istra 1961",
+"away": "Dinamo Zagreb",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "NK Varaždin",
+"away": "Rudeš",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Osijek",
+"away": "Slaven",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-31",
+"home": "Hajduk Split",
+"away": "NK Lokomotiva",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-31",
+"home": "HNK Gorica",
+"away": "Rijeka",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "NK Varaždin",
+"away": "NK Istra 1961",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Dinamo Zagreb",
+"away": "HNK Gorica",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Rijeka",
+"away": "Osijek",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Rudeš",
+"away": "Hajduk Split",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-06",
+"home": "Slaven",
+"away": "NK Lokomotiva",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Osijek",
+"away": "Dinamo Zagreb",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "NK Lokomotiva",
+"away": "Rijeka",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "NK Istra 1961",
+"away": "Rudeš",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Hajduk Split",
+"away": "Slaven",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-14",
+"home": "HNK Gorica",
+"away": "NK Varaždin",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Rudeš",
+"away": "Slaven",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "NK Varaždin",
+"away": "Osijek",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "NK Istra 1961",
+"away": "HNK Gorica",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Rijeka",
+"away": "Hajduk Split",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Dinamo Zagreb",
+"away": "NK Lokomotiva",
+"hg": 3.0,
+"ag": 2.0
+}
+],
+"id": 252
+},
+"soccer_xb_cyprus": {
+"teams": {
+"AEK Larnaca": {
+"n": 4.0,
+"gf": 9.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 9.0
+},
+"AEL Limassol": {
+"n": 4.0,
+"gf": 6.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Omonia Nicosia": {
+"n": 4.0,
+"gf": 8.0,
+"ga": 2.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Pafos FC": {
+"n": 4.0,
+"gf": 4.0,
+"ga": 2.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Apollon Limassol": {
+"n": 4.0,
+"gf": 7.0,
+"ga": 5.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Omonia Aradippou": {
+"n": 4.0,
+"gf": 4.0,
+"ga": 3.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Omonia 29 Maiou": {
+"n": 4.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Aris Limassol": {
+"n": 4.0,
+"gf": 4.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Olympiakos Nicosia": {
+"n": 4.0,
+"gf": 7.0,
+"ga": 7.0,
+"w": 0.0,
+"pts": 4.0
+},
+"Nea Salamis": {
+"n": 4.0,
+"gf": 8.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 4.0
+},
+"APOEL Nicosia": {
+"n": 4.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Karmiotissa": {
+"n": 4.0,
+"gf": 3.0,
+"ga": 6.0,
+"w": 0.0,
+"pts": 3.0
+},
+"Anorthosis": {
+"n": 4.0,
+"gf": 3.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 3.0
+},
+"Krasava Ypsonas FC": {
+"n": 4.0,
+"gf": 2.0,
+"ga": 10.0,
+"w": 0.0,
+"pts": 0.0
+}
+},
+"matches": [
+{
+"d": "2026-08-28",
+"home": "Krasava Ypsonas FC",
+"away": "Omonia 29 Maiou",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-28",
+"home": "Olympiakos Nicosia",
+"away": "Nea Salamis",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-29",
+"home": "AEK Larnaca",
+"away": "APOEL Nicosia",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Aris Limassol",
+"away": "Apollon Limassol",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "AEL Limassol",
+"away": "Anorthosis",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Karmiotissa",
+"away": "Pafos FC",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-31",
+"home": "Omonia Nicosia",
+"away": "Omonia Aradippou",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "Omonia 29 Maiou",
+"away": "Karmiotissa",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Apollon Limassol",
+"away": "Anorthosis",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Omonia Aradippou",
+"away": "Krasava Ypsonas FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "APOEL Nicosia",
+"away": "AEL Limassol",
+"hg": 6.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Nea Salamis",
+"away": "AEK Larnaca",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-07",
+"home": "Pafos FC",
+"away": "Olympiakos Nicosia",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Aris Limassol",
+"away": "Omonia Nicosia",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-11",
+"home": "AEL Limassol",
+"away": "Nea Salamis",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Anorthosis",
+"away": "APOEL Nicosia",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Karmiotissa",
+"away": "Omonia Aradippou",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Omonia Nicosia",
+"away": "Apollon Limassol",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "AEK Larnaca",
+"away": "Pafos FC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Olympiakos Nicosia",
+"away": "Omonia 29 Maiou",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-14",
+"home": "Krasava Ypsonas FC",
+"away": "Aris Limassol",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Omonia 29 Maiou",
+"away": "AEK Larnaca",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Pafos FC",
+"away": "AEL Limassol",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Apollon Limassol",
+"away": "APOEL Nicosia",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Nea Salamis",
+"away": "Anorthosis",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Aris Limassol",
+"away": "Karmiotissa",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Omonia Nicosia",
+"away": "Krasava Ypsonas FC",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Omonia Aradippou",
+"away": "Olympiakos Nicosia",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 136
+},
+"soccer_xb_czech": {
+"teams": {
+"Slavia Prague": {
+"n": 9.0,
+"gf": 25.0,
+"ga": 6.0,
+"w": 7.0,
+"pts": 23.0
+},
+"Slovan Liberec": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 4.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Mladá Boleslav": {
+"n": 8.0,
+"gf": 17.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Sigma Olomouc": {
+"n": 9.0,
+"gf": 16.0,
+"ga": 13.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Teplice": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 15.0,
+"w": 5.0,
+"pts": 16.0
+},
+"FC Zbrojovka Brno": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 12.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Sparta Prague": {
+"n": 9.0,
+"gf": 18.0,
+"ga": 12.0,
+"w": 5.0,
+"pts": 15.0
+},
+"Jablonec": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Hradec Králové": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Viktoria Plzeň": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 17.0,
+"w": 2.0,
+"pts": 10.0
+},
+"Baník Ostrava": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 17.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Bohemians 1905": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Pardubice": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Artis Brno": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Slovácko": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 16.0,
+"w": 0.0,
+"pts": 4.0
+},
+"FC Zlín": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 19.0,
+"w": 0.0,
+"pts": 1.0
+}
+},
+"matches": [
+{
+"d": "2026-08-30",
+"home": "Viktoria Plzeň",
+"away": "Slovácko",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Sparta Prague",
+"away": "Slavia Prague",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-02",
+"home": "FC Zbrojovka Brno",
+"away": "Hradec Králové",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Bohemians 1905",
+"away": "Jablonec",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Sigma Olomouc",
+"away": "Bohemians 1905",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Slavia Prague",
+"away": "FC Zbrojovka Brno",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Slovácko",
+"away": "Pardubice",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Artis Brno",
+"away": "Viktoria Plzeň",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Mladá Boleslav",
+"away": "Baník Ostrava",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "FC Zlín",
+"away": "Teplice",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Jablonec",
+"away": "Slovan Liberec",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Hradec Králové",
+"away": "Sparta Prague",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-09",
+"home": "Jablonec",
+"away": "Baník Ostrava",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-09",
+"home": "Hradec Králové",
+"away": "Viktoria Plzeň",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Bohemians 1905",
+"away": "Slovácko",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "FC Zbrojovka Brno",
+"away": "Artis Brno",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Slovan Liberec",
+"away": "Mladá Boleslav",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Sparta Prague",
+"away": "Jablonec",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Baník Ostrava",
+"away": "Pardubice",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Zlín",
+"away": "Hradec Králové",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Viktoria Plzeň",
+"away": "Sigma Olomouc",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-13",
+"home": "Teplice",
+"away": "Slavia Prague",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Artis Brno",
+"away": "Slovan Liberec",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Mladá Boleslav",
+"away": "FC Zbrojovka Brno",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Pardubice",
+"away": "Bohemians 1905",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Slovácko",
+"away": "Baník Ostrava",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Hradec Králové",
+"away": "Teplice",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Jablonec",
+"away": "FC Zlín",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Sigma Olomouc",
+"away": "Sparta Prague",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Slavia Prague",
+"away": "Viktoria Plzeň",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 122
+},
+"soccer_xb_denmark_2": {
+"teams": {
+"Hvidovre": {
+"n": 9.0,
+"gf": 18.0,
+"ga": 9.0,
+"w": 6.0,
+"pts": 21.0
+},
+"Vejle Boldklub": {
+"n": 9.0,
+"gf": 22.0,
+"ga": 13.0,
+"w": 5.0,
+"pts": 19.0
+},
+"Fredericia": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 6.0,
+"w": 3.0,
+"pts": 14.0
+},
+"Aarhus Fremad": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 13.0
+},
+"AaB": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Hobro": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 16.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Vendsyssel FF": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 10.0
+},
+"AB": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Hillerød": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Kolding IF": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 8.0
+},
+"HB Køge": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 17.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Esbjerg fB": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 19.0,
+"w": 1.0,
+"pts": 5.0
+}
+},
+"matches": [
+{
+"d": "2026-08-20",
+"home": "Vendsyssel FF",
+"away": "Hillerød",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-21",
+"home": "Hobro",
+"away": "AaB",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-21",
+"home": "Vejle Boldklub",
+"away": "Esbjerg fB",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-21",
+"home": "Fredericia",
+"away": "Aarhus Fremad",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "AB",
+"away": "Hvidovre",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "HB Køge",
+"away": "Kolding IF",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Kolding IF",
+"away": "AB",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "AaB",
+"away": "HB Køge",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Hillerød",
+"away": "Hobro",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Hvidovre",
+"away": "Fredericia",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Aarhus Fremad",
+"away": "Vejle Boldklub",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Esbjerg fB",
+"away": "Vendsyssel FF",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Hobro",
+"away": "Hvidovre",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-04",
+"home": "Vejle Boldklub",
+"away": "Vendsyssel FF",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "HB Køge",
+"away": "Hillerød",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "AB",
+"away": "AaB",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Fredericia",
+"away": "Esbjerg fB",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Aarhus Fremad",
+"away": "Kolding IF",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Hobro",
+"away": "Vejle Boldklub",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Vendsyssel FF",
+"away": "Aarhus Fremad",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Hillerød",
+"away": "AB",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Hvidovre",
+"away": "AaB",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Esbjerg fB",
+"away": "HB Køge",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Kolding IF",
+"away": "Fredericia",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Kolding IF",
+"away": "Hillerød",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Aarhus Fremad",
+"away": "Hvidovre",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "AB",
+"away": "Esbjerg fB",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "AaB",
+"away": "Vendsyssel FF",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Fredericia",
+"away": "Vejle Boldklub",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-21",
+"home": "HB Køge",
+"away": "Hobro",
+"hg": 5.0,
+"ag": 2.0
+}
+],
+"id": 85
+},
+"soccer_xb_ecuador": {
+"teams": {
+"Independiente del Valle": {
+"n": 30.0,
+"gf": 73.0,
+"ga": 33.0,
+"w": 24.0,
+"pts": 74.0
+},
+"CSD Macará": {
+"n": 30.0,
+"gf": 41.0,
+"ga": 33.0,
+"w": 15.0,
+"pts": 51.0
+},
+"Universidad Católica": {
+"n": 30.0,
+"gf": 51.0,
+"ga": 27.0,
+"w": 14.0,
+"pts": 51.0
+},
+"Aucas": {
+"n": 30.0,
+"gf": 33.0,
+"ga": 28.0,
+"w": 14.0,
+"pts": 50.0
+},
+"LDU de Quito": {
+"n": 30.0,
+"gf": 31.0,
+"ga": 24.0,
+"w": 13.0,
+"pts": 46.0
+},
+"Barcelona SC": {
+"n": 30.0,
+"gf": 32.0,
+"ga": 25.0,
+"w": 11.0,
+"pts": 44.0
+},
+"Mushuc Runa": {
+"n": 30.0,
+"gf": 35.0,
+"ga": 38.0,
+"w": 9.0,
+"pts": 38.0
+},
+"Deportivo Cuenca": {
+"n": 30.0,
+"gf": 25.0,
+"ga": 37.0,
+"w": 10.0,
+"pts": 36.0
+},
+"Orense": {
+"n": 30.0,
+"gf": 36.0,
+"ga": 47.0,
+"w": 9.0,
+"pts": 33.0
+},
+"Técnico Universitario": {
+"n": 30.0,
+"gf": 28.0,
+"ga": 42.0,
+"w": 10.0,
+"pts": 32.0
+},
+"Delfín": {
+"n": 30.0,
+"gf": 19.0,
+"ga": 31.0,
+"w": 7.0,
+"pts": 28.0
+},
+"Manta": {
+"n": 30.0,
+"gf": 17.0,
+"ga": 42.0,
+"w": 5.0,
+"pts": 21.0
+},
+"Libertad": {
+"n": 30.0,
+"gf": 33.0,
+"ga": 34.0,
+"w": 11.0,
+"pts": 41.0
+},
+"Leones del Norte": {
+"n": 30.0,
+"gf": 31.0,
+"ga": 32.0,
+"w": 10.0,
+"pts": 39.0
+},
+"Guayaquil City": {
+"n": 30.0,
+"gf": 33.0,
+"ga": 36.0,
+"w": 10.0,
+"pts": 39.0
+},
+"Emelec": {
+"n": 30.0,
+"gf": 25.0,
+"ga": 34.0,
+"w": 10.0,
+"pts": 39.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Independiente del Valle",
+"away": "Universidad Católica",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Guayaquil City",
+"away": "LDU de Quito",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Manta",
+"away": "Barcelona SC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Aucas",
+"away": "Libertad",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Orense",
+"away": "CSD Macará",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "Emelec",
+"away": "Leones del Norte",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-01",
+"home": "Delfín",
+"away": "Técnico Universitario",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "LDU de Quito",
+"away": "Mushuc Runa",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "CSD Macará",
+"away": "Manta",
+"hg": 4.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-02",
+"home": "Deportivo Cuenca",
+"away": "Guayaquil City",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-03",
+"home": "Barcelona SC",
+"away": "Independiente del Valle",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-03",
+"home": "Universidad Católica",
+"away": "Aucas",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-03",
+"home": "Leones del Norte",
+"away": "Orense",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "Libertad",
+"away": "Emelec",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Técnico Universitario",
+"away": "LDU de Quito",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-05",
+"home": "Independiente del Valle",
+"away": "CSD Macará",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Delfín",
+"away": "Universidad Católica",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Aucas",
+"away": "Barcelona SC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Deportivo Cuenca",
+"away": "Libertad",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-08",
+"home": "Emelec",
+"away": "Manta",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-08",
+"home": "Mushuc Runa",
+"away": "Leones del Norte",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-08",
+"home": "Orense",
+"away": "Guayaquil City",
+"hg": 4.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Manta",
+"away": "Aucas",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Guayaquil City",
+"away": "Mushuc Runa",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "LDU de Quito",
+"away": "Deportivo Cuenca",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Leones del Norte",
+"away": "Técnico Universitario",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "CSD Macará",
+"away": "Emelec",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Barcelona SC",
+"away": "Delfín",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Libertad",
+"away": "Independiente del Valle",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-15",
+"home": "Universidad Católica",
+"away": "Orense",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 246
+},
+"soccer_xb_guatemala": {
+"teams": {
+"Guastatoya": {
+"n": 12.0,
+"gf": 19.0,
+"ga": 13.0,
+"w": 8.0,
+"pts": 25.0
+},
+"CSD Municipal": {
+"n": 10.0,
+"gf": 16.0,
+"ga": 5.0,
+"w": 7.0,
+"pts": 23.0
+},
+"Antigua Guatemala": {
+"n": 11.0,
+"gf": 21.0,
+"ga": 17.0,
+"w": 7.0,
+"pts": 21.0
+},
+"Deportivo Marquense": {
+"n": 12.0,
+"gf": 13.0,
+"ga": 15.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Club Xelajú": {
+"n": 12.0,
+"gf": 24.0,
+"ga": 14.0,
+"w": 5.0,
+"pts": 18.0
+},
+"San Pedro": {
+"n": 12.0,
+"gf": 14.0,
+"ga": 12.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Deportivo Mixco": {
+"n": 11.0,
+"gf": 17.0,
+"ga": 18.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Comunicaciones FC": {
+"n": 12.0,
+"gf": 16.0,
+"ga": 17.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Coban Imperial": {
+"n": 12.0,
+"gf": 15.0,
+"ga": 18.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Aurora FC": {
+"n": 12.0,
+"gf": 17.0,
+"ga": 21.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Deportivo Malacateco": {
+"n": 12.0,
+"gf": 12.0,
+"ga": 19.0,
+"w": 3.0,
+"pts": 12.0
+},
+"CD Suchitepéquez": {
+"n": 12.0,
+"gf": 11.0,
+"ga": 26.0,
+"w": 1.0,
+"pts": 6.0
+}
+},
+"matches": [
+{
+"d": "2026-09-09",
+"home": "San Pedro",
+"away": "Deportivo Mixco",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-10",
+"home": "Comunicaciones FC",
+"away": "Deportivo Marquense",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-10",
+"home": "CD Suchitepéquez",
+"away": "Guastatoya",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-10",
+"home": "Aurora FC",
+"away": "CSD Municipal",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Deportivo Malacateco",
+"away": "Antigua Guatemala",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Club Xelajú",
+"away": "Coban Imperial",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Deportivo Marquense",
+"away": "San Pedro",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Deportivo Mixco",
+"away": "Aurora FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Coban Imperial",
+"away": "Comunicaciones FC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Guastatoya",
+"away": "Club Xelajú",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "CSD Municipal",
+"away": "Deportivo Malacateco",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-15",
+"home": "Antigua Guatemala",
+"away": "CD Suchitepéquez",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Comunicaciones FC",
+"away": "Guastatoya",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Aurora FC",
+"away": "Deportivo Marquense",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "San Pedro",
+"away": "Coban Imperial",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-21",
+"home": "Deportivo Malacateco",
+"away": "Deportivo Mixco",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-21",
+"home": "CD Suchitepéquez",
+"away": "Club Xelajú",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-24",
+"home": "Club Xelajú",
+"away": "Antigua Guatemala",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "CSD Municipal",
+"away": "CD Suchitepéquez",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Guastatoya",
+"away": "San Pedro",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Deportivo Marquense",
+"away": "Deportivo Malacateco",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Club Xelajú",
+"away": "Comunicaciones FC",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-27",
+"home": "Coban Imperial",
+"away": "Aurora FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "Deportivo Mixco",
+"away": "Antigua Guatemala",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Deportivo Marquense",
+"away": "Antigua Guatemala",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Coban Imperial",
+"away": "Deportivo Malacateco",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Club Xelajú",
+"away": "San Pedro",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Guastatoya",
+"away": "Aurora FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-05",
+"home": "Comunicaciones FC",
+"away": "CD Suchitepéquez",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-09",
+"home": "Antigua Guatemala",
+"away": "CSD Municipal",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 336
+},
+"soccer_xb_hungary": {
+"teams": {
+"Puskás FC Academy": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 10.0,
+"w": 5.0,
+"pts": 15.0
+},
+"Györi ETO": {
+"n": 8.0,
+"gf": 16.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Vasas Budapest": {
+"n": 8.0,
+"gf": 17.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Újpest": {
+"n": 8.0,
+"gf": 17.0,
+"ga": 13.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Ferencváros": {
+"n": 7.0,
+"gf": 11.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Paksi SE": {
+"n": 8.0,
+"gf": 16.0,
+"ga": 17.0,
+"w": 3.0,
+"pts": 11.0
+},
+"MTK Budapest": {
+"n": 8.0,
+"gf": 15.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Kisvárda": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Debrecen": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 15.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Nyíregyháza Spartacus FC": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Zalaegerszeg": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 17.0,
+"w": 2.0,
+"pts": 6.0
+},
+"Kispest Honvéd": {
+"n": 7.0,
+"gf": 11.0,
+"ga": 14.0,
+"w": 1.0,
+"pts": 6.0
+}
+},
+"matches": [
+{
+"d": "2026-08-14",
+"home": "Kispest Honvéd",
+"away": "Vasas Budapest",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-15",
+"home": "Újpest",
+"away": "MTK Budapest",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-15",
+"home": "Nyíregyháza Spartacus FC",
+"away": "Kisvárda",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-16",
+"home": "Debrecen",
+"away": "Györi ETO",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-16",
+"home": "Puskás FC Academy",
+"away": "Paksi SE",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-17",
+"home": "Zalaegerszeg",
+"away": "Ferencváros",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-21",
+"home": "Paksi SE",
+"away": "Újpest",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Vasas Budapest",
+"away": "Puskás FC Academy",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "MTK Budapest",
+"away": "Nyíregyháza Spartacus FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "Györi ETO",
+"away": "Zalaegerszeg",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-23",
+"home": "Kisvárda",
+"away": "Debrecen",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-28",
+"home": "Debrecen",
+"away": "MTK Budapest",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Nyíregyháza Spartacus FC",
+"away": "Paksi SE",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Kispest Honvéd",
+"away": "Zalaegerszeg",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Újpest",
+"away": "Vasas Budapest",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Kisvárda",
+"away": "Györi ETO",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Puskás FC Academy",
+"away": "Ferencváros",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-03",
+"home": "Györi ETO",
+"away": "Ferencváros",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-04",
+"home": "Vasas Budapest",
+"away": "Nyíregyháza Spartacus FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "MTK Budapest",
+"away": "Kisvárda",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Paksi SE",
+"away": "Debrecen",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-06",
+"home": "Zalaegerszeg",
+"away": "Puskás FC Academy",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Ferencváros",
+"away": "Újpest",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Györi ETO",
+"away": "Kispest Honvéd",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Puskás FC Academy",
+"away": "Kispest Honvéd",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Kisvárda",
+"away": "Paksi SE",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Debrecen",
+"away": "Vasas Budapest",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-20",
+"home": "MTK Budapest",
+"away": "Györi ETO",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Újpest",
+"away": "Zalaegerszeg",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Nyíregyháza Spartacus FC",
+"away": "Ferencváros",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 212
+},
+"soccer_xb_indonesia": {
+"teams": {
+"Dewa United FC": {
+"n": 4.0,
+"gf": 8.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Madura United": {
+"n": 3.0,
+"gf": 7.0,
+"ga": 2.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Persija Jakarta": {
+"n": 3.0,
+"gf": 4.0,
+"ga": 1.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Borneo Samarinda": {
+"n": 4.0,
+"gf": 3.0,
+"ga": 4.0,
+"w": 2.0,
+"pts": 6.0
+},
+"Persib Bandung": {
+"n": 3.0,
+"gf": 6.0,
+"ga": 4.0,
+"w": 2.0,
+"pts": 6.0
+},
+"Bali United FC": {
+"n": 3.0,
+"gf": 6.0,
+"ga": 2.0,
+"w": 2.0,
+"pts": 6.0
+},
+"Persebaya Surabaya": {
+"n": 3.0,
+"gf": 3.0,
+"ga": 2.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Bhayangkara Presisi Indonesia FC": {
+"n": 3.0,
+"gf": 5.0,
+"ga": 3.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Arema": {
+"n": 3.0,
+"gf": 8.0,
+"ga": 5.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Persita": {
+"n": 3.0,
+"gf": 6.0,
+"ga": 5.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Persik": {
+"n": 3.0,
+"gf": 3.0,
+"ga": 2.0,
+"w": 1.0,
+"pts": 4.0
+},
+"PSM Makassar": {
+"n": 3.0,
+"gf": 6.0,
+"ga": 8.0,
+"w": 0.0,
+"pts": 2.0
+},
+"Garudayaksa FC": {
+"n": 3.0,
+"gf": 2.0,
+"ga": 4.0,
+"w": 0.0,
+"pts": 2.0
+},
+"Java United F.C.": {
+"n": 3.0,
+"gf": 3.0,
+"ga": 5.0,
+"w": 0.0,
+"pts": 1.0
+},
+"PSIM Yogyakarta": {
+"n": 3.0,
+"gf": 2.0,
+"ga": 4.0,
+"w": 0.0,
+"pts": 1.0
+},
+"Persijap Jepara": {
+"n": 3.0,
+"gf": 1.0,
+"ga": 5.0,
+"w": 0.0,
+"pts": 0.0
+},
+"PSS Sleman": {
+"n": 3.0,
+"gf": 2.0,
+"ga": 7.0,
+"w": 0.0,
+"pts": 0.0
+},
+"Isenmulang Kalteng": {
+"n": 3.0,
+"gf": 2.0,
+"ga": 10.0,
+"w": 0.0,
+"pts": 0.0
+}
+},
+"matches": [
+{
+"d": "2026-09-04",
+"home": "Arema",
+"away": "Isenmulang Kalteng",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Bali United FC",
+"away": "PSS Sleman",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Bhayangkara Presisi Indonesia FC",
+"away": "Persebaya Surabaya",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Persik",
+"away": "Dewa United FC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "PSIM Yogyakarta",
+"away": "Persita",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Borneo Samarinda",
+"away": "Persija Jakarta",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Java United F.C.",
+"away": "Garudayaksa FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Madura United",
+"away": "Persijap Jepara",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Persib Bandung",
+"away": "PSM Makassar",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Garudayaksa FC",
+"away": "Persik",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Dewa United FC",
+"away": "Bhayangkara Presisi Indonesia FC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Persija Jakarta",
+"away": "Persib Bandung",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "PSS Sleman",
+"away": "Madura United",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Bali United FC",
+"away": "Isenmulang Kalteng",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Persijap Jepara",
+"away": "Borneo Samarinda",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Persita",
+"away": "Java United F.C.",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "PSM Makassar",
+"away": "Arema",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-13",
+"home": "Persebaya Surabaya",
+"away": "PSIM Yogyakarta",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-16",
+"home": "Borneo Samarinda",
+"away": "Dewa United FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-18",
+"home": "Arema",
+"away": "Persik",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Madura United",
+"away": "PSIM Yogyakarta",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Persebaya Surabaya",
+"away": "Garudayaksa FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "PSM Makassar",
+"away": "Persita",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Bhayangkara Presisi Indonesia FC",
+"away": "Isenmulang Kalteng",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Persija Jakarta",
+"away": "Java United F.C.",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Borneo Samarinda",
+"away": "Bali United FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Dewa United FC",
+"away": "PSS Sleman",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Persijap Jepara",
+"away": "Persib Bandung",
+"hg": 1.0,
+"ag": 2.0
+}
+],
+"id": 8983
+},
+"soccer_xb_iran": {
+"teams": {
+"Tractor": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 2.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Esteghlal": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 2.0,
+"w": 4.0,
+"pts": 16.0
+},
+"Persepolis": {
+"n": 6.0,
+"gf": 12.0,
+"ga": 3.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Sepahan": {
+"n": 7.0,
+"gf": 11.0,
+"ga": 5.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Aluminium Arak": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Gol Gohar": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Foolad Khuzestan": {
+"n": 7.0,
+"gf": 7.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Nassaji Mazandaran FC": {
+"n": 8.0,
+"gf": 5.0,
+"ga": 7.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Paykan": {
+"n": 7.0,
+"gf": 5.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Malavan": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 9.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Chadormalu Ardakan SC": {
+"n": 7.0,
+"gf": 4.0,
+"ga": 9.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Zob Ahan": {
+"n": 7.0,
+"gf": 4.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Fajr Sepasi": {
+"n": 7.0,
+"gf": 4.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Kheybar Khorramabad": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 8.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Esteghlal Khuzestan": {
+"n": 8.0,
+"gf": 4.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Shams Azar Qazvin": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Mes Shahr Babak": {
+"n": 8.0,
+"gf": 6.0,
+"ga": 12.0,
+"w": 0.0,
+"pts": 5.0
+},
+"Sanat Naft Abadan": {
+"n": 7.0,
+"gf": 2.0,
+"ga": 8.0,
+"w": 0.0,
+"pts": 4.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Persepolis",
+"away": "Malavan",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-01",
+"home": "Esteghlal Khuzestan",
+"away": "Chadormalu Ardakan SC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-01",
+"home": "Gol Gohar",
+"away": "Aluminium Arak",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-01",
+"home": "Shams Azar Qazvin",
+"away": "Tractor",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Malavan",
+"away": "Nassaji Mazandaran FC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-02",
+"home": "Zob Ahan",
+"away": "Paykan",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Kheybar Khorramabad",
+"away": "Foolad Khuzestan",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Esteghlal",
+"away": "Persepolis",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-02",
+"home": "Sanat Naft Abadan",
+"away": "Sepahan",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-03",
+"home": "Fajr Sepasi",
+"away": "Mes Shahr Babak",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Tractor",
+"away": "Gol Gohar",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Paykan",
+"away": "Sanat Naft Abadan",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Aluminium Arak",
+"away": "Esteghlal",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Chadormalu Ardakan SC",
+"away": "Shams Azar Qazvin",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Sepahan",
+"away": "Esteghlal Khuzestan",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Mes Shahr Babak",
+"away": "Malavan",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-07",
+"home": "Nassaji Mazandaran FC",
+"away": "Kheybar Khorramabad",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Persepolis",
+"away": "Zob Ahan",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Foolad Khuzestan",
+"away": "Fajr Sepasi",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-10",
+"home": "Esteghlal",
+"away": "Paykan",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-10",
+"home": "Esteghlal Khuzestan",
+"away": "Tractor",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-10",
+"home": "Shams Azar Qazvin",
+"away": "Gol Gohar",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Sanat Naft Abadan",
+"away": "Chadormalu Ardakan SC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Mes Shahr Babak",
+"away": "Nassaji Mazandaran FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Aluminium Arak",
+"away": "Malavan",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Nassaji Mazandaran FC",
+"away": "Zob Ahan",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Gol Gohar",
+"away": "Esteghlal Khuzestan",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-08",
+"home": "Tractor",
+"away": "Esteghlal",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Sepahan",
+"away": "Fajr Sepasi",
+"hg": 6.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Foolad Khuzestan",
+"away": "Mes Shahr Babak",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 523
+},
+"soccer_xb_israel": {
+"teams": {
+"Maccabi Tel Aviv": {
+"n": 5.0,
+"gf": 18.0,
+"ga": 6.0,
+"w": 5.0,
+"pts": 15.0
+},
+"Maccabi Haifa": {
+"n": 5.0,
+"gf": 12.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Hapoel Tel Aviv": {
+"n": 5.0,
+"gf": 11.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Hapoel Beer Sheva": {
+"n": 5.0,
+"gf": 8.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Beitar Jerusalem": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Hapoel Jerusalem FC": {
+"n": 5.0,
+"gf": 12.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Hapoel Haifa": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Maccabi Petach Tikva": {
+"n": 5.0,
+"gf": 8.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 6.0
+},
+"Maccabi Netanya": {
+"n": 5.0,
+"gf": 6.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Bnei Sakhnin": {
+"n": 5.0,
+"gf": 3.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Hapoel Ramat Gan": {
+"n": 5.0,
+"gf": 4.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 3.0
+},
+"Hapoel Ironi Kiryat Shmona": {
+"n": 5.0,
+"gf": 5.0,
+"ga": 11.0,
+"w": 1.0,
+"pts": 3.0
+},
+"Hapoel Petah Tikva": {
+"n": 5.0,
+"gf": 2.0,
+"ga": 8.0,
+"w": 1.0,
+"pts": 3.0
+},
+"Ironi Tiberias": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 8.0,
+"w": 2.0,
+"pts": 1.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Bnei Sakhnin",
+"away": "Maccabi Petach Tikva",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Hapoel Ironi Kiryat Shmona",
+"away": "Ironi Tiberias",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Hapoel Petah Tikva",
+"away": "Hapoel Jerusalem FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Hapoel Ramat Gan",
+"away": "Hapoel Beer Sheva",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Beitar Jerusalem",
+"away": "Maccabi Netanya",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-08-30",
+"home": "Hapoel Haifa",
+"away": "Hapoel Tel Aviv",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-31",
+"home": "Maccabi Tel Aviv",
+"away": "Maccabi Haifa",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-02",
+"home": "Hapoel Beer Sheva",
+"away": "Hapoel Haifa",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-03",
+"home": "Hapoel Tel Aviv",
+"away": "Beitar Jerusalem",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Hapoel Jerusalem FC",
+"away": "Hapoel Ironi Kiryat Shmona",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Maccabi Petach Tikva",
+"away": "Ironi Tiberias",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Maccabi Haifa",
+"away": "Hapoel Petah Tikva",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Maccabi Netanya",
+"away": "Hapoel Haifa",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Hapoel Tel Aviv",
+"away": "Hapoel Ramat Gan",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Bnei Sakhnin",
+"away": "Beitar Jerusalem",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Hapoel Beer Sheva",
+"away": "Maccabi Tel Aviv",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-13",
+"home": "Hapoel Petah Tikva",
+"away": "Hapoel Beer Sheva",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-14",
+"home": "Hapoel Haifa",
+"away": "Bnei Sakhnin",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Hapoel Ramat Gan",
+"away": "Maccabi Netanya",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-14",
+"home": "Hapoel Ironi Kiryat Shmona",
+"away": "Maccabi Haifa",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-14",
+"home": "Maccabi Tel Aviv",
+"away": "Hapoel Tel Aviv",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Ironi Tiberias",
+"away": "Hapoel Jerusalem FC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-15",
+"home": "Beitar Jerusalem",
+"away": "Maccabi Petach Tikva",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Hapoel Tel Aviv",
+"away": "Hapoel Petah Tikva",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Bnei Sakhnin",
+"away": "Hapoel Ramat Gan",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Maccabi Petach Tikva",
+"away": "Hapoel Jerusalem FC",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-19",
+"home": "Maccabi Haifa",
+"away": "Ironi Tiberias",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Maccabi Netanya",
+"away": "Maccabi Tel Aviv",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Hapoel Beer Sheva",
+"away": "Hapoel Ironi Kiryat Shmona",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Beitar Jerusalem",
+"away": "Hapoel Haifa",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 127
+},
+"soccer_xb_japan_2": {
+"teams": {
+"Vegalta Sendai": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 8.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Albirex Niigata": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 13.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Kataller Toyama": {
+"n": 9.0,
+"gf": 18.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 17.0
+},
+"RB Omiya Ardija": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 17.0
+},
+"Yokohama FC": {
+"n": 9.0,
+"gf": 18.0,
+"ga": 11.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Shonan Bellmare": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 16.0
+},
+"Fujieda MYFC": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Blaublitz Akita": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Tokushima Vortis": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Montedio Yamagata": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Tegevajaro Miyazaki": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Oita Trinita": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 2.0,
+"pts": 11.0
+},
+"Tochigi City FC": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Júbilo Iwata": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Vanraure Hachinohe": {
+"n": 9.0,
+"gf": 5.0,
+"ga": 14.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Iwaki FC": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 17.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Sagan Tosu": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Hokkaido Consadole Sapporo": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 18.0,
+"w": 2.0,
+"pts": 8.0
+},
+"FC Imabari": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 18.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Ventforet Kofu": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 17.0,
+"w": 2.0,
+"pts": 7.0
+}
+},
+"matches": [
+{
+"d": "2026-09-18",
+"home": "Vanraure Hachinohe",
+"away": "Tegevajaro Miyazaki",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Hokkaido Consadole Sapporo",
+"away": "Oita Trinita",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Fujieda MYFC",
+"away": "RB Omiya Ardija",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Albirex Niigata",
+"away": "Júbilo Iwata",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Montedio Yamagata",
+"away": "Kataller Toyama",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Sagan Tosu",
+"away": "Iwaki FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Shonan Bellmare",
+"away": "Blaublitz Akita",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Ventforet Kofu",
+"away": "Tokushima Vortis",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Yokohama FC",
+"away": "FC Imabari",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Tochigi City FC",
+"away": "Vegalta Sendai",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-26",
+"home": "Blaublitz Akita",
+"away": "Albirex Niigata",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "FC Imabari",
+"away": "Shonan Bellmare",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Iwaki FC",
+"away": "Vegalta Sendai",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Júbilo Iwata",
+"away": "Vanraure Hachinohe",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Kataller Toyama",
+"away": "Yokohama FC",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-26",
+"home": "Montedio Yamagata",
+"away": "Sagan Tosu",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Oita Trinita",
+"away": "Fujieda MYFC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "RB Omiya Ardija",
+"away": "Ventforet Kofu",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Tegevajaro Miyazaki",
+"away": "Hokkaido Consadole Sapporo",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Tokushima Vortis",
+"away": "Tochigi City FC",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Albirex Niigata",
+"away": "Tokushima Vortis",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Fujieda MYFC",
+"away": "Shonan Bellmare",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Ventforet Kofu",
+"away": "Kataller Toyama",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Oita Trinita",
+"away": "Montedio Yamagata",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Tochigi City FC",
+"away": "FC Imabari",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Hokkaido Consadole Sapporo",
+"away": "Iwaki FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Vanraure Hachinohe",
+"away": "Yokohama FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Blaublitz Akita",
+"away": "Sagan Tosu",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Vegalta Sendai",
+"away": "Júbilo Iwata",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Tegevajaro Miyazaki",
+"away": "RB Omiya Ardija",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 8974
+},
+"soccer_xb_korea_2": {
+"teams": {
+"Suwon Samsung Bluewings": {
+"n": 25.0,
+"gf": 39.0,
+"ga": 20.0,
+"w": 16.0,
+"pts": 53.0
+},
+"Suwon FC": {
+"n": 26.0,
+"gf": 51.0,
+"ga": 29.0,
+"w": 14.0,
+"pts": 51.0
+},
+"Seoul E-Land FC": {
+"n": 27.0,
+"gf": 45.0,
+"ga": 30.0,
+"w": 14.0,
+"pts": 49.0
+},
+"Daegu FC": {
+"n": 26.0,
+"gf": 48.0,
+"ga": 35.0,
+"w": 13.0,
+"pts": 46.0
+},
+"Hwaseong FC": {
+"n": 27.0,
+"gf": 41.0,
+"ga": 28.0,
+"w": 12.0,
+"pts": 44.0
+},
+"Busan I'Park": {
+"n": 26.0,
+"gf": 41.0,
+"ga": 34.0,
+"w": 12.0,
+"pts": 41.0
+},
+"Gimpo FC": {
+"n": 26.0,
+"gf": 31.0,
+"ga": 30.0,
+"w": 8.0,
+"pts": 36.0
+},
+"Chungnam Asan FC": {
+"n": 25.0,
+"gf": 34.0,
+"ga": 31.0,
+"w": 9.0,
+"pts": 34.0
+},
+"Gyeongnam FC": {
+"n": 25.0,
+"gf": 31.0,
+"ga": 30.0,
+"w": 8.0,
+"pts": 34.0
+},
+"Cheongju FC": {
+"n": 27.0,
+"gf": 32.0,
+"ga": 41.0,
+"w": 6.0,
+"pts": 32.0
+},
+"Seongnam FC": {
+"n": 26.0,
+"gf": 28.0,
+"ga": 31.0,
+"w": 7.0,
+"pts": 31.0
+},
+"Paju Frontier": {
+"n": 25.0,
+"gf": 24.0,
+"ga": 28.0,
+"w": 8.0,
+"pts": 29.0
+},
+"Yongin FC": {
+"n": 25.0,
+"gf": 31.0,
+"ga": 35.0,
+"w": 5.0,
+"pts": 27.0
+},
+"Cheonan City": {
+"n": 26.0,
+"gf": 30.0,
+"ga": 37.0,
+"w": 4.0,
+"pts": 23.0
+},
+"Ansan Greeners": {
+"n": 26.0,
+"gf": 27.0,
+"ga": 49.0,
+"w": 6.0,
+"pts": 22.0
+},
+"Jeonnam Dragons": {
+"n": 25.0,
+"gf": 28.0,
+"ga": 43.0,
+"w": 4.0,
+"pts": 21.0
+},
+"Gimhae FC 2008": {
+"n": 25.0,
+"gf": 19.0,
+"ga": 49.0,
+"w": 2.0,
+"pts": 13.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Gyeongnam FC",
+"away": "Paju Frontier",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Hwaseong FC",
+"away": "Cheongju FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Seongnam FC",
+"away": "Seoul E-Land FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Gimhae FC 2008",
+"away": "Yongin FC",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-30",
+"home": "Suwon FC",
+"away": "Busan I'Park",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Cheongju FC",
+"away": "Seoul E-Land FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Paju Frontier",
+"away": "Daegu FC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Busan I'Park",
+"away": "Ansan Greeners",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Cheonan City",
+"away": "Hwaseong FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Gimhae FC 2008",
+"away": "Jeonnam Dragons",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Yongin FC",
+"away": "Suwon FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Gimpo FC",
+"away": "Seongnam FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Suwon Samsung Bluewings",
+"away": "Chungnam Asan FC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Daegu FC",
+"away": "Yongin FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Seoul E-Land FC",
+"away": "Suwon Samsung Bluewings",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Ansan Greeners",
+"away": "Hwaseong FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Chungnam Asan FC",
+"away": "Cheongju FC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Gyeongnam FC",
+"away": "Seongnam FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Jeonnam Dragons",
+"away": "Gimpo FC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Busan I'Park",
+"away": "Gimhae FC 2008",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Suwon FC",
+"away": "Cheonan City",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Chungnam Asan FC",
+"away": "Cheonan City",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Jeonnam Dragons",
+"away": "Suwon FC",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Gimpo FC",
+"away": "Busan I'Park",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Seoul E-Land FC",
+"away": "Daegu FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Ansan Greeners",
+"away": "Cheongju FC",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Yongin FC",
+"away": "Gyeongnam FC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Gimhae FC 2008",
+"away": "Paju Frontier",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Seongnam FC",
+"away": "Hwaseong FC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-09",
+"home": "Suwon FC",
+"away": "Hwaseong FC",
+"hg": 1.0,
+"ag": 0.0
+}
+],
+"id": 9116
+},
+"soccer_xb_mexico_2": {
+"teams": {
+"Leones Negros": {
+"n": 11.0,
+"gf": 27.0,
+"ga": 16.0,
+"w": 7.0,
+"pts": 23.0
+},
+"Atlético Morelia": {
+"n": 11.0,
+"gf": 21.0,
+"ga": 12.0,
+"w": 7.0,
+"pts": 22.0
+},
+"Atlético La Paz": {
+"n": 11.0,
+"gf": 24.0,
+"ga": 13.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Venados FC": {
+"n": 11.0,
+"gf": 26.0,
+"ga": 21.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Piratas": {
+"n": 11.0,
+"gf": 16.0,
+"ga": 10.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Mineros de Zacatecas": {
+"n": 11.0,
+"gf": 23.0,
+"ga": 19.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Cancún FC": {
+"n": 11.0,
+"gf": 19.0,
+"ga": 15.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Alacranes de Durango": {
+"n": 11.0,
+"gf": 11.0,
+"ga": 11.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Correcaminos de la UAT": {
+"n": 12.0,
+"gf": 20.0,
+"ga": 20.0,
+"w": 4.0,
+"pts": 16.0
+},
+"Tapatío": {
+"n": 10.0,
+"gf": 17.0,
+"ga": 15.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Dorados": {
+"n": 11.0,
+"gf": 20.0,
+"ga": 20.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Alebrijes Oaxaca": {
+"n": 12.0,
+"gf": 10.0,
+"ga": 23.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Tlaxcala FC": {
+"n": 11.0,
+"gf": 19.0,
+"ga": 23.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Jaiba Brava del Tampico-Madero": {
+"n": 11.0,
+"gf": 12.0,
+"ga": 19.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Cruz Azul Hidalgo": {
+"n": 11.0,
+"gf": 11.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 8.0
+},
+"Tepatitlán FC": {
+"n": 10.0,
+"gf": 8.0,
+"ga": 29.0,
+"w": 2.0,
+"pts": 6.0
+}
+},
+"matches": [
+{
+"d": "2026-09-12",
+"home": "Tlaxcala FC",
+"away": "Jaiba Brava del Tampico-Madero",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Venados FC",
+"away": "Tepatitlán FC",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Dorados",
+"away": "Tapatío",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Mineros de Zacatecas",
+"away": "Atlético Morelia",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Leones Negros",
+"away": "Atlético La Paz",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-16",
+"home": "Dorados",
+"away": "Cancún FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Alacranes de Durango",
+"away": "Cruz Azul Hidalgo",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Piratas",
+"away": "Venados FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Tepatitlán FC",
+"away": "Mineros de Zacatecas",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Atlético La Paz",
+"away": "Correcaminos de la UAT",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Atlético Morelia",
+"away": "Leones Negros",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Cancún FC",
+"away": "Alebrijes Oaxaca",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Jaiba Brava del Tampico-Madero",
+"away": "Dorados",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Tapatío",
+"away": "Tlaxcala FC",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "Alebrijes Oaxaca",
+"away": "Atlético La Paz",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-25",
+"home": "Mineros de Zacatecas",
+"away": "Piratas",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Correcaminos de la UAT",
+"away": "Jaiba Brava del Tampico-Madero",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Cruz Azul Hidalgo",
+"away": "Leones Negros",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Tlaxcala FC",
+"away": "Cancún FC",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Venados FC",
+"away": "Atlético Morelia",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Dorados",
+"away": "Alacranes de Durango",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Correcaminos de la UAT",
+"away": "Cruz Azul Hidalgo",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Tepatitlán FC",
+"away": "Jaiba Brava del Tampico-Madero",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Atlético La Paz",
+"away": "Venados FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Alacranes de Durango",
+"away": "Mineros de Zacatecas",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Atlético Morelia",
+"away": "Tlaxcala FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Cancún FC",
+"away": "Tapatío",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Piratas",
+"away": "Alebrijes Oaxaca",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Leones Negros",
+"away": "Dorados",
+"hg": 6.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-09",
+"home": "Alebrijes Oaxaca",
+"away": "Correcaminos de la UAT",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 8976
+},
+"soccer_xb_netherlands_2": {
+"teams": {
+"Heracles": {
+"n": 9.0,
+"gf": 28.0,
+"ga": 12.0,
+"w": 7.0,
+"pts": 22.0
+},
+"Almere City FC": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 7.0,
+"w": 6.0,
+"pts": 19.0
+},
+"VVV-Venlo": {
+"n": 9.0,
+"gf": 23.0,
+"ga": 14.0,
+"w": 6.0,
+"pts": 18.0
+},
+"FC Emmen": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 18.0,
+"w": 5.0,
+"pts": 16.0
+},
+"MVV Maastricht": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 19.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Roda JC Kerkrade": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 15.0
+},
+"RKC Waalwijk": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 12.0,
+"w": 3.0,
+"pts": 14.0
+},
+"Vitesse": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 13.0,
+"w": 4.0,
+"pts": 14.0
+},
+"NAC Breda": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 19.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Jong AZ Alkmaar": {
+"n": 9.0,
+"gf": 22.0,
+"ga": 17.0,
+"w": 4.0,
+"pts": 13.0
+},
+"FC Volendam": {
+"n": 9.0,
+"gf": 20.0,
+"ga": 17.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Jong PSV": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 16.0,
+"w": 3.0,
+"pts": 12.0
+},
+"FC Eindhoven": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 19.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Helmond Sport": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 16.0,
+"w": 2.0,
+"pts": 9.0
+},
+"TOP Oss": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 14.0,
+"w": 3.0,
+"pts": 9.0
+},
+"FC Den Bosch": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 18.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Jong Ajax": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 22.0,
+"w": 2.0,
+"pts": 8.0
+},
+"FC Dordrecht": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 24.0,
+"w": 2.0,
+"pts": 8.0
+},
+"De Graafschap": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 22.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Jong FC Utrecht": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 21.0,
+"w": 2.0,
+"pts": 7.0
+}
+},
+"matches": [
+{
+"d": "2026-09-12",
+"home": "Roda JC Kerkrade",
+"away": "Vitesse",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Volendam",
+"away": "FC Den Bosch",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-14",
+"home": "Jong FC Utrecht",
+"away": "Jong Ajax",
+"hg": 6.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Jong PSV",
+"away": "Jong AZ Alkmaar",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Almere City FC",
+"away": "Heracles",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "FC Den Bosch",
+"away": "Helmond Sport",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "FC Eindhoven",
+"away": "FC Emmen",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Jong Ajax",
+"away": "Roda JC Kerkrade",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Jong AZ Alkmaar",
+"away": "FC Volendam",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Jong FC Utrecht",
+"away": "VVV-Venlo",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-18",
+"home": "RKC Waalwijk",
+"away": "MVV Maastricht",
+"hg": 6.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "TOP Oss",
+"away": "FC Dordrecht",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Vitesse",
+"away": "Jong PSV",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "De Graafschap",
+"away": "NAC Breda",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-25",
+"home": "FC Dordrecht",
+"away": "Almere City FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Heracles",
+"away": "Vitesse",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "FC Emmen",
+"away": "TOP Oss",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "FC Volendam",
+"away": "VVV-Venlo",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "MVV Maastricht",
+"away": "Helmond Sport",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "NAC Breda",
+"away": "FC Eindhoven",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-26",
+"home": "Roda JC Kerkrade",
+"away": "RKC Waalwijk",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "De Graafschap",
+"away": "FC Den Bosch",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-02",
+"home": "Helmond Sport",
+"away": "Heracles",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "TOP Oss",
+"away": "MVV Maastricht",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Vitesse",
+"away": "NAC Breda",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Almere City FC",
+"away": "FC Volendam",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "FC Den Bosch",
+"away": "FC Dordrecht",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "FC Eindhoven",
+"away": "De Graafschap",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "RKC Waalwijk",
+"away": "FC Emmen",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "VVV-Venlo",
+"away": "Roda JC Kerkrade",
+"hg": 2.0,
+"ag": 0.0
+}
+],
+"id": 111
+},
+"soccer_xb_northern_ireland": {
+"teams": {
+"Coleraine": {
+"n": 10.0,
+"gf": 22.0,
+"ga": 10.0,
+"w": 8.0,
+"pts": 25.0
+},
+"Linfield": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 6.0,
+"w": 7.0,
+"pts": 22.0
+},
+"Larne": {
+"n": 6.0,
+"gf": 12.0,
+"ga": 3.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Glentoran": {
+"n": 10.0,
+"gf": 15.0,
+"ga": 10.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Crusaders": {
+"n": 10.0,
+"gf": 15.0,
+"ga": 18.0,
+"w": 5.0,
+"pts": 15.0
+},
+"Carrick Rangers": {
+"n": 10.0,
+"gf": 15.0,
+"ga": 15.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Dungannon Swifts": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Ballymena United": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Cliftonville": {
+"n": 10.0,
+"gf": 12.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Limavady": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 14.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Bangor": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 22.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Portadown": {
+"n": 10.0,
+"gf": 8.0,
+"ga": 20.0,
+"w": 1.0,
+"pts": 4.0
+}
+},
+"matches": [
+{
+"d": "2026-09-05",
+"home": "Coleraine",
+"away": "Crusaders",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-08",
+"home": "Larne",
+"away": "Bangor",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Coleraine",
+"away": "Ballymena United",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Carrick Rangers",
+"away": "Cliftonville",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Crusaders",
+"away": "Limavady",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Glentoran",
+"away": "Bangor",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Portadown",
+"away": "Larne",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Dungannon Swifts",
+"away": "Linfield",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Ballymena United",
+"away": "Carrick Rangers",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Crusaders",
+"away": "Dungannon Swifts",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-15",
+"home": "Glentoran",
+"away": "Coleraine",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-15",
+"home": "Larne",
+"away": "Cliftonville",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-15",
+"home": "Limavady",
+"away": "Bangor",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Portadown",
+"away": "Linfield",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Bangor",
+"away": "Portadown",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Carrick Rangers",
+"away": "Larne",
+"hg": 2.0,
+"ag": 5.0
+},
+{
+"d": "2026-09-19",
+"home": "Cliftonville",
+"away": "Glentoran",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Dungannon Swifts",
+"away": "Ballymena United",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Linfield",
+"away": "Crusaders",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Coleraine",
+"away": "Limavady",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "Coleraine",
+"away": "Linfield",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-26",
+"home": "Ballymena United",
+"away": "Portadown",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Crusaders",
+"away": "Bangor",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Glentoran",
+"away": "Carrick Rangers",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Limavady",
+"away": "Cliftonville",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Carrick Rangers",
+"away": "Crusaders",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Cliftonville",
+"away": "Ballymena United",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Glentoran",
+"away": "Dungannon Swifts",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Portadown",
+"away": "Limavady",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Bangor",
+"away": "Coleraine",
+"hg": 2.0,
+"ag": 3.0
+}
+],
+"id": 129
+},
+"soccer_xb_norway_2": {
+"teams": {
+"FK Haugesund": {
+"n": 24.0,
+"gf": 74.0,
+"ga": 39.0,
+"w": 18.0,
+"pts": 55.0
+},
+"Kongsvinger": {
+"n": 24.0,
+"gf": 70.0,
+"ga": 35.0,
+"w": 16.0,
+"pts": 53.0
+},
+"Strømsgodset": {
+"n": 24.0,
+"gf": 61.0,
+"ga": 31.0,
+"w": 15.0,
+"pts": 51.0
+},
+"Stabæk": {
+"n": 24.0,
+"gf": 57.0,
+"ga": 31.0,
+"w": 14.0,
+"pts": 45.0
+},
+"Odds Ballklubb": {
+"n": 24.0,
+"gf": 50.0,
+"ga": 38.0,
+"w": 11.0,
+"pts": 39.0
+},
+"Bryne": {
+"n": 24.0,
+"gf": 33.0,
+"ga": 31.0,
+"w": 12.0,
+"pts": 38.0
+},
+"Hødd": {
+"n": 24.0,
+"gf": 40.0,
+"ga": 48.0,
+"w": 10.0,
+"pts": 34.0
+},
+"Ranheim": {
+"n": 24.0,
+"gf": 61.0,
+"ga": 58.0,
+"w": 9.0,
+"pts": 31.0
+},
+"Egersund": {
+"n": 24.0,
+"gf": 36.0,
+"ga": 49.0,
+"w": 8.0,
+"pts": 29.0
+},
+"Lyn": {
+"n": 24.0,
+"gf": 39.0,
+"ga": 49.0,
+"w": 8.0,
+"pts": 28.0
+},
+"Strømmen": {
+"n": 24.0,
+"gf": 38.0,
+"ga": 55.0,
+"w": 7.0,
+"pts": 26.0
+},
+"Sandnes Ulf": {
+"n": 24.0,
+"gf": 35.0,
+"ga": 45.0,
+"w": 7.0,
+"pts": 25.0
+},
+"Moss": {
+"n": 24.0,
+"gf": 38.0,
+"ga": 54.0,
+"w": 7.0,
+"pts": 25.0
+},
+"Sogndal": {
+"n": 23.0,
+"gf": 38.0,
+"ga": 53.0,
+"w": 6.0,
+"pts": 23.0
+},
+"Åsane": {
+"n": 24.0,
+"gf": 34.0,
+"ga": 53.0,
+"w": 5.0,
+"pts": 19.0
+},
+"Raufoss": {
+"n": 23.0,
+"gf": 26.0,
+"ga": 61.0,
+"w": 6.0,
+"pts": 19.0
+}
+},
+"matches": [
+{
+"d": "2026-09-05",
+"home": "FK Haugesund",
+"away": "Sogndal",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Kongsvinger",
+"away": "Raufoss",
+"hg": 9.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Odds Ballklubb",
+"away": "Strømsgodset",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Sandnes Ulf",
+"away": "Ranheim",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Strømmen",
+"away": "Bryne",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Stabæk",
+"away": "Moss",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Lyn",
+"away": "Egersund",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Bryne",
+"away": "Stabæk",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Egersund",
+"away": "Kongsvinger",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Hødd",
+"away": "Lyn",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Moss",
+"away": "FK Haugesund",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-13",
+"home": "Ranheim",
+"away": "Åsane",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Raufoss",
+"away": "Odds Ballklubb",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Sogndal",
+"away": "Strømmen",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Strømsgodset",
+"away": "Sandnes Ulf",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Åsane",
+"away": "Bryne",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-20",
+"home": "FK Haugesund",
+"away": "Strømmen",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Kongsvinger",
+"away": "Hødd",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Lyn",
+"away": "Ranheim",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-20",
+"home": "Odds Ballklubb",
+"away": "Egersund",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Raufoss",
+"away": "Strømsgodset",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Sandnes Ulf",
+"away": "Moss",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Stabæk",
+"away": "Sogndal",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-02",
+"home": "Ranheim",
+"away": "Egersund",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Strømmen",
+"away": "Sandnes Ulf",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-03",
+"home": "FK Haugesund",
+"away": "Stabæk",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Hødd",
+"away": "Odds Ballklubb",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-03",
+"home": "Strømsgodset",
+"away": "Åsane",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Bryne",
+"away": "Lyn",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-05",
+"home": "Moss",
+"away": "Kongsvinger",
+"hg": 0.0,
+"ag": 2.0
+}
+],
+"id": 203
+},
+"soccer_xb_paraguay": {
+"teams": {
+"Olimpia": {
+"n": 22.0,
+"gf": 37.0,
+"ga": 17.0,
+"w": 15.0,
+"pts": 49.0
+},
+"Libertad": {
+"n": 22.0,
+"gf": 34.0,
+"ga": 26.0,
+"w": 9.0,
+"pts": 31.0
+},
+"2 de Mayo": {
+"n": 22.0,
+"gf": 18.0,
+"ga": 35.0,
+"w": 5.0,
+"pts": 22.0
+},
+"Nacional": {
+"n": 22.0,
+"gf": 31.0,
+"ga": 22.0,
+"w": 10.0,
+"pts": 39.0
+},
+"Sportivo Trinidense": {
+"n": 22.0,
+"gf": 30.0,
+"ga": 24.0,
+"w": 8.0,
+"pts": 32.0
+},
+"Guaraní": {
+"n": 22.0,
+"gf": 27.0,
+"ga": 23.0,
+"w": 7.0,
+"pts": 29.0
+},
+"Sportivo Ameliano": {
+"n": 22.0,
+"gf": 27.0,
+"ga": 21.0,
+"w": 8.0,
+"pts": 33.0
+},
+"Cerro Porteño": {
+"n": 22.0,
+"gf": 30.0,
+"ga": 22.0,
+"w": 11.0,
+"pts": 38.0
+},
+"Luqueño": {
+"n": 22.0,
+"gf": 24.0,
+"ga": 33.0,
+"w": 5.0,
+"pts": 20.0
+},
+"Rubio Ñú": {
+"n": 22.0,
+"gf": 15.0,
+"ga": 26.0,
+"w": 6.0,
+"pts": 23.0
+},
+"Recoleta": {
+"n": 22.0,
+"gf": 35.0,
+"ga": 32.0,
+"w": 8.0,
+"pts": 28.0
+},
+"Sportivo San Lorenzo": {
+"n": 22.0,
+"gf": 14.0,
+"ga": 41.0,
+"w": 3.0,
+"pts": 15.0
+}
+},
+"matches": [
+{
+"d": "2026-04-24",
+"home": "Nacional",
+"away": "Recoleta",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-04-24",
+"home": "Cerro Porteño",
+"away": "Sportivo Ameliano",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-04-25",
+"home": "Luqueño",
+"away": "Sportivo Trinidense",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-04-25",
+"home": "Libertad",
+"away": "Olimpia",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-04-26",
+"home": "2 de Mayo",
+"away": "Guaraní",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-04-26",
+"home": "Sportivo San Lorenzo",
+"away": "Rubio Ñú",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-01",
+"home": "Sportivo Trinidense",
+"away": "2 de Mayo",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-05-01",
+"home": "Libertad",
+"away": "Sportivo San Lorenzo",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-02",
+"home": "Rubio Ñú",
+"away": "Luqueño",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-03",
+"home": "Olimpia",
+"away": "Sportivo Ameliano",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-03",
+"home": "Recoleta",
+"away": "Cerro Porteño",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-03",
+"home": "Guaraní",
+"away": "Nacional",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-09",
+"home": "2 de Mayo",
+"away": "Rubio Ñú",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-09",
+"home": "Nacional",
+"away": "Sportivo Trinidense",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-10",
+"home": "Sportivo San Lorenzo",
+"away": "Olimpia",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-10",
+"home": "Luqueño",
+"away": "Libertad",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-05-11",
+"home": "Sportivo Ameliano",
+"away": "Recoleta",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-05-11",
+"home": "Cerro Porteño",
+"away": "Guaraní",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-14",
+"home": "Libertad",
+"away": "2 de Mayo",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-15",
+"home": "Olimpia",
+"away": "Recoleta",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-05-15",
+"home": "Rubio Ñú",
+"away": "Nacional",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-15",
+"home": "Sportivo Trinidense",
+"away": "Cerro Porteño",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-16",
+"home": "Guaraní",
+"away": "Sportivo Ameliano",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-17",
+"home": "Sportivo San Lorenzo",
+"away": "Luqueño",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-22",
+"home": "2 de Mayo",
+"away": "Sportivo San Lorenzo",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-23",
+"home": "Luqueño",
+"away": "Olimpia",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-05-23",
+"home": "Recoleta",
+"away": "Guaraní",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-24",
+"home": "Cerro Porteño",
+"away": "Rubio Ñú",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-05-24",
+"home": "Nacional",
+"away": "Libertad",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-05-24",
+"home": "Sportivo Ameliano",
+"away": "Sportivo Trinidense",
+"hg": 1.0,
+"ag": 2.0
+}
+],
+"id": 199
+},
+"soccer_xb_peru": {
+"teams": {
+"Deportivo Garcilaso": {
+"n": 17.0,
+"gf": 21.0,
+"ga": 18.0,
+"w": 7.0,
+"pts": 26.0
+},
+"Universitario de Deportes": {
+"n": 17.0,
+"gf": 24.0,
+"ga": 15.0,
+"w": 8.0,
+"pts": 29.0
+},
+"Sporting Cristal": {
+"n": 17.0,
+"gf": 28.0,
+"ga": 30.0,
+"w": 5.0,
+"pts": 19.0
+},
+"Alianza Atlético": {
+"n": 17.0,
+"gf": 20.0,
+"ga": 18.0,
+"w": 5.0,
+"pts": 21.0
+},
+"Sport Huancayo": {
+"n": 17.0,
+"gf": 21.0,
+"ga": 31.0,
+"w": 4.0,
+"pts": 16.0
+},
+"ADC Juan Pablo II": {
+"n": 17.0,
+"gf": 22.0,
+"ga": 40.0,
+"w": 4.0,
+"pts": 16.0
+},
+"FBC Melgar": {
+"n": 17.0,
+"gf": 29.0,
+"ga": 20.0,
+"w": 8.0,
+"pts": 28.0
+},
+"Sport Boys": {
+"n": 17.0,
+"gf": 15.0,
+"ga": 19.0,
+"w": 5.0,
+"pts": 20.0
+},
+"Cusco FC": {
+"n": 17.0,
+"gf": 21.0,
+"ga": 24.0,
+"w": 8.0,
+"pts": 27.0
+},
+"Atlético Grau": {
+"n": 17.0,
+"gf": 12.0,
+"ga": 18.0,
+"w": 4.0,
+"pts": 16.0
+},
+"Alianza Lima": {
+"n": 17.0,
+"gf": 30.0,
+"ga": 8.0,
+"w": 12.0,
+"pts": 40.0
+},
+"Cienciano": {
+"n": 17.0,
+"gf": 34.0,
+"ga": 22.0,
+"w": 10.0,
+"pts": 33.0
+},
+"FC Cajamarca": {
+"n": 17.0,
+"gf": 23.0,
+"ga": 28.0,
+"w": 4.0,
+"pts": 17.0
+},
+"Comerciantes Unidos": {
+"n": 17.0,
+"gf": 18.0,
+"ga": 20.0,
+"w": 5.0,
+"pts": 21.0
+},
+"Los Chankas": {
+"n": 17.0,
+"gf": 25.0,
+"ga": 21.0,
+"w": 10.0,
+"pts": 34.0
+},
+"Club Deportivo Moquegua": {
+"n": 17.0,
+"gf": 17.0,
+"ga": 24.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Asociación Deportiva Tarma": {
+"n": 17.0,
+"gf": 22.0,
+"ga": 21.0,
+"w": 5.0,
+"pts": 20.0
+},
+"CD UT Cajamarca": {
+"n": 17.0,
+"gf": 21.0,
+"ga": 26.0,
+"w": 4.0,
+"pts": 13.0
+}
+},
+"matches": [
+{
+"d": "2026-09-01",
+"home": "Atlético Grau",
+"away": "FBC Melgar",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "FC Cajamarca",
+"away": "Cienciano",
+"hg": 2.0,
+"ag": 5.0
+},
+{
+"d": "2026-09-04",
+"home": "Alianza Atlético",
+"away": "CD UT Cajamarca",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Sport Huancayo",
+"away": "Sport Boys",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Cusco FC",
+"away": "Club Deportivo Moquegua",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Universitario de Deportes",
+"away": "Comerciantes Unidos",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Sporting Cristal",
+"away": "Los Chankas",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Deportivo Garcilaso",
+"away": "Atlético Grau",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "ADC Juan Pablo II",
+"away": "Alianza Lima",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "FBC Melgar",
+"away": "Asociación Deportiva Tarma",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "CD UT Cajamarca",
+"away": "ADC Juan Pablo II",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Cusco FC",
+"away": "FBC Melgar",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Los Chankas",
+"away": "FC Cajamarca",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Comerciantes Unidos",
+"away": "Sport Huancayo",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Alianza Lima",
+"away": "Universitario de Deportes",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Club Deportivo Moquegua",
+"away": "Sporting Cristal",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Sport Boys",
+"away": "Deportivo Garcilaso",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Atlético Grau",
+"away": "Alianza Atlético",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Alianza Atlético",
+"away": "Comerciantes Unidos",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Alianza Lima",
+"away": "Asociación Deportiva Tarma",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "FC Cajamarca",
+"away": "Cusco FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Sporting Cristal",
+"away": "Atlético Grau",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Deportivo Garcilaso",
+"away": "Universitario de Deportes",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "FBC Melgar",
+"away": "Sport Boys",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Sport Huancayo",
+"away": "CD UT Cajamarca",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "ADC Juan Pablo II",
+"away": "Club Deportivo Moquegua",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-23",
+"home": "Asociación Deportiva Tarma",
+"away": "Cienciano",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-30",
+"home": "Cienciano",
+"away": "Los Chankas",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Club Deportivo Moquegua",
+"away": "Cienciano",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-08",
+"home": "Atlético Grau",
+"away": "Los Chankas",
+"hg": 0.0,
+"ag": 0.0
+}
+],
+"id": 131
+},
+"soccer_xb_poland_2": {
+"teams": {
+"Pogoń Grodzisk Mazowiecki": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Termalica Nieciecza": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 12.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Warta Poznań": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 13.0,
+"w": 5.0,
+"pts": 15.0
+},
+"ŁKS Łódź": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Miedź Legnica": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Polonia Warszawa": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Stal Rzeszów": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 15.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Lechia Gdańsk": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 15.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Chrobry Głogów": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Pogoń Siedlce": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Ruch Chorzów": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Arka Gdynia": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Skierniewice": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Odra Opole": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 9.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Polonia Bytom": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 17.0,
+"w": 1.0,
+"pts": 9.0
+},
+"Stal Mielec": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 23.0,
+"w": 2.0,
+"pts": 9.0
+},
+"TS Podbeskidzie Bielsko-Biała": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 14.0,
+"w": 0.0,
+"pts": 8.0
+},
+"Puszcza Niepołomice": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 6.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Puszcza Niepołomice",
+"away": "TS Podbeskidzie Bielsko-Biała",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Miedź Legnica",
+"away": "Warta Poznań",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Arka Gdynia",
+"away": "Polonia Bytom",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Chrobry Głogów",
+"away": "Ruch Chorzów",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "Pogoń Grodzisk Mazowiecki",
+"away": "Warta Poznań",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "Termalica Nieciecza",
+"away": "Lechia Gdańsk",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Miedź Legnica",
+"away": "Chrobry Głogów",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Stal Mielec",
+"away": "Odra Opole",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Stal Rzeszów",
+"away": "Polonia Warszawa",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Arka Gdynia",
+"away": "ŁKS Łódź",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Polonia Bytom",
+"away": "TS Podbeskidzie Bielsko-Biała",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Ruch Chorzów",
+"away": "Skierniewice",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Polonia Warszawa",
+"away": "Polonia Bytom",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Puszcza Niepołomice",
+"away": "ŁKS Łódź",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Chrobry Głogów",
+"away": "Pogoń Siedlce",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Ruch Chorzów",
+"away": "TS Podbeskidzie Bielsko-Biała",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Warta Poznań",
+"away": "Arka Gdynia",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Skierniewice",
+"away": "Pogoń Grodzisk Mazowiecki",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Lechia Gdańsk",
+"away": "Miedź Legnica",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Odra Opole",
+"away": "Stal Rzeszów",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Stal Mielec",
+"away": "Termalica Nieciecza",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Warta Poznań",
+"away": "Puszcza Niepołomice",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Polonia Bytom",
+"away": "Ruch Chorzów",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Lechia Gdańsk",
+"away": "Stal Mielec",
+"hg": 7.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Pogoń Grodzisk Mazowiecki",
+"away": "ŁKS Łódź",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Polonia Warszawa",
+"away": "Chrobry Głogów",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Termalica Nieciecza",
+"away": "Odra Opole",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Miedź Legnica",
+"away": "Stal Rzeszów",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Pogoń Siedlce",
+"away": "Arka Gdynia",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "TS Podbeskidzie Bielsko-Biała",
+"away": "Skierniewice",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 197
+},
+"soccer_xb_portugal_2": {
+"teams": {
+"Lusitânia Lourosa": {
+"n": 6.0,
+"gf": 11.0,
+"ga": 4.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Penafiel": {
+"n": 6.0,
+"gf": 13.0,
+"ga": 5.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Sporting CP B": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 6.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Farense": {
+"n": 6.0,
+"gf": 11.0,
+"ga": 5.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Vizela": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 11.0
+},
+"União de Leiria": {
+"n": 6.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Leixões": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 6.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Benfica B": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 5.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Tondela": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 6.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Académica": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 9.0
+},
+"Portimonense": {
+"n": 6.0,
+"gf": 4.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 7.0
+},
+"AVS Futebol SAD": {
+"n": 6.0,
+"gf": 6.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Felgueiras 1932": {
+"n": 6.0,
+"gf": 5.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Torreense": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Amarante FC": {
+"n": 6.0,
+"gf": 5.0,
+"ga": 8.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Chaves": {
+"n": 6.0,
+"gf": 5.0,
+"ga": 13.0,
+"w": 1.0,
+"pts": 4.0
+},
+"FC Porto B": {
+"n": 6.0,
+"gf": 4.0,
+"ga": 13.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Feirense": {
+"n": 6.0,
+"gf": 1.0,
+"ga": 8.0,
+"w": 0.0,
+"pts": 1.0
+}
+},
+"matches": [
+{
+"d": "2026-08-23",
+"home": "Penafiel",
+"away": "Sporting CP B",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-24",
+"home": "Farense",
+"away": "Felgueiras 1932",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-24",
+"home": "Feirense",
+"away": "FC Porto B",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "União de Leiria",
+"away": "Tondela",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Portimonense",
+"away": "Leixões",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Académica",
+"away": "Lusitânia Lourosa",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Torreense",
+"away": "Vizela",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-30",
+"home": "Amarante FC",
+"away": "Benfica B",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "AVS Futebol SAD",
+"away": "Feirense",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "FC Porto B",
+"away": "Penafiel",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-30",
+"home": "Felgueiras 1932",
+"away": "Chaves",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Sporting CP B",
+"away": "Farense",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Tondela",
+"away": "FC Porto B",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Penafiel",
+"away": "Académica",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Benfica B",
+"away": "Torreense",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Feirense",
+"away": "Sporting CP B",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Vizela",
+"away": "Felgueiras 1932",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Leixões",
+"away": "Amarante FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "União de Leiria",
+"away": "Portimonense",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Lusitânia Lourosa",
+"away": "AVS Futebol SAD",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Torreense",
+"away": "Leixões",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Académica",
+"away": "Benfica B",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Portimonense",
+"away": "Tondela",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Felgueiras 1932",
+"away": "Penafiel",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "AVS Futebol SAD",
+"away": "Farense",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Chaves",
+"away": "Feirense",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Amarante FC",
+"away": "União de Leiria",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-14",
+"home": "FC Porto B",
+"away": "Vizela",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-14",
+"home": "Sporting CP B",
+"away": "Lusitânia Lourosa",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Farense",
+"away": "Chaves",
+"hg": 4.0,
+"ag": 0.0
+}
+],
+"id": 185
+},
+"soccer_xb_qatar": {
+"teams": {
+"Al-Sadd": {
+"n": 4.0,
+"gf": 19.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Al-Rayyan": {
+"n": 4.0,
+"gf": 7.0,
+"ga": 2.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Al-Duhail SC": {
+"n": 5.0,
+"gf": 9.0,
+"ga": 3.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Al-Shamal": {
+"n": 5.0,
+"gf": 10.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Al-Arabi": {
+"n": 4.0,
+"gf": 5.0,
+"ga": 3.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Lusail SC": {
+"n": 4.0,
+"gf": 7.0,
+"ga": 4.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Al-Wakrah": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 11.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Al-Shahaniya": {
+"n": 4.0,
+"gf": 7.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Al-Ahli": {
+"n": 4.0,
+"gf": 5.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Al-Gharafa": {
+"n": 5.0,
+"gf": 6.0,
+"ga": 11.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Qatar SC": {
+"n": 4.0,
+"gf": 4.0,
+"ga": 9.0,
+"w": 0.0,
+"pts": 2.0
+},
+"Al-Sailiya": {
+"n": 4.0,
+"gf": 5.0,
+"ga": 13.0,
+"w": 0.0,
+"pts": 0.0
+}
+},
+"matches": [
+{
+"d": "2026-08-20",
+"home": "Al-Wakrah",
+"away": "Qatar SC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-20",
+"home": "Al-Rayyan",
+"away": "Lusail SC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-21",
+"home": "Al-Gharafa",
+"away": "Al-Shahaniya",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-21",
+"home": "Al-Arabi",
+"away": "Al-Shamal",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-22",
+"home": "Al-Duhail SC",
+"away": "Al-Sailiya",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Al-Sadd",
+"away": "Al-Ahli",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-27",
+"home": "Al-Gharafa",
+"away": "Al-Shamal",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-27",
+"home": "Al-Wakrah",
+"away": "Al-Rayyan",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-28",
+"home": "Al-Ahli",
+"away": "Lusail SC",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-28",
+"home": "Qatar SC",
+"away": "Al-Sadd",
+"hg": 2.0,
+"ag": 6.0
+},
+{
+"d": "2026-08-29",
+"home": "Al-Duhail SC",
+"away": "Al-Arabi",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Al-Shahaniya",
+"away": "Al-Sailiya",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-03",
+"home": "Al-Ahli",
+"away": "Qatar SC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-03",
+"home": "Al-Sailiya",
+"away": "Al-Arabi",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Al-Shamal",
+"away": "Al-Shahaniya",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Lusail SC",
+"away": "Al-Wakrah",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Al-Rayyan",
+"away": "Al-Duhail SC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Al-Sadd",
+"away": "Al-Gharafa",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-10",
+"home": "Al-Shamal",
+"away": "Al-Wakrah",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-10",
+"home": "Al-Sailiya",
+"away": "Al-Sadd",
+"hg": 3.0,
+"ag": 6.0
+},
+{
+"d": "2026-09-11",
+"home": "Al-Gharafa",
+"away": "Lusail SC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Al-Rayyan",
+"away": "Al-Ahli",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Al-Arabi",
+"away": "Qatar SC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Al-Duhail SC",
+"away": "Al-Shahaniya",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-08",
+"home": "Al-Shamal",
+"away": "Al-Duhail SC",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-10-08",
+"home": "Al-Wakrah",
+"away": "Al-Gharafa",
+"hg": 3.0,
+"ag": 2.0
+}
+],
+"id": 535
+},
+"soccer_xb_romania": {
+"teams": {
+"Dinamo București": {
+"n": 10.0,
+"gf": 23.0,
+"ga": 7.0,
+"w": 7.0,
+"pts": 23.0
+},
+"Rapid București": {
+"n": 10.0,
+"gf": 14.0,
+"ga": 6.0,
+"w": 6.0,
+"pts": 21.0
+},
+"Universitatea Craiova": {
+"n": 10.0,
+"gf": 24.0,
+"ga": 9.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Petrolul Ploiești": {
+"n": 10.0,
+"gf": 13.0,
+"ga": 12.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Universitatea Cluj": {
+"n": 10.0,
+"gf": 17.0,
+"ga": 14.0,
+"w": 6.0,
+"pts": 18.0
+},
+"FCV Farul Constanța": {
+"n": 10.0,
+"gf": 14.0,
+"ga": 14.0,
+"w": 3.0,
+"pts": 14.0
+},
+"Corvinul Hunedoara": {
+"n": 10.0,
+"gf": 11.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 13.0
+},
+"CFR Cluj": {
+"n": 10.0,
+"gf": 16.0,
+"ga": 17.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Sepsi OSK": {
+"n": 10.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 13.0
+},
+"UTA Arad": {
+"n": 10.0,
+"gf": 14.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 12.0
+},
+"FCSB": {
+"n": 10.0,
+"gf": 13.0,
+"ga": 17.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Botoșani": {
+"n": 10.0,
+"gf": 14.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 11.0
+},
+"FC Argeș Pitesti": {
+"n": 10.0,
+"gf": 6.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Oțelul Galați": {
+"n": 10.0,
+"gf": 11.0,
+"ga": 15.0,
+"w": 2.0,
+"pts": 10.0
+},
+"FC Voluntari": {
+"n": 10.0,
+"gf": 9.0,
+"ga": 22.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Csikszereda Miercurea Ciuc": {
+"n": 10.0,
+"gf": 6.0,
+"ga": 23.0,
+"w": 0.0,
+"pts": 1.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "FC Argeș Pitesti",
+"away": "Sepsi OSK",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Corvinul Hunedoara",
+"away": "Dinamo București",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "FCV Farul Constanța",
+"away": "Botoșani",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "FCSB",
+"away": "UTA Arad",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-31",
+"home": "Rapid București",
+"away": "Universitatea Craiova",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "CFR Cluj",
+"away": "FCV Farul Constanța",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Botoșani",
+"away": "Sepsi OSK",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "UTA Arad",
+"away": "Csikszereda Miercurea Ciuc",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Dinamo București",
+"away": "FCSB",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Petrolul Ploiești",
+"away": "Corvinul Hunedoara",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Oțelul Galați",
+"away": "Rapid București",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "FC Voluntari",
+"away": "FC Argeș Pitesti",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Universitatea Craiova",
+"away": "Universitatea Cluj",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "FCV Farul Constanța",
+"away": "UTA Arad",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Csikszereda Miercurea Ciuc",
+"away": "Dinamo București",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Sepsi OSK",
+"away": "CFR Cluj",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Rapid București",
+"away": "FC Voluntari",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Argeș Pitesti",
+"away": "Botoșani",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Corvinul Hunedoara",
+"away": "Universitatea Craiova",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Universitatea Cluj",
+"away": "Oțelul Galați",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-14",
+"home": "FCSB",
+"away": "Petrolul Ploiești",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "UTA Arad",
+"away": "Sepsi OSK",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Rapid București",
+"away": "FC Argeș Pitesti",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "CFR Cluj",
+"away": "Botoșani",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Universitatea Craiova",
+"away": "FCSB",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "FC Voluntari",
+"away": "Universitatea Cluj",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Dinamo București",
+"away": "FCV Farul Constanța",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-21",
+"home": "Oțelul Galați",
+"away": "Corvinul Hunedoara",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-21",
+"home": "Petrolul Ploiești",
+"away": "Csikszereda Miercurea Ciuc",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-08",
+"home": "CFR Cluj",
+"away": "Universitatea Cluj",
+"hg": 1.0,
+"ag": 3.0
+}
+],
+"id": 189
+},
+"soccer_xb_russia": {
+"teams": {
+"FC Krasnodar": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 7.0,
+"w": 6.0,
+"pts": 21.0,
+"xg": 12.16949987411499,
+"xga": 9.247400104999542,
+"xpts": 14.235326807250308
+},
+"Dinamo Moscow": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 8.0,
+"w": 6.0,
+"pts": 19.0,
+"xg": 17.45889973640442,
+"xga": 8.434699952602386,
+"xpts": 17.97910007821092
+},
+"CSKA Moscow": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 19.0,
+"xg": 15.976000010967255,
+"xga": 12.914200007915497,
+"xpts": 14.728672418054256
+},
+"Spartak Moscow": {
+"n": 9.0,
+"gf": 16.0,
+"ga": 7.0,
+"w": 6.0,
+"pts": 19.0,
+"xg": 15.05970013141632,
+"xga": 8.283199943602085,
+"xpts": 16.398260526735733
+},
+"Zenit St. Petersburg": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 9.0,
+"w": 6.0,
+"pts": 18.0,
+"xg": 16.74310004711151,
+"xga": 10.348399937152863,
+"xpts": 16.558318052299292
+},
+"Rubin Kazan": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 12.0,
+"xg": 10.70269986987114,
+"xga": 12.627299904823303,
+"xpts": 11.148587278318423
+},
+"Dynamo Makhachkala": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 16.0,
+"w": 4.0,
+"pts": 12.0,
+"xg": 14.67579996585846,
+"xga": 11.73089975118637,
+"xpts": 14.204228559636668
+},
+"Baltika": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 12.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 13.394499957561493,
+"xga": 7.888100117444992,
+"xpts": 16.418295665410827
+},
+"Krylya Sovetov Samara": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 11.0,
+"xg": 13.304699897766113,
+"xga": 13.65509980916977,
+"xpts": 12.1319253709811
+},
+"FK Akhmat": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 10.0,
+"xg": 9.583400040864944,
+"xga": 10.63949990272522,
+"xpts": 11.271804896489693
+},
+"FC Orenburg": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 1.0,
+"pts": 9.0,
+"xg": 9.544900000095367,
+"xga": 11.647300064563751,
+"xpts": 11.471247531233223
+},
+"FC Rostov": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 17.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 9.374800026416779,
+"xga": 11.706999778747559,
+"xpts": 11.288457789376062
+},
+"Akron Togliatti": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 8.0,
+"xg": 9.025899946689606,
+"xga": 14.63320016860962,
+"xpts": 8.445037750174327
+},
+"Lokomotiv Moscow": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 11.0,
+"w": 1.0,
+"pts": 7.0,
+"xg": 11.787899851799011,
+"xga": 17.975899875164032,
+"xpts": 8.400532112397386
+},
+"Rodina": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 22.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 8.40750002861023,
+"xga": 20.979699969291687,
+"xpts": 4.98594542816254
+},
+"Fakel": {
+"n": 9.0,
+"gf": 6.0,
+"ga": 13.0,
+"w": 0.0,
+"pts": 3.0,
+"xg": 8.559299983084202,
+"xga": 13.056700080633163,
+"xpts": 9.44136299339549
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "FC Krasnodar",
+"away": "FC Rostov",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "FK Akhmat",
+"away": "Krylya Sovetov Samara",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-29",
+"home": "Lokomotiv Moscow",
+"away": "Dinamo Moscow",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Rodina",
+"away": "Baltika",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-30",
+"home": "Spartak Moscow",
+"away": "FC Orenburg",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Rubin Kazan",
+"away": "Dynamo Makhachkala",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Krylya Sovetov Samara",
+"away": "FC Krasnodar",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Zenit St. Petersburg",
+"away": "CSKA Moscow",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "FC Rostov",
+"away": "Fakel",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "FC Orenburg",
+"away": "Akron Togliatti",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Dynamo Makhachkala",
+"away": "Rodina",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Dinamo Moscow",
+"away": "Spartak Moscow",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Baltika",
+"away": "Lokomotiv Moscow",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Rubin Kazan",
+"away": "FK Akhmat",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Krylya Sovetov Samara",
+"away": "Rodina",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Fakel",
+"away": "Baltika",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Zenit St. Petersburg",
+"away": "Lokomotiv Moscow",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Dinamo Moscow",
+"away": "FC Orenburg",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "CSKA Moscow",
+"away": "Rubin Kazan",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "FK Akhmat",
+"away": "Dynamo Makhachkala",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Spartak Moscow",
+"away": "FC Rostov",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Krasnodar",
+"away": "Akron Togliatti",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-16",
+"home": "Rodina",
+"away": "Rubin Kazan",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-16",
+"home": "Spartak Moscow",
+"away": "Fakel",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-16",
+"home": "Baltika",
+"away": "Zenit St. Petersburg",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-16",
+"home": "Lokomotiv Moscow",
+"away": "Krylya Sovetov Samara",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-17",
+"home": "FC Orenburg",
+"away": "FC Krasnodar",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-17",
+"home": "Akron Togliatti",
+"away": "FK Akhmat",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-17",
+"home": "FC Rostov",
+"away": "Dinamo Moscow",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-17",
+"home": "Dynamo Makhachkala",
+"away": "CSKA Moscow",
+"hg": 1.0,
+"ag": 3.0
+}
+],
+"id": 63
+},
+"soccer_xb_scotland_2": {
+"teams": {
+"Stenhousemuir": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 2.0,
+"w": 7.0,
+"pts": 22.0
+},
+"Raith Rovers": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 6.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Partick Thistle": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 2.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Livingston": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 13.0
+},
+"Dunfermline Athletic": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Ayr United": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Arbroath": {
+"n": 9.0,
+"gf": 6.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Inverness Caledonian Thistle": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 9.0,
+"w": 2.0,
+"pts": 10.0
+},
+"Queen's Park": {
+"n": 8.0,
+"gf": 4.0,
+"ga": 13.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Greenock Morton": {
+"n": 9.0,
+"gf": 5.0,
+"ga": 17.0,
+"w": 0.0,
+"pts": 1.0
+}
+},
+"matches": [
+{
+"d": "2026-08-22",
+"home": "Livingston",
+"away": "Dunfermline Athletic",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Queen's Park",
+"away": "Stenhousemuir",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-22",
+"home": "Raith Rovers",
+"away": "Ayr United",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-28",
+"home": "Dunfermline Athletic",
+"away": "Raith Rovers",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Arbroath",
+"away": "Livingston",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Ayr United",
+"away": "Greenock Morton",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Partick Thistle",
+"away": "Queen's Park",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "Stenhousemuir",
+"away": "Inverness Caledonian Thistle",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Livingston",
+"away": "Stenhousemuir",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Arbroath",
+"away": "Dunfermline Athletic",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Inverness Caledonian Thistle",
+"away": "Raith Rovers",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Partick Thistle",
+"away": "Ayr United",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Queen's Park",
+"away": "Greenock Morton",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Greenock Morton",
+"away": "Livingston",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-12",
+"home": "Ayr United",
+"away": "Inverness Caledonian Thistle",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Dunfermline Athletic",
+"away": "Queen's Park",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Raith Rovers",
+"away": "Arbroath",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-15",
+"home": "Stenhousemuir",
+"away": "Partick Thistle",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Queen's Park",
+"away": "Ayr United",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Greenock Morton",
+"away": "Dunfermline Athletic",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Livingston",
+"away": "Inverness Caledonian Thistle",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Partick Thistle",
+"away": "Raith Rovers",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Stenhousemuir",
+"away": "Arbroath",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "Arbroath",
+"away": "Queen's Park",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-25",
+"home": "Ayr United",
+"away": "Stenhousemuir",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-25",
+"home": "Inverness Caledonian Thistle",
+"away": "Greenock Morton",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "Raith Rovers",
+"away": "Livingston",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Greenock Morton",
+"away": "Raith Rovers",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Livingston",
+"away": "Ayr United",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Partick Thistle",
+"away": "Arbroath",
+"hg": 3.0,
+"ag": 0.0
+}
+],
+"id": 123
+},
+"soccer_xb_serbia": {
+"teams": {
+"FK Crvena Zvezda": {
+"n": 10.0,
+"gf": 24.0,
+"ga": 3.0,
+"w": 9.0,
+"pts": 28.0
+},
+"Vojvodina": {
+"n": 10.0,
+"gf": 21.0,
+"ga": 10.0,
+"w": 7.0,
+"pts": 22.0
+},
+"FK Radnički 1923": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Mladost Lučani": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 16.0
+},
+"FK IMT Beograd": {
+"n": 10.0,
+"gf": 12.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Železničar Pančevo": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 14.0
+},
+"FK Radnik Surdulica": {
+"n": 10.0,
+"gf": 14.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 14.0
+},
+"Novi Pazar": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Čukarički": {
+"n": 10.0,
+"gf": 12.0,
+"ga": 18.0,
+"w": 3.0,
+"pts": 11.0
+},
+"OFK Beograd": {
+"n": 10.0,
+"gf": 13.0,
+"ga": 21.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Partizan Beograd": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 19.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Radnički Niš": {
+"n": 9.0,
+"gf": 6.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Mačva Šabac": {
+"n": 10.0,
+"gf": 6.0,
+"ga": 17.0,
+"w": 2.0,
+"pts": 8.0
+},
+"FK Zemun": {
+"n": 10.0,
+"gf": 6.0,
+"ga": 19.0,
+"w": 0.0,
+"pts": 3.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Železničar Pančevo",
+"away": "FK Radnik Surdulica",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Novi Pazar",
+"away": "Mačva Šabac",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Radnički Niš",
+"away": "FK Radnički 1923",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Čukarički",
+"away": "Vojvodina",
+"hg": 0.0,
+"ag": 5.0
+},
+{
+"d": "2026-08-30",
+"home": "FK Zemun",
+"away": "FK Crvena Zvezda",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "FK IMT Beograd",
+"away": "Mladost Lučani",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-31",
+"home": "Partizan Beograd",
+"away": "OFK Beograd",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Novi Pazar",
+"away": "Železničar Pančevo",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "FK Radnik Surdulica",
+"away": "Čukarički",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Mačva Šabac",
+"away": "FK Radnički 1923",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Mladost Lučani",
+"away": "Radnički Niš",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "FK Crvena Zvezda",
+"away": "Partizan Beograd",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Vojvodina",
+"away": "FK Zemun",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "OFK Beograd",
+"away": "FK IMT Beograd",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-10",
+"home": "FK Radnik Surdulica",
+"away": "FK Crvena Zvezda",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Železničar Pančevo",
+"away": "Mačva Šabac",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Čukarički",
+"away": "Novi Pazar",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "FK Radnički 1923",
+"away": "Mladost Lučani",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Radnički Niš",
+"away": "OFK Beograd",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Partizan Beograd",
+"away": "Vojvodina",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-13",
+"home": "FK IMT Beograd",
+"away": "FK Crvena Zvezda",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "FK Zemun",
+"away": "FK Radnik Surdulica",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-17",
+"home": "Železničar Pančevo",
+"away": "FK Crvena Zvezda",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Novi Pazar",
+"away": "FK Zemun",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Vojvodina",
+"away": "FK IMT Beograd",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "FK Radnik Surdulica",
+"away": "Partizan Beograd",
+"hg": 4.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-19",
+"home": "OFK Beograd",
+"away": "FK Radnički 1923",
+"hg": 3.0,
+"ag": 5.0
+},
+{
+"d": "2026-09-20",
+"home": "Mačva Šabac",
+"away": "Mladost Lučani",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "FK Crvena Zvezda",
+"away": "Radnički Niš",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Železničar Pančevo",
+"away": "Čukarički",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 182
+},
+"soccer_xb_slovakia": {
+"teams": {
+"DAC 1904 Dunajska Streda": {
+"n": 8.0,
+"gf": 25.0,
+"ga": 5.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Žilina": {
+"n": 9.0,
+"gf": 23.0,
+"ga": 17.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Spartak Trnava": {
+"n": 9.0,
+"gf": 21.0,
+"ga": 10.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Slovan Bratislava": {
+"n": 8.0,
+"gf": 20.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Zeleziarne Podbrezová": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 16.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Zemplín Michalovce": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 13.0
+},
+"FC Košice": {
+"n": 8.0,
+"gf": 21.0,
+"ga": 18.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Skalica": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 19.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Dukla Banská Bystrica": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 21.0,
+"w": 2.0,
+"pts": 7.0
+},
+"Komárno": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 14.0,
+"w": 0.0,
+"pts": 5.0
+},
+"Trenčín": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 20.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Ružomberok": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 5.0
+}
+},
+"matches": [
+{
+"d": "2026-08-22",
+"home": "DAC 1904 Dunajska Streda",
+"away": "Zeleziarne Podbrezová",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Ružomberok",
+"away": "Dukla Banská Bystrica",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-22",
+"home": "Zemplín Michalovce",
+"away": "Skalica",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "FC Košice",
+"away": "Slovan Bratislava",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-23",
+"home": "Trenčín",
+"away": "Spartak Trnava",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-08-23",
+"home": "Žilina",
+"away": "Komárno",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Trenčín",
+"away": "Ružomberok",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Zeleziarne Podbrezová",
+"away": "FC Košice",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Dukla Banská Bystrica",
+"away": "Komárno",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "Skalica",
+"away": "DAC 1904 Dunajska Streda",
+"hg": 1.0,
+"ag": 6.0
+},
+{
+"d": "2026-08-30",
+"home": "Slovan Bratislava",
+"away": "Zemplín Michalovce",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "Spartak Trnava",
+"away": "Žilina",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-05",
+"home": "Komárno",
+"away": "Skalica",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Zemplín Michalovce",
+"away": "Trenčín",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Žilina",
+"away": "Zeleziarne Podbrezová",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "DAC 1904 Dunajska Streda",
+"away": "Slovan Bratislava",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "FC Košice",
+"away": "Dukla Banská Bystrica",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Ružomberok",
+"away": "Spartak Trnava",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Dukla Banská Bystrica",
+"away": "Skalica",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Ružomberok",
+"away": "Zemplín Michalovce",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Trenčín",
+"away": "DAC 1904 Dunajska Streda",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-12",
+"home": "Spartak Trnava",
+"away": "FC Košice",
+"hg": 5.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Zeleziarne Podbrezová",
+"away": "Komárno",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Slovan Bratislava",
+"away": "Žilina",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "FC Košice",
+"away": "Ružomberok",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Zemplín Michalovce",
+"away": "Dukla Banská Bystrica",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Žilina",
+"away": "Trenčín",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Komárno",
+"away": "Slovan Bratislava",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Skalica",
+"away": "Zeleziarne Podbrezová",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "DAC 1904 Dunajska Streda",
+"away": "Spartak Trnava",
+"hg": 2.0,
+"ag": 2.0
+}
+],
+"id": 176
+},
+"soccer_xb_slovenia": {
+"teams": {
+"Maribor": {
+"n": 10.0,
+"gf": 19.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 20.0
+},
+"Koper": {
+"n": 10.0,
+"gf": 11.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 18.0
+},
+"NK Bravo": {
+"n": 10.0,
+"gf": 12.0,
+"ga": 10.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Olimpija Ljubljana": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Aluminij": {
+"n": 10.0,
+"gf": 16.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Nafta": {
+"n": 10.0,
+"gf": 17.0,
+"ga": 16.0,
+"w": 4.0,
+"pts": 13.0
+},
+"NK Celje": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Nk Brinje Grosuplje": {
+"n": 10.0,
+"gf": 14.0,
+"ga": 18.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Mura": {
+"n": 10.0,
+"gf": 10.0,
+"ga": 21.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Radomlje": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 5.0
+}
+},
+"matches": [
+{
+"d": "2026-08-15",
+"home": "Nafta",
+"away": "NK Celje",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-15",
+"home": "Olimpija Ljubljana",
+"away": "Maribor",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-16",
+"home": "Radomlje",
+"away": "Aluminij",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-16",
+"home": "Nk Brinje Grosuplje",
+"away": "Mura",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-16",
+"home": "Koper",
+"away": "NK Bravo",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-21",
+"home": "Aluminij",
+"away": "Nk Brinje Grosuplje",
+"hg": 4.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-21",
+"home": "Olimpija Ljubljana",
+"away": "Nafta",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-22",
+"home": "Mura",
+"away": "Koper",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-23",
+"home": "Maribor",
+"away": "NK Bravo",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Aluminij",
+"away": "Koper",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Radomlje",
+"away": "Olimpija Ljubljana",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-29",
+"home": "NK Bravo",
+"away": "Mura",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "Nk Brinje Grosuplje",
+"away": "NK Celje",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Nafta",
+"away": "Maribor",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-02",
+"home": "Aluminij",
+"away": "NK Celje",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Nafta",
+"away": "Radomlje",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Aluminij",
+"away": "NK Bravo",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Olimpija Ljubljana",
+"away": "Nk Brinje Grosuplje",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Maribor",
+"away": "Mura",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "NK Celje",
+"away": "Koper",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Nk Brinje Grosuplje",
+"away": "Nafta",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Koper",
+"away": "Olimpija Ljubljana",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "NK Bravo",
+"away": "NK Celje",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Mura",
+"away": "Aluminij",
+"hg": 1.0,
+"ag": 6.0
+},
+{
+"d": "2026-09-13",
+"home": "Radomlje",
+"away": "Maribor",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Koper",
+"away": "Nafta",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Maribor",
+"away": "Aluminij",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "NK Bravo",
+"away": "Olimpija Ljubljana",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Mura",
+"away": "NK Celje",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Nk Brinje Grosuplje",
+"away": "Radomlje",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 173
+},
+"soccer_xb_switzerland_2": {
+"teams": {
+"FC Stade Lausanne-Ouchy": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 3.0,
+"w": 6.0,
+"pts": 21.0
+},
+"Winterthur": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 18.0
+},
+"Yverdon": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 16.0
+},
+"Kriens": {
+"n": 9.0,
+"gf": 16.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Aarau": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 16.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Xamax": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 17.0,
+"w": 4.0,
+"pts": 12.0
+},
+"FC Rapperswil-Jona": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 16.0,
+"w": 3.0,
+"pts": 10.0
+},
+"Etoile Carouge": {
+"n": 9.0,
+"gf": 8.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Wil": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 21.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Stade Nyonnais": {
+"n": 9.0,
+"gf": 6.0,
+"ga": 23.0,
+"w": 0.0,
+"pts": 2.0
+}
+},
+"matches": [
+{
+"d": "2026-08-21",
+"home": "Stade Nyonnais",
+"away": "Etoile Carouge",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-21",
+"home": "Xamax",
+"away": "FC Stade Lausanne-Ouchy",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-21",
+"home": "FC Rapperswil-Jona",
+"away": "Winterthur",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-22",
+"home": "Wil",
+"away": "Kriens",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-23",
+"home": "Yverdon",
+"away": "Aarau",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Kriens",
+"away": "Stade Nyonnais",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-28",
+"home": "Winterthur",
+"away": "FC Stade Lausanne-Ouchy",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Yverdon",
+"away": "Wil",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Aarau",
+"away": "Xamax",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-28",
+"home": "Etoile Carouge",
+"away": "FC Rapperswil-Jona",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-31",
+"home": "Wil",
+"away": "Aarau",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-01",
+"home": "FC Rapperswil-Jona",
+"away": "Kriens",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-01",
+"home": "FC Stade Lausanne-Ouchy",
+"away": "Etoile Carouge",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-01",
+"home": "Stade Nyonnais",
+"away": "Winterthur",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-01",
+"home": "Xamax",
+"away": "Yverdon",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Aarau",
+"away": "FC Rapperswil-Jona",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Kriens",
+"away": "FC Stade Lausanne-Ouchy",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Etoile Carouge",
+"away": "Wil",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Winterthur",
+"away": "Xamax",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Yverdon",
+"away": "Stade Nyonnais",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "FC Rapperswil-Jona",
+"away": "Yverdon",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "FC Stade Lausanne-Ouchy",
+"away": "Wil",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Stade Nyonnais",
+"away": "Xamax",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-11",
+"home": "Etoile Carouge",
+"away": "Winterthur",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Aarau",
+"away": "Kriens",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Kriens",
+"away": "Etoile Carouge",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Wil",
+"away": "Stade Nyonnais",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Xamax",
+"away": "FC Rapperswil-Jona",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-18",
+"home": "Winterthur",
+"away": "Aarau",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Yverdon",
+"away": "FC Stade Lausanne-Ouchy",
+"hg": 0.0,
+"ag": 0.0
+}
+],
+"id": 163
+},
+"soccer_xb_turkey_2": {
+"teams": {
+"Kayserispor": {
+"n": 8.0,
+"gf": 15.0,
+"ga": 3.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Bursaspor": {
+"n": 8.0,
+"gf": 16.0,
+"ga": 7.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Iğdır FK": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 7.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Batman Petrolspor": {
+"n": 8.0,
+"gf": 15.0,
+"ga": 13.0,
+"w": 5.0,
+"pts": 16.0
+},
+"Sarıyer": {
+"n": 8.0,
+"gf": 11.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Keçiörengücü": {
+"n": 8.0,
+"gf": 17.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 13.0
+},
+"Mardin 1969 Spor": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 5.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Antalyaspor": {
+"n": 8.0,
+"gf": 14.0,
+"ga": 13.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Fatih Karagümrük": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Muğlaspor": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 7.0,
+"w": 2.0,
+"pts": 11.0
+},
+"Bandırmaspor": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 5.0,
+"w": 2.0,
+"pts": 10.0
+},
+"Pendikspor": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 10.0
+},
+"Manisa Futbol Kulübü": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Bodrum FK": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 8.0
+},
+"Sivasspor": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 1.0,
+"pts": 8.0
+},
+"Ümraniyespor": {
+"n": 8.0,
+"gf": 6.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 6.0
+},
+"Esenler Erokspor": {
+"n": 8.0,
+"gf": 4.0,
+"ga": 10.0,
+"w": 0.0,
+"pts": 5.0
+},
+"İstanbulspor": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 19.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Van Spor Kulübü": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 17.0,
+"w": 1.0,
+"pts": 4.0
+},
+"Boluspor": {
+"n": 8.0,
+"gf": 3.0,
+"ga": 20.0,
+"w": 0.0,
+"pts": 1.0
+}
+},
+"matches": [
+{
+"d": "2026-09-05",
+"home": "Bandırmaspor",
+"away": "Boluspor",
+"hg": 6.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Keçiörengücü",
+"away": "Sarıyer",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Pendikspor",
+"away": "Ümraniyespor",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Antalyaspor",
+"away": "Sivasspor",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Batman Petrolspor",
+"away": "Fatih Karagümrük",
+"hg": 4.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Muğlaspor",
+"away": "Van Spor Kulübü",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-07",
+"home": "Esenler Erokspor",
+"away": "Kayserispor",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-07",
+"home": "İstanbulspor",
+"away": "Iğdır FK",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-07",
+"home": "Manisa Futbol Kulübü",
+"away": "Bursaspor",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-07",
+"home": "Mardin 1969 Spor",
+"away": "Bodrum FK",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Sarıyer",
+"away": "Bandırmaspor",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Boluspor",
+"away": "Pendikspor",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Van Spor Kulübü",
+"away": "Keçiörengücü",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Bodrum FK",
+"away": "Batman Petrolspor",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Ümraniyespor",
+"away": "Antalyaspor",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Iğdır FK",
+"away": "Mardin 1969 Spor",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Sivasspor",
+"away": "Muğlaspor",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Bursaspor",
+"away": "Esenler Erokspor",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Fatih Karagümrük",
+"away": "Manisa Futbol Kulübü",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Kayserispor",
+"away": "İstanbulspor",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Bandırmaspor",
+"away": "Ümraniyespor",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Muğlaspor",
+"away": "Iğdır FK",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Keçiörengücü",
+"away": "Sivasspor",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Sarıyer",
+"away": "Boluspor",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Batman Petrolspor",
+"away": "Bursaspor",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Esenler Erokspor",
+"away": "Fatih Karagümrük",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Manisa Futbol Kulübü",
+"away": "İstanbulspor",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Pendikspor",
+"away": "Bodrum FK",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Antalyaspor",
+"away": "Van Spor Kulübü",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Mardin 1969 Spor",
+"away": "Kayserispor",
+"hg": 0.0,
+"ag": 1.0
+}
+],
+"id": 165
+},
+"soccer_xb_ukraine": {
+"teams": {
+"Polissya Zhytomyr": {
+"n": 7.0,
+"gf": 15.0,
+"ga": 5.0,
+"w": 6.0,
+"pts": 18.0
+},
+"Shakhtar Donetsk": {
+"n": 7.0,
+"gf": 15.0,
+"ga": 4.0,
+"w": 6.0,
+"pts": 18.0
+},
+"Karpaty": {
+"n": 7.0,
+"gf": 15.0,
+"ga": 5.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Dynamo Kyiv": {
+"n": 6.0,
+"gf": 9.0,
+"ga": 5.0,
+"w": 4.0,
+"pts": 13.0
+},
+"FC Kharkiv": {
+"n": 6.0,
+"gf": 12.0,
+"ga": 4.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Veres Rivne": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Epitsentr Kamianets-Podilskyi": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 7.0,
+"w": 2.0,
+"pts": 8.0
+},
+"LNZ Cherkasy": {
+"n": 7.0,
+"gf": 5.0,
+"ga": 8.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Zorya": {
+"n": 7.0,
+"gf": 7.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Liviy Bereh": {
+"n": 6.0,
+"gf": 4.0,
+"ga": 3.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Bukovyna Chernivtsi": {
+"n": 7.0,
+"gf": 4.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Chornomorets Odesa": {
+"n": 6.0,
+"gf": 3.0,
+"ga": 7.0,
+"w": 1.0,
+"pts": 5.0
+},
+"FC Kolos Kovalivka": {
+"n": 6.0,
+"gf": 6.0,
+"ga": 10.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Kryvbas": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Obolon Kyiv": {
+"n": 7.0,
+"gf": 2.0,
+"ga": 12.0,
+"w": 0.0,
+"pts": 4.0
+},
+"Kudrivka": {
+"n": 7.0,
+"gf": 5.0,
+"ga": 18.0,
+"w": 0.0,
+"pts": 2.0
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Kudrivka",
+"away": "Epitsentr Kamianets-Podilskyi",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-29",
+"home": "Liviy Bereh",
+"away": "Karpaty",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Shakhtar Donetsk",
+"away": "Polissya Zhytomyr",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "Chornomorets Odesa",
+"away": "Kryvbas",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "LNZ Cherkasy",
+"away": "Veres Rivne",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-31",
+"home": "Zorya",
+"away": "FC Kharkiv",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-31",
+"home": "Bukovyna Chernivtsi",
+"away": "Dynamo Kyiv",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "Chornomorets Odesa",
+"away": "Liviy Bereh",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "Polissya Zhytomyr",
+"away": "Kudrivka",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "FC Kharkiv",
+"away": "Obolon Kyiv",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Kryvbas",
+"away": "FC Kolos Kovalivka",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Karpaty",
+"away": "Shakhtar Donetsk",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Dynamo Kyiv",
+"away": "LNZ Cherkasy",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Veres Rivne",
+"away": "Zorya",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Epitsentr Kamianets-Podilskyi",
+"away": "Bukovyna Chernivtsi",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "FC Kolos Kovalivka",
+"away": "Karpaty",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "LNZ Cherkasy",
+"away": "Obolon Kyiv",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Polissya Zhytomyr",
+"away": "Liviy Bereh",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Bukovyna Chernivtsi",
+"away": "Zorya",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Dynamo Kyiv",
+"away": "Epitsentr Kamianets-Podilskyi",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-14",
+"home": "Shakhtar Donetsk",
+"away": "Chornomorets Odesa",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Chornomorets Odesa",
+"away": "Obolon Kyiv",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Polissya Zhytomyr",
+"away": "Kryvbas",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "FC Kharkiv",
+"away": "Bukovyna Chernivtsi",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Zorya",
+"away": "Dynamo Kyiv",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Epitsentr Kamianets-Podilskyi",
+"away": "Liviy Bereh",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Kudrivka",
+"away": "FC Kolos Kovalivka",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Karpaty",
+"away": "Veres Rivne",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Shakhtar Donetsk",
+"away": "LNZ Cherkasy",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Veres Rivne",
+"away": "Kudrivka",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 441
+},
+"soccer_xb_uruguay": {
+"teams": {
+"Liverpool FC": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 7.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Club Atletico Peñarol": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 6.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Montevideo City Torque": {
+"n": 9.0,
+"gf": 19.0,
+"ga": 10.0,
+"w": 6.0,
+"pts": 19.0
+},
+"Deportivo Maldonado": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 5.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Nacional": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 9.0,
+"w": 5.0,
+"pts": 17.0
+},
+"Montevideo Wanderers": {
+"n": 9.0,
+"gf": 12.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 15.0
+},
+"Juventud de las Piedras": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 6.0,
+"w": 3.0,
+"pts": 14.0
+},
+"Cerro": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Racing": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 12.0
+},
+"Club Atlético Progreso": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 12.0
+},
+"Boston River": {
+"n": 9.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 9.0
+},
+"Defensor Sporting": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 16.0,
+"w": 2.0,
+"pts": 8.0
+},
+"Danubio": {
+"n": 9.0,
+"gf": 4.0,
+"ga": 10.0,
+"w": 1.0,
+"pts": 7.0
+},
+"Cerro Largo": {
+"n": 9.0,
+"gf": 6.0,
+"ga": 12.0,
+"w": 0.0,
+"pts": 5.0
+},
+"Central Español": {
+"n": 9.0,
+"gf": 5.0,
+"ga": 16.0,
+"w": 1.0,
+"pts": 5.0
+},
+"Albion": {
+"n": 9.0,
+"gf": 9.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 3.0
+}
+},
+"matches": [
+{
+"d": "2026-09-04",
+"home": "Montevideo City Torque",
+"away": "Cerro Largo",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Danubio",
+"away": "Club Atletico Peñarol",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-05",
+"home": "Deportivo Maldonado",
+"away": "Montevideo Wanderers",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Liverpool FC",
+"away": "Boston River",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-07",
+"home": "Albion",
+"away": "Club Atlético Progreso",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Montevideo Wanderers",
+"away": "Nacional",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Cerro Largo",
+"away": "Central Español",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Club Atlético Progreso",
+"away": "Cerro",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-13",
+"home": "Juventud de las Piedras",
+"away": "Danubio",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Defensor Sporting",
+"away": "Deportivo Maldonado",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Club Atletico Peñarol",
+"away": "Albion",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Montevideo City Torque",
+"away": "Liverpool FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Boston River",
+"away": "Club Atlético Progreso",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Deportivo Maldonado",
+"away": "Cerro Largo",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Danubio",
+"away": "Montevideo Wanderers",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Nacional",
+"away": "Defensor Sporting",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-21",
+"home": "Central Español",
+"away": "Montevideo City Torque",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-26",
+"home": "Club Atlético Progreso",
+"away": "Racing",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Cerro Largo",
+"away": "Nacional",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "Juventud de las Piedras",
+"away": "Cerro",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Defensor Sporting",
+"away": "Danubio",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-28",
+"home": "Montevideo Wanderers",
+"away": "Albion",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-30",
+"home": "Montevideo City Torque",
+"away": "Club Atletico Peñarol",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Liverpool FC",
+"away": "Club Atlético Progreso",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Albion",
+"away": "Defensor Sporting",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Deportivo Maldonado",
+"away": "Central Español",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Danubio",
+"away": "Cerro Largo",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Boston River",
+"away": "Juventud de las Piedras",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Cerro",
+"away": "Montevideo Wanderers",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-05",
+"home": "Nacional",
+"away": "Montevideo City Torque",
+"hg": 2.0,
+"ag": 0.0
+}
+],
+"id": 161
+},
+"soccer_xb_usl": {
+"teams": {
+"Tampa Bay Rowdies": {
+"n": 27.0,
+"gf": 46.0,
+"ga": 25.0,
+"w": 15.0,
+"pts": 52.0
+},
+"Detroit City FC": {
+"n": 27.0,
+"gf": 33.0,
+"ga": 20.0,
+"w": 13.0,
+"pts": 47.0
+},
+"Charleston Battery": {
+"n": 26.0,
+"gf": 52.0,
+"ga": 31.0,
+"w": 14.0,
+"pts": 46.0
+},
+"Hartford Athletic": {
+"n": 26.0,
+"gf": 29.0,
+"ga": 26.0,
+"w": 9.0,
+"pts": 39.0
+},
+"Rhode Island FC": {
+"n": 26.0,
+"gf": 39.0,
+"ga": 29.0,
+"w": 11.0,
+"pts": 38.0
+},
+"Pittsburgh Riverhounds SC": {
+"n": 27.0,
+"gf": 28.0,
+"ga": 27.0,
+"w": 11.0,
+"pts": 38.0
+},
+"Louisville City FC": {
+"n": 26.0,
+"gf": 43.0,
+"ga": 42.0,
+"w": 10.0,
+"pts": 37.0
+},
+"Miami FC": {
+"n": 28.0,
+"gf": 38.0,
+"ga": 45.0,
+"w": 9.0,
+"pts": 36.0
+},
+"Indy Eleven": {
+"n": 27.0,
+"gf": 33.0,
+"ga": 33.0,
+"w": 9.0,
+"pts": 34.0
+},
+"Loudoun United FC": {
+"n": 26.0,
+"gf": 32.0,
+"ga": 44.0,
+"w": 4.0,
+"pts": 24.0
+},
+"Birmingham Legion FC": {
+"n": 26.0,
+"gf": 36.0,
+"ga": 43.0,
+"w": 4.0,
+"pts": 23.0
+},
+"Brooklyn": {
+"n": 27.0,
+"gf": 27.0,
+"ga": 55.0,
+"w": 4.0,
+"pts": 18.0
+},
+"Sporting JAX": {
+"n": 27.0,
+"gf": 32.0,
+"ga": 73.0,
+"w": 3.0,
+"pts": 14.0
+},
+"El Paso Locomotive FC": {
+"n": 27.0,
+"gf": 46.0,
+"ga": 35.0,
+"w": 14.0,
+"pts": 47.0
+},
+"New Mexico United": {
+"n": 27.0,
+"gf": 41.0,
+"ga": 32.0,
+"w": 13.0,
+"pts": 46.0
+},
+"Sacramento Republic FC": {
+"n": 27.0,
+"gf": 37.0,
+"ga": 25.0,
+"w": 11.0,
+"pts": 44.0
+},
+"Lexington SC": {
+"n": 27.0,
+"gf": 49.0,
+"ga": 33.0,
+"w": 13.0,
+"pts": 43.0
+},
+"FC Tulsa": {
+"n": 27.0,
+"gf": 32.0,
+"ga": 25.0,
+"w": 11.0,
+"pts": 42.0
+},
+"Colorado Springs Switchbacks FC": {
+"n": 27.0,
+"gf": 40.0,
+"ga": 37.0,
+"w": 11.0,
+"pts": 40.0
+},
+"Orange County SC": {
+"n": 27.0,
+"gf": 36.0,
+"ga": 42.0,
+"w": 10.0,
+"pts": 39.0
+},
+"San Antonio FC": {
+"n": 27.0,
+"gf": 29.0,
+"ga": 29.0,
+"w": 9.0,
+"pts": 38.0
+},
+"Las Vegas Lights FC": {
+"n": 27.0,
+"gf": 35.0,
+"ga": 38.0,
+"w": 10.0,
+"pts": 36.0
+},
+"Oakland Roots SC": {
+"n": 27.0,
+"gf": 33.0,
+"ga": 35.0,
+"w": 8.0,
+"pts": 34.0
+},
+"Phoenix Rising FC": {
+"n": 27.0,
+"gf": 36.0,
+"ga": 40.0,
+"w": 8.0,
+"pts": 33.0
+},
+"Monterey Bay FC": {
+"n": 27.0,
+"gf": 29.0,
+"ga": 47.0,
+"w": 5.0,
+"pts": 21.0
+}
+},
+"matches": [
+{
+"d": "2026-09-20",
+"home": "Colorado Springs Switchbacks FC",
+"away": "New Mexico United",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Phoenix Rising FC",
+"away": "El Paso Locomotive FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Las Vegas Lights FC",
+"away": "Hartford Athletic",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Indy Eleven",
+"away": "Oakland Roots SC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Sacramento Republic FC",
+"away": "San Antonio FC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-23",
+"home": "Birmingham Legion FC",
+"away": "Brooklyn",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-25",
+"home": "Hartford Athletic",
+"away": "Louisville City FC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-25",
+"home": "Sporting JAX",
+"away": "Loudoun United FC",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-26",
+"home": "Charleston Battery",
+"away": "Rhode Island FC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Detroit City FC",
+"away": "Colorado Springs Switchbacks FC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "Indy Eleven",
+"away": "Miami FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "San Antonio FC",
+"away": "Tampa Bay Rowdies",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "New Mexico United",
+"away": "Sacramento Republic FC",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-27",
+"home": "Monterey Bay FC",
+"away": "Lexington SC",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-27",
+"home": "Oakland Roots SC",
+"away": "Phoenix Rising FC",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Orange County SC",
+"away": "Pittsburgh Riverhounds SC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-30",
+"home": "Brooklyn",
+"away": "Detroit City FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-30",
+"home": "Miami FC",
+"away": "Sporting JAX",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-30",
+"home": "Rhode Island FC",
+"away": "Indy Eleven",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-01",
+"home": "FC Tulsa",
+"away": "New Mexico United",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-01",
+"home": "Sacramento Republic FC",
+"away": "Las Vegas Lights FC",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-03",
+"home": "Loudoun United FC",
+"away": "Indy Eleven",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Brooklyn",
+"away": "Rhode Island FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-03",
+"home": "Detroit City FC",
+"away": "Birmingham Legion FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-03",
+"home": "Lexington SC",
+"away": "El Paso Locomotive FC",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Tampa Bay Rowdies",
+"away": "Miami FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Colorado Springs Switchbacks FC",
+"away": "Oakland Roots SC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Orange County SC",
+"away": "Monterey Bay FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Las Vegas Lights FC",
+"away": "San Antonio FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "New Mexico United",
+"away": "Phoenix Rising FC",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 8972
+},
+"soccer_xb_venezuela": {
+"teams": {
+"Metropolitanos FC": {
+"n": 13.0,
+"gf": 17.0,
+"ga": 10.0,
+"w": 7.0,
+"pts": 25.0
+},
+"Deportivo Táchira": {
+"n": 13.0,
+"gf": 17.0,
+"ga": 12.0,
+"w": 7.0,
+"pts": 24.0
+},
+"Academia Puerto Cabello": {
+"n": 13.0,
+"gf": 16.0,
+"ga": 14.0,
+"w": 4.0,
+"pts": 17.0
+},
+"Carabobo FC": {
+"n": 13.0,
+"gf": 23.0,
+"ga": 14.0,
+"w": 4.0,
+"pts": 19.0
+},
+"Portuguesa FC": {
+"n": 13.0,
+"gf": 20.0,
+"ga": 12.0,
+"w": 5.0,
+"pts": 20.0
+},
+"Deportivo La Guaira": {
+"n": 13.0,
+"gf": 15.0,
+"ga": 6.0,
+"w": 7.0,
+"pts": 27.0
+},
+"Estudiantes Mérida": {
+"n": 13.0,
+"gf": 21.0,
+"ga": 18.0,
+"w": 6.0,
+"pts": 20.0
+},
+"Universidad Central": {
+"n": 13.0,
+"gf": 24.0,
+"ga": 20.0,
+"w": 7.0,
+"pts": 23.0
+},
+"Monagas SC": {
+"n": 13.0,
+"gf": 14.0,
+"ga": 22.0,
+"w": 3.0,
+"pts": 11.0
+},
+"Caracas": {
+"n": 13.0,
+"gf": 15.0,
+"ga": 17.0,
+"w": 3.0,
+"pts": 15.0
+},
+"Rayo Zuliano": {
+"n": 13.0,
+"gf": 13.0,
+"ga": 23.0,
+"w": 4.0,
+"pts": 14.0
+},
+"Trujillanos FC": {
+"n": 13.0,
+"gf": 9.0,
+"ga": 26.0,
+"w": 0.0,
+"pts": 4.0
+},
+"Zamora FC": {
+"n": 13.0,
+"gf": 14.0,
+"ga": 14.0,
+"w": 4.0,
+"pts": 17.0
+},
+"Anzoátegui FC": {
+"n": 13.0,
+"gf": 15.0,
+"ga": 25.0,
+"w": 2.0,
+"pts": 9.0
+}
+},
+"matches": [
+{
+"d": "2026-08-31",
+"home": "Academia Puerto Cabello",
+"away": "Anzoátegui FC",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Zamora FC",
+"away": "Deportivo Táchira",
+"hg": 2.0,
+"ag": 5.0
+},
+{
+"d": "2026-09-02",
+"home": "Caracas",
+"away": "Portuguesa FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-03",
+"home": "Rayo Zuliano",
+"away": "Carabobo FC",
+"hg": 4.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-03",
+"home": "Anzoátegui FC",
+"away": "Monagas SC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-03",
+"home": "Estudiantes Mérida",
+"away": "Universidad Central",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-03",
+"home": "Metropolitanos FC",
+"away": "Trujillanos FC",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Portuguesa FC",
+"away": "Zamora FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Monagas SC",
+"away": "Metropolitanos FC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Trujillanos FC",
+"away": "Caracas",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Deportivo Táchira",
+"away": "Rayo Zuliano",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Deportivo La Guaira",
+"away": "Anzoátegui FC",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Anzoátegui FC",
+"away": "Metropolitanos FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "Academia Puerto Cabello",
+"away": "Carabobo FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Rayo Zuliano",
+"away": "Portuguesa FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Zamora FC",
+"away": "Trujillanos FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Caracas",
+"away": "Monagas SC",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Carabobo FC",
+"away": "Deportivo La Guaira",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-15",
+"home": "Deportivo Táchira",
+"away": "Academia Puerto Cabello",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Universidad Central",
+"away": "Anzoátegui FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-16",
+"home": "Portuguesa FC",
+"away": "Estudiantes Mérida",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-16",
+"home": "Monagas SC",
+"away": "Zamora FC",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-16",
+"home": "Trujillanos FC",
+"away": "Rayo Zuliano",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-16",
+"home": "Metropolitanos FC",
+"away": "Caracas",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Rayo Zuliano",
+"away": "Monagas SC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Universidad Central",
+"away": "Carabobo FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Deportivo La Guaira",
+"away": "Deportivo Táchira",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-20",
+"home": "Anzoátegui FC",
+"away": "Caracas",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Zamora FC",
+"away": "Metropolitanos FC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Estudiantes Mérida",
+"away": "Trujillanos FC",
+"hg": 1.0,
+"ag": 1.0
+}
+],
+"id": 339
+}
+},
+"updated": "2026-10-09T08:53+00:00"
 }
