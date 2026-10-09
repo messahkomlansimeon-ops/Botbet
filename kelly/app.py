@@ -528,7 +528,7 @@ def run_xbet_refresh(now=None, fetch=None):
     new = [c for c in CB.best_per_match(upcoming) if c.get("xodds") and c["key"] not in before]
     if new:
         fair.record(new, today["day"], shown=new)
-        telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet de l'après-midi",
+        telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet",
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
                                        "depuis ce matin). Vérifie la cote avant de valider."))
     print(f"[1xbet] relevé de l'après-midi : {len(upcoming)} pronostic(s) à venir, {len(new)} nouveau(x) 💎", file=sys.stderr)
