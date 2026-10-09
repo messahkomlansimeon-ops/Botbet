@@ -1,0 +1,201 @@
+"""Cotes 1xBet (kelly/sources/xbet.py) et choix de la ligne à la cote réelle (kelly/xprice.py), hors ligne : réponses de l'API au
+format réel (marché principal AU PREMIER NIVEAU, sous-matchs statistiques typés), paramètres triés, rapprochement des matchs,
+sous-matchs demandés seulement pour les familles voulues, meilleure ligne, pronostic écarté si 1xBet paie trop peu, affichage.
+Lancer : python -m tests.test_xbet"""
+import json
+import os
+import tempfile
+from urllib.parse import parse_qsl, urlparse
+
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-")
+os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-cache-")
+os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-odds-")
+os.environ.pop("TELEGRAM_TOKEN", None)
+
+from kelly import calib, combos as CB, config as C, fmt, store, xprice  # noqa: E402
+from kelly.sources import http, state, xbet  # noqa: E402
+
+KO = 1791572400                                     # 2026-10-09 19:00 UTC
+EV = {"id": "e1", "home_team": "Málaga", "away_team": "Espanyol", "commence_time": "2026-10-09T19:00:00Z"}
+
+
+def cell(t, cf, p=None):
+    return [{"type": t, "cf": cf, "cfView": str(cf)} | ({"parameter": p} if p is not None else {})]
+
+
+MENU = [{"menuSectionId": 2, "sports": [{"id": 1, "nameEng": "Football", "ligas": [
+    {"id": 71, "nameEng": "Spain", "subLigas": [{"id": 127733, "nameEng": "Spain. La Liga"},
+                                               {"id": 1700000, "nameEng": "Spain. La Liga. Statistics Round"}]},
+    {"id": 118587, "nameEng": "UEFA Champions League", "globalChampId": 105}]}]}]
+GAMES = [{"id": 900, "mainGameId": 900, "startTs": KO, "sport": {"id": 1},
+          "opponent1": {"fullName": "Málaga"}, "opponent2": {"fullName": "Espanyol"}},
+         {"id": 901, "mainGameId": 901, "startTs": KO, "sport": {"id": 1},
+          "opponent1": {"fullName": "Home (Special bets)"}, "opponent2": {"fullName": "Away (Special bets)"}},
+         {"id": 902, "mainGameId": 777, "startTs": KO, "sport": {"id": 1}, "opponent1": {"fullName": "x"}, "opponent2": {"fullName": "y"}}]
+MAIN = {"eventGroups": [{"groupId": 1, "events": [cell(1, 2.878), cell(2, 3.295), cell(3, 2.745)]},
+                        {"groupId": 8, "events": [cell(4, 1.512), cell(5, 1.385), cell(6, 1.474)]},
+                        {"groupId": 19, "events": [cell(180, 1.79), cell(181, 1.937)]},
+                        {"groupId": 17, "events": [cell(9, 2.167, 2.5) + cell(10, 1.806, 2.5), cell(9, 1.33, 1.5) + cell(10, 3.3, 1.5)]}],
+        # la 1re mi-temps (premier sous-match) a d'autres cotes : elles ne doivent JAMAIS être prises pour celles du match
+        "subGamesForMainGame": [{"id": 950, "period": 1, "subGameName": "1ère mi-temps",
+                                 "eventGroups": [{"groupId": 1, "events": [cell(1, 3.52), cell(2, 2.0), cell(3, 3.32)]}]},
+                                {"id": 951, "gameTypeId": 2, "subGameName": "Corners"},
+                                {"id": 952, "gameTypeId": 2, "period": 1, "subGameName": "Corners. 1ère mi-temps"},
+                                {"id": 953, "gameTypeId": 12, "subGameName": "Tirs Cadrés"},
+                                {"id": 954, "gameTypeId": 95, "subGameName": "Tirs vers le but"}]}
+CORNERS = {"eventGroups": [{"groupId": 17, "events": [cell(9, 1.59, 8.5) + cell(10, 2.2, 8.5), cell(9, 1.99, 9.5) + cell(10, 1.8, 9.5),
+                                                      cell(9, 2.6, 10.5) + cell(10, 1.45, 10.5)]},
+                           {"groupId": 15, "events": [cell(11, 1.65, 4.5)]}]}
+SOT = {"eventGroups": [{"groupId": 17, "events": [cell(9, 1.81, 8.5) + cell(10, 1.95, 8.5)]},
+                       {"groupId": 15, "events": [cell(11, 2.16, 4.5) + cell(12, 1.65, 4.5)]},
+                       {"groupId": 62, "events": [cell(13, 1.95, 4.5) + cell(14, 1.8, 4.5)]}]}
+
+
+class FakeNet:
+    def __init__(self):
+        self.calls = []
+
+    def fetch(self, url, source, ttl, headers=None, check_robots=True):
+        self.calls.append(url)
+        q = dict(parse_qsl(urlparse(url).query))
+        keys = [k for k, _ in parse_qsl(urlparse(url).query)]
+        assert keys == sorted(keys), f"paramètres non triés : {url}"         # sinon HTTP 400 chez 1xBet
+        ep = urlparse(url).path.rsplit("/", 1)[-1]
+        body = {"leftMenuSports": MENU, "games1x2": GAMES}.get(ep)
+        if ep == "gameEvents":
+            body = {"900": MAIN, "951": CORNERS, "953": SOT}.get(q["gameId"], {"eventGroups": []})
+        return http.Result(url, json.dumps(body).encode(), 200)
+
+
+def with_net(fn):
+    old = http.fetch
+    net = FakeNet()
+    http.fetch = net.fetch
+    try:
+        return fn(net)
+    finally:
+        http.fetch = old
+
+
+def test_parse_and_url():
+    u = xbet.url("gameEvents", gameId=5, cfView=3)
+    keys = [k for k, _ in parse_qsl(urlparse(u).query)]
+    assert keys == sorted(keys) and "selectedMs" not in keys
+    px, subs = xbet.parse_main(MAIN, "Málaga", "Espanyol")
+    assert px[("h2h", "Málaga", None)] == 2.878 and px[("h2h", "Draw", None)] == 3.295          # pas la 1re mi-temps (3,52 / 2,00)
+    assert px[("double_chance", "Málaga or Draw", None)] == 1.512 and px[("double_chance", "Draw or Espanyol", None)] == 1.474
+    assert px[("totals", "Over", 2.5)] == 2.167 and px[("totals", "Under", 1.5)] == 3.3 and px[("btts", "No", None)] == 1.937
+    assert subs == {2: 951, 12: 953, 95: 954}                                                  # sous-matchs du match entier seulement
+    out = {}
+    xbet._ladder(SOT["eventGroups"], *xbet.SUBGAMES[12], out)
+    assert out[("team_sot_total", "Over", 8.5)] == 1.81 and out[("team_sot_home", "Under", 4.5)] == 1.65
+    assert out[("team_sot_away", "Over", 4.5)] == 1.95
+    assert xbet.book_prob(out, "team_sot_total", "Over", 8.5) == round((1 / 1.81) / (1 / 1.81 + 1 / 1.95), 4)
+    assert [g["gid"] for g in xbet.parse_games(GAMES)] == [900, 901]                           # pas les sous-matchs (902)
+    print("ok  lecture des cotes et adresses triées")
+
+
+def test_find_match():
+    cands = [{"gid": 1, "home": "Málaga", "away": "Espanyol", "ts": KO},
+             {"gid": 2, "home": "Real Sociedad", "away": "Espanyol", "ts": KO + 3 * 86400}]
+    assert xbet.find(EV, cands)["gid"] == 1
+    naples = {"id": "n", "home_team": "Napoli", "away_team": "Juventus", "commence_time": "2026-10-09T19:00:00Z"}
+    assert xbet.find(naples, [{"gid": 3, "home": "SSC Naples", "away": "Juventus", "ts": KO}])["gid"] == 3      # même heure
+    assert xbet.find(naples, [{"gid": 4, "home": "SSC Naples", "away": "Juventus", "ts": KO + 7200}]) is None   # 2 h d'écart
+    assert xbet.find(EV, [{"gid": 5, "home": "Malmö", "away": "Elfsborg", "ts": KO}]) is None
+    print("ok  rapprochement des matchs (noms + heure)")
+
+
+def test_fetch_day_requests():
+    store.save(state.FILE, {})
+
+    def run(net):
+        got = xbet.fetch_day([("soccer_spain_la_liga", EV), ("soccer_epl", EV | {"id": "e2"}), ("tennis_x", EV | {"id": "e3"})],
+                             wanted={"e1": {"alternate_totals_corners", "totals"}})
+        return got, net.calls
+    got, calls = with_net(run)
+    assert set(got) == {"e1"} and got["e1"]["gid"] == 900, got
+    eps = [urlparse(u).path.rsplit("/", 1)[-1] + ("#" + dict(parse_qsl(urlparse(u).query)).get("gameId", "")) for u in calls]
+    # menu, liste de la Liga, marché principal, corners ; pas de tirs cadrés (non voulus) ; Premier League absente du menu : rien
+    assert eps == ["leftMenuSports#", "games1x2#", "gameEvents#900", "gameEvents#951"], eps
+    assert got["e1"]["px"][("alternate_totals_corners", "Over", 9.5)] == 1.99
+    assert state.health("xbet")["rows"] == 1
+    print("ok  requêtes limitées aux familles voulues")
+
+
+def prono(market, name, point, p0, alts=None, **kw):
+    c = {"id": "e1", "sport_key": "soccer_spain_la_liga", "home": "Málaga", "away": "Espanyol", "commence": EV["commence_time"],
+         "start": "19:00", "league": "Liga", "market": market, "name": name, "point": point, "who": None, "prob": p0, "p0": p0,
+         "min_odds": round(1 / p0 * 1.05, 2), "conf": 0.6, "n_min": 8, "score": 0.2, "key": f"e1|{market}||{point}|{name}",
+         "pick": fmt.label(market, name, point, None, "soccer")}
+    if alts is not None:
+        c["alts"] = alts
+    return c | kw
+
+
+def test_choose_line_and_viability():
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    px = {}
+    xbet._ladder(CORNERS["eventGroups"], *xbet.SUBGAMES[2], px)
+    # Kelly visait plus de 8,5 (68 %, payé 1,59 < mini 1,54 ? non : 1,59 >= 1,54) ; plus de 9,5 (60 %) payé 1,99 vaut mieux
+    c = prono("alternate_totals_corners", "Over", 8.5, 0.68,
+              alts=[["Over", 8.5, 0.68, None], ["Over", 9.5, 0.60, 0.52], ["Over", 10.5, 0.45, None], ["Under", 9.5, 0.40, None]])
+    assert xprice.price(c, px) == "value"
+    assert (c["name"], c["point"], c["xodds"]) == ("Over", 9.5, 1.99) and c["key"].endswith("|9.5|Over") and "9,5" in c["pick"]
+    assert c["prob"] == 0.6 and c["min_odds"] == round(1 / 0.6 * 1.05, 2) and abs(c["xev"] - (0.6 * 1.99 - 1)) < 1e-4
+    assert c["xp"] == xbet.book_prob(px, "alternate_totals_corners", "Over", 9.5) and CB.viable(c)
+    # 1xBet paie trop peu : pronostic gardé pour mémoire mais plus viable (ni montré ni dans un combiné)
+    low = prono("alternate_totals_corners", "Under", 10.5, 0.72, alts=[["Under", 10.5, 0.72, None]])
+    assert xprice.price(low, px) == "low" and low["xodds"] == 1.45 and not CB.viable(low)
+    # marché que 1xBet ne propose pas : inchangé, « à vérifier »
+    none = prono("team_fouls_total", "Over", 22.5, 0.66)
+    assert xprice.price(none, px) is None and "xodds" not in none and CB.viable(none)
+    best = CB.best_per_match([none, c])
+    assert best == [c], "à valeur égale de classement, le pronostic jouable chez 1xBet passe devant"
+    legs = CB.fair_legs([c, none | {"id": "e9"}])
+    assert {l["odds"] for l in legs} == {1.99, none["min_odds"]}
+    print("ok  meilleure ligne à la cote 1xBet, pronostic mal payé écarté")
+
+
+def test_apply_and_messages():
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    px = {}
+    xbet._ladder(CORNERS["eventGroups"], *xbet.SUBGAMES[2], px)
+    pronos = [prono("alternate_totals_corners", "Over", 9.5, 0.60, alts=[["Over", 9.5, 0.60, None]]),
+              prono("team_fouls_total", "Over", 22.5, 0.66) | {"id": "e2", "home": "A", "away": "B"}]
+    seen = {}
+
+    def fetch(events, deadline=None, wanted=None):
+        seen.update(events=[e["id"] for _, e in events], wanted=wanted)
+        return {"e1": {"gid": 900, "px": px}}
+    assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0}
+    assert seen["events"] == ["e1", "e2"] and seen["wanted"]["e1"] == {"alternate_totals_corners"}
+    text = fmt.pronos(CB.best_per_match(pronos))
+    assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text and "— mini <b>" in text, text
+    real = fmt.fair_combo(3.96, [pronos[0], pronos[0] | {"id": "x"}], 0.36, 0.5)
+    assert real.startswith("<b>💎 COMBINÉ AUX COTES 1XBET</b>") and "🎯 Cote <b>" in real and "✔️ Cote 1xBet <b>1,99</b>" in real
+    mixed = fmt.fair_combo(3.0, [pronos[0], pronos[1]], 0.4, 0.5)
+    assert "À VÉRIFIER CHEZ 1XBET" in mixed and "Kelly n'a pas vu toutes les cotes" in mixed
+    old = C.XBET_ENABLED
+    C.XBET_ENABLED = False
+    try:
+        assert xprice.apply(pronos, fetch=lambda *a, **k: 1 / 0) == {"matches": 0, "value": 0, "low": 0}
+    finally:
+        C.XBET_ENABLED = old
+    assert xprice.apply(pronos, fetch=lambda *a, **k: 1 / 0)["matches"] == 0              # panne : le matin continue
+    print("ok  relevé du matin, messages 💎 et combinés aux cotes 1xBet")
+
+
+def main():
+    test_parse_and_url()
+    test_find_match()
+    test_fetch_day_requests()
+    test_choose_line_and_viability()
+    test_apply_and_messages()
+    print("tests 1xBet : OK")
+
+
+if __name__ == "__main__":
+    main()

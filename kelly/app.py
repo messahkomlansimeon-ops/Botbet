@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, freeclose, learn, monde,
-               money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly)
+               money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xprice)
 from .sources import fmmatch, http
 from .telegram import Html
 
@@ -371,6 +371,8 @@ def world_report(scan, picks, day, now):
             print(f"[monde] prochains matchs ignorés : {e}", file=sys.stderr)
     try:
         pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.SCAN_SECONDS, africa=africa)
+        if C.SOURCES_REFRESH:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé
+            xprice.apply(pronos)
         fair.record(pronos, day, shown=CB.best_per_match(pronos))     # suivis : les montrés + d'autres en silence (fiabilité)
     except Exception as e:                          # noqa: BLE001
         print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)

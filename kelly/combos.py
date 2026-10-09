@@ -293,13 +293,16 @@ def viable(c):
         return False
     if c.get("base") is not None and c["prob"] < c["base"]:
         return False
+    if c.get("xodds") and c["xodds"] < c.get("min_odds", 0):              # 1xBet paie moins que la cote mini de Kelly : pas joué
+        return False
     return calib.factor(c["market"], sport_key=c.get("sport_key")) >= C.VIABLE_MIN_K
 
 
 def best_per_match(pronos):
-    """Le meilleur pronostic viable de chaque match (le mieux classé), dans l'ordre du classement : un seul par match."""
+    """Le meilleur pronostic viable de chaque match, un seul par match : d'abord ceux qui sont jouables à la cote 1xBet relevée
+    par Kelly (c["xodds"], kelly/xprice.py), puis les autres (« à vérifier »), chacun dans l'ordre du classement."""
     best = {}
-    for c in sorted(pronos, key=lambda c: -c.get("score", 0)):
+    for c in sorted(pronos, key=lambda c: (not c.get("xodds"), -c.get("score", 0))):
         if c["id"] not in best and viable(c):
             best[c["id"]] = c
     return list(best.values())
@@ -312,8 +315,9 @@ def fair_eligible(c):
 
 
 def fair_legs(pronos):
-    """Jambes d'un combiné à cote juste : les pronostics solides, avec la cote minimale comme « cote » de l'optimiseur."""
-    return [c | {"odds": c["min_odds"]} for c in pronos if fair_eligible(c) and viable(c)]
+    """Jambes d'un combiné à cote juste : les pronostics solides, avec comme « cote » de l'optimiseur la cote 1xBet relevée par Kelly
+    (c["xodds"], jamais sous la cote mini : sinon le pronostic n'est pas viable), sinon la cote minimale à exiger."""
+    return [c | {"odds": c.get("xodds") or c["min_odds"]} for c in pronos if fair_eligible(c) and viable(c)]
 
 
 def fair_stake(min_total):

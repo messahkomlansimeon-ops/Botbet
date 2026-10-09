@@ -200,6 +200,18 @@ def best_per_family(opts, families, bases=None):
     return [b[1:] for b in best.values()]
 
 
+def alternatives(opts, bases, market):
+    """Lignes possibles d'un marché pour le choix à la cote 1xBet : [[côté, ligne, proba rapprochée de 50 %, référence ou None]],
+    proba dans C.FAIR_P_RANGE seulement (même règle que best_per_family)."""
+    lo, hi = C.FAIR_P_RANGE
+    out = []
+    for m, name, point, p, _ in opts:
+        base = (bases or {}).get((m, name, point))
+        if m == market and lo <= shrink(p) <= hi:
+            out.append([name, point, round(shrink(p), 4), None if base is None else round(shrink(base), 4)])
+    return out
+
+
 def side_name(market, ev):
     """Équipe visée par un marché « par équipe » (suffixe _home / _away), sinon None."""
     if market in STAT_SPECS and not market.endswith("_total"):
@@ -295,6 +307,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=()):
         picks_ = []
         for b in best_per_family(opts, families, bases):
             c = make_pick(ev, *b, src)
+            c["alts"] = alternatives(opts, bases, b[0])        # autres lignes du marché : la meilleure à la cote 1xBet (xprice.py)
             c["n_min"] = min(f.get("n_home") or 0, f.get("n_away") or 0)      # matchs de données de l'équipe la moins connue
             base = bases.get((b[0], b[1], b[2]))
             if base is not None:
@@ -356,7 +369,7 @@ def fmt_pronos(pronos, limit=None):
 
 # ---------- suivi (calibration) ----------
 
-ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0")   # lignes de fair.json : petites
+ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0", "xodds")   # fair.json : petites
 
 
 def pick_label(r):

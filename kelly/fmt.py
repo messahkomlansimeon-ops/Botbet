@@ -236,11 +236,13 @@ def pronos(items, limit=10):
     """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale."""
     shown = items[:limit]
     if not shown:
-        return Html(b("🎲 Pronostics Kelly sans cote") + "\n" + i("Aucun pronostic assez solide : Kelly ne montre que des pronostics "
+        return Html(b("🎲 Pronostics Kelly") + "\n" + i("Aucun pronostic assez solide : Kelly ne montre que des pronostics "
                                                                  "viables (assez de chances et de données)."))
-    lines = [b("🎲 Pronostics Kelly sans cote"),
-             i("Le meilleur pronostic de chaque match, s'il est solide. À comparer chez 1xBet : joue seulement si la cote est au "
-               "moins celle indiquée.")]
+    priced = any(c.get("xodds") for c in shown)
+    lines = [b("🎲 Pronostics Kelly"),
+             i("Le meilleur pronostic de chaque match, s'il est solide. "
+               + ("💎 = cote 1xBet relevée par Kelly ce matin et assez haute pour jouer (vérifie qu'elle n'a pas baissé). "
+                  if priced else "") + "« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée.")]
     by = {}
     for c in shown:
         by.setdefault(c["id"], []).append(c)
@@ -248,10 +250,14 @@ def pronos(items, limit=10):
         lines.append("")
         lines.append(_match_line(None, cs[0]))
         for c in cs:
-            lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")
             q = c.get("conf")
             data = "" if q is None else (" · données solides" if q >= 0.4 else " · données correctes")
-            lines.append(i(f"   {pct(c['prob'])} de chances{data}"))
+            if c.get("xodds"):
+                lines.append(f"💎 {esc(c['pick'])} — cote 1xBet {b(num(c['xodds']))}")
+                lines.append(i(f"   {pct(c['prob'])} de chances{data} · valeur {c['xev'] * 100:+.0f} %"))
+            else:
+                lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")
+                lines.append(i(f"   {pct(c['prob'])} de chances{data}"))
     if len(items) > len(shown):
         lines += ["", i(f"+ {len(items) - len(shown)} autres : écris un nom d'équipe pour voir un match")]
     return Html("\n".join(lines))
@@ -260,17 +266,23 @@ def pronos(items, limit=10):
 def fair_leg(n, c):
     """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
     chances = i(f"({pct(c['prob'])} de chances)")
+    if c.get("xodds"):
+        return "\n".join([_match_line(n, c), f"💎 {esc(c['pick'])}", f"✔️ Cote 1xBet {b(num(c['xodds']))}  {chances}"])
     return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 
 def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
     (mise indicative seulement), chaque jambe avec sa cote minimale. `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »)."""
-    head = [b(f"{title} — À VÉRIFIER CHEZ 1XBET" if title else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET"),
-            f"🎯 Cote mini {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
+    real = all(c.get("xodds") for c in picks)          # toutes les cotes relevées chez 1xBet par Kelly : la cote totale est réelle
+    tail = "COTES 1XBET" if real else "À VÉRIFIER CHEZ 1XBET"
+    head = [b(f"{title} — {tail}" if title else ("💎 COMBINÉ AUX COTES 1XBET" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")),
+            f"🎯 {'Cote' if real else 'Cote mini'} {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
             (f"💰 Mise : {b(esc(stake_txt))} {i('(seulement si 1xBet paie la cote mini)')}" if stake_txt else
              f"💰 Mise indicative : {units(stake)} au plus {i('(pas calculée sur ta bankroll)')}")]
-    foot = i("⚠️ Kelly n'a pas vu les cotes de 1xBet : joue seulement si CHAQUE pari atteint sa cote mini "
+    foot = i("💎 Cotes relevées chez 1xBet par Kelly ce matin : vérifie qu'elles n'ont pas baissé avant de valider." if real else
+             ("⚠️ Kelly n'a pas vu toutes les cotes de 1xBet : " if any(c.get("xodds") for c in picks) else
+              "⚠️ Kelly n'a pas vu les cotes de 1xBet : ") + "joue seulement si CHAQUE pari atteint sa cote mini "
              f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")
     return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1)) + "\n\n" + foot
                 + played_hint(hint))

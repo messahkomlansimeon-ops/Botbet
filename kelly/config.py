@@ -177,6 +177,10 @@ FAIR_COMBO_TIERS = ((5, 5.0, 6.5), (12, 12.0, 15.0), (25, 25.0, 32.0))   # (cote
 FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0),
                     ("tv5", "team_shots_", "🎯 COMBINÉ TIRS VERS LE BUT", 5.0, 7.0))
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
+# Cotes 1xBet (kelly/sources/xbet.py) : le prix exact des pronostics chez le bookmaker de l'utilisateur, lu le matin (gratuit, poli)
+XBET_ENABLED = os.environ.get("XBET_ENABLED", "1") != "0"
+XBET_SECONDS = _int("XBET_SECONDS", 480)            # temps maximal du relevé 1xBet du matin (3 s entre requêtes)
+XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 60)     # matchs relevés au plus (les mieux classés d'abord)
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
 FAIR_COMBO_KEEP_DAYS = 14
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}

@@ -1203,7 +1203,7 @@ def test_fair_pronostics():
         for c in pronos:                                                   # proba utile : ni hasard ni évidence
             assert C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and c["min_odds"] >= c["fair"] >= 1 / C.FAIR_P_RANGE[1] - 0.01
         text = fmt.pronos(pronos)
-        assert text.startswith("<b>🎲 Pronostics Kelly sans cote</b>"), text
+        assert text.startswith("<b>🎲 Pronostics Kelly</b>"), text
         assert "<b>Alpha – Bravo</b>" in text and "👉 Plus de 10,5 corners — mini <b>" in text, text
         assert f'<b>{fmt.num(top["min_odds"])}</b>' in text and "cote juste" not in text
         # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
@@ -1288,8 +1288,8 @@ def test_morning_always_useful():
         assert order == sorted(order), world                                   # sélections d'abord un jour de trêve
         assert "💳 Ligue des nations UEFA\n" in world and "⚽ MLS\n" in world and "18h00  France – Italie" in world, world
         assert "Cotes réelles achetées : " in world and "crédit" not in world and "🎲" in world
-        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 Pronostics Kelly sans cote" in txt
-        prono = next(m for m in sent if m.startswith("<b>🎲 Pronostics Kelly sans cote"))
+        assert "PARI DU JOUR" in txt and "SÛR" in txt and "🎲 Pronostics Kelly" in txt
+        prono = next(m for m in sent if m.startswith("<b>🎲 Pronostics Kelly"))
         assert "— mini <b>" in prono and "chez 1xBet" in prono and "cote juste" not in prono
         assert "Alpha" not in prono and "Ligue des nations" not in prono             # les sélections n'ont pas de profil de club
         paid_leagues = {c[0].split("/")[2] for c in fake.paid()}
@@ -1348,12 +1348,12 @@ def test_morning_always_useful():
         txt = "\n".join(sent)
         assert fake.paid() == [] and not track.load() and fake.remaining == 25
         assert "🌍 Tour du monde" in txt and "Pas de cote achetée aujourd'hui (budget de cotes du jour épuisé)" in txt, txt
-        assert "🎲 Pronostics Kelly sans cote" in txt and "— mini <b>" in txt and "⚽ Brasileirão\n" in txt
+        assert "🎲 Pronostics Kelly" in txt and "— mini <b>" in txt and "⚽ Brasileirão\n" in txt
         assert "Pas assez de matchs" not in txt and "COMBINÉS DU" not in txt and "PARI DU JOUR" not in txt and "SÛR" not in txt
         assert "Cotes réelles achetées" not in next(m for m in sent if m.startswith("<b>🌍 Tour du monde"))          # aucune ligue payée
         assert not any(r["sent"] for r in track.load())                        # rien n'est suivi comme pari envoyé (pas de cote, pas de CLV)
         assert store.load("fair.json", []) and store.load("monde.json", {})["paid"] == []
-        assert "Pronostics Kelly sans cote" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
+        assert "Pronostics Kelly" in app.handle_command("/top") and app.handle_command("/combi 30").startswith("Pas de cotes réelles")
 
         # --- 3) aucun match nulle part aujourd'hui : on le dit en une ligne avec les prochains jours
         wipe()
@@ -2115,7 +2115,7 @@ def test_replay_oct8():
         head = text[0]
         assert "3 avec des cotes réelles" in head and f"{len(built)} combinés à vérifier chez 1xBet" in head, head
         assert all(c["tier"] in [t for t, _, _ in C.COMBOS] for c in sent_combos)
-        assert not any("paie au moins" in t or "— mini" in t for t in text if "COMBINÉ À VÉRIFIER" not in t and "Pronostics Kelly sans cote" not in t)
+        assert not any("paie au moins" in t or "— mini" in t for t in text if "COMBINÉ À VÉRIFIER" not in t and "Pronostics Kelly" not in t)
         real_ids = {c["id"] for c in sent_picks}
         assert real_ids <= {p["id"] for p in picks}                                      # les combinés réels n'ont que des jambes à vraies cotes
         for fm in fair_msgs:
@@ -2141,7 +2141,7 @@ def test_replay_oct8():
         reply = app.handle_command(f"/combi {huge}")
         assert reply.startswith(f"Impossible de monter un combiné à la cote {huge} aujourd'hui.\n• Avec les cotes réelles, les 3 paris de qualité") \
             and f"ne permettent pas d'atteindre la cote {huge}" in reply, reply
-        assert "Pronostics Kelly sans cote" in reply and "il en faudrait environ" in reply and "équipes déjà couvertes" in reply, reply
+        assert "Pronostics Kelly" in reply and "il en faudrait environ" in reply and "équipes déjà couvertes" in reply, reply
         # --- sans aucune cote réelle : /combi 25 propose quand même un combiné à cote juste
         store.save("today.json", {"day": str(day), "picks": [], "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
         reply = app.handle_command("/combi 25")
@@ -2212,7 +2212,7 @@ def test_run_daily_world():
         assert all(c["tier"] in [t for t, _, _ in C.COMBOS] for c in bets["combos"])                  # jamais de combiné à cote juste ici
         today_ = store.load("today.json", {})
         assert today_["pronos"] and {c["sport_key"] for c in today_["pronos"]} & {"africa", "soccer_brazil_campeonato"}
-        assert any(m.startswith("<b>🎲 Pronostics Kelly sans cote") for m in sent) and any("🌍 Tour du monde" in m for m in sent)
+        assert any(m.startswith("<b>🎲 Pronostics Kelly") for m in sent) and any("🌍 Tour du monde" in m for m in sent)
         for m in sent:
             assert m.count("<b>") == m.count("</b>") and m.count("<i>") == m.count("</i>"), m
         plain_all = "\n".join(fmt.plain(m) for m in sent).lower()

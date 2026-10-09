@@ -88,6 +88,17 @@ Les matchs que le budget ne couvre pas sont analysés gratuitement (`kelly/fair.
 
 Durées : relevé gratuit ≤ 150 s (`SCAN_SECONDS`), téléchargements de stats ≤ 420 s (`SOURCES_SECONDS`, le reste est repris au passage suivant), calcul des pronostics local : le passage de 08:00 reste très en dessous des 15 minutes du workflow, même cache froid.
 
+## Cotes 1xBet : le vrai prix de chaque pronostic
+
+Chaque matin, juste après le calcul des pronostics, Kelly lit chez 1xBet (1xbet.ci, le bookmaker où tu joues) la cote EXACTE de ses pronostics : buts, double chance, « les 2 marquent », corners, tirs vers le but, tirs cadrés, fautes, touches, hors-jeu (`kelly/sources/xbet.py`, `kelly/xprice.py`).
+- **💎 jouable** : parmi les lignes du marché (plus de 8,5 / 9,5 / 10,5 corners...), Kelly garde celle qui rapporte le plus à la cote 1xBet réelle, si la cote est au moins sa cote mini (1 / proba x 1,05) et la proba d'au moins 58 %. Le message affiche « 💎 Plus de 9,5 corners — cote 1xBet 1,99 · valeur +19 % ».
+- **Trop mal payé** : si 1xBet paie moins que la cote mini, le pronostic n'est plus montré ni utilisé dans un combiné.
+- **Pas chez 1xBet** (marché non proposé, match non trouvé) : le pronostic reste « mini X, à vérifier », comme avant.
+- **Combinés** : jambes aux cotes 1xBet quand elles sont connues ; toutes connues = « 💎 COMBINÉ AUX COTES 1XBET » avec la cote réelle.
+- **Cartons** : 1xBet ne compte que les jaunes, Kelly jaunes + rouges : pas comparés.
+- **Accès poli** : adresses publiques seulement (robots.txt respecté, identité KellyBot, 3 s entre requêtes, cache 2 h), aucun jeton, proxy ni faux navigateur ; 403/429 ou page anti-robot = source coupée 24 h. Au plus `XBET_MAX_MATCHES` (60) matchs en `XBET_SECONDS` (480 s), les mieux classés d'abord ; `XBET_ENABLED=0` coupe tout. Piège de l'API : les paramètres de l'adresse doivent être dans l'ordre alphabétique (sinon HTTP 400).
+- Les cotes sont celles de 04:00 : vérifie qu'elles n'ont pas baissé avant de valider.
+
 ## Touches, hors-jeu, fautes, tirs cadrés : stats de match FotMob
 Les pages de match de FotMob (HTML autorisé par robots.txt ; seul `/api/*` est interdit et n'est jamais appelé) donnent pour chaque équipe les **touches, hors-jeu, fautes, tirs, tirs cadrés, corners et cartons** (les cartons sont comptés sur le fil du match : la stat vaut parfois 0-0 à tort). La page d'une ligue liste tous les matchs de la saison avec leur lien : Kelly peut donc remonter l'historique d'une équipe, ce que le forfait gratuit d'API-Football interdit. `kelly/sources/fmmatch.py` :
 - **Quand** : à chaque passage horaire (11:05 à 22:05), `FM_PAGES_PER_RUN` (15) pages de match au plus en `FM_SECONDS` (80 s), jamais à 08:00 (déjà chargé). La page de la ligue, lue le matin, est relue depuis le cache. Une page pèse ~1 Mo et n'est jamais gardée : seules les stats vont dans `data/fm_matches.json` (compact, 12 derniers matchs par équipe).
