@@ -306,9 +306,9 @@ def _avg_view(recs, keys=("goals", "shots", "sot", "corners", "fouls", "cards", 
     for k in keys:
         f = [r[k][0] for r in recs if r[k][0] is not None]
         a = [r[k][1] for r in recs if r[k][1] is not None]
-        if len(f) >= min_count:
+        if f and len(f) >= min_count:              # jamais de moyenne sans relevé (une équipe qui n'a joué qu'à domicile)
             out[k + "_for"] = round(sum(f) / len(f), 2)
-        if len(a) >= min_count:
+        if a and len(a) >= min_count:
             out[k + "_against"] = round(sum(a) / len(a), 2)
     return out
 

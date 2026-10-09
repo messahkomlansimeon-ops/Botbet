@@ -52,6 +52,7 @@ def test_averages_need_enough_matches():
     recs = [{"throws": (20, 18) if i < 2 else (None, None)} for i in range(10)]
     assert "throws_for" not in fd._avg_view(recs, keys=("throws",), min_count=3)
     assert fd._avg_view(recs, keys=("throws",))["throws_for"] == 20                  # football-data : inchangé
+    assert fd._avg_view([], keys=("throws",), min_count=0) == {"n": 0}               # aucun match (une équipe sans match à l'extérieur)
 
 
 def test_one_combo_per_tier_and_day():
