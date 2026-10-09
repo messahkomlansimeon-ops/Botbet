@@ -271,7 +271,7 @@ def calibrated(model, market, p):
 def book_stats(rows):
     books = {}
     for r in rows:
-        if r.get("clv") is None:
+        if r.get("clv") is None or r.get("close_src"):     # cote finale gratuite : mouvement du marché, pas le prix d'un book
             continue
         b = books.setdefault(r.get("book") or "?", {"n": 0, "clv": 0.0})
         b["n"] += 1; b["clv"] += r["clv"]

@@ -1,15 +1,19 @@
 """Fiabilité de Kelly par famille de marché, mesurée sur ses pronostics sans cote réglés gratuitement (data/fair.json n'en garde
 que FAIR_KEEP_DAYS jours ; ce cumul-ci est gardé pour toujours dans data/calib.json, quelques centaines d'octets).
 
-data/calib.json : {famille: [n, gagnés, somme des probas brutes]}. Proba « brute » (c["p0"]) = avant la correction ci-dessous :
-la correction ne se mesure jamais elle-même.
+data/calib.json : {famille: [n, gagnés, somme des probas brutes], "_lg": {championnat: {famille: [...]}}}. Proba « brute »
+(c["p0"]) = avant la correction ci-dessous : la correction ne se mesure jamais elle-même.
+
+Par championnat : dès FAIR_CALIB_MIN pronostics d'une famille dans un championnat (corners au Brésil...), la correction de ce
+championnat remplace celle de la famille, rapprochée d'elle tant que les pronostics sont peu nombreux. Kelly peut être juste sur
+les corners en Europe et trop sûre d'elle au Brésil.
 
 Correction (factor) : la proba annoncée est 50 % + k x (proba brute - 50 %). k = (réussite - 50 %) / (proba brute moyenne - 50 %),
 ramené vers 1 tant que les pronostics sont peu nombreux (poids n / (n + FAIR_CALIB_PRIOR)), borné à K_RANGE, et 1 sous
 FAIR_CALIB_MIN pronostics réglés. k < 1 : Kelly est trop sûre d'elle sur ce marché, ses probas sont rapprochées de 50 % et la
 « cote mini » à exiger chez 1xBet monte.
 """
-from . import config as C, store
+from . import catalogue, config as C, store
 
 FILE = "calib.json"
 K_RANGE = (0.4, 1.2)
@@ -44,10 +48,14 @@ def add(rows):
     for r in rows:
         if r.get("calib") or r.get("result") not in ("win", "loss"):
             continue
-        acc = data.setdefault(family(r["market"]), [0, 0, 0.0])
-        acc[0] += 1
-        acc[1] += r["result"] == "win"
-        acc[2] = round(acc[2] + (r.get("p0") or r["prob"]), 4)
+        fam, p0, won = family(r["market"]), r.get("p0") or r["prob"], r["result"] == "win"
+        accs = [data.setdefault(fam, [0, 0, 0.0])]
+        if r.get("sport_key"):
+            accs.append(data.setdefault("_lg", {}).setdefault(r["sport_key"], {}).setdefault(fam, [0, 0, 0.0]))
+        for acc in accs:
+            acc[0] += 1
+            acc[1] += won
+            acc[2] = round(acc[2] + p0, 4)
         r["calib"] = True
         n += 1
     if n:
@@ -55,30 +63,40 @@ def add(rows):
     return n
 
 
-def factor(market, data=None):
-    """k de la famille du marché (1 = pas de correction)."""
-    acc = (data if data is not None else load()).get(family(market))
+def _k(acc, prior_k=1.0):
+    """k d'un cumul [n, gagnés, somme des probas], rapproché de `prior_k` tant que n est petit ; None sous FAIR_CALIB_MIN."""
     if not acc or acc[0] < C.FAIR_CALIB_MIN:
-        return 1.0
+        return None
     n, w, s = acc
     p0 = s / n - 0.5
     if p0 < 0.02:
-        return 1.0
+        return None
     raw = (w / n - 0.5) / p0
-    k = 1 + (raw - 1) * n / (n + C.FAIR_CALIB_PRIOR)
+    k = prior_k + (raw - prior_k) * n / (n + C.FAIR_CALIB_PRIOR)
     return max(K_RANGE[0], min(K_RANGE[1], k))
 
 
-def calibrate(market, p, data=None):
-    """Proba corrigée d'un pronostic de proba brute `p`."""
-    return 0.5 + (p - 0.5) * factor(market, data)
+def factor(market, data=None, sport_key=None):
+    """k du marché (1 = pas de correction) : celui du championnat `sport_key` s'il a assez de pronostics de cette famille, sinon celui
+    de la famille."""
+    data = data if data is not None else load()
+    fam = family(market)
+    k = _k(data.get(fam))
+    k = 1.0 if k is None else k
+    lg = _k(((data.get("_lg") or {}).get(sport_key) or {}).get(fam), k) if sport_key else None
+    return k if lg is None else lg
+
+
+def calibrate(market, p, data=None, sport_key=None):
+    """Proba corrigée d'un pronostic de proba brute `p` (championnat `sport_key` facultatif)."""
+    return 0.5 + (p - 0.5) * factor(market, data, sport_key)
 
 
 def lines(data=None, detail=False):
     """« corners : 58 % réalisés pour 66 % annoncés (120) » par famille (texte brut), des plus suivies aux moins suivies."""
     data = data if data is not None else load()
     out = []
-    for fam, (n, w, s) in sorted(data.items(), key=lambda kv: -kv[1][0]):
+    for fam, (n, w, s) in sorted(((f, a) for f, a in data.items() if not f.startswith("_")), key=lambda kv: -kv[1][0]):
         if n < SHOW_MIN:
             continue
         txt = f"{LABELS.get(fam, fam)} : {round(w / n * 100)} % réalisés pour {round(s / n * 100)} % annoncés ({n})"
@@ -87,3 +105,24 @@ def lines(data=None, detail=False):
             txt += f", correction k = {k:.2f}"
         out.append(txt)
     return out
+
+
+def league_name(sk):
+    return "Afrique" if sk == "africa" else catalogue.name(sk)
+
+
+def league_rows(data=None, min_n=SHOW_MIN):
+    """[(championnat, n, réussite, proba annoncée moyenne)] tous marchés confondus, championnats d'au moins `min_n` pronostics
+    réglés, du plus fiable (réussite - annonce la plus haute) au moins fiable."""
+    out = []
+    for sk, fams in ((data if data is not None else load()).get("_lg") or {}).items():
+        n, w, s = (sum(a[i] for a in fams.values()) for i in range(3))
+        if n >= min_n:
+            out.append((league_name(sk), n, w / n, s / n))
+    return sorted(out, key=lambda x: x[3] - x[2])
+
+
+def league_lines(data=None, limit=None):
+    """« Brasileirão : 64 % réalisés pour 66 % annoncés (45) », du championnat le plus fiable au moins fiable."""
+    rows = league_rows(data)
+    return [f"{nm} : {round(w * 100)} % réalisés pour {round(s * 100)} % annoncés ({n})" for nm, n, w, s in rows[:limit]]

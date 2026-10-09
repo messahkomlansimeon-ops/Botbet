@@ -9,8 +9,8 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, learn, monde,
-               odds, played, settle, sources, stats, store, strength, telegram, track)
+from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, freeclose, learn, monde,
+               odds, played, settle, sources, stats, store, strength, telegram, track, weekly)
 from .sources import fmmatch, http
 from .telegram import Html
 
@@ -176,6 +176,11 @@ def morning_report(now):
     store.save("bets.json", bets)
     rows = track.load()
     bankroll.apply_results([r for r in rows if r.get("played")], played_only=True)     # pari du jour noté avec /joue
+    try:
+        n = freeclose.fill(rows, now)               # cote finale gratuite des paris fantômes : l'apprentissage avance sans crédit
+        print(f"[apprentissage] {n} cote(s) finale(s) gratuite(s) (football-data, BetExplorer)", file=sys.stderr)
+    except Exception as e:                          # noqa: BLE001 - facultatif
+        print(f"[apprentissage] cotes finales gratuites ignorées : {type(e).__name__}: {e}", file=sys.stderr)
     track.save(rows)
     model = learn.update(rows, bets["combos"])
     msgs = []
@@ -191,6 +196,14 @@ def morning_report(now):
     d = learn.describe_simple(model, rows)
     if d:
         msgs.append(d)
+    try:
+        if weekly.due(now):                         # premier matin de la semaine : bilan d'apprentissage en mots simples
+            w = weekly.message(now)
+            if w:
+                msgs.append(w)
+            weekly.mark(now)
+    except Exception as e:                          # noqa: BLE001 - facultatif
+        print(f"[semaine] bilan d'apprentissage ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     return msgs, model
 
 

@@ -385,9 +385,11 @@ def _bilan_simple(days, rows, picks, combos):
     free = [x for x in (fair_line(fair.load(), days), fair_combo_line(fair.load_combos(), days)) if x]
     if free:
         blocks.append([f"🎲 {fmt.esc(x)}" for x in free])
-    cl = calib.lines()
+    cl, ll = calib.lines(), calib.league_lines(limit=3)
     if cl:
         blocks.append(["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(pronostics réglés, depuis le début)")] + [f"• {fmt.esc(x)}" for x in cl])
+    if ll:
+        blocks.append(["🏟 <b>Ses meilleurs championnats</b>"] + [f"• {fmt.esc(x)}" for x in ll])
     pending = sum(1 for r in rows if r.get("result") is None)
     foot = ([f"⏳ {pending} pari{'s' if pending > 1 else ''} en attente de résultat"] if pending else [])
     blocks.append(foot + [fmt.i("Chiffres techniques : bouton « Plus de détails », ou écris « bilan détail »")])
@@ -432,4 +434,8 @@ def _bilan_detail(bets, days, rows, picks, combos):
     if cl:
         lines.append("Fiabilité par marché (pronostics sans cote, depuis le début) :")
         lines += [f"• {x}" for x in cl]
+    ll = calib.league_lines()
+    if ll:
+        lines.append("Fiabilité par championnat (du plus fiable au moins fiable) :")
+        lines += [f"• {x}" for x in ll]
     return "\n".join(lines)
