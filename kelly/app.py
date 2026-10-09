@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, freeclose, learn, monde,
-               money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xprice, xworld)
+               money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xalerts, xprice, xworld)
 from .sources import fmmatch, http, xbet
 from .telegram import Html
 
@@ -604,6 +604,17 @@ def _current_day(today, now):
     return today.get("day") in (str(kday), str(now.date()))
 
 
+def _market_alerts(found, closing, rows, now, fetch=None):
+    """Alertes du marché (💰 1xBet en retard, ✅ bonne nouvelle, voir kelly/xalerts.py) pour les mouvements `found` (find_alerts) et les
+    cotes de clôture `closing`. Sans le today.json du jour Kelly en cours : pas de référence 1xBet (ni 💰), jour Kelly calculé."""
+    today = store.load("today.json", {})
+    if not _current_day(today, now):
+        today = {}
+    day = today.get("day") or str(now.date() if now.hour >= C.DAY_END_HOUR else now.date() - timedelta(days=1))
+    combos = store.load("bets.json", {"combos": []}).get("combos", [])
+    return xalerts.on_market(found, closing, today, rows, combos, day, now, fetch)
+
+
 def _load_updates(day):
     sent = store.load(COMBO_UPDATES, {})
     return sent if isinstance(sent, dict) and sent.get("day") == day and isinstance(sent.get("tiers"), dict) else {"day": day, "tiers": {}}
@@ -687,6 +698,7 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
                                        "depuis ce matin). Vérifie la cote avant de valider."))
     n_upd = _update_combos(today["day"], pronos, now, got)
+    xalerts.on_refresh(today, now, got, upcoming_, fetch)       # ⚠️ mes paris en danger, 📈 mieux payé qu'au matin (un message, jamais d'erreur)
     LAST_REFRESH.update(matches=len(got), new=len(new), updated=n_upd)
     print(f"[1xbet] relevé : {len(upcoming_)} pronostic(s) à venir, {len(new)} nouveau(x) 💎 annoncé(s), "
           f"{n_upd} combiné(s) du matin renvoyé(s) à jour", file=sys.stderr)
@@ -779,8 +791,9 @@ def _update_combos(day, pronos, now, refreshed):
             continue
         code = _coupon(legs)
         dropped = _record_version(sent, row, rows, (legs, total, prob), hhmm, code)
-        msg = _fair_reply((legs, total, prob), f"🔄 Un combiné du matin a changé chez 1xBet : le voici aux cotes de {hhmm} "
-                                               "(l'ancien code est remplacé)." + (DROPPED_NOTE if dropped else ""),
+        head = (f"⚠️ Ton combiné a changé : un pari est retiré ou moins bien payé chez 1xBet. Le voici aux cotes de {hhmm} "
+                if removed else f"🔄 Un combiné du matin a changé chez 1xBet : le voici aux cotes de {hhmm} ")
+        msg = _fair_reply((legs, total, prob), head + "(l'ancien code est remplacé)." + (DROPPED_NOTE if dropped else ""),
                           fmt.combo_changes(removed, added, changed), title=f"🔄 COMBINÉ À JOUR {hhmm}", stake_txt=_stake_txt(row),
                           when=hhmm, code=code, retry=RETRY_BUTTON)
         telegram.send(chat.with_played_button(msg, f"v{tier}", day, funded=bool(row.get("stake")), refresh=tier))
@@ -789,11 +802,12 @@ def _update_combos(day, pronos, now, refreshed):
     return n
 
 
-def run_track(events_for=None, now=None):
+def run_track(events_for=None, now=None, xfetch=None):
     """Passage horaire : cote de clôture des paris ENVOYÉS dont le match démarre bientôt (bulk par ligue
-    quand c'est moins cher, sinon un appel par match, seulement les marchés suivis) + alertes de cote.
+    quand c'est moins cher, sinon un appel par match, seulement les marchés suivis) + alertes 1xBet (xalerts.on_market : 💰 1xBet en
+    retard sur un mouvement du marché, ✅ bonne nouvelle ; 1xBet relu en direct pour 3 matchs au plus).
     Chaque appel payant passe par le budget « closing » ; refusé = sauté (log), jamais d'erreur.
-    `events_for(sport_key, ev_id, markets)` : injectable pour les tests (un appel par match, sans budget)."""
+    `events_for(sport_key, ev_id, markets)` : injectable pour les tests (un appel par match, sans budget), `xfetch` : relevé 1xBet des alertes."""
     now = now or now_utc()
     telegram.flush_outbox()                         # messages restés en attente (réseau coupé) : renvoyés avant les alertes du jour
     rows = track.load()
@@ -839,8 +853,7 @@ def run_track(events_for=None, now=None):
     print(f"{n} clôtures relevées, {len(missed)} manquées, {skipped} sautées (budget), {len(alerts)} alertes.")
     if calls and events_for is None:
         print(f"[budget] {budget.line()}", file=sys.stderr)
-    if alerts:
-        telegram.send(alert_text(alerts, alert_xbet(alerts)))
+    _market_alerts(alerts, closing, rows, now, xfetch)
     cache.flush()
     return n, alerts
 
@@ -889,7 +902,8 @@ def find_alerts(picks, history):
 
 def run_alert(sample=False):
     """Balayage large : cotes qui chutent = argent des pros. Désactivé sur forfait gratuit (BUDGET_SHARES sans
-    « alert » = 0 crédit) : les alertes ne viennent plus que de run_track, sur les matchs relevés."""
+    « alert » = 0 crédit) : les alertes ne viennent plus que de run_track, sur les matchs relevés. Mêmes alertes 1xBet que run_track
+    (xalerts.on_market) ; -> le message envoyé (liste vide sinon)."""
     now = now_utc()
     hist = store.load("odds_history.json", {})
     if sample:
@@ -900,47 +914,15 @@ def run_alert(sample=False):
         day = now.date()
         picks = odds.build_picks(odds.fetch_events(day, props=bool(os.environ.get("ALERT_PROPS")), optional=True,
                                                    use="alert", after=now), day, now)
-    alerts = find_alerts(picks, hist)
+    found = find_alerts(picks, hist)
     if not sample:
         hist.update(odds.snapshot(picks))
         store.save("odds_history.json", hist)
-    if not alerts:
+    if not found:
         print("Aucun mouvement notable.")
         return []
-    text = alert_text(alerts, alert_xbet(alerts))
-    telegram.send(text)
-    return [text]
-
-
-def alert_xbet(alerts):
-    """Cote 1xBet des paris alertés, quand elle est connue SANS réseau : le pari figure dans data/today.json avec sa référence 1xBet
-    (xref) et la cote est dans le cache du disque (xbet.cached_cf). -> {clé du pari: (cote, "HH:MM" du relevé)} ; {} si rien."""
-    today = store.load("today.json", {})
-    by_key = {c["key"]: c for c in today.get("picks") or [] if c.get("xref")}
-    out = {}
-    for _, c, _ in alerts:
-        ref = (by_key.get(c["key"]) or {}).get("xref")
-        hit = xbet.cached_cf(ref) if ref else None
-        if hit and hit[1]:
-            out[c["key"]] = (hit[0], datetime.fromtimestamp(hit[1], tz=timezone.utc).strftime("%H:%M"))
-    return out
-
-
-def alert_text(alerts, xb=None):
-    """Alertes de mouvement de cote. Les cotes comparées viennent de The Odds API (le marché, pas 1xBet) : dit comme tel ; `xb`
-    (alert_xbet) ajoute la cote 1xBet du dernier relevé quand Kelly l'a."""
-    xb = xb or {}
-    lines = [fmt.b("🚨 La cote chute : de l'argent arrive sur ces paris")]
-    for _, c, prev in alerts:
-        x = xb.get(c["key"])
-        lines.append(f"\n{fmt.b(fmt.event_name(c))} · {fmt.hhmm(c['start'])} · {fmt.esc(c['league'])}\n"
-                     f"{fmt.esc(c['pick'])} : {fmt.num(prev['o'])} ➜ {fmt.b(fmt.num(c['odds']))} "
-                     f"({fmt.pct(prev['p'])} ➜ {fmt.pct(c['prob'])} de chances) depuis {fmt.hhmm(prev['t'][11:16])} "
-                     + fmt.i("(cote du marché, pas 1xBet)")
-                     + (f"\n💎 Chez 1xBet, au dernier relevé de {x[1]} : {fmt.b(fmt.num(x[0]))}" if x else ""))
-    lines.append("\n" + fmt.i("Une cote qui chute vite = beaucoup de mises sur ce pari. Ces cotes sont celles du marché : vérifie la cote "
-                              "chez 1xBet et les compositions avant de suivre."))
-    return Html("\n".join(lines))
+    msg = _market_alerts(found, picks, track.load(), now)
+    return [msg] if msg else []
 
 
 # ---------- commandes Telegram ----------
@@ -955,6 +937,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 💰 <b>Mon budget</b> : voir ou changer ton budget du jour
 🔄 <b>Mettre à jour tous les paris</b> : Kelly relit tout de suite les cotes 1xBet de tous les paris du jour, t'envoie les nouveaux paris 💎 et les combinés du matin qui ont changé (sinon : 04:00 et 15:00)
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
+🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
 <b>Ton budget du jour</b>
 Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>) : chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la mise de chacun. Les jours pauvres, elle en garde une partie. Change-le quand tu veux.

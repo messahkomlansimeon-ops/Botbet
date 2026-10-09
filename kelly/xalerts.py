@@ -1,0 +1,368 @@
+"""Alertes centrées sur 1xBet, le seul bookmaker où l'utilisateur joue : chaque alerte dit quoi faire, avec la cote 1xBet et l'heure de sa lecture.
+
+  💰 1xBet est en retard : le MARCHÉ (clôture The Odds API, passage horaire run_track) bouge fort sur un pari envoyé, mais 1xBet paie encore
+     un prix qui a de la valeur face à la nouvelle probabilité du marché (proba x cote - 1 >= C.XALERT_LAG_EDGE) -> « joue maintenant »,
+     avec une mise et un code coupon du pari seul. 1xBet relu en direct pour les seuls matchs concernés (C.XALERT_LIVE_MAX par passage).
+  ⚠️ Mes paris en danger : à chaque relevé 1xBet (15:00, mise à jour manuelle), un combiné réel ou le pari du jour dont un pari a quitté
+     1xBet ou ne paie plus assez pour avoir sa place -> « n'est plus jouable tel quel » et le bouton « 🎟️ Vérifier ce combiné ».
+  📈 Mieux payé qu'au matin : un pari 💎 (ou un pari réel montré) dont la cote 1xBet a monté de C.XALERT_RISE depuis le matin (xodds0) et a
+     toujours de la valeur -> « c'est le moment », avec un code coupon.
+  ✅ Bonne nouvelle : un pari que tu as joué dont le marché a baissé de C.ALERT_ODDS_DROP depuis le matin (tu as pris une meilleure cote).
+
+Un seul message par passage (💰 d'abord, puis ⚠️, 📈, ✅), C.XALERT_MAX_ITEMS alertes au plus ; data/alerts_sent.json retient la dernière cote
+alertée de chaque pari (pas deux fois la même alerte sans nouveau mouvement). Les relectures 1xBet sont plafonnées et ne lèvent jamais.
+"""
+import math
+import sys
+from datetime import datetime, timedelta, timezone
+
+from . import bankroll, chat, combos as CB, config as C, fmt, money, played, store, telegram, track, xprice
+from .sources import state, xbet
+from .telegram import Html
+
+FILE = "alerts_sent.json"                   # {"day", "items": {"clé du pari|type": dernière cote alertée}}
+TYPES = ("lag", "danger", "rise", "good")   # ordre d'affichage
+TITLES = {"lag": "💰 1xBet est en retard : joue maintenant", "danger": "⚠️ Mes paris en danger",
+          "rise": "📈 Mieux payé chez 1xBet qu'au premier relevé : c'est le moment", "good": "✅ Bonne nouvelle"}
+ADVICE = "Si tu ne l'as pas encore joué : touche « 🎟️ Vérifier ce combiné » ou demande un combi."
+
+
+# ---------- outils ----------
+
+def _ko(c):
+    return datetime.fromisoformat(c["commence"].replace("Z", "+00:00"))
+
+
+def _open(c, now):
+    """Match encore ouvert chez 1xBet : pas commencé, et à plus de C.XBET_SOON_MIN min (1xBet le retire de l'avant-match avant)."""
+    return _ko(c) > now + timedelta(minutes=C.XBET_SOON_MIN)
+
+
+def _match(c):
+    """« <b>PSG – Lyon</b> · 21h00 · Ligue 1 » : le match d'une alerte, son heure et sa ligue."""
+    return " · ".join([fmt.b(fmt.event_name(c))] + [x for x in (fmt.hhmm(c.get("start")), fmt.esc(c.get("league") or "")) if x])
+
+
+def _clock(ts):
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M")
+
+
+def _read_time(ref, now):
+    """Heure « HH:MM » de la lecture 1xBet du pari `ref` (cache du disque), sinon celle du passage."""
+    t0 = xbet.odds_time([ref[0]]) if ref else None
+    return _clock(t0) if t0 else now.strftime("%H:%M")
+
+
+def _at(c, price):
+    """Le pari réel `c` à la cote 1xBet `price` (copie) : sa valeur est recalculée, comme xprice._pick_price."""
+    return c | {"odds": price, "xodds": price, "edge": c["prob"] * price - 1}
+
+
+def _x_now(m, c):
+    """(cote, référence) du pari `c` dans la lecture 1xBet `m` (xbet.fetch_day) ; (None, None) si 1xBet ne le propose plus."""
+    px = m["px"]
+    key = xbet.resolve(px, c["market"], c["name"], c["point"])
+    return (px[key], (m.get("refs") or {}).get(key)) if key else (None, None)
+
+
+def _item(kind, key, odds, text, rank=0.0, coupon=None, buttons=()):
+    """Une alerte : `odds` = dernière cote alertée (dédoublonnage), `coupon` = pari seul à enregistrer chez 1xBet ({xref, xodds})."""
+    return {"type": kind, "key": key, "odds": odds, "text": text, "rank": rank, "coupon": coupon, "buttons": [b for b in buttons if b]}
+
+
+# ---------- relectures 1xBet plafonnées ----------
+
+class Reader:
+    """Relectures 1xBet en direct d'un passage d'alertes : au plus C.XALERT_LIVE_MAX matchs (un match déjà relu sert à tous ses paris), id
+    1xBet du match (xgid) obligatoire ; 1xBet muet ou en panne = None, jamais d'erreur. `fetch` : injectable pour les tests."""
+
+    def __init__(self, fetch=None, cap=None):
+        self.fetch, self.cap = fetch, C.XALERT_LIVE_MAX if cap is None else cap
+        self.tried, self.found = set(), {}
+
+    def get(self, c):
+        """Lecture 1xBet {"gid", "px", "refs"...} du match du pari `c` (dict de pari avec "xgid"), ou None."""
+        if c["id"] in self.tried:
+            return self.found.get(c["id"])
+        if len(self.tried) >= self.cap or not c.get("xgid"):
+            return None
+        self.tried.add(c["id"])
+        m = xprice.live_found([c], self.fetch).get(c["id"])
+        if m:
+            self.found[c["id"]] = m
+        return m
+
+
+class Prices:
+    """Cote 1xBet du moment des paris réels du jour (today.json) : SANS requête quand le cache du disque a une lecture de moins de
+    C.XBET_COMBI_FRESH_MIN min (le relevé qui vient d'avoir lieu), sinon relue en direct par le Reader (plafonné)."""
+
+    def __init__(self, reader, now):
+        self.reader, self.now, self.memo = reader, now, {}
+
+    def get(self, c):
+        """-> ("ok", cote, référence, "HH:MM") | ("gone", None, None, None) : 1xBet ne propose plus le pari | None : inconnu."""
+        if c["key"] not in self.memo:
+            self.memo[c["key"]] = self._read(c)
+        return self.memo[c["key"]]
+
+    def _read(self, c):
+        hit = xbet.cached_cell(c["xref"]) if c.get("xref") else None
+        if hit and state.clock() - (hit[1] or 0) <= C.XBET_COMBI_FRESH_MIN * 60:
+            return ("ok", hit[0], c["xref"], _clock(hit[1])) if hit[0] else ("gone", None, None, None)
+        m = self.reader.get(c)
+        if not m:
+            return None
+        x, ref = _x_now(m, c)
+        return ("ok", x, ref, _read_time(ref, self.now)) if x else ("gone", None, None, None)
+
+
+# ---------- paris joués ----------
+
+def _took(x):
+    """Pari compté comme joué : noté (/joue), ou, avec un budget du jour, misé et pas retiré par « ❌ Pas joué »."""
+    return not x.get("skipped") and (bool(x.get("played")) or (bool(x.get("cur")) and (x.get("stake") or 0) > 0))
+
+
+def took_bets(rows, combos, day):
+    """({clé du pari: cote prise chez 1xBet ou None}, {clés notées explicitement avec /joue}) des paris du jour comptés joués : pari du
+    jour (ligne envoyée de tracked.json) et jambes des combinés réels (bets.json). Cote prise d'un combiné : celle de la jambe."""
+    took, noted = {}, set()
+    for r in played.single_rows(rows, combos):
+        if r.get("date") == day and r.get("result") is None and _took(r):
+            took[r["key"]] = (r.get("played") or {}).get("odds") or r.get("xodds") or r.get("odds")
+            if r.get("played"):
+                noted.add(r["key"])
+    for x in combos:
+        if x.get("date") == day and x.get("result") is None and _took(x):
+            legs = {l["key"]: l.get("xodds") for l in x.get("xlegs") or []}
+            for k in x.get("keys") or []:
+                took.setdefault(k, legs.get(k))
+                if x.get("played"):
+                    noted.add(k)
+    return took, noted
+
+
+# ---------- ✅ bonne nouvelle ----------
+
+def good_items(closing, rows, took):
+    """✅ Les paris joués (`took`) dont le marché (cote typique, relevé de clôture) a baissé d'au moins C.ALERT_ODDS_DROP depuis le matin
+    (cote de leur ligne de suivi) : « tu as pris 2,10, le marché est maintenant à 1,85 (+13 % de valeur prise) ». Informatif."""
+    by_row = {r["key"]: r for r in rows}
+    out = []
+    for c in closing:
+        r = by_row.get(c["key"])
+        if c["key"] not in took or not r or not r.get("odds"):
+            continue
+        mine = took[c["key"]] or r.get("xodds") or r["odds"]
+        drop, gain = (r["odds"] - c["odds"]) / r["odds"], mine / c["odds"] - 1
+        if drop < C.ALERT_ODDS_DROP or gain <= 0:
+            continue
+        out.append(_item("good", c["key"], c["odds"],
+                         f"{_match(c)}\n👉 {fmt.esc(c['pick'])} : tu as pris {fmt.b(fmt.odds_txt(mine))}, le marché est maintenant à "
+                         f"{fmt.b(fmt.odds_txt(c['odds']))} ({fmt.signed(round(gain * 100), ' %')} de valeur prise)\n"
+                         + fmt.i(f"Le marché a baissé de {round(drop * 100)} % depuis ce matin : tu as pris mieux que le prix d'aujourd'hui. "
+                                 "Rien à faire."), rank=gain))
+    return out
+
+
+# ---------- 💰 1xBet en retard ----------
+
+def _ref_event(c, today):
+    """Le pari alerté `c` (marché) a-t-il une référence chez 1xBet dans data/today.json (même match, marché, côté et ligne dans les paris ou
+    les pronostics, id 1xBet du match connu) ? -> `c` + "xgid" (de quoi relire le match sans menu), ou None."""
+    cands = [x for x in (today.get("picks") or []) + (today.get("pronos") or []) if x.get("id") == c["id"]]
+    same = [x for x in cands if x.get("key") == c["key"] or xbet.same_bet(x, c)]
+    gid = next((x["xgid"] for x in same + cands if x.get("xgid")), None)
+    return c | {"xgid": gid} if gid and any(x.get("xref") or x.get("xgid") for x in same) else None
+
+
+def _stake_txt(p, x):
+    """Mise d'un pari seul de proba `p` à la cote `x` : sur le budget du jour (money.allocate) ou en unités (bankroll.stake) ; None si le
+    budget n'en laisse aucune (pari trop petit pour l'arrondi)."""
+    if money.active():
+        st = money.allocate([{"kind": "pari", "tier": "pari", "prob": p, "odds": x}])[0][0]
+        return money.money(st) + " (sur ton budget du jour)" if st else None
+    return fmt.units(bankroll.stake(p, x, "⭐", bankroll.load()["bankroll"]))
+
+
+def lag_items(alerts, today, reader, now, noted=(), skip=()):
+    """💰 Pour chaque mouvement fort du marché (find_alerts : [(score, pari de clôture, ancienne lecture)]) sur un pari qui a une référence
+    1xBet et que tu n'as pas noté joué : 1xBet relu en direct (Reader) ; s'il paie encore avec de la valeur face à la NOUVELLE proba du
+    marché (proba x cote - 1 >= C.XALERT_LAG_EDGE) : « joue maintenant ». 1xBet déjà ajusté : rien (voir good_items). `skip` : clés déjà
+    traitées par ✅."""
+    out = []
+    for _, c, prev in alerts:
+        if c["key"] in noted or c["key"] in skip or not _open(c, now):
+            continue
+        ev = _ref_event(c, today)
+        m = reader.get(ev) if ev else None
+        x, ref = _x_now(m, c) if m else (None, None)
+        if not x:
+            continue
+        p = c.get("prob_book", c["prob"])
+        value = p * x - 1
+        stake = _stake_txt(p, x) if value >= C.XALERT_LAG_EDGE else None
+        if not stake:                               # 1xBet a déjà suivi le marché, ou pas de mise sur le budget : rien à jouer
+            continue
+        chances = f" ({fmt.pct(prev['pb'])} ➜ {fmt.pct(p)} de chances)" if prev.get("pb") else ""
+        out.append(_item("lag", c["key"], x,
+                         f"{_match(c)}\n👉 {fmt.esc(c['pick'])} — 1xBet paie {fmt.b(fmt.odds_txt(x))} "
+                         f"{fmt.i('(lu à ' + _read_time(ref, now) + ')')}\n"
+                         f"📊 Le marché a bougé : {fmt.odds_txt(prev['o'])} ➜ {fmt.b(fmt.odds_txt(c['odds']))}{chances}\n"
+                         f"💎 1xBet n'a pas suivi : valeur {fmt.b(fmt.signed(round(value * 100), ' %'))} avec la nouvelle probabilité du marché\n"
+                         f"💰 Mise : {fmt.b(fmt.esc(stake))}", rank=value, coupon={"xref": ref, "xodds": x} if ref else None))
+    return out
+
+
+# ---------- ⚠️ mes paris en danger / 📈 mieux payé ----------
+
+def real_targets(today, rows, combos, day, now):
+    """Paris réels du jour encore jouables (ni réglés, ni retirés par « ❌ Pas joué », aucun match commencé ni imminent), aux cotes 1xBet du
+    matin : [(nom, nom court du bouton « Vérifier », mot du pari pour ce bouton, ligne de suivi, jambes de today.json)] : le pari du jour et les
+    combinés de bets.json."""
+    by_key = {c["key"]: c for c in today.get("picks") or []}
+    singles = [("Le pari du jour", "pari du jour", "pari", r, [r["key"]]) for r in played.single_rows(rows, combos) if r.get("xodds")]
+    combos_ = [(f"Le combiné {fmt.tier_word(x['tier'])}", fmt.tier_word(x["tier"]), played.norm(fmt.tier_word(x["tier"])), x, x["keys"])
+               for x in combos if x.get("xlegs")]
+    out = []
+    for name, short, what, x, keys in singles + combos_:
+        legs = [by_key.get(k) for k in keys]
+        if (x.get("date") == day and x.get("result") is None and not x.get("skipped") and all(legs)
+                and all(l.get("xodds") and _open(l, now) for l in legs)):
+            out.append((name, short, what, x, legs))
+    return out
+
+
+def danger_items(targets, prices, day):
+    """⚠️ Combinés réels et pari du jour dont un pari n'est plus chez 1xBet, ou paie moins qu'à son choix au point de perdre sa raison d'être
+    (CB.leg_reason : plus d'avantage clair). Un pari dont la cote a baissé mais garde son avantage ne déclenche rien."""
+    out = []
+    for name, short, what, x, legs in targets:
+        lines, cur, gone = [], [], False
+        for c in legs:
+            st = prices.get(c)
+            now_odds = st[1] if st and st[0] == "ok" else c["xodds"]
+            cur.append(now_odds)
+            label = f"{fmt.event_name(c)} ({fmt.hhmm(c.get('start'))} · {fmt.esc(c.get('league') or '')}) — {fmt.esc(c['pick'])}"
+            if st and st[0] == "gone":
+                lines.append(f"❌ Plus chez 1xBet : {label}")
+                gone = True
+            elif st and now_odds < c["xodds"] and not CB.leg_reason(_at(c, now_odds)):
+                lines.append(f"📉 Moins bien payé : {label} : {fmt.odds_txt(c['xodds'])} ➜ {fmt.b(fmt.odds_txt(now_odds))} chez 1xBet "
+                             f"(plus d'avantage clair, lu à {st[3]})")
+        if lines:
+            button = chat.refresh_button(what, day, f"🎟️ Vérifier ce combiné : {short}")
+            out.append(_item("danger", f"{x.get('date')}|{what}", 0.0 if gone else round(math.prod(cur), 3),
+                             fmt.b(fmt.esc(name) + " n'est plus jouable tel quel") + "\n" + "\n".join(lines) + "\n" + fmt.i(ADVICE),
+                             rank=len(lines), buttons=[button]))
+    return out
+
+
+def _rise_text(c, old, new, value, at):
+    return (f"{_match(c)}\n👉 {fmt.esc(c['pick'])} : 1xBet payait {fmt.odds_txt(old)} au premier relevé du jour, il paie maintenant "
+            f"{fmt.b(fmt.odds_txt(new))} ({fmt.signed(round((new / old - 1) * 100), ' %')}, lu à {at})\n"
+            f"💎 Valeur {fmt.signed(round(value * 100), ' %')} à ce prix")
+
+
+def rise_items(pronos, got, at, targets, prices, noted=()):
+    """📈 Les paris montrés ce matin (pronostics 💎 : CB.best_per_match, relus à ce relevé `at` ; paris réels : pari du jour et jambes des
+    combinés non notés joués) dont la cote 1xBet a monté d'au moins C.XALERT_RISE depuis le matin (xodds0) et qui ont toujours de la valeur."""
+    out, seen = [], set()
+    for c in CB.best_per_match(pronos):
+        old, new = c.get("xodds0"), c.get("xodds")
+        if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0:
+            seen.add(c["key"])
+            out.append(_item("rise", c["key"], new, _rise_text(c, old, new, c["xev"], at), rank=new / old,
+                             coupon={"xref": c["xref"], "xodds": new} if c.get("xref") else None))
+    for _, _, _, _, legs in targets:
+        for c in legs:
+            if c["key"] in seen or c["key"] in noted:
+                continue
+            seen.add(c["key"])
+            st, old = prices.get(c), c.get("xodds0") or c["xodds"]
+            if st and st[0] == "ok" and st[1] / old - 1 >= C.XALERT_RISE and CB.leg_reason(_at(c, st[1])):
+                out.append(_item("rise", c["key"], st[1], _rise_text(c, old, st[1], c["prob"] * st[1] - 1, st[3]), rank=st[1] / old,
+                                 coupon={"xref": st[2], "xodds": st[1]} if st[2] else None))
+    return out
+
+
+# ---------- envoi : un message par passage ----------
+
+def _load(day):
+    d = store.load(FILE, {})
+    return d if isinstance(d, dict) and d.get("day") == day and isinstance(d.get("items"), dict) else {"day": day, "items": {}}
+
+
+def _fresh(sent, it):
+    """Alerte à envoyer : jamais envoyée pour ce pari, ou sa cote a encore bougé d'au moins le seuil depuis la dernière alerte."""
+    last = sent["items"].get(f"{it['key']}|{it['type']}")
+    thr = C.ALERT_ODDS_DROP if it["type"] == "good" else C.XALERT_RISE
+    return last is None or (abs(it["odds"] / last - 1) >= thr if last else bool(it["odds"]))
+
+
+def send(items, day, now):
+    """Dédoublonne (data/alerts_sent.json), classe (💰, ⚠️, 📈, ✅), garde C.XALERT_MAX_ITEMS alertes, crée le code coupon des paris seuls à
+    jouer et envoie UN message. -> le message envoyé, ou None."""
+    sent = _load(day)
+    items = sorted((it for it in items if _fresh(sent, it)), key=lambda it: (TYPES.index(it["type"]), -it["rank"]))
+    shown, more = items[:C.XALERT_MAX_ITEMS], len(items) - C.XALERT_MAX_ITEMS
+    if not shown:
+        return None
+    blocks, buttons = [f"🔔 {fmt.b('Alertes Kelly')} · {now.strftime('%H:%M')}"], []
+    for kind in TYPES:
+        group = [it for it in shown if it["type"] == kind]
+        if not group:
+            continue
+        blocks.append(fmt.b(TITLES[kind]))
+        for it in group:
+            text = it["text"]
+            if it["coupon"]:
+                code = xbet.save_coupon([it["coupon"]])
+                text += fmt.coupon_block(code, "cherche ce pari dans l'appli 1xBet").replace("\n\n", "\n", 1)
+            blocks.append(text)
+            buttons += it["buttons"]
+    blocks.append(fmt.i("Vérifie la cote dans l'appli avant de valider : 1xBet a pu bouger depuis sa lecture."
+                        + (f" + {more} autre{'s' if more > 1 else ''} alerte{'s' if more > 1 else ''} au prochain passage." if more > 0 else "")))
+    msg = Html("\n\n".join(blocks))
+    if buttons:
+        msg = telegram.with_buttons(msg, telegram.inline([[b] for b in buttons]))
+    for it in shown:                                # retenues avant l'envoi : un message mis en attente (réseau) ne sera pas doublé
+        sent["items"][f"{it['key']}|{it['type']}"] = it["odds"]
+    store.save(FILE, sent)
+    telegram.send(msg)
+    return msg
+
+
+def on_market(alerts, closing, today, rows, combos, day, now, fetch=None):
+    """Passage horaire (app.run_track, app.run_alert) : 💰 et ✅ à partir des mouvements du marché `alerts` (app.find_alerts) et des paris
+    de clôture `closing`. `today` : data/today.json du jour en cours ({} sinon). -> le message envoyé ou None. Ne lève jamais."""
+    if not C.XALERTS_ENABLED:
+        return None
+    try:
+        took, noted = took_bets(rows, combos, day)
+        good = good_items(closing, rows, took)
+        lag = lag_items(alerts, today, Reader(fetch), now, noted, {it["key"] for it in good})
+        return send(lag + good, day, now)
+    except Exception as e:                          # noqa: BLE001 - une alerte en échec ne bloque jamais le passage horaire
+        print(f"[alertes] ignorées : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def on_refresh(today, now, got, upcoming, fetch=None):
+    """Relevé 1xBet (app.run_xbet_refresh : 15:00, mise à jour manuelle) : ⚠️ et 📈. `got` : matchs relus par ce relevé, `upcoming` : pronostics
+    à venir remis à leurs cotes. Les paris réels sont rechiffrés par le cache du relevé, sinon relus en direct (C.XALERT_LIVE_MAX matchs au
+    plus). -> le message envoyé ou None. Ne lève jamais."""
+    if not C.XALERTS_ENABLED or not got:
+        return None
+    try:
+        day = today["day"]
+        rows, combos = track.load(), store.load("bets.json", {"combos": []}).get("combos", [])
+        prices = Prices(Reader(fetch), now)
+        targets = real_targets(today, rows, combos, day, now)
+        items = (danger_items(targets, prices, day)
+                 + rise_items(upcoming, got, today.get("xbet_at") or now.strftime("%H:%M"), targets, prices, took_bets(rows, combos, day)[1]))
+        return send(items, day, now)
+    except Exception as e:                          # noqa: BLE001 - une alerte en échec ne bloque jamais le relevé
+        print(f"[alertes] ignorées : {type(e).__name__}: {e}", file=sys.stderr)
+        return None

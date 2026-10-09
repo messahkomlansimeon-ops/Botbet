@@ -76,13 +76,16 @@ def price(c, px, refs=None):
     pick = choose(c, px)
     if pick:
         name, point, p, p0, b, odd, ev = pick
-        if (name, point) != (c["name"], c["point"]):
+        moved = (name, point) != (c["name"], c["point"])
+        if moved:
             c.update(name=name, point=point, key=f'{c["id"]}|{c["market"]}||{point if point is not None else ""}|{name}',
                      pick=odds.label(c["market"], name, point, c.get("who"), "soccer"))
             if b is not None:
                 c["base"] = round(b, 4)
         c.update(prob=round(p, 4), p0=round(p0, 4), fair=round(1 / p, 2), min_odds=round(1 / p * (1 + C.FAIR_MARGIN), 2),
                  xodds=odd, xev=round(ev, 4), xp=xbet.book_prob(px, c["market"], name, None if point is None else float(point)))
+        if moved or c.get("xodds0") is None:        # cote du matin (alerte « mieux payé ») : la première lue, ou celle de la nouvelle ligne
+            c["xodds0"] = odd
         ref = (refs or {}).get((c["market"], name, None if point is None else float(point)))
         if ref:
             c["xref"] = ref
@@ -143,6 +146,7 @@ def _pick_price(c, px, refs, model=None):
         c["why"] = ", ".join(w for w in str(c.get("why") or "").split(", ") if w and not w.startswith("cote plus haute"))
     d = c.get("prob_book", c["prob"]) * (price - c["odds"]) * c.get("weight", 1.0)       # écart de la valeur brute de build_picks
     c.update(odds=price, best_odds=price, book="1xBet", xodds=price, edge=c["prob"] * price - 1, score=c["score"] + d)
+    c.setdefault("xodds0", price)                   # cote du matin (alerte « mieux payé »), jamais écrasée par une relecture
     if "heuristic" in c:
         c["heuristic"] += d
         if model and model.get("adopted"):
@@ -223,6 +227,17 @@ def live_check(ids, now=None, fetch=None, fresh_min=None):
     return pronos, got, now.strftime("%H:%M")
 
 
+def live_found(items, fetch=None, fresh_min=None):
+    """Relit EN DIRECT chez 1xBet les matchs des paris `items` (dicts : id, championnat, équipes, coup d'envoi, marché ; "xgid" connu : lu
+    directement) -> {id Kelly: {"gid", "px", "refs", ...}} (xbet.fetch_day). Ne lève jamais : 1xBet en panne = {}. `fetch` : injectable."""
+    try:
+        return (fetch or xbet.fetch_day)(_events(items), deadline=time.monotonic() + C.XBET_SECONDS, wanted=_wanted(items),
+                                         live=True, fresh_min=fresh_min) or {}
+    except Exception as e:                          # noqa: BLE001 - 1xBet en panne : rien de relu
+        print(f"[1xbet] vérification en direct impossible : {type(e).__name__}: {e}", file=sys.stderr)
+        return {}
+
+
 def live_picks(legs, now=None, fetch=None, fresh_min=None):
     """Relit EN DIRECT chez 1xBet les matchs des paris RÉELS `legs` (jambes d'un combiné ou pari du jour, tirés de data/today.json) et
     les remet au prix du moment, SANS toucher aux paris du jour : chaque jambe est relue sur une copie. Mêmes règles de fraîcheur que
@@ -233,13 +248,7 @@ def live_picks(legs, now=None, fetch=None, fresh_min=None):
     now = now or datetime.now(timezone.utc)
     soon = now + timedelta(minutes=C.XBET_SOON_MIN)
     sel = [c for c in legs if datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
-    found = {}
-    if sel:
-        try:
-            found = (fetch or xbet.fetch_day)(_events(sel), deadline=time.monotonic() + C.XBET_SECONDS, wanted=_wanted(sel),
-                                              live=True, fresh_min=fresh_min) or {}
-        except Exception as e:                      # noqa: BLE001 - 1xBet en panne : les jambes gardent leur dernière cote
-            print(f"[1xbet] vérification en direct impossible : {type(e).__name__}: {e}", file=sys.stderr)
+    found = live_found(sel, fetch, fresh_min) if sel else {}
     out = []
     for c in legs:
         m = found.get(c["id"])

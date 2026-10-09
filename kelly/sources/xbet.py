@@ -263,9 +263,10 @@ def odds_time(gids):
     return min(ts) if ts else None
 
 
-def cached_cf(ref):
-    """Dernière cote 1xBet du pari `ref` ([GameId, Type, Param], c["xref"]) lue dans le CACHE du disque, sans aucune requête (alertes
-    horaires : pas de données de proxy pour rien) -> (cote, instant du relevé) ou None si le cache ne l'a pas."""
+def cached_cell(ref):
+    """Cote 1xBet du pari `ref` ([GameId, Type, Param], c["xref"]) lue dans le CACHE du disque, sans aucune requête (alertes : pas de
+    données de proxy pour rien) -> (cote, instant du relevé) ; cote None = le relevé en cache ne propose plus ce pari ; None si le match
+    n'est pas en cache."""
     try:
         gid, typ, param = ref
         hit = http._read(http._key(_events_url(gid), JSON_H))
@@ -274,9 +275,9 @@ def cached_cf(ref):
         for c in _cells(json.loads(hit[1]).get("eventGroups")):
             if c.get("type") == typ and float(c.get("parameter") or 0) == float(param or 0):
                 return float(c["cf"]), hit[0].get("fetched_at")
+        return None, hit[0].get("fetched_at")
     except (TypeError, ValueError, KeyError, AttributeError):
-        pass
-    return None
+        return None
 
 
 def _events(gid):
@@ -330,6 +331,12 @@ def resolve(px, market, name, point):
         want = _canon(market, name)
         return next((k for k in px if k[0] == market and k[2] == pt and isinstance(k[1], str) and _canon(market, k[1]) == want), None)
     return None
+
+
+def same_bet(a, b):
+    """Deux paris Kelly (dicts : marché, côté, ligne) sont-ils le même pari chez 1xBet ? Sans casse, ni ordre des équipes en double chance."""
+    pa, pb = (None if x.get("point") is None else float(x["point"]) for x in (a, b))
+    return a["market"] == b["market"] and pa == pb and _canon(a["market"], a["name"]) == _canon(b["market"], b["name"])
 
 
 def lookup(px, market, name, point):

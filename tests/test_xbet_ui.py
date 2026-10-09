@@ -348,20 +348,17 @@ def test_verify_real():
 # ---------- E5 : alertes ----------
 
 def test_alerts():
-    c = pick(1, odds=1.7, prob=0.65, key="e1|h2h||Home1")
-    prev = {"o": 1.9, "p": 0.55, "t": "2030-01-01T08:00:00"}
-    txt = str(app.alert_text([(0.1, c, prev)]))
-    assert "cote du marché, pas 1xBet" in txt and "Chez 1xBet" not in txt and "vérifie la cote chez 1xBet" in txt, txt
-    assert "Chez 1xBet, au dernier relevé de 09:30 : <b>1,52</b>" in str(app.alert_text([(0.1, c, prev)], {c["key"]: (1.52, "09:30")}))
-    # cote 1xBet relue dans le cache du disque, sans réseau
+    # l'ancien message générique « La cote chute » n'existe plus : ses cas sont couverts par les alertes 1xBet (tests/test_alerts.py)
+    assert not hasattr(app, "alert_text") and not hasattr(app, "alert_xbet")
+    # cote 1xBet relue dans le cache du disque, sans réseau (base des alertes ⚠️ et 📈)
     u = xbet._events_url(77701)
     body = b'{"eventGroups": [{"events": [[{"type": 1, "cf": 1.52, "parameter": 0}, {"type": 2, "cf": 3.4}]]}]}'
     http._write(http._key(u, xbet.JSON_H), {"url": u, "fetched_at": state.clock(), "status": 200}, body)
-    store.save("today.json", {"day": DAY, "picks": [pick(1, key=c["key"], xref=[77701, 1, 0], xodds=1.5)], "pronos": []})
-    got = app.alert_xbet([(0.1, c, prev)])
-    assert got[c["key"]][0] == 1.52 and len(got[c["key"]][1]) == 5, got
-    assert app.alert_xbet([(0.1, c | {"key": "autre"}, prev)]) == {}
-    print("ok  E5 alertes : cote du marché, cote 1xBet du cache quand elle existe")
+    got = xbet.cached_cell([77701, 1, 0])
+    assert got[0] == 1.52 and got[1] > 0, got
+    assert xbet.cached_cell([77701, 9, 2.5])[0] is None, "match en cache, pari absent"
+    assert xbet.cached_cell([77702, 1, 0]) is None, "match absent du cache"
+    print("ok  E5 alertes : cote 1xBet du cache du disque (pari présent, pari absent, match inconnu)")
 
 
 # ---------- E6 : résultats du matin ----------

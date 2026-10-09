@@ -379,6 +379,13 @@ UNITS = {
 # Alertes : baisse de la meilleure cote ou hausse de la proba de consensus.
 ALERT_ODDS_DROP = 0.10
 ALERT_PROB_RISE = 0.07
+# Alertes centrées sur 1xBet (kelly/xalerts.py) : 💰 1xBet en retard sur le marché, ⚠️ mes paris en danger, 📈 mieux payé qu'au matin,
+# ✅ bonne nouvelle. Un seul message par passage (6 alertes au plus), jamais deux fois la même alerte sans nouveau mouvement.
+XALERTS_ENABLED = _bool("XALERTS_ENABLED", True)    # 0 : plus aucune alerte
+XALERT_LAG_EDGE = _float("XALERT_LAG_EDGE", 0.05)   # 💰 valeur mini (proba du marché x cote 1xBet - 1) pour dire « joue maintenant »
+XALERT_RISE = _float("XALERT_RISE", 0.05)           # 📈 hausse mini de la cote 1xBet depuis le matin ; aussi mouvement mini pour répéter une alerte
+XALERT_LIVE_MAX = _int("XALERT_LIVE_MAX", 3)        # matchs relus en direct chez 1xBet par passage d'alertes (les autres : cache ou rien)
+XALERT_MAX_ITEMS = 6                                # alertes au plus dans un message
 
 # Bankroll
 KELLY_FRACTION = 0.25
