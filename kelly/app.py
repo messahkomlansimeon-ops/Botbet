@@ -1652,6 +1652,15 @@ def _flush_outbox_locked():
         pass
 
 
+def _waiting(fn):
+    """`fn` (commande ou bouton Telegram) pendant laquelle l'utilisateur attend : un code coupon refusé par 1xBet puis réessayé lui est
+    annoncé (xbet.coupon_notice)."""
+    def run(*args):
+        with xbet.coupon_notice(lambda text: telegram.send(text, queue=False)):
+            return fn(*args)
+    return run
+
+
 def run_commands(serve=False):
     """Une passe (--commands, sans verrou : à lancer hors du matin) ou le serveur (--serve) : chaque message / bouton est traité sous
     le verrou des données (store.data_lock, le même fichier que `flock` dans les unités systemd), relâché entre deux ; les messages
@@ -1665,12 +1674,12 @@ def run_commands(serve=False):
                 if time.monotonic() - last_flush >= 60:
                     last_flush = time.monotonic()
                     _flush_outbox_locked()
-                telegram.poll(handle_command, timeout=10, on_callback=chat.on_callback, lock=lock)   # court : réponse rapide après une coupure
+                telegram.poll(_waiting(handle_command), timeout=10, on_callback=_waiting(chat.on_callback), lock=lock)   # court : réponse rapide après une coupure
             except Exception as e:                  # noqa: BLE001 - le serveur ne s'arrête pas sur une erreur
                 print(f"[serve] {e}", file=sys.stderr)
                 time.sleep(2)
     else:
-        n = telegram.poll(handle_command, on_callback=chat.on_callback)
+        n = telegram.poll(_waiting(handle_command), on_callback=_waiting(chat.on_callback))
         print(f"{n} message(s) traité(s).")
 
 

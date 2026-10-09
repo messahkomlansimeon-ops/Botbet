@@ -586,6 +586,7 @@ def save_coupon(legs):
             if not data.get("Success"):
                 _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
                                         ensure_ascii=False), legs)
+                attempt.why = str(data.get("Error") or "").strip()[:120]
                 return None, True
             val = data.get("Value")
             if isinstance(val, str) and val.strip():
@@ -600,15 +601,50 @@ def save_coupon(legs):
     # refus intermittents de 1xBet (même ticket accepté quelques minutes plus tard) : nouveaux essais à attente croissante
     # (COUPON_BACKOFF), seulement après un « non » explicite de 1xBet (Success false, réponse sans code) : aucun ticket n'a été créé
     try:
+        attempt.why, _notice.sent = "", False
         code, again = attempt()
-        for wait in COUPON_BACKOFF:
+        for i, wait in enumerate(COUPON_BACKOFF, 2):
             if code or not again:
                 break
+            _notice(f"⏳ 1xBet a refusé le code coupon" + (f" (« {attempt.why} »)" if attempt.why else "")
+                    + f" : nouvel essai dans {wait:g} s ({i}/{len(COUPON_BACKOFF) + 1})…")
+            attempt.why = ""
             time.sleep(wait)
             code, again = attempt()
+        if code and _notice.sent:
+            _notice("✅ 1xBet a accepté le code coupon.")
         return code
     finally:
         ses.close("enregistrement du coupon")
+
+
+_NOTICE = None          # fonction(texte) pendant une commande Telegram : l'utilisateur qui attend est prévenu d'un refus de 1xBet
+
+
+@contextmanager
+def coupon_notice(send):
+    """Pendant ce bloc (une commande ou un bouton Telegram), un code coupon refusé par 1xBet puis réessayé est annoncé à
+    l'utilisateur avec `send(texte)` ; jamais pendant les relevés automatiques (personne n'attend la réponse)."""
+    global _NOTICE
+    old, _NOTICE = _NOTICE, send
+    try:
+        yield
+    finally:
+        _NOTICE = old
+
+
+def _notice(text):
+    """Prévient l'utilisateur qui attend (coupon_notice) ; rien hors d'une commande ; ne lève jamais."""
+    if _NOTICE is None:
+        return
+    try:
+        _NOTICE(text)
+        _notice.sent = True
+    except Exception as e:                          # noqa: BLE001 - un message d'attente ne bloque jamais le code coupon
+        print(f"[1xbet] message d'attente non envoyé : {type(e).__name__}: {e}", file=sys.stderr)
+
+
+_notice.sent = False
 
 
 def _coupon_fail(why, legs):

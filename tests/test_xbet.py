@@ -418,6 +418,20 @@ def test_save_coupon():
     with patch("kelly.sources.http.post", side_effect=[err_res, err_res, ok_res]), patch("kelly.sources.xbet.time.sleep") as sl:
         assert xbet.save_coupon(legs) == "AP89E" and sl.call_count == 2       # accepté au 3e essai : on s'arrête là
 
+    # Pendant une commande Telegram, l'utilisateur qui attend est prévenu de chaque refus (raison de 1xBet), puis du code accepté
+    said = []
+    with patch("kelly.sources.http.post", side_effect=[err_res, err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"), \
+            xbet.coupon_notice(said.append):
+        assert xbet.save_coupon(legs) == "AP89E"
+    assert said == ["⏳ 1xBet a refusé le code coupon (« Erreur ») : nouvel essai dans 2 s (2/4)…",
+                    "⏳ 1xBet a refusé le code coupon (« Erreur ») : nouvel essai dans 5 s (3/4)…",
+                    "✅ 1xBet a accepté le code coupon."], said
+    said.clear()
+    with patch("kelly.sources.http.post", return_value=ok_res), xbet.coupon_notice(said.append):
+        assert xbet.save_coupon(legs) == "AP89E" and said == []                 # accepté du premier coup : rien à dire
+    with patch("kelly.sources.http.post", side_effect=[err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"):
+        assert xbet.save_coupon(legs) == "AP89E" and said == []                 # relevé automatique : personne n'attend, aucun message
+
     # Entrées invalides -> None, ne lève jamais
     assert xbet.save_coupon([]) is None
     assert xbet.save_coupon([{"home": "A"}]) is None
