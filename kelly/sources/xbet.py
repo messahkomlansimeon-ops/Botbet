@@ -182,10 +182,12 @@ def find(ev, cands):
 
 
 def _cells(groups):
+    """Cellules jouables d'un gameEvents. Une cellule « blocked » (sous-match listé avant d'être ouvert, marché suspendu) a une cote
+    affichée mais n'est pas jouable dans l'appli : jamais un prix pour Kelly (pas de pari, pas de jambe de combiné, pas de coupon)."""
     for eg in groups or []:
         for ev in eg.get("events") or []:
             for c in ev or []:
-                if isinstance(c, dict) and c.get("cf"):
+                if isinstance(c, dict) and c.get("cf") and not c.get("blocked"):
                     yield c
 
 

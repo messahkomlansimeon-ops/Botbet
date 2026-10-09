@@ -92,6 +92,15 @@ def test_parse_and_url():
     xbet._ladder(SOT["eventGroups"], *xbet.SUBGAMES[12], out)
     assert out[("team_sot_total", "Over", 8.5)] == 1.81 and out[("team_sot_home", "Under", 4.5)] == 1.65
     assert out[("team_sot_away", "Over", 4.5)] == 1.95
+    # sous-match listé avant son ouverture (cellules « blocked », vu le 09/10 sur des tirs vers le but) : aucune cote jouable
+    locked = json.loads(json.dumps(SOT))
+    for eg in locked["eventGroups"]:
+        for ev in eg["events"]:
+            for c in ev:
+                c["blocked"] = True
+    lout = {}
+    xbet._ladder(locked["eventGroups"], *xbet.SUBGAMES[12], lout)
+    assert lout == {}, lout
     assert xbet.book_prob(out, "team_sot_total", "Over", 8.5) == round((1 / 1.81) / (1 / 1.81 + 1 / 1.95), 4)
     assert [g["gid"] for g in xbet.parse_games(GAMES)] == [900]                    # ni paris spéciaux (901), ni sous-matchs (902)
     eng = [{"id": 5, "mainGameId": 5, "startTs": KO, "opponent1": {"fullNameEng": "CSKA Moscow", "fullName": "CSKA Moscou"},
