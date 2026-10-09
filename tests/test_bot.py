@@ -2219,8 +2219,8 @@ def test_run_daily_world():
         header = next(m for m in sent if m.startswith("<b>🔥 Kelly"))
         assert "combiné" in header and "à vérifier chez 1xBet" in header, header
         rows = store.load("fair_combos.json", [])
-        shot_msgs = [m for m in sent if m.startswith("<b>🎯 COMBINÉ TIRS")]                       # combinés « spécial tirs »
-        assert rows and len(rows) == len(fair_msgs) + len(shot_msgs) and all(r["tier"] in (5, 12, 25, "tc5", "tv5") for r in rows)
+        shot_msgs = [m for m in sent if m.startswith(("<b>🎯 COMBINÉ TIRS", "<b>🧮 COMBINÉ STATS"))]      # combinés « spécial tirs » et « stats »
+        assert rows and len(rows) == len(fair_msgs) + len(shot_msgs) and all(r["tier"] in (5, 12, 25, "tc5", "tv5", "ts5") for r in rows)
         bets = store.load("bets.json", {"combos": []})
         assert all(c["tier"] in [t for t, _, _ in C.COMBOS] for c in bets["combos"])                  # jamais de combiné à cote juste ici
         today_ = store.load("today.json", {})

@@ -258,7 +258,10 @@ def apply(pronos, fetch=None, picks=None):
         if picks:                                   # sans paris réels (relevé de l'après-midi) : les probas sharp du matin déjà posées restent
             ensemble.attach(pronos, picks, history=store.load("odds_history.json", {}))
     try:
-        found = (fetch or xbet.fetch_day)(_events(pronos), deadline=time.monotonic() + C.XBET_SECONDS, wanted=_wanted(pronos))
+        events, wanted = _events(pronos), _wanted(pronos)
+        if fetch is None:                           # relevé du matin : les matchs à pronostics stats d'abord (xbet.prioritise_stats) ; un relevé en direct garde l'ordre de l'appelant
+            events = xbet.prioritise_stats(events, wanted)
+        found = (fetch or xbet.fetch_day)(events, deadline=time.monotonic() + C.XBET_SECONDS, wanted=wanted)
     except Exception as e:                          # noqa: BLE001 - une source en panne ne casse pas le matin
         print(f"[1xbet] cotes ignorées : {type(e).__name__}: {e}", file=sys.stderr)
         return out

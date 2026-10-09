@@ -286,7 +286,8 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
     payés qui n'ont pas de ligne chez les books). `africa` : matchs africains du jour (stats.africa_matches), analysés avec
     les seuls profils API-Football. `deadline` : instant time.monotonic au-delà duquel on s'arrête. `all_families` : garder le
     meilleur pronostic de CHAQUE marché du match (relevé 1xBet : la cote réelle choisit ensuite le pari, kelly/xprice.py) au lieu
-    des 2 meilleurs plus tirs et tirs cadrés."""
+    des 2 meilleurs plus tirs et tirs cadrés ; les matchs payés (cotes réelles de The Odds API : buts, 1N2... déjà chiffrés) reçoivent alors aussi les
+    familles de stats (tirs, tirs cadrés, fautes, touches, hors-jeu), que 1xBet liste surtout pour les grands championnats."""
     have = {}
     for c in picks:
         have.setdefault(c["id"], set()).add(c["market"])
@@ -304,6 +305,8 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
         seen += 1
         paid = ev["id"] in have
         families = {prematch.CORNERS, prematch.CARDS} - have.get(ev["id"], set()) if paid else set(ALL_FAMILIES)
+        if paid and all_families and C.FAIR_STATS_PAID:        # relevé 1xBet : les championnats payés (grands championnats) sont ceux où 1xBet liste tirs, fautes, touches, hors-jeu
+            families |= set(STAT_MARKETS) - have.get(ev["id"], set())      # (rejeu du 09/10 : 3 matchs payés sur 14 listés n'avaient aucun pronostic stats)
         f = odds.match_numbers(ev["home_team"], ev["away_team"], key)
         (opts, bases), src = _options(f, ev["home_team"], ev["away_team"]), "football-data" if key != "africa" else "API-Football"
         if not opts and not paid and api_left > 0 and day is not None and stats.left_today() > C.FAIR_API_RESERVE:
@@ -553,6 +556,8 @@ def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
     rows = load_combos()
     n = 0
     for target, combo in sent:
+        if not combo:                                # palier non bâti (fair_plan_all rend aussi les paliers vides)
+            continue
         row = combo_row(target, combo, day, (stakes or {}).get(target), cur, (coupons or {}).get(target), at)
         if not any(r["date"] == row["date"] and r["tier"] == target for r in rows):      # relance du matin : un seul combiné par palier et par jour (le premier)
             rows.append(row)

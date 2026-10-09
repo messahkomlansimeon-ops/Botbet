@@ -241,8 +241,12 @@ FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une j
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
 FAIR_COMBO_TIERS = ((5, 5.0, 6.5), (12, 12.0, 15.0), (25, 25.0, 32.0))   # (cote mini visée, fourchette de la cote mini totale)
 # Combinés « spécial tirs » à vérifier chez 1xBet, chaque matin : (palier, préfixe des marchés, titre, fourchette de la cote mini)
+# Le préfixe peut être un tuple de préfixes (str.startswith) : « ts5 » mélange tirs, tirs cadrés, fautes, touches et hors-jeu (un pari par match).
+FAIR_STATS_TIER = _bool("FAIR_STATS_TIER", True)      # 0 : plus de palier « 🧮 COMBINÉ STATS » (tc5 et tv5 restent)
+FAIR_STATS_PAID = _bool("FAIR_STATS_PAID", True)      # 0 : les matchs payés (cotes réelles) n'ont plus de pronostics tirs / fautes / touches / hors-jeu (comportement d'avant)
 FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0),
-                    ("tv5", "team_shots_", "🎯 COMBINÉ TIRS VERS LE BUT", 5.0, 7.0))
+                    ("tv5", "team_shots_", "🎯 COMBINÉ TIRS VERS LE BUT", 5.0, 7.0)) \
+    + ((("ts5", ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_"), "🧮 COMBINÉ STATS", 5.0, 7.0),) if FAIR_STATS_TIER else ())
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
 # Cotes 1xBet (kelly/sources/xbet.py) : le prix exact des pronostics chez le bookmaker de l'utilisateur, lu le matin (gratuit, poli)
 XBET_ENABLED = os.environ.get("XBET_ENABLED", "1") != "0"
@@ -267,6 +271,11 @@ XBET_LIVE_SPARES = _int("XBET_LIVE_SPARES", 8)      # matchs remplaçants relus 
 XBET_SOON_MIN = _int("XBET_SOON_MIN", 10)           # match qui commence dans moins de N min : retiré par 1xBet, jamais repris
 XBET_MANUAL_GAP = _int("XBET_MANUAL_GAP", 10)      # minutes au moins entre deux relevés manuels (« 🔄 Mettre à jour tous les paris »)
 XBET_MANUAL_SECONDS = _int("XBET_MANUAL_SECONDS", 150)  # durée maximale d'un relevé manuel (sous le verrou des données) : combinés et 💎 d'abord
+# Relecture du soir (`python bot.py --evening`, app.run_evening) : les matchs du jour Kelly pas encore commencés sont réanalysés avec les stats du moment (profils
+# FotMob accumulés depuis le matin) et remis aux cotes 1xBet ; un seul message « 🌙 Pronostics de ce soir mis à jour ».
+EVENING_SOON_MIN = _int("EVENING_SOON_MIN", 30)         # un match qui commence dans moins de N min n'est pas retouché (1xBet ferme les sous-matchs stats avant le coup d'envoi)
+EVENING_SECONDS = _int("EVENING_SECONDS", 600)          # durée maximale du relevé 1xBet du soir (3 s entre requêtes)
+EVENING_LIMIT = _int("EVENING_LIMIT", 12)               # paris 💎 au plus dans le message du soir
 XBET_UPDATE_MOVE = _float("XBET_UPDATE_MOVE", 0.05)  # combiné du matin renvoyé si sa cote totale a bougé de plus de 5 %
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
 FAIR_COMBO_KEEP_DAYS = 14

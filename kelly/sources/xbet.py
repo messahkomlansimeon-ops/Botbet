@@ -551,6 +551,18 @@ def list_leagues(keys, deadline=None):
     return out
 
 
+def prioritise_stats(events, wanted):
+    """`events` avec d'abord les matchs dont on veut des sous-matchs statistiques (tirs, tirs cadrés, fautes, touches, hors-jeu : un gameEvents de plus par
+    famille, dans `wanted`), puis les autres, chacun dans l'ordre reçu. Si le délai du relevé tombe, ce sont eux qui valent le plus par requête : ils
+    nourrissent les combinés de stats. Sans `wanted`, l'ordre ne change pas. Appelé par xprice.apply pour le relevé du matin seulement (les relevés en direct
+    gardent l'ordre de l'appelant : combinés et paris montrés d'abord)."""
+    events = list(events)
+    if not wanted:
+        return events
+    stat = lambda e: any(m in MARKET_SUB and MARKET_SUB[m] != 2 for m in wanted.get(e[1].get("id"), ()))      # noqa: E731 - type 2 = corners : tous les matchs
+    return sorted(events, key=lambda e: not stat(e))                                                          # tri stable
+
+
 def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, fresh_min=None):
     """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
     événement qui porte "xgid" (id 1xBet déjà connu : relevé du matin, championnat vu par 1xBet) est lu directement, sans menu ni

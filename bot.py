@@ -15,6 +15,9 @@
                              budget TUNE_SECONDS (1800 s), reprend où il s'est arrêté ; --force refait tout. À planifier chaque semaine.
                              Mode séparé : ne touche ni aux paris ni à Telegram, ne plante jamais le run du matin.
   python bot.py --xbet       second relevé des cotes 1xBet (15:00) : pronostics du matin remis aux cotes du moment, message si nouveaux 💎
+  python bot.py --evening    relecture du SOIR : les matchs du jour Kelly pas encore commencés sont réanalysés (stats du moment, sources en cache, aucun appel
+                             payant), remis aux cotes 1xBet et fusionnés dans today.json ; UN message « 🌙 Pronostics de ce soir mis à jour : N 💎 »,
+                             aucun combiné envoyé (« combi N » les bâtit). Prend lui-même le verrou des données ; --no-lock s'il est déjà lancé sous `flock`
   python bot.py --export     copie lisible de la base (data/kelly.db) en JSON dans data/sauvegarde/ (la sauvegarde de 23:00 la commite)
   python bot.py --import [dossier]  restaure la base depuis une copie JSON (data/sauvegarde/ par défaut) ; sous le verrou des données
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
@@ -62,6 +65,17 @@ def main(argv):
             app.fill_match_stats()
     elif "--xbet" in argv:
         app.run_xbet_refresh()
+    elif "--evening" in argv:
+        if "--no-lock" in argv:                 # déjà sous `flock` (unité systemd) : en reprendre un bloquerait
+            app.run_evening()
+        else:
+            from kelly import store
+            try:
+                with store.data_lock(wait=600, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):
+                    app.run_evening()
+            except store.LockTimeout:
+                print("Kelly travaille depuis plus de 10 minutes : relecture du soir abandonnée", file=sys.stderr)
+                sys.exit(1)
     elif "--alert" in argv:
         app.run_alert(sample)
     elif "--serve" in argv:

@@ -651,7 +651,7 @@ def deliver_morning(messages, day, now, sample=False):
 
 
 def fair_plan_all(pronos):
-    """Tous les combinés à cote juste du matin (paliers 5 / 12 / 25 puis « tirs ») avec UN SEUL Usage : un match n'est jamais repris dans deux
+    """Tous les combinés à cote juste du matin (paliers 5 / 12 / 25 puis « tirs cadrés », « tirs vers le but », « stats ») avec UN SEUL Usage : un match n'est jamais repris dans deux
     combinés au-delà des règles de réutilisation (une jambe risquée une seule fois, sûre LEG_REUSE_MAX fois)."""
     usage = CB.Usage()
     return CB.fair_plan(pronos, usage=usage) + CB.fair_shots_plan(pronos, usage=usage)
@@ -659,9 +659,11 @@ def fair_plan_all(pronos):
 
 def keep_pronos(pronos, fair_combos=()):
     """Pronostics gardés dans today.json (relus par /top, /match, /combi et le relevé de 15:00) : TOUJOURS les paris montrés (un par
-    match, CB.best_per_match) et chaque jambe des combinés du jour, puis, jusqu'à la limite, les 40 meilleurs des autres et ceux assez
-    solides pour un combiné à cote juste ou trouvés chez 1xBet (relus à 15:00). Dans l'ordre du classement."""
+    match, CB.best_per_match), chaque jambe des combinés du jour et toute jambe possible d'un combiné (CB.fair_legs : « combi N » les rebâtit), puis,
+    jusqu'à la limite, les 40 meilleurs des autres et ceux assez solides pour un combiné à cote juste ou trouvés chez 1xBet (relus à 15:00).
+    Dans l'ordre du classement."""
     must = {c["key"] for c in CB.best_per_match(pronos)} | {l["key"] for _, combo in fair_combos if combo for l in combo[0]}
+    must |= {c["key"] for c in CB.fair_legs(pronos)}        # toutes les jambes possibles d'un combiné : « combi N » et la relecture de 15:00 les rebâtissent (rejeu du 09/10 : 3 sur 26 perdues)
     first = [c for c in pronos if c["key"] in must]
     rest = [c for c in pronos if c["key"] not in must]
     n = max(0, 40 - len(first))
@@ -822,6 +824,110 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
     print(f"[1xbet] relevé : {len(upcoming_)} pronostic(s) à venir, {len(new)} nouveau(x) 💎 annoncé(s), "
           f"{n_upd} combiné(s) du matin renvoyé(s) à jour, pari du jour {'passé aux cotes 1xBet' if n_single else 'inchangé'}", file=sys.stderr)
     return len(new)
+
+
+def _sent_keys(day):
+    """Clés des pronostics déjà dans un combiné du jour (combinés du matin, dernière version envoyée, combinés sur mesure gardés) : la relecture du soir
+    ne les retire jamais de today.json."""
+    keys = set()
+    for row in fair.load_combos():
+        if row.get("date") == day:
+            keys |= set(row.get("keys") or []) | {l.get("key") for l in row.get("legs") or []}
+    for t in _load_updates(day)["tiers"].values():
+        keys |= set(t.get("keys") or []) | {l.get("key") for l in t.get("legs") or []}
+    for it in custom._load(day)["items"].values():
+        keys |= {l.get("key") for l in it.get("legs") or []}
+    return keys - {None}
+
+
+def run_evening(now=None, fetch=None, seconds=None):
+    """Relecture du SOIR (`python bot.py --evening`) : les matchs du jour Kelly de data/today.json pas encore commencés (et pas imminents :
+    C.EVENING_SOON_MIN min) sont réanalysés avec fair.make (toutes les familles, stats comprises : les profils FotMob se sont remplis depuis le
+    matin) à partir des SEULES sources déjà en cache (aucun appel payant, aucun quota API-Football : day=None), puis remis aux cotes 1xBet
+    (xprice.apply, session et plafonds habituels, C.EVENING_SECONDS au plus, matchs à pronostics stats d'abord). Fusion dans today.json :
+    seuls les pronostics des matchs RELUS chez 1xBet sont remplacés (les autres gardent leurs pronostics et leurs cotes) ; sont conservés tels
+    quels : les paris du jour (picks), les pronostics des matchs commencés ou imminents, ceux qui sont déjà jambe d'un combiné envoyé ou gardé
+    (_sent_keys) ; les suivis (fair.json : seulement de NOUVELLES lignes), combinés (fair_combos.json), notes et bets.json ne sont pas touchés.
+    Journal des avis de l'ensemble mis à jour. UN seul message « 🌙 Pronostics de ce soir mis à jour : N 💎 » (les 💎 pas encore annoncés, par match et
+    marché), rien s'il n'y en a pas ; aucun combiné envoyé tout seul : « combi N » les rebâtit. Idempotent, ne lève jamais.
+    `fetch` : injectable pour les tests. -> nombre de 💎 annoncés."""
+    try:
+        return _run_evening(now or now_utc(), fetch, seconds)
+    except Exception as e:                          # noqa: BLE001 - une relecture facultative ne casse jamais rien
+        print(f"[soir] relecture du soir ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
+
+
+def _run_evening(now, fetch, seconds):
+    import copy
+    from .sources import xbet
+    migrate.ensure()
+    today = store.load("today.json", {})
+    today = today if isinstance(today, dict) else {}
+    if not _current_day(today, now) or not today.get("pronos"):
+        print(f"[soir] pas de pronostics du jour Kelly en cours (today.json : {today.get('day')}) : rien à relire", file=sys.stderr)
+        return 0
+    day, soon = today["day"], now + timedelta(minutes=C.EVENING_SOON_MIN)
+    telegram.flush_outbox()
+    evs = {}
+    for c in today["pronos"]:
+        if c.get("sport_key") == "africa" or datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) <= soon:
+            continue                                # commencé / imminent, ou match africain (profils API-Football seuls : non relu ici)
+        ev = evs.setdefault(c["id"], {"id": c["id"], "sport_key": c["sport_key"], "league": c.get("league"), "home_team": c["home"],
+                                      "away_team": c["away"], "commence_time": c["commence"]})
+        if c.get("xgid") and "xgid" not in ev:
+            ev["xgid"] = c["xgid"]                  # match 1xBet déjà connu : lu directement, sans menu ni liste
+    if not evs:
+        print("[soir] aucun match à venir à relire", file=sys.stderr)
+        return 0
+    scan = {"leagues": {}}
+    for ev in evs.values():
+        scan["leagues"].setdefault(ev["sport_key"], []).append(ev)
+    picks = today.get("picks") or []
+    new = fair.make(scan, picks, None, deadline=time.monotonic() + C.FAIR_SECONDS, africa=(), all_families=True)      # day=None : jamais API-Football
+    first = _priority_ids(day, [c for c in today["pronos"] if c["id"] in evs])
+    limit = time.monotonic() + (seconds or C.EVENING_SECONDS)
+    got = set()
+
+    def run(events, deadline=None, wanted=None):
+        events = sorted(xbet.prioritise_stats(events, wanted), key=lambda e: e[1]["id"] not in first)       # tri stable : stats d'abord, puis les matchs qui comptent
+        deadline = min(deadline, limit) if deadline else limit
+        found = (fetch or xbet.fetch_day)(events, deadline=deadline, wanted=wanted)
+        got.update(found)
+        return found
+    xprice.apply(new, fetch=run, picks=copy.deepcopy(picks))
+    if not got:
+        print("[soir] 1xBet n'a relu aucun match : today.json inchangé", file=sys.stderr)
+        return 0
+    stamp = now.strftime("%H:%M")
+    redo = {i for i in got if i in evs}
+    fresh = [{k: c[k] for k in c if k != "score"} | ({"xat": stamp} if c.get("xodds") else {}) for c in new if c["id"] in redo]
+    protected = _sent_keys(day)
+    old = today["pronos"]
+    kept = [c for c in old if c["id"] not in redo or c["key"] in protected]
+    held = {_slot(c) for c in kept if c["id"] in redo}
+    merged = kept + [c for c in fresh if _slot(c) not in held]
+    if "announced" not in today:                    # premier relevé du jour : les 💎 du matin sont déjà connus
+        today["announced"] = [_slot(c) for c in CB.best_per_match([c for c in old if (c.get("commence") or "9")[:16] > soon.isoformat()[:16]])
+                              if c.get("xodds")]
+    seen = {_slot(k) for k in today["announced"]}
+    upcoming_ = [c for c in merged if (c.get("commence") or "9")[:16] > soon.isoformat()[:16]]
+    announce = [c for c in CB.best_per_match(upcoming_) if c["id"] in redo and c.get("xodds") and _slot(c) not in seen]
+    today["pronos"] = merged
+    today["announced"] += [_slot(c) for c in announce]
+    today["xbet_at"] = stamp
+    store.save("today.json", today)
+    log_opinions([c for c in fresh if _slot(c) not in held], day, now)
+    if announce:
+        have = {(r.get("date"), r.get("id"), r.get("market")) for r in fair.load()}
+        rec = [c for c in announce if (day, c["id"], c["market"]) not in have]      # suivi : seulement de NOUVELLES lignes (jamais une ligne existante)
+        if rec:
+            fair.record(rec, day, shown=rec)
+        telegram.send(fmt.pronos(announce, limit=C.EVENING_LIMIT, title=f"🌙 Pronostics de ce soir mis à jour : {len(announce)} 💎",
+                                 when=stamp, intro="Matchs de ce soir réanalysés avec les statistiques du moment et remis aux cotes 1xBet. "
+                                                   "Vérifie la cote avant de valider ; « combi N » bâtit un combiné avec ces paris."))
+    print(f"[soir] {len(redo)}/{len(evs)} match(s) à venir relus chez 1xBet, {len(announce)} 💎 annoncé(s)", file=sys.stderr)
+    return len(announce)
 
 
 def manual_refresh(now=None, fetch=None):
