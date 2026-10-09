@@ -504,10 +504,10 @@ def update_combo(row, combo, hhmm, coupon=None):
 
 def kill_combo(row):
     """Combiné du matin déclaré injouable (« ne le joue pas ») : plus rien à suivre. Réglé « annulé » avec la marque « dead » (hors
-    des résultats, du bilan et de l'argent) ; sur le budget du jour il passe aussi en « ❌ Pas joué » (money.skip)."""
+    des résultats, du bilan et de l'argent) ; si tu l'avais noté joué, sa note sort aussi du bilan (marque « skipped »)."""
     row["dead"] = True
     row["result"] = "void"
-    if row.get("cur") and not row.get("skipped"):
+    if row.get("played") and not row.get("skipped"):
         row["skipped"] = row["auto_skipped"] = True
     return row
 

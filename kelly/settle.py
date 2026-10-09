@@ -355,7 +355,7 @@ def _block(name, rows):
 
 
 def bilan(bets, days=None, rows=None, detail=False):
-    """Bilan. Par défaut en mots simples (combinés gagnés, résultat en unités, paris envoyés) ; `detail` : les chiffres
+    """Bilan. Par défaut en mots simples (combinés gagnés, résultat en FCFA de tes paris notés, paris envoyés) ; `detail` : les chiffres
     techniques (rendement par mise, CLV, Brier, par marché)."""
     rows = track.load() if rows is None else rows
     picks = [r for r in rows if r.get("result") in ("win", "loss")]
@@ -399,10 +399,9 @@ def fair_combo_line(rows, days=None, today=None):
 
 
 def _custom_done(rows, days=None):
-    """Combinés sur mesure joués (misés sur le budget ou notés avec /joue, pas retirés par « ❌ Pas joué ») et réglés : ils comptent dans le
-    bilan en argent et celui des paris joués, pas dans fair_combo_line."""
-    done = [r for r in rows if r.get("custom") and r.get("result") in ("win", "loss") and not r.get("skipped")
-            and (r.get("played") or r.get("cur"))]
+    """Combinés sur mesure joués (notés, pas retirés par l'ancien « ❌ Pas joué ») et réglés : ils comptent dans le bilan en argent et celui
+    des paris joués, pas dans fair_combo_line."""
+    done = [r for r in rows if r.get("custom") and r.get("result") in ("win", "loss") and not r.get("skipped") and r.get("played")]
     if days:
         cut = str((datetime.now(timezone.utc) - timedelta(days=days)).date())
         done = [r for r in done if r["date"] >= cut]
@@ -410,8 +409,8 @@ def _custom_done(rows, days=None):
 
 
 def _gain(c):
-    """Gain (u) d'un combiné de bets.json : à la cote et à la mise notées avec /joue quand il y en a (comme bankroll.played_gain), sinon
-    à la mise conseillée."""
+    """Gain d'un combiné de bets.json : à la cote et à la mise notées quand il y en a (comme bankroll.played_gain), sinon à la mise de
+    sa ligne (ancienne mise en unités : calcul interne de la bankroll, jamais affiché)."""
     if c.get("played") and c["result"] in ("win", "loss"):
         from .bankroll import played_gain
         return played_gain(c)
@@ -419,32 +418,32 @@ def _gain(c):
 
 
 def _sum_txt(cs, html=True):
-    """Résultat d'un groupe de combinés : en unités pour ceux de la bankroll, en devise pour ceux misés sur le budget du jour (« pas
-    joué » et cote corrigée comptés) ; jamais mélangés : « +12 u et −1 000 FCFA ». `html` : devise échappée."""
+    """Résultat en argent des paris NOTÉS et réglés parmi `cs` (money.gain : cote et mise notées) : « +2 000 FCFA » ; '' si aucun n'est noté
+    et réglé (un combiné que Kelly a seulement conseillé ne compte pas). `html` : devise échappée."""
     from . import money
-    parts = []
-    units = [c for c in cs if not c.get("cur")]
-    if units or not cs:
-        parts.append(fmt.signed(sum(map(_gain, units))))
-    for cur in dict.fromkeys(c["cur"] for c in cs if c.get("cur")):
-        parts.append(money.signed(sum(money.gain(c) or 0 for c in cs if c.get("cur") == cur), cur))
-    txt = " et ".join(parts)
+    by = {}
+    for c in cs:
+        g = money.gain(c)
+        if g is not None:
+            by.setdefault(c.get("cur") or money.cur(), []).append(g)
+    txt = " et ".join(money.signed(sum(g), cur) for cur, g in by.items())
     return fmt.esc(txt) if html else txt
 
 
 def _bilan_simple(days, rows, picks, combos):
-    """Bilan en mots simples, par blocs séparés d'une ligne vide : combinés, paris envoyés, paris joués chez 1xBet, pronostics sans
-    cote, fiabilité par marché."""
+    """Bilan en mots simples, par blocs séparés d'une ligne vide : combinés (gagnés sur joués, résultat de TES paris notés), paris envoyés,
+    paris joués chez 1xBet, pronostics sans cote, fiabilité par marché."""
     sent = [r for r in picks if r.get("sent")]
     blocks = [[f"📊 <b>Bilan</b>{f' — {days} derniers jours' if days else ''}"]]
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
-        b = [f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat {fmt.b(_sum_txt(combos))}"]
+        b = [f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)}"]
         tiers = {}
         for c in combos:
             tiers.setdefault(fmt.tier_name(c["tier"]), []).append(c)
-        b += [f"      {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)} ({_sum_txt(cs)})"
-              for tier, cs in tiers.items()]
+        for tier, cs in tiers.items():
+            mine = _sum_txt(cs)
+            b.append(f"      {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)}" + (f" (tes paris : {mine})" if mine else ""))
         blocks.append(b)
     if sent:
         w = sum(1 for r in sent if r["result"] == "win")
@@ -453,9 +452,9 @@ def _bilan_simple(days, rows, picks, combos):
     bets_ = store.load("bets.json", {"combos": []})
     ml = money.summary_lines(bets_, rows, fair.load_combos())
     if ml:
-        blocks.append(["💰 <b>Tes mises</b> " + fmt.i("(tout ce que Kelly a proposé, sauf « pas joué »)")] + [f"• {fmt.esc(x)}" for x in ml])
+        blocks.append(["💰 <b>Tes paris notés</b> " + fmt.i("(seuls ceux que tu as notés comptent)")] + [f"• {fmt.esc(x)}" for x in ml])
     pl = played.summary_lines(bets_, rows, fair.load_combos(), days)
-    if money.active():                              # le résultat en argent est au-dessus : ne garder que l'écart de cote 1xBet
+    if ml:                                          # le résultat en argent est au-dessus : ne garder que l'écart de cote 1xBet
         pl = [x for x in pl if not x.startswith("Joués chez 1xBet")]
         if pl:
             blocks.append([f"💵 {fmt.esc(x)}" for x in pl])
@@ -486,7 +485,8 @@ def _bilan_detail(bets, days, rows, picks, combos):
         tiers.setdefault(c["tier"].split(" (")[0], []).append(c)
     for tier, rows_ in tiers.items():
         nn = len(rows_); ww = sum(1 for r in rows_ if r["result"] == "win")
-        lines.append(f"{tier} : {ww}/{nn} | {_sum_txt(rows_, html=False)}")      # unités ou devise (cote corrigée, « pas joué »)
+        mine = _sum_txt(rows_, html=False)
+        lines.append(f"{tier} : {ww}/{nn}" + (f" | tes paris : {mine}" if mine else ""))      # résultat de TES paris notés seulement
     if sent:
         lines.append("Par marché (envoyés) :")
         markets = {}

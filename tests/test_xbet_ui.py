@@ -105,7 +105,7 @@ class Fakes:
 
 
 def buttons(msg):
-    return [b["callback_data"] for row in msg.markup["inline_keyboard"] for b in row]
+    return [b["callback_data"] for row in msg.markup["inline_keyboard"] for b in row if "callback_data" in b]
 
 
 def at(h, m=0):
@@ -149,7 +149,7 @@ def test_combi_fallthrough():
     with Fakes() as f:
         out = str(app.custom_combo(typ, flat, 4.5, DAY))
     assert out.startswith("Kelly n'a vu aucune cote de 1xBet aujourd'hui") and "À VÉRIFIER CHEZ 1XBET" in out and "SUR MESURE" not in out, out
-    assert "Mise indicative" in out
+    assert "Mise indicative" not in out and "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in out, out    # sans budget : jamais d'unités
     # budget du jour : la mise du combiné demandé est prise dessus
     money.set_daily(5000)
     with Fakes():
@@ -167,7 +167,7 @@ def test_combi_fallthrough():
     xprice.price_picks(xp, fetch=fake_fetch(pr))
     with Fakes() as f:
         out = str(app.custom_combo(xp, [], 5.0, DAY, when="09:30"))
-    assert "SUR MESURE" in out and "Code coupon 1xBet : <b>K7Q2X</b>" in out and "Cotes 1xBet de 09:30" in out, out
+    assert "SUR MESURE" in out and "Code coupon 1xBet : <code>K7Q2X</code>" in out and "Cotes 1xBet de 09:30" in out, out
     assert "cotes de référence" not in out and "Home5" not in out and "Home6" not in out
     print("ok  E1/E10 /combi : jamais de prix typique quand 1xBet a des cotes, cotes de référence annoncées, mise sur le budget")
 
@@ -188,6 +188,8 @@ def fair_row(xodds=2.0, mins=(1.6, 1.55, 1.55), results=("win", "win", "win"), *
 def test_real_combo_gain():
     row = fair_row()
     assert played.is_real(row) and row["min_odds"] == 8.0
+    assert money.gain(row) is None, "mise conseillée seule (stake + cur) : pas noté, pas compté"
+    row["played"] = {"odds": 8.0, "stake": 1000}                          # noté au total des cotes 1xBet
     assert money.gain(row) == 7000, money.gain(row)                       # 1 000 x (2 x 2 x 2 - 1), pas à la cote mini 1,6 x 1,55 x 1,55
     # noté à 7,5 chez 1xBet : toutes les jambes gagnées, le ratio vaut 1
     row["played"] = {"odds": 7.5, "stake": 1000, "at": "x"}
@@ -197,7 +199,9 @@ def test_real_combo_gain():
     assert bankroll.played_gain(half) == 1000 * (8.0 * 4 / 8 - 1) and money.gain(half) == 1000 * (8.0 * 4 / 8 - 1)
     # combiné à vérifier (cotes mini) : inchangé
     mini = fair_row(xodds=None)
-    assert not played.is_real(mini) and abs(money.gain(mini) - 1000 * (1.6 * 1.55 * 1.55 - 1)) < 1e-6
+    assert not played.is_real(mini) and money.gain(mini) is None
+    mini["played"] = {"odds": mini["min_odds"], "stake": 1000}
+    assert abs(money.gain(mini) - 1000 * (1.6 * 1.55 * 1.55 - 1)) < 1e-6
     mini["played"] = {"odds": 4.5, "stake": 1000}
     assert abs(bankroll.played_gain(mini) - 1000 * (4.5 * (1.6 * 1.55 * 1.55) / mini["min_odds"] - 1)) < 1e-6
     # bilan en unités d'un combiné de bets.json noté : à la cote notée (E12)
@@ -257,7 +261,7 @@ def test_mes_paris():
     todo = played.todo(DAY)
     text = str(todo)
     assert "Pari du jour — cote 1xBet 1,50 (09:30)" in text and "Sûr — cote 1xBet 5,06 (09:30)" in text, text
-    assert "Code coupon 1xBet : CODE1" in text and "Code coupon 1xBet : CODE2" in text, text
+    assert "Code coupon 1xBet : <code>CODE1</code>" in text and "Code coupon 1xBet : <code>CODE2</code>" in text, text
     cb = [b["callback_data"] for row in todo.markup["inline_keyboard"] for b in row]
     assert f"xmajr|pari|{DAY}" in cb and f"xmajr|sur|{DAY}" in cb and f"joue|sur|{DAY}" in cb, cb
     # « Autre cote » : l'exemple est le prix 1xBet (pas la cote typique 1,60)
@@ -270,20 +274,20 @@ def test_mes_paris():
     fair.record_combos([(5, (legs, 1.55 ** 4, 0.72 ** 4))], DAY, coupons={5: "FAIRC"}, at="04:12")
     store.save("today.json", {"day": DAY, "picks": [], "pronos": [prono(i) for i in range(7)]})
     todo = played.todo(DAY)
-    assert "Aux cotes 1xBet — cote 1xBet 5,77 (04:12)" in str(todo) and "Code coupon 1xBet : FAIRC" in str(todo), str(todo)
+    assert "Aux cotes 1xBet (cote 5,8) — cote 1xBet 5,77 (04:12)" in str(todo) and "Code coupon 1xBet : <code>FAIRC</code>" in str(todo), str(todo)
     assert f"xmaj|5|{DAY}" in [b["callback_data"] for row in todo.markup["inline_keyboard"] for b in row]
     with Fakes(code="NEWC1", drop=("m1",)) as f:
         out = app.refresh_combo("5", DAY, now=at(13, 30))
-    assert "Code coupon 1xBet : <b>NEWC1</b>" in out, out
+    assert "Code coupon 1xBet : <code>NEWC1</code>" in out, out
     row = fair.load_combos()[0]
     assert row["coupon"] == "NEWC1" and row["at"] == "13:30" and "m1|totals||3.5|Under" not in row["keys"]
     todo = str(played.todo(DAY))
-    assert "(13:30)" in todo and "Code coupon 1xBet : NEWC1" in todo and "FAIRC" not in todo, todo
+    assert "(13:30)" in todo and "Code coupon 1xBet : <code>NEWC1</code>" in todo and "FAIRC" not in todo, todo
     # un combiné à cote mini : « cote mini », jamais de bouton ni de code
     row["legs"][0]["xodds"] = None
     store.save(fair.COMBOS_FILE, [row])
     todo = played.todo(DAY)
-    assert "À vérifier — cote mini" in str(todo) and "Code coupon" not in str(todo) and "xmaj" not in str(todo.markup), str(todo)
+    assert "À vérifier (cote mini 5) — cote mini" in str(todo) and "Code coupon" not in str(todo) and "xmaj" not in str(todo.markup), str(todo)
     # budget : la liste montre le prix 1xBet de la version en cours, son code et le bouton
     reset()
     money.set_daily(5000)
@@ -307,7 +311,7 @@ def test_verify_real():
         out = app.refresh_real("sur", DAY, now=at(13), fetch=fake_fetch(now, asked))
     assert f.sent[0].startswith("⏳ Je vérifie ce combiné chez 1xBet"), f.sent
     assert {ev["id"] for _, ev in asked[0]} == {"e1", "e2", "e3", "e4"} and asked[0][0][1]["xgid"], "matchs du combiné relus (id 1xBet connu)"
-    assert "Moins bien payé" in out and "📉" in out and "Code coupon 1xBet : <b>VERIF1</b>" in out, out
+    assert "Moins bien payé" in out and "📉" in out and "Code coupon 1xBet : <code>VERIF1</code>" in out, out
     assert "Cotes 1xBet de 13:00" in out and "cote 3,91" in out, out                    # 1,2 x 1,45 x 1,5 x 1,5
     assert f"xmajr|sur|{DAY}" in buttons(out), "le bouton reste sous la version vérifiée"
     row = store.load("bets.json", {})["combos"][0]
@@ -315,7 +319,7 @@ def test_verify_real():
     assert row["xnow"] == {"at": "13:00", "odds": 3.915, "coupon": "VERIF1"}, row["xnow"]
     todo = str(played.todo(DAY))
     assert "Sûr — cote 1xBet 3,92 (13:00)" in todo or "Sûr — cote 1xBet 3,91 (13:00)" in todo, todo
-    assert "Code coupon 1xBet : VERIF1" in todo and "CODE2" not in todo, todo
+    assert "Code coupon 1xBet : <code>VERIF1</code>" in todo and "CODE2" not in todo, todo
     # un pari retiré par 1xBet : plus de combiné jouable tel quel, pas de nouveau code
     gone = dict(now) | {"e3": {("btts", "Yes", None): 1.8}}
     with Fakes(code="VERIF2") as f:
@@ -327,7 +331,7 @@ def test_verify_real():
     top = by_key["e4"]
     with Fakes(code="VERIF3") as f:
         out = app.refresh_real("pari", DAY, now=at(14), fetch=fake_fetch({"e4": {("h2h", "HOME", None): 1.42}}))
-    assert "PARI DU JOUR À JOUR 14:00" in out and "— cote 1,42" in out and "Valeur +5 %" not in out and "Code coupon 1xBet : <b>VERIF3</b>" in out, out
+    assert "PARI DU JOUR À JOUR 14:00" in out and "— cote 1,42" in out and "Valeur +5 %" not in out and "Code coupon 1xBet : <code>VERIF3</code>" in out, out
     assert f"xmajr|pari|{DAY}" in buttons(out) and top["key"] in {r["key"] for r in track.load()}
     # les garde-fous : match commencé, 1xBet muet, autre jour, callback du bouton
     assert "en jeu" in app.refresh_real("sur", DAY, now=datetime(2030, 1, 1, 20, tzinfo=timezone.utc), fetch=fake_fetch(now))
@@ -341,7 +345,7 @@ def test_verify_real():
             out = chat.on_callback(f"xmajr|sur|{DAY}")
     finally:
         xbet.fetch_day = old
-    assert "Code coupon 1xBet : <b>VERIF4</b>" in out, out
+    assert "Code coupon 1xBet : <code>VERIF4</code>" in out, out
     print("ok  E4 « Vérifier ce combiné » d'un combiné réel et du pari du jour : cotes du moment, pari retiré / moins bien payé, nouveau code")
 
 
@@ -375,11 +379,12 @@ def test_morning_results():
     assert "Pari du jour — cote 1xBet 1,50" in text(base | {"xodds": 1.5})
     played_ = base | {"xodds": 1.5, "played": {"odds": 1.55, "stake": 10}}
     t = text(played_)
-    assert "Pari du jour — cote 1,55 chez 1xBet" in t and "+5,5 u" in t, t                      # 10 x (1,55 - 1)
+    assert "Pari du jour — cote 1,55 chez 1xBet" in t and "+5,5 FCFA" in t and " u" not in t, t       # 10 x (1,55 - 1), tout en FCFA
     budget = base | {"xodds": 1.5, "stake": 2000, "cur": "FCFA"}
-    assert "cote 1xBet 1,50" in text(budget) and "+1 000 FCFA" in text(budget), text(budget)
+    assert "cote 1xBet 1,50" in text(budget) and "FCFA" not in text(budget), text(budget)            # mise conseillée seule : pas noté, aucun montant
+    assert "+1 000 FCFA" in text(budget | {"played": {"odds": 1.5, "stake": 2000}}), text(budget | {"played": {"odds": 1.5, "stake": 2000}})
     assert "perdu" not in text(base | {"result": "loss", "xodds": 1.5}) and "❌ Pari du jour — cote 1xBet 1,50" in text(base | {"result": "loss", "xodds": 1.5})
-    assert "pas joué" in text(budget | {"skipped": True})
+    assert "pas joué" in text(budget | {"skipped": True})                                           # ancien « ❌ Pas joué »
     # combiné non joué : le prix utilisé est dit
     leg = base | {"key": "k1"}
     combo = {"tier": "🛡️ SÛR (cote 5 à 7)", "keys": ["k1"], "odds": 5.06, "stake": 2.0, "result": "win", "date": DAY}
@@ -457,7 +462,7 @@ def test_times_and_coupon_failure():
         assert "touche « 🎟️ Vérifier ce combiné »" in out
     with Fakes(code="OK1"):
         out = str(app._fair_reply((legs, 5.77, 0.27), "Voici.", when="13:00", retry="redemande le combi"))
-        assert "Code coupon 1xBet : <b>OK1</b>" in out and "indisponible" not in out
+        assert "Code coupon 1xBet : <code>OK1</code>" in out and "indisponible" not in out
     assert "indisponible" not in str(fmt.fair_combo(5.77, legs, 0.27, 0.5)) and not hasattr(fmt, "played_hint")
     assert all("hint" not in inspect.signature(f).parameters for f in (fmt.combo, fmt.single, fmt.fair_combo))
     print("ok  E9/E11/E13 heures de relevé, repli « dernier relevé », code coupon indisponible, code mort retiré")

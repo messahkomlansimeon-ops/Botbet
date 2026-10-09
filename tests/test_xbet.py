@@ -395,7 +395,7 @@ def test_save_coupon():
 
     # Format avec code coupon
     msg = fmt.fair_combo(2.28, legs, 0.45, 0.5, coupon=code)
-    assert f"🎟️ Code coupon 1xBet : <b>{code}</b>" in msg
+    assert f"🎟️ Code coupon 1xBet : <code>{code}</code>" in msg
     assert "<a href" not in msg
 
     # Format sans coupon
@@ -540,7 +540,7 @@ def test_combi_live():
     assert sent and sent[0].startswith("⏳"), sent
     assert msg.startswith("Voici un combiné aux cotes 1xBet de 13:00"), msg[:200]
     assert seen_fresh == [C.XBET_COMBI_FRESH_MIN] == [180], "combi : cotes de moins de 3 h reprises"
-    assert "❌ Retiré : H1 – A1" in msg and "➕ Ajouté" in msg and "🎟️ Code coupon 1xBet : <b>K7Q2X</b>" in msg
+    assert "❌ Retiré : H1 – A1" in msg and "➕ Ajouté" in msg and "🎟️ Code coupon 1xBet : <code>K7Q2X</code>" in msg
     assert coupons and "m1" not in coupons[0], "le code est créé avec les paris encore jouables"
     msg, _, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), got=False)
     assert "1xBet ne répond pas" in msg and "Code coupon" not in msg and not coupons
@@ -561,7 +561,7 @@ def test_refresh_button_and_updates():
     assert "🔄 COMBINÉ À JOUR 13:00" in msg and "❌ Retiré : H2 – A2" in msg and "K7Q2X" in msg, msg[:300]
     assert len(fair.load_combos()) == 1, "le suivi garde le combiné du matin"
     assert seen_fresh == [None], "bouton « 🎟️ Vérifier ce combiné » : la règle des 5 min (XBET_FRESH_MIN), pas celle du combi"
-    btn = chat.with_played_button("x", "v5", DAY2, funded=False, refresh=5)
+    btn = chat.with_played_button("x", "v5", DAY2, refresh=5)
     assert any(b["callback_data"] == f"xmaj|5|{DAY2}" for row in btn.markup["inline_keyboard"] for b in row)
     # relevé de 13:00 : un pari retiré -> combiné renvoyé à jour ; 2e relevé identique -> rien ; pas de liste 💎 avant 15:00
     store.save(app.COMBO_UPDATES, {})

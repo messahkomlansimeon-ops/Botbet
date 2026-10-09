@@ -1,15 +1,16 @@
-"""Budget du jour : un montant fixé une fois (« budget 5000 »), modifiable quand tu veux, réparti chaque matin entre le pari du jour,
-les combinés et les combinés à vérifier chez 1xBet, selon la confiance de Kelly. Il remplace la bankroll et la saisie des paris :
-Kelly suppose que tu joues ce qu'elle propose, à la mise affichée ; « ❌ Pas joué » retire un pari du bilan, « ✏️ Autre cote »
-corrige la cote obtenue.
+"""Budget du jour : le montant que tu es prêt à miser AUJOURD'HUI (« budget 5000 »), modifiable n'importe quel jour (il reste tel quel
+jusqu'à ce que tu le changes). Kelly le répartit chaque matin entre le pari du jour, les combinés et les combinés à vérifier chez 1xBet,
+selon sa confiance : ce sont des MISES CONSEILLÉES en FCFA. Seuls les paris que tu notes (« ✅ Je l'ai joué », « ✅ Je le joue », /joue :
+x["played"] = {odds, stake, at}) comptent dans tes résultats, au bilan et pour les alertes « tu as joué » ; « ✏️ Autre cote » corrige la
+cote obtenue et « ↩️ Annuler » retire la note. Sans budget, Kelly ne donne aucune mise conseillée (jamais d'unités).
 
 Répartition (allocate) : chaque pari a une part maximale du budget selon son palier (SHARE), multipliée par sa confiance =
 espérance (proba x cote - 1) rapportée à CONF_FULL, bornée à [CONF_MIN, 1]. Journée riche (la somme dépasse le budget) : tout est
 réduit dans la même proportion, le budget est entièrement misé. Journée pauvre : Kelly mise moins et garde le reste. Mises arrondies
 (round_step) ; une mise plus petite que l'arrondi est abandonnée.
 
-data/mybudget.json : {"daily": montant, "cur": "FCFA"}. Les paris misés sur le budget portent « cur » (devise) : seuls eux comptent
-dans le bilan en argent (gains).
+data/mybudget.json : {"daily": montant, "cur": "FCFA"}. « cur » sur la ligne d'un pari = devise de sa mise (stake) : la mise conseillée du
+matin, ou celle de la note. Un pari ne compte dans l'argent (gain, bilan) que s'il est NOTÉ (x["played"]) et pas retiré.
 """
 import math
 import re
@@ -120,16 +121,49 @@ def allocate(items, budget=None, detail=False):
     return out + (total < 1,) if detail else out
 
 
+def row_item(x):
+    """Ligne de suivi d'un pari -> l'item de `allocate` (kind, tier, prob, odds) qui le décrit ; None si ses données sont illisibles.
+    Combiné à vérifier / aux cotes 1xBet / sur mesure (« legs », fair_combos.json) : kind « fair » à sa cote ; combiné réel (« keys »,
+    bets.json) : kind « combo » et son palier ; pari du jour (tracked.json) : kind « pari » à sa cote 1xBet quand il en a une."""
+    try:
+        if "legs" in x:
+            return {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"])}
+        if "keys" in x:
+            return {"kind": "combo", "tier": x["tier"], "prob": float(x["prob"]), "odds": float(x["odds"])}
+        return {"kind": "pari", "tier": "pari", "prob": float(x["prob"]), "odds": float(x.get("xodds") or x["odds"])}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def suggested(x):
+    """Mise conseillée (devise du budget) d'un pari : celle décidée le matin (ligne avec sa devise « cur » et une mise > 0) ; 0 si le matin la
+    jugeait trop petite pour le budget (« stake » = 0) ; sinon (pas de mise du matin : budget fixé après coup, ancienne ligne) calculée sur le
+    budget d'aujourd'hui (allocate, ce pari seul). 0 sans budget du jour : Kelly ne donne alors AUCUNE mise conseillée (jamais d'unités).
+    Ne lève jamais."""
+    if not active():
+        return 0
+    st = x.get("stake")
+    if x.get("cur") and _amount(st) > 0:
+        return st
+    if st == 0 and not isinstance(st, bool):
+        return 0
+    item = row_item(x)
+    return allocate([item])[0][0] if item else 0
+
+
+NO_BUDGET = fmt.NO_BUDGET                  # à la place d'une mise, quand il n'y a pas de budget du jour
+
+
 def budget_line(spent, kept, poor=None):
-    """« 💰 Budget du jour : 5 000 FCFA · 3 800 misés, 1 200 gardés (journée pauvre) » (HTML). `poor` (allocate, detail) : Kelly mise moins
-    que le budget parce que ses paris sont peu sûrs ; sinon (journée riche, tout a été réparti) le reste n'est qu'un arrondi."""
+    """« 💰 Budget du jour : 5 000 FCFA · 3 800 répartis, 1 200 gardés (journée pauvre) » (HTML). `poor` (allocate, detail) : Kelly conseille
+    moins que le budget parce que ses paris sont peu sûrs ; sinon (journée riche, tout a été réparti) le reste n'est qu'un arrondi."""
     head = f"💰 Budget du jour : {fmt.b(fmt.esc(money(daily())))}"
     if not spent:
-        return head + " · rien de misé aujourd'hui"
+        return head + " · aucune mise conseillée aujourd'hui"
     if poor is None:
         poor = True
-    return head + (f" · {fmt.esc(money(spent))} misés, {fmt.esc(money(kept))} gardés " + fmt.i("(journée pauvre)")
-                   if poor and kept >= round_step(daily()) else " · tout est misé")
+    return head + (f" · {fmt.esc(money(spent))} répartis, {fmt.esc(money(kept))} gardés " + fmt.i("(journée pauvre)")
+                   if poor and kept >= round_step(daily()) else " · tout est réparti")
 
 
 # ---------- lecture des montants ----------
@@ -198,15 +232,18 @@ def parse_amount(args):
 # ---------- commande « budget » ----------
 
 QUICK = (2000, 5000, 10000, 20000)
+EXPLAIN = ("C'est le montant que tu es prêt à miser AUJOURD'HUI : Kelly s'en sert pour calculer ses mises conseillées. Tu peux le changer "
+           "n'importe quel jour, il reste tel quel jusqu'à ce que tu le changes. Seuls les paris que tu notes (« ✅ Je l'ai joué ») "
+           "comptent dans tes résultats.")
 
 
 def command(args):
     """« budget » : le budget actuel et des boutons pour le changer ; « budget 7500 » (ou « budget 50 € ») : le fixe ;
-    « budget 0 » : revient aux mises en unités sur la bankroll."""
+    « budget 0 » : le supprime (plus de mise conseillée)."""
     from . import telegram
     if not args:
-        txt = (f"💰 Ton budget du jour : {money(daily())}.\nKelly le répartit chaque matin entre ses paris, selon sa confiance."
-               if active() else "💰 Pas encore de budget du jour : Kelly donne ses mises en unités.")
+        txt = (f"💰 Ton budget du jour : {money(daily())}.\n{EXPLAIN}"
+               if active() else f"💰 Pas encore de budget du jour : Kelly ne donne pas de mise conseillée.\n{EXPLAIN}")
         return telegram.with_buttons(txt + "\nChoisis un montant, ou écris par exemple : budget 7500",
                                      telegram.inline([[(f"{q:,}".replace(",", " "), f"budget|{q}") for q in QUICK]]))
     amount, currency = parse_amount(args)
@@ -214,16 +251,17 @@ def command(args):
         return "Montant invalide. Exemple : budget 5000"
     if amount <= 0:
         store.save(FILE, {})
-        return "Budget du jour supprimé : Kelly redonne ses mises en unités sur ta bankroll."
+        return "Budget du jour supprimé : Kelly ne donne plus de mise conseillée (tes paris notés restent comptés dans tes résultats)."
     set_daily(amount, currency)
-    return (f"✅ Budget du jour : {money(amount)}. Les mises de demain matin seront calculées dessus "
-            "(tu peux le changer quand tu veux).")
+    return (f"✅ Budget du jour : {money(amount)}. Kelly en tire ses mises conseillées (demain matin, et tout de suite pour les paris "
+            "sans mise). Tu peux le changer quand tu veux ; seuls les paris que tu notes comptent dans tes résultats.")
 
 
 # ---------- « ❌ Pas joué » ----------
 
 def skip(what, day, undo=False):
-    """Retire (ou remet, `undo`) un pari du jour du bilan en argent. -> réponse."""
+    """Ancien bouton « ❌ Pas joué » (messages d'avant le mode « je note ce que je joue ») : retire (ou remet, `undo`) un pari du jour du bilan
+    en argent. Plus aucun message neuf n'en propose ; le bouton d'un ancien message marche toujours. -> réponse."""
     from . import played
     t = played.find(what, day)
     if t is None or isinstance(t, str):
@@ -248,18 +286,13 @@ def _won_odds(x):
 
 
 def gain(x):
-    """Gain (devise) d'un pari misé sur le budget et réglé (gagné / perdu) ; None s'il ne compte pas (pas sur le budget, pas joué,
-    pas réglé, non vérifiable)."""
-    if not x.get("cur") or x.get("skipped") or x.get("result") not in ("win", "loss"):
+    """Gain (devise) d'un pari NOTÉ (x["played"]) et réglé (gagné / perdu), à la cote et à la mise notées ; None s'il ne compte pas (pas
+    noté, retiré par l'ancien « ❌ Pas joué », pas réglé, non vérifiable). Une mise conseillée seule (« cur » + « stake » sans note) ne
+    compte jamais."""
+    if not x.get("played") or x.get("skipped") or x.get("result") not in ("win", "loss"):
         return None
-    if x.get("played"):
-        from .bankroll import played_gain
-        return played_gain(x)
-    if x["result"] == "loss":
-        return -x["stake"]
-    if "legs" in x:                                   # combiné aux cotes 1xBet : leurs cotes ; à vérifier : la cote mini (1xBet a payé au moins ça)
-        return x["stake"] * (_won_odds(x) - 1)
-    return x["stake"] * (x.get("odds_final", x.get("xodds") or x["odds"]) - 1)      # pari du jour à la cote 1xBet (xodds) quand il en a une
+    from .bankroll import played_gain
+    return played_gain(x)
 
 
 def items(bets, rows, fair_rows):
@@ -267,24 +300,31 @@ def items(bets, rows, fair_rows):
     return list(bets.get("combos", [])) + single_rows(rows, bets.get("combos", [])) + list(fair_rows)
 
 
-def result(bets, rows, fair_rows, days=None, today=None):
-    """(nombre de paris comptés, gain total, total misé) des paris misés sur le budget, sur `days` jours (tout sinon)."""
+def _counted(bets, rows, fair_rows, days=None, today=None):
+    """[(pari, gain)] des paris NOTÉS et réglés, sur `days` jours (tout sinon)."""
     cut = str((date.fromisoformat(str(today)[:10]) if today else date.today()) - timedelta(days=days)) if days else ""
-    n = total = staked = 0
+    out = []
     for x in items(bets, rows, fair_rows):
         g = gain(x)
-        if g is None or (x.get("date") or "") < cut:
-            continue
-        n, total, staked = n + 1, total + g, staked + (x.get("played") or {}).get("stake", x["stake"])
-    return n, total, staked
+        if g is not None and (x.get("date") or "") >= cut:
+            out.append((x, g))
+    return out
+
+
+def result(bets, rows, fair_rows, days=None, today=None):
+    """(nombre de paris comptés, gain total, total misé) des paris notés et réglés, sur `days` jours (tout sinon)."""
+    done = _counted(bets, rows, fair_rows, days, today)
+    return len(done), sum(g for _, g in done), sum(x["played"]["stake"] for x, _ in done)
 
 
 def summary_lines(bets, rows, fair_rows, today=None):
-    """Lignes du bilan en argent (texte brut) : 7 derniers jours et depuis le début. [] si rien de réglé sur le budget."""
+    """Lignes du bilan en argent (texte brut) : 7 derniers jours et depuis le début, avec les paris gagnés. [] si aucun pari noté n'est réglé."""
     out = []
     for days, label in ((7, "7 derniers jours"), (None, "depuis le début")):
-        n, total, staked = result(bets, rows, fair_rows, days, today)
-        if n:
+        done = _counted(bets, rows, fair_rows, days, today)
+        if done:
+            n, total, staked = len(done), sum(g for _, g in done), sum(x["played"]["stake"] for x, _ in done)
+            won = sum(1 for x, _ in done if x["result"] == "win")
             roi = f", {round(total / staked * 100):+d} % de ce qui a été misé" if staked else ""
-            out.append(f"{label} : {signed(total)} sur {n} pari{'s' if n > 1 else ''}{roi}")
+            out.append(f"{label} : {signed(total)} sur {n} pari{'s' if n > 1 else ''} ({won} gagné{'s' if won > 1 else ''}){roi}")
     return out

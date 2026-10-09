@@ -1,5 +1,5 @@
 """Non-régression de l'interface budget / texte libre : montants avec séparateurs de milliers, budget absurde, FCFA qui fuient dans
-la bankroll en unités, mises à 0, « Pas joué » sur un pari réglé, routage du texte libre, réponse « Autre cote », affichages.
+la bankroll en unités, mises à 0, anciens « Pas joué » sur un pari réglé, routage du texte libre, réponse « Autre cote », affichages.
 Hors ligne. Lancer : python -m tests.test_fix_ui"""
 import json
 import math
@@ -66,13 +66,18 @@ def test_amount_parsing():
     # /joue : mise avec milliers, cote avec virgule ou point
     wipe()
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, cur=None, stake=10)]})
-    for txt, stake in (("5,40 2 000", 2000), ("5.40 2.000", 2000), ("5,40 2,5", 2.5), ("5,40 1.234,5", 1234.5), ("5,40", 10)):
+    for txt, stake in (("5,40 2 000", 2000), ("5.40 2.000", 2000), ("5,40 2,5", 2.5), ("5,40 1.234,5", 1234.5), ("5,40", 1234.5)):   # cote seule : même mise
         assert "Noté" in played.command(["sur"] + txt.split(), DAY), txt
         p = store.load("bets.json", {})["combos"][0]["played"]
         assert p["odds"] == 5.4 and p["stake"] == stake, (txt, p)
     for bad in ("5,40 2 00", "5,40 -3", "5,40 inf", "inf", "nan", "-5", "5,40 0", "1e3"):
         r = played.command(["sur"] + bad.split(), DAY)
         assert "Noté" not in r, (bad, r)
+    # sans mise conseillée (pas de budget du jour) ni mise donnée : Kelly demande la mise, jamais une mise en unités inventée
+    store.save("bets.json", {"picks": [], "combos": [combo(SUR, cur=None, stake=10)]})
+    r = played.command(["sur", "5,40"], DAY)
+    assert r == "Avec quelle mise en FCFA ? Réponds ta mise, par exemple 1 000 (cote 5,40 retenue)." and "played" not in store.load("bets.json", {})["combos"][0], r
+    assert "Noté" in played.command(["sur", "5,40", "2000"], DAY)
     # dans /joue la place est fixée (cote puis mise) : « 2 000 » = cote 2, mise 0 (refusée) ; « 2 500 » = cote 2, mise 500
     assert "supérieure à 0" in played.command(["sur", "2", "000"], DAY) and store.load("bets.json", {})["combos"][0]["played"]["odds"] == 5.4
     assert "Noté" in played.command(["sur", "2", "500"], DAY) and store.load("bets.json", {})["combos"][0]["played"]["stake"] == 500
@@ -96,7 +101,7 @@ def test_allocate_robust():
     stakes, spent, kept = money.allocate(bad)
     assert len(stakes) == len(bad) and all(math.isfinite(s) for s in stakes) and stakes[3] == 0 and stakes[-1] > 0
     assert money.allocate(bad, float("inf"))[0] == [0] * len(bad) and money.allocate(bad, 1e300)[0] == [0] * len(bad)
-    # build_day ne plante pas avec un budget absurde stocké à la main : il retombe en mode unités
+    # build_day ne plante pas avec un budget absurde stocké à la main : il retombe en mode « sans budget » (aucune mise conseillée)
     store.save(money.FILE, {"daily": float("inf"), "cur": "FCFA"})
     store.save("bets.json", {"picks": [], "combos": []})
     msgs, _, combos_ = app.build_day([leg(i, 1.9, 0.6, 0.08) for i in range(8)], date(2026, 10, 9))
@@ -138,23 +143,30 @@ def test_played_never_switches_real_mode_for_budget_or_zero():
     money.set_daily(5000)
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 1000), combo(COSTAUD, 13.0, 0, cur=None)]})
     assert "Noté" in played.command(["sur", "5,40"], DAY) and not bankroll.load().get("real")
-    # mise à 0 (trop petite pour le budget) : refusée, la bankroll reste en mode simple
+    # mise de 0 (trop petite pour le budget) : pas de mise conseillée, Kelly demande la mise (jamais une mise en unités inventée)
     r = played.command(["costaud", "13"], DAY)
-    assert "pas de mise" in r and "Noté" not in r and not bankroll.load().get("real"), r
-    r = played.command(["costaud", "13", "100"], DAY)
-    assert "pas de mise" in r and not bankroll.load().get("real"), r
+    assert r.startswith("Avec quelle mise en FCFA ?") and "Noté" not in r and not bankroll.load().get("real"), r
     assert "played" not in store.load("bets.json", {})["combos"][1]
     assert "supérieure à 0" in played.command(["sur", "5,40", "0"], DAY)
-    # le bouton « Autre cote » d'un pari à 0 n'ouvre pas de question
+    # le bouton « ✅ Je l'ai joué » d'un pari sans mise conseillée pose la question cote + mise, et la garde ouverte tant que la mise manque
     chat.clear_pending()
-    assert "pas de mise" in chat.on_callback(f"joue|costaud|{DAY}") and chat.get_pending() is None
-    assert chat.on_callback(f"joue|sur|{DAY}").startswith("À quelle cote")
+    ask = chat.on_callback(f"joue|costaud|{DAY}")
+    assert ask.startswith("À quelle cote et avec quelle mise en FCFA ?") and chat.get_pending()["what"] == "costaud", ask
+    assert chat.route("13")[1].startswith("Avec quelle mise en FCFA ?") and chat.get_pending()["what"] == "costaud"
+    _, reply = chat.route("13 1 000")
+    assert reply.startswith("✅ Noté") and "mise 1 000 FCFA" in reply and chat.get_pending() is None, reply
+    c1 = store.load("bets.json", {})["combos"][1]
+    assert c1["played"]["stake"] == 1000 and c1["cur"] == "FCFA" and not bankroll.load().get("real"), c1
+    assert chat.on_callback(f"joue|sur|{DAY}").startswith("À quelle cote as-tu finalement joué")        # déjà noté : on corrige la cote
     # pari du jour sans mise : stake 0 enregistré, jamais de mise en unités inventée
     chat.clear_pending()
     track.save([{"key": "s", "id": "s", "date": DAY, "sent": True, "single": True, "odds": 1.9, "prob": 0.6, "stake": 0, "cur": None,
                  "result": None, "pick": "X gagne", "market": "h2h"}])
-    assert "pas de mise" in played.command(["pari", "1,9"], DAY) and not bankroll.load().get("real")
-    print("ok  pas de mode réel pour un pari du budget ou à mise 0")
+    assert played.command(["pari", "1,9"], DAY).startswith("Avec quelle mise en FCFA ?") and not bankroll.load().get("real")
+    # /joue tapé sans mise ouvre l'attente : la réponse « cote mise » suivante le note
+    assert app.handle_command("/joue pari 1,9").startswith("Avec quelle mise en FCFA ?") and chat.get_pending()["what"] == "pari"
+    assert chat.route("1,9 500")[1].startswith("✅ Noté") and track.load()[0]["played"]["stake"] == 500
+    print("ok  pas de mode réel pour un pari du budget ou à mise 0 ; la mise manquante est demandée")
 
 
 def test_zero_stake_has_no_buttons():
@@ -176,44 +188,49 @@ def test_zero_stake_has_no_buttons():
     assert [c["tier"] for c in zero] == [COSTAUD] and "cur" not in zero[0], combos_
     assert picks[0]["stake"] == 0 and "cur" not in picks[0]                     # le pari du jour à 0 : noté 0, sans devise
     cost = next(m for m in msgs if "COSTAUD" in m)
-    assert "pas de mise" in cost and getattr(cost, "markup", None) is None, cost
+    assert "pas de mise" in cost and [b["text"] for b in cost.markup["inline_keyboard"][0]] == ["✅ Je l'ai joué"], cost    # sans mise dans le bouton
     single = next(m for m in msgs if "PARI DU JOUR" in m)
-    assert "pas de mise" in single and getattr(single, "markup", None) is None, single
+    assert "pas de mise" in single and [b["text"] for b in single.markup["inline_keyboard"][0]] == ["✅ Je l'ai joué"], single
     funded = [c for c in combos_ if c["stake"]]
     assert funded and all(c["cur"] == "FCFA" for c in funded)
     with_buttons = [m for m in msgs if getattr(m, "markup", None) and "inline_keyboard" in m.markup]
-    assert len(with_buttons) == len(funded), (len(with_buttons), len(funded))
-    assert "skip|sur|" in json.dumps(with_buttons[0].markup)
-    # le pari du jour et le Costaud enregistrés avec une mise de 0 : « Autre cote » refusé, bankroll intacte
+    assert len(with_buttons) == len(combos_) + 1, (len(with_buttons), len(combos_))         # chaque pari a son « ✅ Je l'ai joué » (on peut jouer sa propre mise)
+    sur_btn = next(m for m in with_buttons if "joue|sur|" in json.dumps(m.markup)).markup["inline_keyboard"][0][0]["text"]
+    assert sur_btn.startswith("✅ Je l'ai joué — ") and sur_btn.endswith(" FCFA") and "skip|" not in json.dumps(with_buttons[0].markup)
+    # le pari du jour et le Costaud enregistrés avec une mise de 0 : « ✅ Je l'ai joué » demande la cote ET la mise, bankroll intacte
     track.save([])
     track.record(picks, {c["key"] for c in picks}, DAY, single_key=picks[0]["key"])
     store.save("bets.json", {"picks": [], "combos": [c | {"date": DAY, "result": None} for c in combos_]})
-    assert "pas de mise" in chat.on_callback(f"joue|pari|{DAY}") and "pas de mise" in chat.on_callback(f"joue|costaud|{DAY}")
-    assert not bankroll.load().get("real") and chat.get_pending() is None
-    todo = app.handle_command("🧾 Mes paris")                                    # la liste n'offre pas de bouton pour le Costaud
-    assert "costaud" not in json.dumps(getattr(todo, "markup", {})).lower()
+    assert chat.on_callback(f"joue|pari|{DAY}").startswith("À quelle cote et avec quelle mise en FCFA ?")
+    assert chat.on_callback(f"joue|costaud|{DAY}").startswith("À quelle cote et avec quelle mise en FCFA ?")
+    assert not bankroll.load().get("real") and chat.get_pending()["what"] == "costaud"
+    todo = app.handle_command("🧾 Mes paris")                                    # la liste offre le bouton du Costaud, sans mise dans le libellé
+    cost_btn = next(b["text"] for row in todo.markup["inline_keyboard"] for b in row if b["callback_data"] == f"joue|costaud|{DAY}")
+    assert cost_btn.startswith("✅ Costaud · Je l'ai joué") and "FCFA" not in cost_btn, cost_btn
     # sans budget : les boutons ✅ restent
     store.save(money.FILE, {})
     msgs, _, _ = app.build_day(legs, date(2026, 10, 9))
     assert any(getattr(m, "markup", None) and "joue|sur|" in json.dumps(m.markup) for m in msgs)
     # chat.played_button directement
     money.set_daily(5000)
-    assert chat.played_button("sur", DAY, funded=False) is None and chat.played_button("sur", DAY)
-    assert isinstance(chat.with_played_button(fmt.Html("x"), "sur", DAY, funded=False), telegram.Html)
-    print("ok  pas de bouton budget sur un pari sans mise")
+    assert chat.played_button("sur", DAY, stake=0)["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
+    assert chat.played_button("sur", DAY, stake=2500)["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué — 2 500 FCFA"
+    assert isinstance(chat.with_played_button(fmt.Html("x"), "sur", DAY, stake=0), telegram.Html)
+    print("ok  pas de mise conseillée : « ✅ Je l'ai joué » sans montant, la mise est demandée")
 
 
 def test_pas_joue_refused_once_settled():
     wipe()
     money.set_daily(5000)
-    store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 1000, result="loss"), combo(COSTAUD, 13.0, 500)]})
+    store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 1000, result="loss", played={"odds": 5.0, "stake": 1000}),
+                                                     combo(COSTAUD, 13.0, 500)]})
     r = chat.on_callback(f"skip|sur|{DAY}", 5)
     assert "déjà réglé" in r and "skipped" not in store.load("bets.json", {})["combos"][0], r
     assert "déjà réglé" in money.skip("sur", DAY) and "déjà réglé" in money.skip("sur", DAY, undo=True)
-    assert money.result(store.load("bets.json", {}), [], [])[1] == -1000        # la perte reste au bilan
+    assert money.result(store.load("bets.json", {}), [], [])[1] == -1000        # la perte du pari noté reste au bilan
     assert "retiré" in money.skip("costaud", DAY) and store.load("bets.json", {})["combos"][1]["skipped"]
     assert "compté comme joué" in money.skip("costaud", DAY, undo=True)
-    print("ok  « Pas joué » refusé sur un pari réglé")
+    print("ok  ancien « Pas joué » refusé sur un pari réglé")
 
 
 def test_free_text_routing():
@@ -250,10 +267,10 @@ def test_autre_cote_answer():
         store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 1000)]})
         # sans attente, en mode budget : le bouton cité existe
         hint = chat.route("5,40")[1]
-        assert "✏️ Autre cote" in hint and "Je l'ai joué" not in hint, hint
+        assert "✅ Je l'ai joué" in hint and "✏️ Autre cote" in hint, hint
         assert chat.route("2 000")[1] == hint
         money.command(["0"])
-        assert "Je l'ai joué" in chat.route("5,40")[1]                    # sans budget : l'ancien bouton
+        assert "Je l'ai joué" in chat.route("5,40")[1]                    # sans budget : le même bouton
         money.set_daily(5000)
         # question puis réponse « 5,40 2 000 »
         assert chat.on_callback(f"joue|sur|{DAY}", 11).startswith("À quelle cote")
@@ -261,10 +278,12 @@ def test_autre_cote_answer():
         assert reply.startswith("✅ Noté") and "2 000 FCFA" in reply, reply
         p = store.load("bets.json", {})["combos"][0]["played"]
         assert p["odds"] == 5.4 and p["stake"] == 2000 and chat.get_pending() is None
-        # le bouton devient « ✅ Joué à 5,40 » inerte + « ❌ Pas joué » utile
-        row = edits[-1][1]["inline_keyboard"][0]
-        assert edits[-1][0] == 11 and [b["text"] for b in row] == ["✅ Joué à 5,40", "❌ Pas joué"], row
-        assert [b["callback_data"] for b in row] == ["noop", f"skip|sur|{DAY}"]
+        # le bouton devient « ✅ Joué à 5,40 · 2 000 FCFA » inerte + « ✏️ Autre cote » et « ↩️ Annuler » utiles
+        rows = edits[-1][1]["inline_keyboard"]
+        assert edits[-1][0] == 11 and rows[0][0]["text"] == "✅ Joué à 5,40 · 2 000 FCFA" and rows[0][0]["callback_data"] == "noop", rows
+        assert [b["text"] for b in rows[1]] == ["✏️ Autre cote", "↩️ Annuler"], rows
+        assert [b["callback_data"] for b in rows[1]] == [f"joue|sur|{DAY}", f"annule|sur|{DAY}"]
+        assert not any("skip" in b["callback_data"] for row in rows for b in row)
         # « 5,40 2.000 », « 5,40 2000 FCFA »
         for txt in ("5,40 2.000", "5.40 2 000 FCFA", "5,40 2000"):
             chat.on_callback(f"joue|sur|{DAY}", 12)
@@ -279,15 +298,17 @@ def test_autre_cote_answer():
             assert chat.get_pending() and chat.get_pending()["msg"] == 13, txt
             assert store.load("bets.json", {})["combos"][0]["played"] == before, txt
         assert chat.route("2,00 500")[1].startswith("✅ Noté") and chat.get_pending() is None
-        # hors budget : le bouton reste unique
+        # hors budget : la mise est celle donnée (FCFA), les mêmes boutons
         money.command(["0"])
         store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 10, cur=None)]})
         chat.on_callback(f"joue|sur|{DAY}", 14)
         chat.route("5,40 2")
-        assert [b["text"] for b in edits[-1][1]["inline_keyboard"][0]] == ["✅ Joué à 5,40"], edits[-1]
+        assert [b["text"] for b in edits[-1][1]["inline_keyboard"][0]] == ["✅ Joué à 5,40 · 2 FCFA"], edits[-1]
+        c0 = store.load("bets.json", {})["combos"][0]
+        assert c0["played"]["stake"] == 2 and c0["cur"] == "FCFA" and c0["stake"] is None, c0           # l'ancienne mise en unités n'est plus une mise conseillée
     finally:
         telegram.edit_buttons = old_edit
-    print("ok  réponse « Autre cote » : milliers, ambiguïté, boutons")
+    print("ok  réponse « Autre cote » : milliers, ambiguïté, boutons « Joué à… » / « Autre cote » / « Annuler »")
 
 
 def test_display():
@@ -299,7 +320,7 @@ def test_display():
            [{"kind": "fair", "tier": 5.5, "prob": 0.25, "odds": 5.5}, {"kind": "fair", "tier": 13, "prob": 0.1, "odds": 13}]
     stakes, spent, kept, poor = money.allocate(rich, detail=True)
     assert not poor and kept > 0
-    assert "journée pauvre" not in money.budget_line(spent, kept, poor) and "tout est misé" in money.budget_line(spent, kept, poor)
+    assert "journée pauvre" not in money.budget_line(spent, kept, poor) and "tout est réparti" in money.budget_line(spent, kept, poor)
     stakes, spent, kept, poor = money.allocate([{"kind": "combo", "tier": SUR, "prob": 0.2, "odds": 5.2}], detail=True)
     assert poor and "journée pauvre" in money.budget_line(spent, kept, poor)
     assert len(money.allocate(rich)) == 3
@@ -308,19 +329,21 @@ def test_display():
     assert "journée pauvre" in msgs[0], msgs[0]                           # 2 combinés seulement : les parts ne remplissent pas le budget
     # devise échappée dans le HTML
     store.save(money.FILE, {"daily": 5000, "cur": "<i>x</i>"})                # fichier modifié à la main : devise illisible -> FCFA
-    assert money.budget_line(1000, 0, False) == "💰 Budget du jour : <b>5 000 FCFA</b> · tout est misé"
-    assert settle._sum_txt([combo(SUR, result="win", odds_final=5.0, cur="A<B")]).count("<") == 0
+    assert money.budget_line(1000, 0, False) == "💰 Budget du jour : <b>5 000 FCFA</b> · tout est réparti"
+    assert settle._sum_txt([combo(SUR, result="win", odds_final=5.0, cur="A<B", played={"odds": 5.0, "stake": 100})]).count("<") == 0
     assert app._signed(1000, {"cur": "A<B"}) == "+1 000 FCFA"
     assert money.signed(5, "€") == "+5 €" and money.money(5, "&") == "5 FCFA"
     money.set_daily(5000)
-    # _sum_txt : unités et FCFA mélangés
+    # _sum_txt : seuls les paris NOTÉS comptent, tous en FCFA (une ligne sans devise est en FCFA)
     old = combo(SUR, 5.0, 10, cur=None, result="win", odds_final=5.0)
     new_loss = combo(COSTAUD, 13.0, 1000, result="loss")
     new_win = combo(SUR, 5.0, 500, result="win", odds_final=5.0)
-    assert settle._sum_txt([old, new_loss]) == "+40 u et −1 000 FCFA", settle._sum_txt([old, new_loss])
-    assert settle._sum_txt([old]) == "+40 u" and settle._sum_txt([new_loss, new_win]) == "+1 000 FCFA"
-    assert settle._sum_txt([new_win | {"played": {"odds": 6.0, "stake": 500}}]) == "+2 500 FCFA"          # cote corrigée
-    assert settle._sum_txt([new_loss | {"skipped": True}]) == "+0 FCFA"                                   # pas joué
+    assert settle._sum_txt([old, new_loss, new_win]) == "", "une mise conseillée seule ne compte pas"
+    n = lambda c, o, st: c | {"played": {"odds": o, "stake": st}}                                         # noqa: E731
+    assert settle._sum_txt([n(old, 5.0, 10), n(new_loss, 13.0, 1000)]) == "−960 FCFA", settle._sum_txt([n(old, 5.0, 10), n(new_loss, 13.0, 1000)])
+    assert settle._sum_txt([n(old, 5.0, 10)]) == "+40 FCFA" and settle._sum_txt([n(new_loss, 13.0, 1000), n(new_win, 5.0, 500)]) == "+1 000 FCFA"
+    assert settle._sum_txt([n(new_win, 6.0, 500)]) == "+2 500 FCFA"                                       # cote corrigée
+    assert settle._sum_txt([n(new_loss, 13.0, 1000) | {"skipped": True}]) == ""                           # ancien « pas joué » : hors compte
     # bilan détail : FCFA en FCFA, cote corrigée, pas joué
     bets = {"picks": [], "combos": [combo(SUR, 5.0, 1000, result="win", odds_final=5.0, played={"odds": 5.5, "stake": 1000}),
                                     combo(COSTAUD, 13.0, 500, result="loss", skipped=True),
@@ -331,27 +354,29 @@ def test_display():
     sur_line = next(x for x in det.splitlines() if x.startswith(fmt.tier_name(SUR).split(" (")[0]))
     assert "+4 500 FCFA" in sur_line and " u" not in sur_line and "unités" not in sur_line, sur_line
     cost_line = next(x for x in det.splitlines() if x.startswith(fmt.tier_name(COSTAUD).split(" (")[0]))
-    assert "FCFA" in cost_line and "500" not in cost_line.split("|")[1], cost_line
+    assert "FCFA" not in cost_line and "tes paris" not in cost_line, cost_line          # pas noté (ancien « pas joué ») : aucun montant
     # played.summary_lines : en FCFA, « pas joué » exclu
     lines = played.summary_lines(bets, [], [])
     assert lines and "résultat +4 500 FCFA" in lines[0] and " u" not in lines[0].split("résultat")[1], lines
     assert "1 gagné sur 1" in lines[0] or "1 gagné sur 2" in lines[0], lines
     mixed = {"picks": [], "combos": [combo(SUR, 5.0, 10, cur=None, result="win", odds_final=5.0, played={"odds": 5.0, "stake": 10}),
                                      combo(COSTAUD, 13.0, 1000, result="loss", played={"odds": 13.0, "stake": 1000})]}
-    assert "résultat +40 u et −1 000 FCFA" in played.summary_lines(mixed, [], [])[0]
-    # bilan simple : les deux
+    assert "résultat −960 FCFA" in played.summary_lines(mixed, [], [])[0]          # plus d'unités : tout en FCFA
+    # bilan simple : le résultat de TES paris notés, par palier
     simple = settle.bilan(mixed)
-    assert "+40 u et −1 000 FCFA" in simple, simple
-    print("ok  affichages : journée riche, devise échappée, unités et FCFA, cote corrigée")
+    assert "(tes paris : +40 FCFA)" in simple and "(tes paris : −1 000 FCFA)" in simple and " u)" not in simple, simple
+    print("ok  affichages : journée riche, devise échappée, tout en FCFA, cote corrigée")
 
 
 def test_commands_numbers_guard():
     wipe()
     store.save("today.json", {"day": DAY, "picks": [leg(1, 1.9, 0.6, 0.08)], "pronos": []})
     assert app.handle_command("/combi inf") == "Exemple : /combi 30" and app.handle_command("/combi nan") == "Exemple : /combi 30"
-    assert app.handle_command("/bank inf").startswith("Montant invalide") and app.handle_command("/bank -5").startswith("Montant invalide")
-    assert bankroll.load()["bankroll"] == 100.0
-    print("ok  /combi et /bank refusent inf / nan")
+    for arg in ("", " inf", " -5", " 50000"):                  # /bank ne règle plus rien : Kelly travaille en FCFA avec le budget du jour
+        r = app.handle_command("/bank" + arg)
+        assert "ne suit plus de bankroll en unités" in r and "FCFA" in r and "Mon budget" in r and not r.startswith("Montant"), r
+    assert bankroll.load()["bankroll"] == 100.0 and bankroll.load()["initial"] == 100.0
+    print("ok  /combi refuse inf / nan ; /bank est inoffensif (FCFA et budget du jour)")
 
 
 def main():

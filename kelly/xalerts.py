@@ -4,12 +4,12 @@
      un prix qui a de la valeur face à la nouvelle probabilité du marché (proba x cote - 1 >= C.XALERT_LAG_EDGE) -> « joue maintenant »,
      avec une mise et un code coupon du pari seul. 1xBet relu en direct pour les seuls matchs concernés (C.XALERT_LIVE_MAX par passage).
   ⚠️ Mes paris en danger : à chaque relevé 1xBet (15:00, mise à jour manuelle), un combiné réel, un combiné sur mesure suivi (« ✅ Je le joue »,
-     kelly/custom.py) ou le pari du jour dont un pari a quitté 1xBet ou ne paie plus assez pour avoir sa place -> « n'est plus jouable tel
-     quel » et le bouton « 🎟️ Vérifier ce combiné ».
+     kelly/custom.py) ou le pari du jour (noté ou non : tout ce qui est suivi) dont un pari a quitté 1xBet ou ne paie plus assez pour avoir sa place -> « n'est plus
+     jouable tel quel » et le bouton « 🎟️ Vérifier ce combiné ».
   📈 Mieux payé qu'au matin : un pari 💎 (ou un pari réel montré) dont la cote 1xBet a monté de C.XALERT_RISE depuis le matin (xodds0) et a
      toujours de la valeur -> « c'est le moment », avec un code coupon.
-  ✅ Bonne nouvelle : un pari que tu as joué (ou un combiné sur mesure que tu joues) dont le marché a baissé de C.ALERT_ODDS_DROP depuis le
-     matin (tu as pris une meilleure cote).
+  ✅ Bonne nouvelle : un pari que tu as joué (noté : « ✅ Je l'ai joué », « ✅ Je le joue », /joue) dont le marché a baissé de
+     C.ALERT_ODDS_DROP depuis le matin (tu as pris une meilleure cote).
 
 Un seul message par passage (💰 d'abord, puis ⚠️, 📈, ✅), C.XALERT_MAX_ITEMS alertes au plus ; data/alerts_sent.json retient la dernière cote
 alertée de chaque pari (pas deux fois la même alerte sans nouveau mouvement). Les relectures 1xBet sont plafonnées et ne lèvent jamais.
@@ -18,7 +18,7 @@ import math
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import bankroll, chat, combos as CB, config as C, fair, fmt, money, played, store, telegram, track, xprice
+from . import chat, combos as CB, config as C, fair, fmt, money, played, store, telegram, track, xprice
 from .sources import state, xbet
 from .telegram import Html
 
@@ -122,39 +122,37 @@ class Prices:
 # ---------- paris joués ----------
 
 def _took(x):
-    """Pari compté comme joué : noté (/joue), ou, avec un budget du jour, misé et pas retiré par « ❌ Pas joué »."""
-    return not x.get("skipped") and (bool(x.get("played")) or (bool(x.get("cur")) and (x.get("stake") or 0) > 0))
+    """Pari compté comme joué : NOTÉ (« ✅ Je l'ai joué », « ✅ Je le joue », /joue) et pas retiré. Une mise conseillée seule (budget du jour)
+    n'est pas un pari joué."""
+    return not x.get("skipped") and bool(x.get("played"))
 
 
-def _custom_rows(day):
-    """Combinés sur mesure suivis du jour `day` pas encore réglés ni retirés (fair_combos.json, marque « custom », voir kelly/custom.py)."""
+def _custom_rows(day, noted=False):
+    """Combinés sur mesure suivis (« ✅ Je le joue ») du jour `day`, pas encore réglés ni retirés (fair_combos.json, marque « custom », voir
+    kelly/custom.py). `noted` : seulement ceux que tu as notés joués (pour « tu l'as joué ») ; sans, tous les combinés suivis, comme tous
+    les paris du matin : les alertes ⚠️ / 📈 veillent sur tout ce qui est suivi, noté ou non."""
     return [x for x in fair.load_combos() if played.is_custom(x) and x.get("date") == day and x.get("result") is None
-            and not x.get("skipped") and not x.get("dead") and x.get("legs")]
+            and not x.get("skipped") and not x.get("dead") and x.get("legs") and (x.get("played") or not noted)]
 
 
 def took_bets(rows, combos, day):
-    """({clé du pari: cote prise chez 1xBet ou None}, {clés notées explicitement avec /joue}) des paris du jour comptés joués : pari du
-    jour (ligne envoyée de tracked.json), jambes des combinés réels (bets.json) et jambes des combinés sur mesure suivis. Cote prise d'un
-    combiné : celle de la jambe. Un combiné sur mesure est joué dès l'appui sur « ✅ Je le joue » : ses paris sont aussi « notés » (ni
-    « joue maintenant » ni « mieux payé » pour un pari que tu as déjà pris)."""
-    took, noted = {}, set()
+    """({clé du pari: cote prise chez 1xBet ou None}, {clés notées}) des paris du jour que tu as NOTÉS : pari du jour (ligne envoyée de
+    tracked.json), jambes des combinés réels (bets.json) et jambes des combinés sur mesure. Cote prise d'un combiné : celle de la jambe.
+    Seuls les paris notés comptent (ni « joue maintenant » ni « mieux payé » pour un pari que tu as déjà pris) : les deux ensembles ont les
+    mêmes clés."""
+    took = {}
     for r in played.single_rows(rows, combos):
         if r.get("date") == day and r.get("result") is None and _took(r):
-            took[r["key"]] = (r.get("played") or {}).get("odds") or r.get("xodds") or r.get("odds")
-            if r.get("played"):
-                noted.add(r["key"])
+            took[r["key"]] = r["played"].get("odds") or r.get("xodds") or r.get("odds")
     for x in combos:
         if x.get("date") == day and x.get("result") is None and _took(x):
             legs = {l["key"]: l.get("xodds") for l in x.get("xlegs") or []}
             for k in x.get("keys") or []:
                 took.setdefault(k, legs.get(k))
-                if x.get("played"):
-                    noted.add(k)
-    for x in _custom_rows(day):
+    for x in _custom_rows(day, noted=True):
         for l in x["legs"]:
             took.setdefault(l["key"], l.get("xodds"))
-            noted.add(l["key"])
-    return took, noted
+    return took, set(took)
 
 
 # ---------- ✅ bonne nouvelle ----------
@@ -191,18 +189,18 @@ def _ref_event(c, today):
     return c | {"xgid": gid} if gid and any(x.get("xref") or x.get("xgid") for x in same) else None
 
 
-def _stake_txt(p, x):
-    """Mise d'un pari seul de proba `p` à la cote `x` : sur le budget du jour (money.allocate) ou en unités (bankroll.stake) ; None si le
-    budget n'en laisse aucune (pari trop petit pour l'arrondi)."""
+def _stake_line(p, x):
+    """Ligne « mise » d'un pari seul de proba `p` à la cote `x` : mise conseillée sur le budget du jour (money.allocate), ou, sans budget du
+    jour, de quoi le régler (jamais d'unités) ; None si le budget n'en laisse aucune (pari trop petit pour l'arrondi : rien à jouer)."""
     if money.active():
         st = money.allocate([{"kind": "pari", "tier": "pari", "prob": p, "odds": x}])[0][0]
-        return money.money(st) + " (sur ton budget du jour)" if st else None
-    return fmt.units(bankroll.stake(p, x, "⭐", bankroll.load()["bankroll"]))
+        return f"💰 Mise conseillée : {fmt.b(fmt.esc(money.money(st) + ' (sur ton budget du jour)'))}" if st else None
+    return f"💡 Mise conseillée : {fmt.esc(money.NO_BUDGET)}"
 
 
 def lag_items(alerts, today, reader, now, noted=(), skip=()):
     """💰 Pour chaque mouvement fort du marché (find_alerts : [(score, pari de clôture, ancienne lecture)]) sur un pari qui a une référence
-    1xBet et que tu n'as pas noté joué : 1xBet relu en direct (Reader) ; s'il paie encore avec de la valeur face à la NOUVELLE proba du
+    1xBet et que tu n'as pas noté : 1xBet relu en direct (Reader) ; s'il paie encore avec de la valeur face à la NOUVELLE proba du
     marché (proba x cote - 1 >= C.XALERT_LAG_EDGE) : « joue maintenant ». 1xBet déjà ajusté : rien (voir good_items). `skip` : clés déjà
     traitées par ✅."""
     out = []
@@ -216,7 +214,7 @@ def lag_items(alerts, today, reader, now, noted=(), skip=()):
             continue
         p = c.get("prob_book", c["prob"])
         value = p * x - 1
-        stake = _stake_txt(p, x) if value >= C.XALERT_LAG_EDGE else None
+        stake = _stake_line(p, x) if value >= C.XALERT_LAG_EDGE else None
         if not stake:                               # 1xBet a déjà suivi le marché, ou pas de mise sur le budget : rien à jouer
             continue
         chances = f" ({fmt.pct(prev['pb'])} ➜ {fmt.pct(p)} de chances)" if prev.get("pb") else ""
@@ -225,7 +223,7 @@ def lag_items(alerts, today, reader, now, noted=(), skip=()):
                          f"{fmt.i('(lu à ' + _read_time(ref, now) + ')')}\n"
                          f"📊 Le marché a bougé : {fmt.odds_txt(prev['o'])} ➜ {fmt.b(fmt.odds_txt(c['odds']))}{chances}\n"
                          f"💎 1xBet n'a pas suivi : valeur {fmt.b(fmt.signed(round(value * 100), ' %'))} avec la nouvelle probabilité du marché\n"
-                         f"💰 Mise : {fmt.b(fmt.esc(stake))}", rank=value, coupon={"xref": ref, "xodds": x} if ref else None))
+                         f"{stake}", rank=value, coupon={"xref": ref, "xodds": x} if ref else None))
     return out
 
 
@@ -336,7 +334,7 @@ def send(items, day, now):
     shown, more = items[:C.XALERT_MAX_ITEMS], len(items) - C.XALERT_MAX_ITEMS
     if not shown:
         return None
-    blocks, buttons = [f"🔔 {fmt.b('Alertes Kelly')} · {now.strftime('%H:%M')}"], []
+    blocks, buttons, codes = [f"🔔 {fmt.b('Alertes Kelly')} · {now.strftime('%H:%M')}"], [], []
     for kind in TYPES:
         group = [it for it in shown if it["type"] == kind]
         if not group:
@@ -347,13 +345,15 @@ def send(items, day, now):
             if it["coupon"]:
                 code = xbet.save_coupon([it["coupon"]])
                 text += fmt.coupon_block(code, "cherche ce pari dans l'appli 1xBet").replace("\n\n", "\n", 1)
+                codes += [code] if code else []
             blocks.append(text)
             buttons += it["buttons"]
     blocks.append(fmt.i("Vérifie la cote dans l'appli avant de valider : 1xBet a pu bouger depuis sa lecture."
                         + (f" + {more} autre{'s' if more > 1 else ''} alerte{'s' if more > 1 else ''} au prochain passage." if more > 0 else "")))
     msg = Html("\n\n".join(blocks))
-    if buttons:
-        msg = telegram.with_buttons(msg, telegram.inline([[b] for b in buttons]))
+    rows = telegram.inline([[b] for b in buttons])["inline_keyboard"] + (telegram.copy_row(codes[0]) if len(codes) == 1 else [])   # « 📋 Copier » : un seul code
+    if rows:
+        msg = telegram.with_buttons(msg, {"inline_keyboard": rows})
     for it in shown:                                # retenues avant l'envoi : un message mis en attente (réseau) ne sera pas doublé
         sent["items"][f"{it['key']}|{it['type']}"] = it["odds"]
     store.save(FILE, sent)

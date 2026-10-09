@@ -82,7 +82,7 @@ def setup(pronos=None, stake=None, budget=None, n_legs=4):
 
 
 def buttons(msg):
-    return [b["callback_data"] for row in msg.markup["inline_keyboard"] for b in row]
+    return [b["callback_data"] for row in msg.markup["inline_keyboard"] for b in row if "callback_data" in b]
 
 
 def at(h, m=0):
@@ -148,12 +148,15 @@ def test_tracking_follows_the_sent_version():
     msg = f.sent[0]
     assert "💰 Mise : <b>500 FCFA</b>" in msg and "Mise indicative" not in msg and "seulement si 1xBet paie" not in msg, msg
     assert "Cotes 1xBet de 13:00 : vérifie qu'elles n'ont pas baissé avant de valider." in msg and "ce matin" not in msg
-    assert buttons(msg) == [f"skip|v5|{DAY}", f"joue|v5|{DAY}", f"xmaj|5|{DAY}"], buttons(msg)
-    # sans budget : « ✅ Je l'ai joué » + vérifier, mise indicative
+    # plus de « ❌ Pas joué » : « ✅ Je l'ai joué » avec la mise conseillée, puis vérifier
+    assert buttons(msg) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"], buttons(msg)
+    assert msg.markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué — 500 FCFA", msg.markup
+    # sans budget : « ✅ Je l'ai joué » + vérifier, et la ligne « règle ton budget » (jamais une mise en unités)
     setup()
     with Fakes() as f:
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
-    assert buttons(f.sent[0]) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"] and "Mise indicative" in f.sent[0]
+    assert buttons(f.sent[0]) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"] and "Mise indicative" not in f.sent[0]
+    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in f.sent[0] and f.sent[0].markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
     assert "mise" not in fair.load_combos()[0] or fair.load_combos()[0].get("stake") is None
     # injouable : pas de remplaçant (seulement les 4 matchs du combiné), un pari retiré
     setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)
@@ -161,13 +164,24 @@ def test_tracking_follows_the_sent_version():
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
     assert len(f.sent) == 1 and "ne le joue pas" in f.sent[0], f.sent
     row = fair.load_combos()[0]
-    assert row["dead"] and row["skipped"] and row["result"] == "void"
+    assert row["dead"] and "skipped" not in row and row["result"] == "void", "pas noté : rien à retirer du bilan"
+    # noté joué avant d'être déclaré injouable : sa note sort aussi du bilan
+    setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)
+    assert "✅ Noté" in played.command(["v5", "5,40"], DAY)
+    with Fakes():
+        app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
+    row = fair.load_combos()[0]
+    assert row["dead"] and row["skipped"] and row["auto_skipped"] and row["result"] == "void" and played.items({"combos": []}, [], [row]) == []
+    setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)
+    with Fakes():
+        app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
+    row = fair.load_combos()[0]
     far = datetime(2030, 1, 5, tzinfo=timezone.utc)
     rows, done = settle.settle_fair_combos(far, stats_for=lambda *a, **k: None)
     assert not done and rows[0]["result"] == "void", "un combiné mort n'est jamais réglé"
     assert app.fair_combos_report(far) == [] and settle.fair_combo_line(rows) == ""
     assert money.result({"combos": []}, [], rows)[0] == 0 and money.gain(rows[0]) is None
-    assert "pas joué" in played.todo(DAY)
+    assert "plus jouable chez 1xBet (Kelly a conseillé de ne pas le jouer)" in played.todo(DAY)
     # sans budget : drapeau « dead » seul, mêmes exclusions
     setup(pronos=[prono(i) for i in range(4)])
     with Fakes():
@@ -270,21 +284,32 @@ def test_texts():
 
 
 def test_buttons_keep_verify_row():
-    """C7 : « ✏️ Autre cote », « ❌ Pas joué » et « ↩️ Finalement joué » gardent la ligne « 🎟️ Vérifier ce combiné » d'un combiné réel."""
+    """C7 : « ✏️ Autre cote », « ↩️ Annuler » et les anciens « ❌ Pas joué » / « ↩️ Finalement joué » gardent la ligne « 🎟️ Vérifier ce combiné »
+    d'un combiné réel."""
     setup(stake=500, budget=5000)
     edits = []
     old = telegram.edit_buttons
     telegram.edit_buttons = lambda mid, markup, chat_id=None: edits.append((mid, markup)) or True
     verify = f"xmaj|5|{DAY}"
-    flat = lambda markup: [b["callback_data"] for row in markup["inline_keyboard"] for b in row]       # noqa: E731
+    flat = lambda markup: [b["callback_data"] for row in markup["inline_keyboard"] for b in row if "callback_data" in b]       # noqa: E731
     try:
         assert "retiré de ton bilan" in chat.on_callback(f"skip|v5|{DAY}", 42)
         assert flat(edits[-1][1]) == [f"unskip|v5|{DAY}", verify]
         assert "compté comme joué" in chat.on_callback(f"unskip|v5|{DAY}", 42)
-        assert flat(edits[-1][1]) == [f"skip|v5|{DAY}", f"joue|v5|{DAY}", verify]
-        assert "À quelle cote" in chat.on_callback(f"joue|v5|{DAY}", 42)
+        assert flat(edits[-1][1]) == [f"joue|v5|{DAY}", verify] and edits[-1][1]["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué — 500 FCFA"
+        # cote 1xBet connue (combiné aux cotes 1xBet) + mise conseillée : un appui note tout de suite à la cote du combiné, sans rien demander
+        assert chat.on_callback(f"joue|v5|{DAY}", 42).startswith("✅ Noté") and chat.get_pending() is None
+        assert flat(edits[-1][1]) == ["noop", f"joue|v5|{DAY}", f"annule|v5|{DAY}", verify]
+        assert edits[-1][1]["inline_keyboard"][0][0]["text"].startswith("✅ Joué à 5,77")
+        # « ✏️ Autre cote » demande la cote (c'est son rôle)
+        assert "À quelle cote as-tu finalement joué" in chat.on_callback(f"joue|v5|{DAY}", 42)
         assert "Noté" in chat.route("5,40")[1]
-        assert flat(edits[-1][1]) == ["noop", f"skip|v5|{DAY}", verify] and edits[-1][1]["inline_keyboard"][0][0]["text"].startswith("✅ Joué à 5,40")
+        assert flat(edits[-1][1]) == ["noop", f"joue|v5|{DAY}", f"annule|v5|{DAY}", verify]
+        assert edits[-1][1]["inline_keyboard"][0][0]["text"].startswith("✅ Joué à 5,40")
+        # « ↩️ Annuler » retire la note et remet « ✅ Je l'ai joué », la ligne « Vérifier » reste
+        assert "Note annulée" in chat.on_callback(f"annule|v5|{DAY}", 42)
+        assert flat(edits[-1][1]) == [f"joue|v5|{DAY}", verify] and "played" not in fair.load_combos()[0]
+        assert chat.on_callback(f"annule|v5|{DAY}", 42).endswith("n'était pas noté.")
         # combiné pas réel (cote mini) : pas de ligne « Vérifier »
         rows = fair.load_combos()
         rows[0]["legs"][0]["xodds"] = None
@@ -327,6 +352,8 @@ def test_fair_record_flags_and_lines():
     store.save(calib.FILE, {})
     calib._memo.clear()
     store.save("today.json", {"day": DAY, "picks": [], "pronos": [ann], "announced": ["m0|totals||3.5|Under"]})    # ancien format : clé
+    store.save(fair.COMBOS_FILE, [])                # aucun combiné du matin (un combiné « à vérifier » resté d'un test passerait aux cotes 1xBet)
+    store.save(app.COMBO_UPDATES, {})
     sent = []
     old = telegram.send
     telegram.send = lambda text, *a, **k: sent.append(text)

@@ -177,8 +177,9 @@ def test_single_flag():
     assert flagged == ["k0"], flagged
     assert next(r for r in rows if r["key"] == "k0")["prob_book"] == 0.70                  # proba brute gardée pour la calibration
     settle.record_combos(sent_combos, day)
-    out = app.handle_command("/joue pari 1,5")
-    assert "Noté" in out and "pari du jour du" in out and "Pari 0" in out, out
+    assert app.handle_command("/joue pari 1,5").startswith("Avec quelle mise en FCFA ?")        # sans budget du jour : la mise est demandée
+    out = app.handle_command("/joue pari 1,5 100")
+    assert "Noté" in out and "pari du jour du" in out and "Pari 0" in out and "mise 100 FCFA" in out, out
     rows = track.load()
     assert next(r for r in rows if r["key"] == "k0").get("played") and not next(r for r in rows if r["key"] == "old").get("played")
     assert {r["key"] for r in played.single_rows(rows, store.load("bets.json", {})["combos"])} == {"old", "k0"}

@@ -132,7 +132,7 @@ def ranks(combos):
     out = {}
     for c in combos:
         if c.get("result") is None:
-            rk = (tiers.get(c["tier"], len(tiers)), -c.get("stake", 0))
+            rk = (tiers.get(c["tier"], len(tiers)), -(c.get("stake") or 0))
             for k in c["keys"]:
                 out[k] = min(out.get(k, rk), rk)
     return out

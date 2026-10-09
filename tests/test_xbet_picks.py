@@ -132,7 +132,7 @@ def test_build_day_coupon():
     finally:
         xbet.save_coupon = old
     text = "\n".join(str(m) for m in msgs)
-    assert "Code coupon 1xBet : <b>CODE1</b>" in text and "Charger le coupon" in text, text
+    assert "Code coupon 1xBet : <code>CODE1</code>" in text and "Charger le coupon" in text, text
     assert asked[0] == [picks[3]["key"]] and len(asked) == 2, asked                    # pari du jour d'abord, puis le combiné
     assert "cote 1,50" in text and "1,60" not in text and "Coolbet" not in text, "cotes 1xBet affichées, jamais la cote typique"
     assert "Cotes 1xBet de 09:30" in text, "heure du relevé rappelée"
@@ -179,7 +179,8 @@ def test_tracking_and_gains():
     assert settle._gain({"stake": 2, "result": "win", "odds": TYP, "xodds": XB}) == 1.0
     assert settle._gain({"stake": 2, "result": "win", "odds": 3.0}) == 4.0
     from kelly import money
-    assert money.gain({"stake": 2, "cur": "FCFA", "result": "win", "odds": TYP, "xodds": XB}) == 1.0
+    assert money.gain({"stake": 2, "cur": "FCFA", "result": "win", "odds": TYP, "xodds": XB}) is None, "mise conseillée seule : pas joué, pas compté"
+    assert money.gain({"stake": 2, "cur": "FCFA", "result": "win", "odds": TYP, "xodds": XB, "played": {"odds": XB, "stake": 2}}) == 1.0    # noté à la cote 1xBet
     assert settle._rate([{"result": "win", "odds": TYP, "xodds": XB}])[2] == 50.0
     print("ok  suivi à la cote du marché, gains à la cote 1xBet")
 
@@ -193,7 +194,7 @@ def test_custom_combo():
         msg = str(app.custom_combo(picks, [], 5.0, DAY))
     finally:
         xbet.save_coupon = old
-    assert "Code coupon 1xBet : <b>CUSTOM9</b>" in msg and "Home5" not in msg and "Home6" not in msg, msg
+    assert "Code coupon 1xBet : <code>CUSTOM9</code>" in msg and "Home5" not in msg and "Home6" not in msg, msg
     print("ok  /combi sur mesure : seulement les paris aux cotes 1xBet, avec code")
 
 

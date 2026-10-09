@@ -1,15 +1,20 @@
 """Kelly sans commandes : menu de boutons fixe, bouton « ✅ Je l'ai joué » sous les paris, texte libre (« bilan », « combi 20 »,
 « Flamengo »...). Les commandes « / » restent valables : route() traduit le reste en commande « / », ou répond directement.
 
-Pari en attente de cote : data/pending.json = {what, day, msg, at} après un appui sur ✅, valable PENDING_MINUTES ; la réponse
-« 5,40 » (ou « 5,40 2000 » avec la mise) le note avec played.command, puis le bouton devient « ✅ Joué à 5,40 ».
+Seul un pari que tu NOTES compte (kelly/played.py) : sous un pari pas noté, « ✅ Je l'ai joué » (avec la mise conseillée du budget du jour
+quand il y en a une) ; sous un pari noté, « ✏️ Autre cote » et « ↩️ Annuler » (callback « annule »). Les anciens boutons « ❌ Pas joué » /
+« ↩️ Finalement joué » (callbacks « skip » / « unskip ») répondent encore, mais aucun message neuf ne les crée.
 
-Sous un combiné « combi 20 », « ✅ Je le joue » (callback « cjoue|m<n>|<jour> ») le fait suivre comme un combiné du matin : voir kelly/custom.py.
+Pari en attente de cote : data/pending.json = {what, day, msg, at} après un appui sur ✅, valable PENDING_MINUTES ; la réponse
+« 5,40 » (ou « 5,40 2000 » avec la mise en FCFA) le note avec played.command, puis les boutons deviennent « ✅ Joué à 5,40 » + « ✏️ Autre
+cote » + « ↩️ Annuler ». Sans mise conseillée, la question reste ouverte jusqu'à ce que la mise soit donnée.
+
+Sous un combiné « combi 20 », « ✅ Je le joue » (callback « cjoue|m<n>|<jour> ») le note comme un combiné du matin : voir kelly/custom.py.
 """
 import re
 from datetime import datetime, timedelta, timezone
 
-from . import fmt, played, store, telegram
+from . import fmt, money, played, store, telegram
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
@@ -37,29 +42,39 @@ def menu():
     return telegram.menu_keyboard(MENU)
 
 
-def played_button(what, day, funded=True):
-    """Boutons d'un pari du jour `day` (what : sur, costaud..., pari, v5...). Avec un budget du jour : le pari compte comme joué,
-    « ❌ Pas joué » le retire et « ✏️ Autre cote » corrige la cote (aucun bouton si `funded` est faux : mise de 0) ; sans budget :
-    « ✅ Je l'ai joué »."""
+def played_button(what, day, stake=0, played_=None):
+    """Boutons d'un pari du jour `day` (what : sur, costaud..., pari, v5...). Pas noté : « ✅ Je l'ai joué », avec la mise conseillée (`stake`,
+    FCFA) dans le libellé quand il y en a une. Noté (`played_` : sa note {odds, stake}) : « ✅ Joué à … » (inerte), « ✏️ Autre cote » et
+    « ↩️ Annuler »."""
     from . import money
     day = str(day)[:10]
-    if money.active():
-        if not funded:                              # mise de 0 (trop petite pour le budget) : rien à jouer, rien à corriger
-            return None
-        return telegram.inline([[("❌ Pas joué", f"skip|{what}|{day}"), ("✏️ Autre cote", f"joue|{what}|{day}")]])
-    return telegram.inline([[("✅ Je l'ai joué", f"joue|{what}|{day}")]])
+    if played_:
+        return telegram.inline([[(f"✅ Joué à {fmt.odds_txt(played_['odds'])} · {money.money(played_['stake'])}", None)],
+                                [("✏️ Autre cote", f"joue|{what}|{day}"), ("↩️ Annuler", f"annule|{what}|{day}")]])
+    return telegram.inline([[("✅ Je l'ai joué" + (f" — {money.money(stake)}" if stake else ""), f"joue|{what}|{day}")]])
 
 
-def with_played_button(text, what, day, funded=True, refresh=None, xrefresh=False):
-    """Le message `text` avec ses boutons de pari ; sans bouton (texte seul) quand il n'y a rien à jouer. `refresh` : palier d'un
-    combiné à cote juste aux cotes 1xBet -> bouton « 🎟️ Vérifier ce combiné » (cotes relues en direct, paris retirés remplacés, nouveau
-    code). `xrefresh` : combiné réel (ou pari du jour) remis aux cotes 1xBet -> même bouton, pour `what` (cotes relues, nouveau code)."""
-    markup = played_button(what, day, funded)
+def state_buttons(what, day):
+    """Boutons d'un pari d'après son état dans le suivi (noté ou pas, mise conseillée du moment) ; None si le pari n'existe plus."""
+    t = played.find(what, str(day)[:10])
+    if t is None or isinstance(t, str):
+        return None
+    p = t.item.get("played")
+    return played_button(what, day, 0 if p else t.stake, p)
+
+
+def with_played_button(text, what, day, stake=0, refresh=None, xrefresh=False, lookup=False, code=None):
+    """Le message `text` avec ses boutons de pari. `stake` : la mise conseillée (FCFA) affichée dans « ✅ Je l'ai joué » ; `lookup` : boutons
+    d'après l'état du pari dans le suivi (state_buttons : un combiné renvoyé peut être noté ou pas). `refresh` : palier d'un combiné à cote
+    juste aux cotes 1xBet -> bouton « 🎟️ Vérifier ce combiné » (cotes relues en direct, paris retirés remplacés, nouveau code). `xrefresh` :
+    combiné réel (ou pari du jour) remis aux cotes 1xBet -> même bouton, pour `what` (cotes relues, nouveau code). `code` : le code coupon
+    du message (un seul) -> ligne « 📋 Copier le code XXXX » en dernier."""
+    markup = state_buttons(what, day) if lookup else played_button(what, day, stake)
     extra = ([("🎟️ Vérifier ce combiné", f"xmaj|{refresh}|{str(day)[:10]}")] if refresh is not None
              else [("🎟️ Vérifier ce combiné", f"xmajr|{what}|{str(day)[:10]}")] if xrefresh else None)
-    if extra:
-        markup = {"inline_keyboard": (markup or {"inline_keyboard": []})["inline_keyboard"] + telegram.inline([extra])["inline_keyboard"]}
-    return telegram.with_buttons(text, markup) if markup else text
+    rows = ((markup or {"inline_keyboard": []})["inline_keyboard"] + (telegram.inline([extra])["inline_keyboard"] if extra else [])
+            + telegram.copy_row(code))
+    return telegram.with_buttons(text, {"inline_keyboard": rows}) if rows else text
 
 
 def refresh_button(what, day, label="🎟️ Vérifier ce combiné"):
@@ -81,9 +96,18 @@ def refresh_row(what, day):
     return telegram.inline([[b]])["inline_keyboard"] if b else []
 
 
+def copy_rows(what, day):
+    """Ligne « 📋 Copier le code XXXX » du code coupon de la version en cours du pari `what` ; [] sans code (ou pari disparu)."""
+    t = played.find(what, str(day)[:10])
+    if t is None or isinstance(t, str):
+        return []
+    return telegram.copy_row(played.price_info(what, t.item).get("coupon"))
+
+
 def keep_refresh(markup, what, day):
-    """`markup` (boutons du pari) avec, en plus, la ligne « 🎟️ Vérifier ce combiné » s'il y a lieu."""
-    extra = refresh_row(what, day)
+    """`markup` (boutons du pari) avec, en plus, la ligne « 🎟️ Vérifier ce combiné » et la ligne « 📋 Copier le code » s'il y a lieu : quand les
+    boutons d'un message sont remplacés (note, annulation, ancien « ❌ Pas joué »...), ni la vérification ni le code ne se perdent."""
+    extra = refresh_row(what, day) + copy_rows(what, day)
     if not extra:
         return markup
     return {"inline_keyboard": ((markup or {}).get("inline_keyboard") or []) + extra}
@@ -96,8 +120,10 @@ def combi_picker():
 
 # ---------- pari en attente de cote ----------
 
-def set_pending(what, day, msg):
-    store.save(PENDING_FILE, {"what": what, "day": day, "msg": msg, "at": _now().isoformat(timespec="seconds")})
+def set_pending(what, day, msg, odds=None):
+    """Attend la réponse de l'utilisateur pour noter le pari `what` du jour `day`. `odds` : la cote est déjà CONNUE (cote 1xBet lue par Kelly, ou
+    cote tapée avec /joue) : on n'attend que la mise (un montant seul, « 1000 » ou « 1 000 », est alors une mise) ; sans, la cote (et la mise)."""
+    store.save(PENDING_FILE, {"what": what, "day": day, "msg": msg, "at": _now().isoformat(timespec="seconds")} | ({"odds": odds} if odds else {}))
 
 
 def get_pending():
@@ -115,25 +141,54 @@ def clear_pending():
         store.save(PENDING_FILE, {})
 
 
+STAKE_HELP = "Réponds ta mise, par exemple 1 000"
+
+
+def _bad_answer(p, ref, known):
+    """Réponse non comprise : ce qu'il faut répondre (la question reste ouverte)."""
+    ex = fmt.num(ref) if ref else "5,40"
+    if known:
+        return (f"Je n'ai pas compris. {STAKE_HELP} (la cote {fmt.num(known)} est retenue), ou la cote et la mise : {ex} 1 000.")
+    return (f"Je n'ai pas compris la cote. Réponds juste la cote, par exemple {ex} (ou {ex} 2 000 pour donner aussi ta mise en FCFA). "
+            "Une cote entière avec une mise s'écrit avec ses décimales : 2,00 500.")
+
+
 def _answer(p, text):
-    """La réponse envoyée après un appui sur ✅ / ✏️ (« 5,40 », « 5,40 2 000 »...) : notée avec played.command ; le bouton du
-    message devient « ✅ Joué à … » (avec « ❌ Pas joué » en budget). Cote douteuse ou ambiguë (« 2 000 ») : on redemande, l'attente
-    reste ouverte. Cote maxi : 1000, ou le double de la cote du pari pour un gros combiné (« combi 10000 » : 11 061,90)."""
-    from . import money
-    odds, stake, err = played.parse_odds_stake([text], strict=True)
+    """La réponse envoyée après un appui sur ✅ / ✏️ (« 5,40 », « 5,40 2 000 »...) : notée avec played.command ; les boutons du message
+    deviennent « ✅ Joué à … », « ✏️ Autre cote », « ↩️ Annuler ». Cote douteuse ou ambiguë (« 2 000 ») : on redemande, l'attente reste
+    ouverte. Cote maxi : 1000, ou le double de la cote du pari pour un gros combiné (« combi 10000 » : 11 061,90).
+    Cote déjà CONNUE (p["odds"] : cote 1xBet lue par Kelly, ou cote tapée) : on n'attend que la mise, un montant seul (« 1000 », « 1 000 »,
+    « 2000 ») est la mise (aucune ambiguïté à garder : ce n'est pas une cote), et « cote mise » (« 11000 1000 ») corrige aussi la cote. Un
+    décimal seul (« 5,40 ») est une cote : la mise est alors demandée, avec cette cote. Sans mise conseillée, la mise est demandée et l'attente
+    reste ouverte."""
     t = played.find(p["what"], p["day"])
     ref = t.ref if t is not None and not isinstance(t, str) and t.ref else None
-    top = min(played.MAX_ODDS, max(1000.0, 2 * (ref or 0)))
-    if err or odds is None or not 1 < odds < top:
-        ex = fmt.num(ref) if ref else "5,40"
-        return (f"Je n'ai pas compris la cote. Réponds juste la cote, par exemple {ex} (ou {ex} 2 000 pour donner aussi ta mise). "
-                "Une cote entière avec une mise s'écrit avec ses décimales : 2,00 500.")
+    known = p.get("odds")
+    top = min(played.MAX_ODDS, max(1000.0, 2 * (ref or known or 0)))
+    args = [text]
+    if known:                                       # cote connue : un montant seul est la mise
+        tokens = money.split_tokens([text])
+        if len(tokens) > 1 and money.CUR_RE.fullmatch(tokens[-1]):
+            tokens = tokens[:-1]
+        amount, n = money.take_amount(tokens)
+        if amount is not None and n == len(tokens):
+            if amount > 0 and float(amount).is_integer():
+                args = [f"{known:.2f}", str(int(amount))]
+            elif not 1 < amount < top:
+                return _bad_answer(p, ref, known)
+            else:                                   # « 5,40 » : une autre cote, la mise reste à donner
+                args = [text]
+    if args == [text]:
+        odds, stake, err = played.parse_odds_stake([text], strict=not known)
+        if err or odds is None or not 1 < odds < top:
+            return _bad_answer(p, ref, known)
+    reply = played.command([p["what"]] + args, p["day"])
+    if reply.startswith(played.NEED_STAKE):          # pas de mise : la question reste ouverte, la cote donnée est retenue
+        set_pending(p["what"], p["day"], p.get("msg"), odds=played.parse_odds_stake(args)[0])
+        return reply
     clear_pending()
-    reply = played.command([p["what"], text], p["day"])
     if reply.startswith("✅ Noté") and p.get("msg"):
-        label = (f"✅ Joué à {money.split_tokens([text])[0]}", None)
-        telegram.edit_buttons(p["msg"], keep_refresh(telegram.inline([[label, ("❌ Pas joué", f"skip|{p['what']}|{p['day']}")]]
-                                                                     if money.active() else [[label]]), p["what"], p["day"]))
+        telegram.edit_buttons(p["msg"], keep_refresh(state_buttons(p["what"], p["day"]), p["what"], p["day"]))
     return reply
 
 
@@ -163,10 +218,8 @@ def route(text):
     if num and p:
         return None, _answer(p, t)
     if num:
-        from . import money
-        button = "✏️ Autre cote" if money.active() else "✅ Je l'ai joué"
-        return None, (f"Appuie d'abord sur « {button} » sous le pari, puis envoie la cote. "
-                      "Ou écris tout d'un coup, par exemple : joué sûr 5,40")
+        return None, ("Appuie d'abord sur « ✅ Je l'ai joué » (ou « ✏️ Autre cote ») sous le pari, puis envoie la cote. "
+                      "Ou écris tout d'un coup, par exemple : joué sûr 5,40 1000")
     clear_pending()
     if t.startswith("/"):
         return t, None
@@ -195,6 +248,25 @@ def route(text):
 
 # ---------- appuis sur les boutons ----------
 
+def _ask(t):
+    """La question posée après « ✅ Je l'ai joué » / « ✏️ Autre cote » sur le pari `t` (played.find). Cote 1xBet CONNUE (t.known) et pas encore
+    noté : jamais la cote, seulement la mise (on_callback a noté tout de suite quand une mise est conseillée). Sinon la cote, et la mise quand
+    Kelly n'en conseille aucune (ou à corriger) ; « ✏️ Autre cote » demande toujours la cote, la mise notée reste la même si seule la cote est donnée."""
+    ex = fmt.num(t.ref)
+    prev = t.item.get("played")
+    if prev:
+        return (f"À quelle cote as-tu finalement joué le {t.label} chez 1xBet ?\nRéponds juste la nouvelle cote, par exemple {ex} (ta mise reste "
+                f"{money.money(prev['stake'], t.item.get('cur'))}), ou {ex} 2000 pour changer aussi la mise.")
+    if t.known:
+        return (f"{played.NEED_STAKE} {STAKE_HELP} : le {t.label} est noté à la cote 1xBet {fmt.odds_txt(t.ref)} lue par Kelly. "
+                f"Si 1xBet t'a payé autre chose, réponds la cote et la mise : {ex} 1 000.")
+    if t.stake > 0:
+        return (f"À quelle cote as-tu joué le {t.label} chez 1xBet ?\nRéponds juste la cote, par exemple {ex} : ta mise sera de "
+                f"{money.money(t.stake)} (ou {ex} 2000 pour une autre mise).")
+    return (f"À quelle cote et avec quelle mise en FCFA ? (le {t.label} chez 1xBet)\n"
+            f"Réponds la cote et la mise, par exemple {ex} 1 000.")
+
+
 def on_callback(data, message_id=None):
     """Réponse à un appui sur un bouton sous un message (voir les callback_data de ce module)."""
     from . import app
@@ -205,12 +277,21 @@ def on_callback(data, message_id=None):
             return t or "Ce pari n'existe plus."
         if t.item.get("result") is not None:
             return f"Le {t.label} est déjà réglé : trop tard pour le noter."
-        from . import money
-        if played.unfunded(t) and money.active():
-            return f"Le {t.label} n'a pas de mise sur ton budget du jour (trop petite) : rien à corriger."
+        if t.known and not t.item.get("played"):     # cote 1xBet connue : jamais demandée
+            if t.stake > 0:                          # et mise conseillée : noté tout de suite (« ✏️ Autre cote » / « ↩️ Annuler » corrigent)
+                reply = played.note(t, t.ref, t.stake)
+                if message_id:
+                    telegram.edit_buttons(message_id, keep_refresh(state_buttons(parts[1], parts[2]), parts[1], parts[2]))
+                return reply
+            set_pending(parts[1], parts[2], message_id, odds=t.ref)      # sinon seule la mise est demandée
+            return _ask(t)
         set_pending(parts[1], parts[2], message_id)
-        return (f"À quelle cote as-tu joué le {t.label} chez 1xBet ?\nRéponds juste la cote, par exemple "
-                f"{fmt.num(t.ref)} (ou {fmt.num(t.ref)} 2000 pour donner aussi ta mise).")
+        return _ask(t)
+    if parts[0] == "annule" and len(parts) == 3:          # « ↩️ Annuler » : la note du pari est retirée (comme /joue <quoi> 0)
+        reply = played.command([parts[1], "0"], parts[2])
+        if message_id and reply.startswith("Note annulée"):
+            telegram.edit_buttons(message_id, keep_refresh(state_buttons(parts[1], parts[2]), parts[1], parts[2]) or {"inline_keyboard": []})
+        return reply
     if parts[0] in ("skip", "unskip") and len(parts) in (3, 4):
         from . import money
         reply = money.skip(parts[1], parts[2], undo=parts[0] == "unskip")
@@ -219,7 +300,7 @@ def on_callback(data, message_id=None):
                 markup = getattr(played.todo(parts[2]), "markup", None) or {"inline_keyboard": []}
             else:
                 markup = keep_refresh(telegram.inline([[("↩️ Finalement joué", f"unskip|{parts[1]}|{parts[2]}")]]) if parts[0] == "skip"
-                                      else played_button(parts[1], parts[2]), parts[1], parts[2])
+                                      else state_buttons(parts[1], parts[2]), parts[1], parts[2])
             telegram.edit_buttons(message_id, markup)
         return reply
     if parts[0] == "budget" and len(parts) == 2:

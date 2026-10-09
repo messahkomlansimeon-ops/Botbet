@@ -1,4 +1,5 @@
-"""Budget du jour : répartition selon la confiance, jours pauvres, mises dans les messages, « ❌ Pas joué », bilan en argent.
+"""Budget du jour : répartition selon la confiance, jours pauvres, mises conseillées dans les messages, paris notés (seuls comptés),
+anciens boutons « ❌ Pas joué », bilan en argent.
 Lancer : python -m tests.test_budget"""
 import os
 import tempfile
@@ -42,6 +43,7 @@ def test_command_and_messages():
     store.save(money.FILE, {})
     r = app.handle_command("budget")
     assert "Pas encore de budget" in r and r.markup["inline_keyboard"][0][1]["callback_data"] == "budget|5000"
+    assert "AUJOURD'HUI" in r and "Seuls les paris que tu notes" in r, r        # ce que c'est : le montant prêt à miser aujourd'hui, seuls les paris notés comptent
     assert "invalide" in app.handle_command("budget abc")
     assert "✅ Budget du jour : 5 000 FCFA" in app.handle_command("budget 5000") and money.daily() == 5000
     assert "5 000 FCFA" in chat.on_callback("budget|5000")
@@ -53,7 +55,9 @@ def test_command_and_messages():
     assert "💰 Budget du jour : <b>5 000 FCFA</b>" in head, head
     sur = next(m for m in msgs if "SÛR" in m)
     assert "💰 mise : <b>" in sur and "FCFA" in sur, sur
-    assert [b["callback_data"] for b in sur.markup["inline_keyboard"][0]] == ["skip|sur|2026-10-09", "joue|sur|2026-10-09"]
+    assert [b["callback_data"] for b in sur.markup["inline_keyboard"][0]] == ["joue|sur|2026-10-09"], sur.markup
+    btn = sur.markup["inline_keyboard"][0][0]["text"]
+    assert btn.startswith("✅ Je l'ai joué — ") and btn.endswith(" FCFA") and "❌" not in str(sur.markup), btn      # la mise conseillée dans le bouton
     assert all(c.get("cur") == "FCFA" and c["stake"] > 0 for c in combos) and sent_picks[0]["cur"] == "FCFA"
     assert sum(c["stake"] for c in combos) + sent_picks[0]["stake"] <= 5000
     print("ok  commande budget et messages du matin")
@@ -74,26 +78,44 @@ def test_skip_and_money_bilan():
     store.save("fair_combos.json", [{"date": "2026-10-09", "tier": 5, "min_odds": 5.5, "prob": 0.2, "keys": ["f1", "f2"],
                                      "stake": 400, "cur": "FCFA", "result": "win",
                                      "legs": [{"key": "f1", "min_odds": 2.2, "result": "win"}, {"key": "f2", "min_odds": 2.5, "result": "win"}]}])
-    n, total, staked = money.result(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []))
+    result = lambda: money.result(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []))      # noqa: E731
+    # une mise conseillée (cur + stake) n'est PAS un pari joué : rien ne compte tant que tu n'as pas noté
+    assert result() == (0, 0, 0) and money.summary_lines(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []),
+                                                         today="2026-10-09") == []
+    # les paris notés (à la cote et à la mise de 1xBet) comptent
+    bets = store.load("bets.json", {})
+    bets["combos"][0]["played"] = {"odds": 5.0, "stake": 1000}
+    bets["combos"][1]["played"] = {"odds": 13.0, "stake": 500}
+    store.save("bets.json", bets)
+    rows = track.load()
+    rows[0]["played"] = {"odds": 1.9, "stake": 800}
+    track.save(rows)
+    fc = store.load("fair_combos.json", [])
+    fc[0]["played"] = {"odds": 5.5, "stake": 400}
+    store.save("fair_combos.json", fc)
+    n, total, staked = result()
     assert n == 4 and total == 1000 * 4 - 500 - 800 + 400 * 4.5 and staked == 1000 + 500 + 800 + 400, (n, total, staked)
-    # ❌ Pas joué sur le Costaud perdu : refusé, il est déjà réglé (la perte reste au bilan) ; accepté sur le Méchant en attente, ↩️ le remet
+    # ancien « ❌ Pas joué » (anciens messages) sur le Costaud perdu : refusé, il est déjà réglé (la perte reste au bilan) ; accepté sur le
+    # Méchant en attente, ↩️ le remet
     assert "déjà réglé" in chat.on_callback("skip|costaud|2026-10-09")
-    assert money.result(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []))[1] == total
+    assert result()[1] == total
     assert "retiré de ton bilan" in chat.on_callback("skip|mechant|2026-10-09")
     assert "compté comme joué" in chat.on_callback("unskip|mechant|2026-10-09")
     # ✏️ autre cote : le gain suit la cote de 1xBet
     assert "déjà réglé" in played.command(["sur", "5,5"], "2026-10-09")               # trop tard : le Sûr est réglé
-    assert "Noté" in played.command(["mechant", "60"], "2026-10-09")                 # le Méchant n'est pas encore réglé
+    assert "Noté" in played.command(["mechant", "60"], "2026-10-09")                 # le Méchant n'est pas encore réglé : mise conseillée 200
     b = store.load("bets.json", {})
+    assert b["combos"][2]["played"] == {"odds": 60.0, "stake": 200.0, "at": b["combos"][2]["played"]["at"]}, b["combos"][2]
     b["combos"][2].update(result="win", odds_final=50.0)
     assert money.gain(b["combos"][2]) == 200 * (60 - 1)
-    lines = money.summary_lines(store.load("bets.json", {}), track.load(), store.load("fair_combos.json", []), today="2026-10-09")
+    lines = money.summary_lines(b, track.load(), store.load("fair_combos.json", []), today="2026-10-09")
     assert lines and lines[0].startswith("7 derniers jours : +") and "FCFA" in lines[0], lines
     simple = settle.bilan(store.load("bets.json", {}), rows=track.load())
-    assert "💰 <b>Tes mises</b>" in simple and "Joués chez 1xBet" not in simple and "FCFA" in simple, simple
+    assert "💰 <b>Tes paris notés</b>" in simple and "Joués chez 1xBet" not in simple and "FCFA" in simple, simple
+    assert " u<" not in simple and " u " not in simple and "unités" not in simple, simple              # jamais d'unités
     todo = app.handle_command("🧾 Mes paris")
-    assert "Méchant" in todo and any(b["callback_data"].endswith("|l") for row in todo.markup["inline_keyboard"] for b in row), todo
-    print("ok  pas joué, autre cote et bilan en argent")
+    assert "Méchant" in todo and any(b["callback_data"].startswith("annule|") for row in todo.markup["inline_keyboard"] for b in row), todo
+    print("ok  paris notés seuls comptés, anciens boutons pas joué, autre cote et bilan en argent")
 
 
 def main():

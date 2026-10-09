@@ -58,14 +58,13 @@ def message(now=None):
     combos = [c for c in bets["combos"] if c.get("result") in ("win", "loss") and c["date"] >= cut]
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
-        blocks.append([f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)} · résultat "
-                       f"{fmt.b(settle._sum_txt(combos))}"])
+        blocks.append([f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)}"])
     n, total, staked = money.result(bets, rows, fair_combos, days=7, today=now.date())
     if n:
-        blocks.append([f"💰 <b>Tes mises</b> : {fmt.b(money.signed(total))} sur {n} pari{'s' if n > 1 else ''}"
+        blocks.append([f"💰 <b>Tes paris notés</b> : {fmt.b(fmt.esc(money.signed(total)))} sur {n} pari{'s' if n > 1 else ''}"
                        + (f" ({round(total / staked * 100):+d} % de ce qui a été misé)" if staked else "")])
     pl = played.summary_lines(bets, rows, fair_combos, days=7, today=str(now.date()))
-    pl = [x for x in pl if not (money.active() and x.startswith("Joués chez 1xBet"))]
+    pl = [x for x in pl if not (n and x.startswith("Joués chez 1xBet"))]
     if pl:
         blocks.append([f"💵 {fmt.esc(x)}" for x in pl])
     week = [r for r in rows if r.get("clv") is not None and (r.get("date") or "") >= cut]

@@ -23,7 +23,7 @@ def corrupt(name):
         con.execute("INSERT OR REPLACE INTO docs (name, body, updated) VALUES (?, '{pas du json', 'x')", (name,))
 
 
-from kelly import (app, bankroll, bootstrap, budget, cache, calib, chat, combos as CB, fair, fmt, config as C, learn, odds, played,  # noqa: E402
+from kelly import (app, bankroll, bootstrap, budget, cache, calib, chat, combos as CB, fair, fmt, config as C, learn, money, odds, played,  # noqa: E402
                    settle, sources, stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
 from tests import make_sample, synth  # noqa: E402
@@ -891,14 +891,15 @@ def test_special_combo():
         messages, sent, combos = app.build_day(picks, day)
         assert [t for t, _, _ in C.COMBOS][2] == C.SPECIAL
         msg = next(m for m in messages if m.startswith("<b>🎯 SPÉCIAL"))
-        assert "Pas assez" not in msg and "mise conseillée" in msg, msg
+        assert "Pas assez" not in msg and "Mise conseillée : règle ton budget du jour" in msg and " u</b>" not in msg, msg      # sans budget : jamais d'unités
         sp = next(c for c in combos if c["tier"] == C.SPECIAL)
         legs = [next(c for c in picks if c["key"] == k) for k in sp["keys"]]
         assert 6.0 <= sp["odds"] <= 15.0 and len(legs) >= 2 and len({c["id"] for c in legs}) == len(legs)
         assert all(CB.soft_market(c) and (c["market"].startswith("player_") or c["market"] in
                    ("alternate_totals_corners", "alternate_totals_cards")) for c in legs), [c["market"] for c in legs]
         assert all(CB.leg_reason(c) for c in legs)                                          # chaque jambe a une raison
-        assert sp["stake"] <= 1000 * C.STAKE_CAP["🎯"] + 1e-9
+        assert sp["stake"] is None and "cur" not in sp                                      # sans budget du jour : aucune mise stockée (jamais d'unités)
+        assert bankroll.stake(sp["prob"], sp["odds"], C.SPECIAL, 1000.0) <= 1000 * C.STAKE_CAP["🎯"] + 1e-9     # le calcul Kelly plafonné reste correct
         assert all(c["key"] in {x["key"] for x in sent} for c in legs)                       # suivis comme les autres combinés
         pool = CB.make_special_pool(picks)
         assert pool and [c["key"] for c in CB.pool_for(C.SPECIAL, picks, [])] == [c["key"] for c in pool]
@@ -1838,8 +1839,11 @@ def test_messages_human():
                   why="cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)", best_odds=2.05, book="Betfair")]
     msg = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"})
     assert isinstance(msg, telegram.Html) and msg.startswith(
-        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances\n📈 Espérance +9,4 % · 💰 mise conseillée : <b>2 u</b>\n\n"
-        "<b>1. Flamengo – Vasco &amp; Fils</b>  <i>21h00 · Brasileirão</i>"), msg
+        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances\n📈 Espérance +9,4 %\n"
+        "<i>💡 Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »</i>\n\n"
+        "<b>1. Flamengo – Vasco &amp; Fils</b>  <i>21h00 · Brasileirão</i>"), msg           # sans budget du jour : aucune mise en unités
+    with_budget = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"}, stake_txt="1 500 FCFA")
+    assert "📈 Espérance +9,4 % · 💰 mise : <b>1 500 FCFA</b>\n\n<b>1. Flamengo" in with_budget and "Mise conseillée" not in with_budget, with_budget
     assert "\n👉 Flamengo gagne — <b>1,55</b>\n💡 <i>Très probable : 70 % de chances</i>\n\n<b>2. Santos – Gremio</b>  <i>22h30" in msg, msg
     assert "<b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n💡 <i>Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)</i>" in msg, msg
     # résultats du lendemain
@@ -1848,14 +1852,22 @@ def test_messages_human():
     lost = {"tier": C.COMBOS[4][0], "keys": ["k1", "k2", "k3", "k4"], "odds": 156.7, "stake": 0.2, "result": "loss", "date": "2026-10-07"}
     by = {r["key"]: r for r in rows}
     w, l_ = app.combo_result(won, by), app.combo_result(lost, by)
-    assert w.split("\n")[0] == "<b>✅ SÛR gagné — cote 6,12 (cotes de référence, pas 1xBet)</b> · +10,2 u", w
+    # un combiné que Kelly a seulement conseillé n'est pas noté : aucun montant (ni en unités)
+    assert w.split("\n")[0] == "<b>✅ SÛR gagné — cote 6,12 (cotes de référence, pas 1xBet)</b>", w
     assert w.split("\n")[1:] == ["✅ Flamengo gagne (2-0)", "✅ Santos – Gremio : Plus de 2,5 buts (3-1)"], w
-    assert l_ == "❌ <b>MONSTRE perdu</b> — 3 sur 4, raté : Nautico – Gremio &amp; Co (1-1) · −0,2 u", l_
+    assert l_ == "❌ <b>MONSTRE perdu</b> — 3 sur 4, raté : Nautico – Gremio &amp; Co (1-1)", l_
+    # noté (cote et mise de 1xBet, en FCFA) : le gain apparaît
+    wn = app.combo_result(won | {"played": {"odds": 5.9, "stake": 1000}, "cur": "FCFA"}, by)
+    ln = app.combo_result(lost | {"played": {"odds": 150.0, "stake": 100}, "cur": "FCFA"}, by)
+    assert wn.split("\n")[0] == "<b>✅ SÛR gagné — cote 5,90 chez 1xBet</b> · +4 900 FCFA", wn
+    assert ln == "❌ <b>MONSTRE perdu</b> — 3 sur 4, raté : Nautico – Gremio &amp; Co (1-1) · −100 FCFA", ln
     with Sandbox():
         bankroll.save({"bankroll": 104.3, "initial": 100.0})
         bets = {"picks": [], "combos": [dict(won), dict(lost)]}
         res = app.results_message(bets, rows, [])
-        assert res.startswith("<b>📋 Résultats d'hier</b>\n\n<b>✅ SÛR gagné") and res.rstrip().endswith("<i>Hier : 1 combiné gagné sur 2 · bankroll 104,3 u (+4,3)</i>"), res
+        assert res.startswith("<b>📋 Résultats d'hier</b>\n\n<b>✅ SÛR gagné")
+        assert res.rstrip().endswith("<i>Hier : 1 combiné gagné sur 2</i>") and "bankroll" not in res and " u" not in res, res        # aucune bankroll en unités
+        assert all(c["reported"] for c in bets["combos"]) and app.results_message(bets, rows, []) is None
         assert all(c["reported"] for c in bets["combos"]) and app.results_message(bets, rows, []) is None
     # le message du jour de l'échantillon : pas de jargon, HTML bien formé, virgules
     bankroll.save({"bankroll": 100.0, "initial": 100.0})
@@ -2021,12 +2033,13 @@ def test_fair_combos():
         assert lo <= total <= hi and abs(total - math.prod(c["min_odds"] for c in cl)) < 1e-9, (target, total)
         assert abs(prob - math.prod(c["prob"] for c in cl)) < 1e-9 and len({c["id"] for c in cl}) == len(cl) >= 2   # un match une fois
         assert all(c["prob"] >= C.FAIR_COMBO_MIN_P for c in cl)
-    # messages : titre « à vérifier chez 1xBet », jambes « joue si la cote est au moins X », mise indicative
+    # messages : titre « à vérifier chez 1xBet », jambes « joue si la cote est au moins X », mise conseillée du budget (sinon la ligne « règle ton budget »)
     for target, (cl, total, prob) in built:
         msg = fmt.fair_combo(total, cl, prob, CB.fair_stake(total))
         assert isinstance(msg, telegram.Html) and msg.startswith(f"<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET</b>\n🎯 Cote mini <b>{fmt.odds_txt(total)}</b>"), msg
-        assert msg.count("Joue si 1xBet paie au moins <b>") == len(cl) and "Mise indicative" in msg and "pas calculée sur ta bankroll" in msg
-        assert "mise conseillée" not in msg and "cote juste" not in msg and not re.search(r"\d\.\d", fmt.plain(msg))
+        assert msg.count("Joue si 1xBet paie au moins <b>") == len(cl) and "Mise indicative" not in msg and "ta bankroll" not in msg
+        assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg, msg           # sans budget : aucune mise en unités
+        assert "cote juste" not in msg and not re.search(r"\d\.\d", fmt.plain(msg)) and not re.search(r"\d u\b", fmt.plain(msg))
         assert msg.count("<b>") == msg.count("</b>") and msg.count("<i>") == msg.count("</i>")
     stakes = [CB.fair_stake(t) for _, (_, t, _) in built]
     assert stakes == sorted(stakes, reverse=True) and max(stakes) <= 1.0                          # plus c'est gros, plus la mise indicative est petite
@@ -2119,7 +2132,7 @@ def test_replay_oct8():
         real_ids = {c["id"] for c in sent_picks}
         assert real_ids <= {p["id"] for p in picks}                                      # les combinés réels n'ont que des jambes à vraies cotes
         for fm in fair_msgs:
-            assert "mise conseillée" not in fm and "Mise indicative" in fm
+            assert "Mise indicative" not in fm and "Mise conseillée : règle ton budget du jour" in fm
         # --- enregistrement : fichier à part, jamais dans bets.json ni dans les mises de la bankroll
         n_rec = fair.record_combos(built, day)
         rows = store.load("fair_combos.json", [])
@@ -2134,8 +2147,8 @@ def test_replay_oct8():
         assert isinstance(reply, telegram.Html) and "Kelly n'a vu aucune cote de 1xBet aujourd'hui : voici un combiné" in reply, reply   # cote mini avant les cotes de référence
         assert "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET" in reply and "Cote mini <b>2" in reply and "à vérifier chez 1xBet" in reply
         mini = float(re.search(r"Cote mini <b>(\d+,\d+)", reply).group(1).replace(",", "."))
-        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and "Joue si 1xBet paie au moins" in reply and "ise indicative" in reply
-        assert "SUR MESURE" not in reply and "mise conseillée" not in reply
+        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and "Joue si 1xBet paie au moins" in reply and "Mise conseillée : règle ton budget du jour" in reply
+        assert "SUR MESURE" not in reply and "Mise indicative" not in reply and "mise conseillée :" not in reply
         # --- une cote hors de portée de TOUS les pronostics solides du jour : impossible, on dit précisément ce qui manque
         huge = int(CB.fair_shortfall(keep, 25)["best_total"] * 5)
         reply = app.handle_command(f"/combi {huge}")
@@ -2295,15 +2308,17 @@ class saved_files:
 
 
 def test_played_bets():
-    """/joue : note la cote et la mise obtenues chez 1xBet ; la bankroll passe en mode réel (seuls les paris notés comptent),
-    le bilan donne le résultat réel et l'écart de cote 1xBet face à la cote typique."""
-    files = ("bets.json", "tracked.json", "fair_combos.json", "bankroll.json", "today.json")
+    """/joue : note la cote et la mise (FCFA) obtenues chez 1xBet ; sans mise conseillée la mise est demandée ; seuls les paris notés comptent
+    dans le résultat en argent (la bankroll en unités ne bouge plus), le bilan donne le résultat réel et l'écart de cote 1xBet face à la cote
+    typique."""
+    files = ("bets.json", "tracked.json", "fair_combos.json", "bankroll.json", "today.json", "mybudget.json")
     with saved_files(*files):
         day = "2026-10-08"
         bankroll.save({"bankroll": 1000.0, "initial": 1000.0})
+        store.save(money.FILE, {})
         store.save("today.json", {"day": day, "picks": [], "pronos": []})
-        sur = {"tier": C.COMBOS[0][0], "keys": ["k1", "k2"], "odds": 5.0, "prob": 0.22, "stake": 10.0, "date": day, "result": None}
-        costaud = {"tier": C.COMBOS[1][0], "keys": ["k4"], "odds": 13.0, "prob": 0.08, "stake": 5.0, "date": "2026-10-01",
+        sur = {"tier": C.COMBOS[0][0], "keys": ["k1", "k2"], "odds": 5.0, "prob": 0.22, "stake": None, "date": day, "result": None}
+        costaud = {"tier": C.COMBOS[1][0], "keys": ["k4"], "odds": 13.0, "prob": 0.08, "stake": None, "date": "2026-10-01",
                    "result": "loss"}
         store.save("bets.json", {"picks": [], "combos": [sur, costaud]})
         row = lambda k, sent, odds_, prob: {"key": k, "id": k, "date": day, "sent": sent, "odds": odds_, "prob": prob,  # noqa: E731
@@ -2312,22 +2327,27 @@ def test_played_bets():
         legs = [{"key": "f1", "min_odds": 2.3, "result": None}, {"key": "f2", "min_odds": 2.3, "result": None}]
         store.save("fair_combos.json", [{"date": day, "tier": 5, "min_odds": 5.29, "prob": 0.2, "keys": ["f1", "f2"], "legs": legs,
                                          "result": None}])
-        todo = app.handle_command("/joue")
+        todo = fmt.plain(app.handle_command("/joue"))          # message HTML (codes coupon en <code>) : texte lisible
         assert "/joue sur <cote>" in todo and "/joue pari <cote>" in todo and "/joue v5 <cote>" in todo and "pas noté" in todo, todo
+        assert "À vérifier (cote mini 5)" in todo and "règle ton budget du jour" in todo, todo
+        # sans budget du jour ni mise donnée : la mise est demandée, rien n'est noté (jamais une mise en unités)
         m = app.handle_command("/joue sûr 5,40")
-        assert "Noté" in m and "5,40" in m and "+8 %" in m and "ne suit plus que les paris notés" in m, m
-        assert bankroll.load()["real"] and store.load("bets.json", {})["combos"][0]["played"]["stake"] == 10.0
+        assert m.startswith("Avec quelle mise en FCFA ?") and "played" not in store.load("bets.json", {})["combos"][0], m
+        m = app.handle_command("/joue sûr 5,40 10")
+        assert "Noté" in m and "5,40" in m and "+8 %" in m and "mise 10 FCFA" in m and "ne suit plus que les paris notés" not in m, m
+        assert not bankroll.load().get("real") and store.load("bets.json", {})["combos"][0]["played"]["stake"] == 10.0
+        assert store.load("bets.json", {})["combos"][0]["cur"] == "FCFA"
         m = app.handle_command("/joue sur 5,40 3")
-        assert "mise 3 u" in m and "ne suit plus" not in m, m
-        assert "Noté" in app.handle_command("/joue pari 2")
+        assert "mise 3 FCFA" in m and " u" not in m, m
+        assert "Noté" in app.handle_command("/joue pari 2 10")
         assert next(r for r in track.load() if r["key"] == "k3")["played"] == {"odds": 2.0, "stake": 10.0,
                                                                                "at": next(r for r in track.load() if r["key"] == "k3")["played"]["at"]}
-        assert "moins que la cote mini" in app.handle_command("/joue v5 5,0")
+        assert "moins que la cote mini" in app.handle_command("/joue v5 5,0 1")
         assert "inconnu" in app.handle_command("/joue foot 2")
         assert "Pas de combiné Costaud" in app.handle_command("/joue costaud 13")     # celui du 1er octobre est déjà réglé
         assert "invalide" in app.handle_command("/joue sur abc") and "supérieure à 1" in app.handle_command("/joue sur 0,9")
         assert "✅" in app.handle_command("/joue")
-        # règlement : seuls les paris notés font bouger la bankroll, à la cote de 1xBet
+        # règlement : seuls les paris notés comptent, à la cote et à la mise de 1xBet, en FCFA ; la bankroll en unités ne bouge pas
         bets = store.load("bets.json", {})
         bets["combos"][0] |= {"result": "win", "odds_final": 5.0}
         store.save("bets.json", bets)
@@ -2343,20 +2363,23 @@ def test_played_bets():
         rows = track.load()
         bankroll.apply_results([r for r in rows if r.get("played")], played_only=True)
         bankroll.apply_results(fc, played_only=True)
-        expected = 1000 + 3 * (5.4 - 1) - 10 + 1.0 * (5.0 - 1)
-        assert abs(bankroll.load()["bankroll"] - round(expected, 2)) < 1e-6, bankroll.load()
+        n, total, staked = money.result(bets, rows, fc)
+        assert n == 3 and abs(total - (3 * (5.4 - 1) - 10 + 1.0 * (5.0 - 1))) < 1e-6 and staked == 14.0, (n, total, staked)
+        assert bankroll.load()["bankroll"] == 1000.0 and not bankroll.load().get("real"), bankroll.load()
         bankroll.apply_results(bets["combos"])
-        assert abs(bankroll.load()["bankroll"] - round(expected, 2)) < 1e-6, "un pari n'est compté qu'une fois"
+        assert bankroll.load()["bankroll"] == 1000.0, "un pari n'est compté qu'une fois"
         store.save("bets.json", bets)
         assert "déjà réglé" in app.handle_command("/joue sur 6")
         res = app.combo_result(bets["combos"][0], {})
-        assert "cote 5,40 chez 1xBet" in res and "+13,2 u" in res, res
+        assert "cote 5,40 chez 1xBet" in res and "+13,2 FCFA" in res and " u" not in res, res
         simple = settle.bilan(bets, rows=rows)
-        assert "Joués chez 1xBet : 2 gagnés sur 3" in simple and "Cotes de 1xBet : +6,6 % en moyenne" in simple, simple
+        assert "sur 3 paris (2 gagnés)" in simple and "Cotes de 1xBet : +6,6 % en moyenne" in simple, simple
+        assert "Joués chez 1xBet" not in simple and "+7,2 FCFA" in simple, simple             # le résultat en argent est donné une seule fois
         detail = settle.bilan(bets, rows=rows, detail=True)
         assert "Écart de cote 1xBet par palier : Sûr +8 % (1), Pari du jour" in detail, detail
-        assert "réglée" in app.handle_command("/bank 500") and bankroll.load()["real"]
-        assert "paris notés avec /joue seulement" in bankroll.summary([])
+        assert "Joués chez 1xBet : 2 gagnés sur 3 · résultat +7,2 FCFA" in detail, detail
+        r = app.handle_command("/bank 500")
+        assert "ne suit plus de bankroll en unités" in r and "FCFA" in r and not bankroll.load().get("real") and bankroll.load()["bankroll"] == 1000.0
     print("paris joués chez 1xBet (/joue) : OK")
 
 
@@ -2502,7 +2525,8 @@ def test_buttons_and_free_text():
         c = store.load("bets.json", {})["combos"][0]
         assert c["played"]["odds"] == 5.4 and c["played"]["stake"] == 2000
         edit = [p for m, p in fake.calls if m == "editMessageReplyMarkup"]
-        assert edit and edit[0]["message_id"] == 7 and edit[0]["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Joué à 5,40"
+        assert edit and edit[0]["message_id"] == 7 and edit[0]["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Joué à 5,40 · 2 000 FCFA"
+        assert [b["text"] for b in edit[0]["reply_markup"]["inline_keyboard"][1]] == ["✏️ Autre cote", "↩️ Annuler"]
         # --- attente expirée
         chat.set_pending("sur", day, 9)
         p = store.load("pending.json", {})
@@ -2531,7 +2555,7 @@ def main():
 
     # --- Journée 1 : envoi + suivi (envoyés + fantômes)
     msgs = app.run_daily(sample=True)
-    assert any("Kelly —" in m for m in msgs) and any("mise conseillée" in m for m in msgs)
+    assert any("Kelly —" in m for m in msgs) and any("Mise conseillée : règle ton budget du jour" in m for m in msgs)
     rows = track.load()
     assert len(rows) >= 30 and sum(r["sent"] for r in rows) >= 5, (len(rows))
     assert all(r["closed_at"] is None and "heuristic" in r["features"] for r in rows)
@@ -2616,7 +2640,8 @@ def main():
     # synthétiques ont une marge proportionnelle (sans biais favori-outsider) : il n'y reste que 4 jambes de qualité (max 3,6)
     assert "COMBINÉ SUR MESURE" in app.handle_command("/combi 3")
     assert "meilleurs paris du jour" in app.handle_command("/top")
-    assert "réglée" in app.handle_command("/bank 50000")
+    before = bankroll.load()
+    assert "ne suit plus de bankroll en unités" in app.handle_command("/bank 50000") and bankroll.load() == before      # /bank ne règle plus rien
     assert "Kelly" in app.handle_command("/aide")
     test_build_picks_shapes()
     test_select_sports()

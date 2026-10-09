@@ -104,7 +104,7 @@ class Fakes:
 
 
 def buttons(msg):
-    return [b["callback_data"] for row in msg.markup["inline_keyboard"] for b in row]
+    return [b["callback_data"] for row in msg.markup["inline_keyboard"] for b in row if "callback_data" in b]
 
 
 def setup_singles(picks, priced, sent=(1,)):
@@ -172,8 +172,8 @@ def test_lag():
     assert "💰 1xBet est en retard : joue maintenant" in msg and "Home1 – Away1" in msg and "19h00" in msg and "Liga" in msg, msg
     assert "Home1 gagne — 1xBet paie <b>1,80</b>" in msg and "(lu à 18:00)" in msg, msg
     assert "1,90 ➜ <b>1,55</b>" in msg and "52 % ➜ 65 % de chances" in msg and "valeur <b>+17 %</b>" in msg, msg
-    assert "Mise : <b>1 u</b>" in msg, msg
-    assert "Code coupon 1xBet : <b>K7Q2X</b>" in msg, msg
+    assert "💡 Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg and " u</b>" not in msg, msg          # sans budget : jamais d'unités
+    assert "Code coupon 1xBet : <code>K7Q2X</code>" in msg, msg
     assert len(f.coupons) == 1 and f.coupons[0][0]["xodds"] == 1.80 and f.coupons[0][0]["xref"] == [9001, 1, 0], f.coupons
     assert calls == [["e1"]], f"un seul match relu en direct : {calls}"
     # même état au passage suivant (les clôtures sont relevées de nouveau) : la même alerte n'est pas renvoyée
@@ -191,8 +191,8 @@ def test_lag():
     money.set_daily(5000)
     with Fakes() as f:
         run_track([moved(1)], {"e1": {("h2h", "HOME", None): 1.80}})
-    assert "Mise : <b>1 250 FCFA (sur ton budget du jour)</b>" in str(f.sent[0]), f.sent
-    print("ok  F1 💰 1xBet en retard : valeur +17 %, cote 1xBet et heure, mouvement du marché, mise (unités ou budget), code coupon du pari seul")
+    assert "💰 Mise conseillée : <b>1 250 FCFA (sur ton budget du jour)</b>" in str(f.sent[0]), f.sent
+    print("ok  F1 💰 1xBet en retard : valeur +17 %, cote 1xBet et heure, mouvement du marché, mise (budget, sinon règle ton budget), code coupon du pari seul")
 
 
 def test_no_lag_when_xbet_followed():
@@ -252,12 +252,19 @@ def test_good_news():
     row = next(r for r in track.load() if r["key"] == played_pick["key"])
     assert row["odds"] == 2.2 and row["xodds"] == 2.10 and row["cur"] == "FCFA", row
     with Fakes() as f:
+        # une mise conseillée (budget du jour) n'est pas un pari joué : tant que tu ne l'as pas noté, aucune bonne nouvelle
+        run_track([pick(1, odds=1.86, prob=0.6, prob_book=0.6)], {"e1": {("h2h", "HOME", None): 2.10}})
+        assert not f.sent, f.sent
+        rows = track.load()
+        row = next(r for r in rows if r["key"] == played_pick["key"])
+        row["played"], row["closed_at"] = {"odds": 2.10, "stake": 1000}, None
+        track.save(rows)
         run_track([pick(1, odds=1.86, prob=0.6, prob_book=0.6)], {"e1": {("h2h", "HOME", None): 2.10}})
         msg = str(f.sent[0])
         assert "✅ Bonne nouvelle" in msg and "Home1 – Away1" in msg, msg
         assert "tu as pris <b>2,10</b>, le marché est maintenant à <b>1,86</b> (+13 % de valeur prise)" in msg, msg
         assert "💰" not in msg and not f.coupons, "pari joué : pas de « joue maintenant »"
-        # noté joué avec /joue à 2,05 : c'est cette cote qui compte
+        # noté joué à 2,05 : c'est cette cote qui compte
         store.save(xalerts.FILE, {})
         rows = track.load()
         row = next(r for r in rows if r["key"] == played_pick["key"])
@@ -335,7 +342,7 @@ def test_danger_and_rise():
         assert "H7 – A7" in msg and "1xBet payait 1,55 au premier relevé du jour, il paie maintenant <b>1,70</b> (+10 %, lu à 15:00)" in msg, msg
         assert "Home4 – Away4" in msg and "1xBet payait 1,50 au premier relevé du jour, il paie maintenant <b>1,95</b> (+30 %" in msg, msg
         assert "H8" not in msg and "H9" not in msg, "cote inchangée : pas d'alerte"
-        assert msg.count("Code coupon 1xBet : <b>K7Q2X</b>") == 2 and len(f.coupons) == 2, f.coupons
+        assert msg.count("Code coupon 1xBet : <code>K7Q2X</code>") == 2 and len(f.coupons) == 2, f.coupons
         assert sorted(c[0]["xodds"] for c in f.coupons) == [1.70, 1.95], f.coupons
         assert [c for c in calls if any(i.startswith("e") for i in c)] == [["e3"]], f"seul e3 relu en direct : {calls}"
         # dédoublonnage : même relevé, même état -> rien

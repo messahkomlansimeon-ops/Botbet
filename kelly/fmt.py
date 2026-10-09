@@ -53,8 +53,16 @@ def pct(p):
 
 
 def units(x):
-    """Mise en unités : « 2 u », « 0,2 u », « 10,2 u »."""
+    """Montant en unités : « 2 u », « 0,2 u ». Plus utilisé dans les messages (tout est en FCFA) : gardé comme outil de format."""
     return f"{trim(x, 1 if abs(x) >= 1 else 2)} u"
+
+
+NO_BUDGET = "règle ton budget du jour avec « 💰 Mon budget »"      # à la place d'une mise, quand il n'y a pas de budget du jour (jamais d'unités)
+
+
+def no_stake_line():
+    """Une ligne (une fois par message) à la place de la mise conseillée quand il n'y a pas de budget du jour."""
+    return i("💡 Mise conseillée : " + esc(NO_BUDGET))
 
 
 def signed(x, suffix=" u"):
@@ -222,11 +230,16 @@ def expect(prob, odds_total):
     return f"espérance {signed((prob * odds_total - 1) * 100, ' %')}"
 
 
+def code(c):
+    """Un code coupon en <code> : un appui dessus le copie dans toutes les applications Telegram."""
+    return f"<code>{esc(c)}</code>"
+
+
 def coupon_block(coupon, retry=None):
-    """Code coupon 1xBet d'un combiné ou d'un pari (xbet.save_coupon), à charger dans l'appli ; '' sans code. `retry` : pari qui devait
+    """Code coupon 1xBet d'un combiné ou d'un pari (xbet.save_coupon), à charger dans l'appli (en <code>, à copier d'un appui) ; '' sans code. `retry` : pari qui devait
     avoir son code (toutes les jambes lues chez 1xBet) mais dont l'enregistrement a échoué -> une ligne dit quoi faire (« touche … »)."""
     if coupon:
-        return f"\n\n🎟️ Code coupon 1xBet : {b(esc(coupon))}\n" + i("Dans l'appli 1xBet : ticket, « Charger le coupon »")
+        return f"\n\n🎟️ Code coupon 1xBet : {code(coupon)}\n" + i("Dans l'appli 1xBet : ticket, « Charger le coupon »")
     return "\n\n" + i(f"Code coupon indisponible pour l'instant : {esc(retry)}") if retry else ""
 
 
@@ -238,22 +251,27 @@ def xbet_note(legs, when=None):
                        "💎 Cotes relevées chez 1xBet par Kelly : vérifie qu'elles n'ont pas baissé avant de valider.")
 
 
-def combo(title, picks, odds_total, prob, stake, reasons=None, stake_txt=None, coupon=None, when=None, retry=None):
+def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=None, coupon=None, when=None, retry=None):
     """Message d'un combiné : titre et cote ; chances, espérance et mise sur deux lignes ; puis les jambes, séparées par une ligne
-    vide. `stake_txt` : la mise prise sur le budget du jour (« 1 500 FCFA »), à la place de la mise en unités. `coupon` : code coupon
-    1xBet (toutes les jambes aux cotes 1xBet), `when` : heure « HH:MM » de ces cotes, `retry` : voir coupon_block."""
+    vide. `stake_txt` : la mise conseillée sur le budget du jour (« 1 500 FCFA ») ; sans elle (pas de budget du jour), une ligne dit de régler
+    le budget (jamais de mise en unités ; `stake`, ancienne mise en unités, est ignoré). `coupon` : code coupon 1xBet (toutes les jambes
+    aux cotes 1xBet), `when` : heure « HH:MM » de ces cotes, `retry` : voir coupon_block."""
     reasons = reasons or {}
     head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
             f"🎯 {len(picks)} paris · {pct(prob)} de chances",
-            f"📈 {expect(prob, odds_total).capitalize()} · 💰 " + (f"mise : {b(esc(stake_txt))}" if stake_txt else
-                                                                   f"mise conseillée : {b(units(stake))}")]
+            f"📈 {expect(prob, odds_total).capitalize()}" + (f" · 💰 mise : {b(esc(stake_txt))}" if stake_txt else "")]
+    if not stake_txt:
+        head.append(no_stake_line())
     legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
     return Html("\n".join(head) + "\n\n" + "\n\n".join(legs) + coupon_block(coupon, retry) + xbet_note(picks, when))
 
 
 def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None, when=None, retry=None):
-    """Pari du jour : une seule jambe (et sa mise sur le budget du jour, `stake_txt`). `coupon` / `when` / `retry` : voir combo."""
+    """Pari du jour : une seule jambe (et sa mise conseillée sur le budget du jour, `stake_txt`, sinon la ligne « règle ton budget »).
+    `coupon` / `when` / `retry` : voir combo."""
     head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances" + (f" · 💰 mise : {b(esc(stake_txt))}" if stake_txt else "")]
+    if not stake_txt:
+        head.append(no_stake_line())
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + coupon_block(coupon, retry) + xbet_note([c], when))
 
 
@@ -311,9 +329,10 @@ def fair_leg(n, c):
     return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 
-def fair_combo(min_total, picks, prob, stake, stake_txt=None, title=None, coupon=None, when=None, retry=None, stale=False):
-    """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
-    (mise indicative seulement), chaque jambe avec sa cote minimale. `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »).
+def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, coupon=None, when=None, retry=None, stale=False):
+    """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », chaque jambe avec sa cote minimale ;
+    la mise conseillée vient du budget du jour (`stake_txt`), sinon une ligne dit de régler le budget (jamais d'unités ; `stake`, ancienne
+    mise indicative en unités, est ignoré). `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »).
     `when` : heure « HH:MM » du relevé des cotes 1xBet (combiné réel), rappelée en bas du message ; `retry` : voir coupon_block ;
     `stale` : cotes du DERNIER relevé (1xBet injoignable à l'instant) : le titre et le pied le disent, avec l'heure `when` du relevé si on
     la connaît."""
@@ -326,7 +345,7 @@ def fair_combo(min_total, picks, prob, stake, stake_txt=None, title=None, coupon
                                                     "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")),
             f"🎯 {'Cote' if real else 'Cote mini'} {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
             (f"💰 Mise : {b(esc(stake_txt))}" + ("" if real else f" {i('(seulement si 1xBet paie la cote mini)')}") if stake_txt else
-             f"💰 Mise indicative : {units(stake)} au plus {i('(pas calculée sur ta bankroll)')}")]
+             no_stake_line())]
     foot = i(f"💎 Cotes 1xBet du dernier relevé ({esc(when)}) : elles ont pu baisser depuis, vérifie-les avant de valider." if old and when else
              "💎 Cotes 1xBet du dernier relevé : elles ont pu baisser depuis, vérifie-les avant de valider." if old else
              f"💎 Cotes 1xBet de {esc(when)} : vérifie qu'elles n'ont pas baissé avant de valider." if real and when else

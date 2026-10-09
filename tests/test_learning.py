@@ -92,7 +92,13 @@ def test_weekly_report():
     store.save(calib.FILE, {"corners": [100, 55, 70.0], "goals": [80, 50, 50.0]})
     calib._memo.clear()
     msg = weekly.message(NOW)
-    assert "Ce que Kelly a appris cette semaine" in msg and "1 gagné sur 1" in msg and "+4 u" in msg, msg
+    assert "Ce que Kelly a appris cette semaine" in msg and "1 gagné sur 1" in msg, msg
+    assert "+4 u" not in msg and " u<" not in msg and "Tes paris notés" not in msg, msg          # un combiné seulement conseillé : aucun montant, jamais d'unités
+    # le même combiné NOTÉ (cote et mise de 1xBet, en FCFA) : le résultat de tes paris notés
+    store.save("bets.json", {"picks": [], "combos": [{"tier": "🛡️ SÛR", "keys": [], "odds": 5.0, "stake": None, "date": "2026-10-10",
+                                                      "result": "win", "odds_final": 5.0, "cur": "FCFA", "played": {"odds": 5.0, "stake": 1000}}]})
+    noted = weekly.message(NOW)
+    assert "💰 <b>Tes paris notés</b> : <b>+4 000 FCFA</b> sur 1 pari" in noted and " u<" not in noted, noted
     assert "battue 1 fois sur 1" in msg and "Paris suivis en silence : 0 sur 1 (1 mesurés gratuitement)" in msg, msg
     assert "⚠️ corners : trop optimiste, 55 % réalisés pour 70 % annoncés (100)" in msg and "Kelly baisse ses probabilités" in msg, msg
     assert "✅ buts : fiable" in msg or "👍 buts : prudente" in msg, msg

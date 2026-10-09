@@ -38,9 +38,28 @@ def with_buttons(text, markup):
     return out
 
 
+def _button(label, data):
+    """Un bouton : `data` = donnée renvoyée au clic (64 octets au plus, None = bouton inerte) ou {"copy_text": texte} = bouton qui copie `texte`
+    dans le presse-papiers (Bot API 7.11 : « copy_text », aucun aller-retour avec Kelly)."""
+    if isinstance(data, dict) and "copy_text" in data:
+        return {"text": label, "copy_text": {"text": str(data["copy_text"])[:256]}}
+    return {"text": label, "callback_data": data or "noop"}
+
+
 def inline(rows):
-    """Boutons sous un message : rows = [[(libellé, donnée renvoyée au clic, 64 octets au plus)]] ; donnée None = bouton inerte."""
-    return {"inline_keyboard": [[{"text": label, "callback_data": data or "noop"} for label, data in row] for row in rows]}
+    """Boutons sous un message : rows = [[(libellé, donnée renvoyée au clic, 64 octets au plus)]] ; donnée None = bouton inerte, donnée
+    {"copy_text": texte} = bouton « copier » (voir copy_button)."""
+    return {"inline_keyboard": [[_button(label, data) for label, data in row] for row in rows]}
+
+
+def copy_button(code):
+    """Le bouton « 📋 Copier le code XXXX » d'un code coupon : (libellé, donnée) pour inline(). Un appui copie le code, sans rien envoyer à Kelly."""
+    return f"📋 Copier le code {code}", {"copy_text": code}
+
+
+def copy_row(code):
+    """La ligne de boutons « 📋 Copier le code XXXX » (format inline_keyboard, à ajouter sous les autres boutons) ; [] sans code."""
+    return inline([[copy_button(code)]])["inline_keyboard"] if code else []
 
 
 def menu_keyboard(rows):

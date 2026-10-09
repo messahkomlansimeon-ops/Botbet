@@ -1,7 +1,7 @@
-"""Gestion de mise : Kelly fractionnaire, plafonds par palier, série noire.
-
-Mode réel (bankroll.json « real », activé par le premier /joue) : la bankroll ne suit plus que les paris notés avec /joue, à la
-cote et à la mise obtenues chez 1xBet (x["played"] = {odds, stake}). Sinon elle suit les combinés envoyés, à la mise conseillée."""
+"""Bankroll en unités (interne) : Kelly fractionnaire, plafonds par palier, série noire. Kelly ne l'AFFICHE plus : les mises conseillées et
+les résultats sont en FCFA (kelly/money.py, budget du jour) et seuls les paris notés comptent ; ce module garde le calcul des gains d'un
+pari noté (played_gain), la série de combinés perdus et l'ancien fichier bankroll.json (jamais effacé). Un pari qui porte une devise
+(« cur ») n'entre jamais dans la bankroll en unités."""
 import math
 
 from . import config as C, store
@@ -36,7 +36,7 @@ def won_odds(x):
 
 
 def played_gain(x):
-    """Gain réel (u) d'un pari noté avec /joue et réglé. Jambes annulées : la cote 1xBet baisse dans la même proportion que la
+    """Gain réel (FCFA : la mise notée) d'un pari noté et réglé. Jambes annulées : la cote 1xBet baisse dans la même proportion que la
     cote de référence (cote typique ; cote 1xBet des jambes gagnées pour un combiné aux cotes 1xBet, cote mini pour un combiné à
     vérifier)."""
     p = x["played"]
@@ -54,10 +54,11 @@ def played_gain(x):
     return p["stake"] * (p["odds"] * ratio - 1)
 
 def apply_results(items, played_only=False):
-    """Met à jour la bankroll avec les paris réglés non encore comptés (marqués « counted »). Un pari misé sur le budget du jour
-    (« cur », en devise) est ignoré et marqué « counted » : l'argent du budget ne touche jamais la bankroll en unités. Mode réel : seuls les paris notés
-    comptent (played_gain). Sinon : les combinés gagnés ou perdus, à la mise conseillée. Un résultat « unknown » (non vérifiable) ne change rien. `played_only` : éléments qui ne
-    comptent qu'en mode réel (pari du jour, combinés à vérifier chez 1xBet)."""
+    """Met à jour l'ancienne bankroll en unités (interne, jamais affichée) avec les paris réglés non encore comptés (marqués « counted »). Un
+    pari qui porte une devise (« cur » : mise conseillée en FCFA ou pari noté) est ignoré et marqué « counted » : l'argent n'entre jamais dans
+    la bankroll en unités. Mode réel : seuls les paris notés comptent (played_gain). Sinon : les combinés gagnés ou perdus, à la mise des
+    anciennes lignes. Un résultat « unknown » (non vérifiable) ne change rien. `played_only` : éléments qui ne comptent qu'en mode réel
+    (pari du jour, combinés à vérifier chez 1xBet)."""
     for c in items:
         if c.get("cur"):                            # misé sur le budget du jour (devise) : jamais dans la bankroll en unités
             c["counted"] = True
@@ -74,7 +75,8 @@ def apply_results(items, played_only=False):
                 b["bankroll"] += played_gain(c)
         elif c["result"] in ("win", "loss"):
             c["counted"] = True
-            b["bankroll"] += c["stake"] * (c.get("odds_final", c.get("xodds") or c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
+            st = c.get("stake") or 0                  # plus de mise en unités depuis le budget en FCFA : 0, la bankroll en unités ne bouge plus
+            b["bankroll"] += st * (c.get("odds_final", c.get("xodds") or c["odds"]) - 1) if c["result"] == "win" else -st
     b["bankroll"] = round(b["bankroll"], 2)
     save(b)
     return b
@@ -89,12 +91,7 @@ def streak(combos):
             break
     return n
 
-def summary(combos):
-    b = load()
-    pnl = b["bankroll"] - b["initial"]
-    lines = [f"💼 Bankroll : {b['bankroll']:.2f} unités ({pnl:+.2f} depuis le début)"
-             + (" — paris notés avec /joue seulement" if b.get("real") else "")]
+def streak_line(combos):
+    """Alerte après une série de combinés perdus d'affilée (C.STREAK_WARNING) ; '' sinon."""
     s = streak(combos)
-    if s >= C.STREAK_WARNING:
-        lines.append(f"⚠️ {s} combinés perdus d'affilée : lève le pied, réduis les mises ou fais une pause.")
-    return "\n".join(lines)
+    return f"⚠️ {s} combinés perdus d'affilée : lève le pied, réduis les mises ou fais une pause." if s >= C.STREAK_WARNING else ""
