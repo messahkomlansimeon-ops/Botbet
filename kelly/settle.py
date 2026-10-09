@@ -362,13 +362,18 @@ def _gain(c):
     return c["stake"] * (c.get("odds_final", c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
 
 
-def _sum_txt(cs):
-    """Résultat d'un groupe de combinés : en devise s'ils sont misés sur le budget du jour (seuls ceux-là comptent), sinon en unités."""
+def _sum_txt(cs, html=True):
+    """Résultat d'un groupe de combinés : en unités pour ceux de la bankroll, en devise pour ceux misés sur le budget du jour (« pas
+    joué » et cote corrigée comptés) ; jamais mélangés : « +12 u et −1 000 FCFA ». `html` : devise échappée."""
     from . import money
-    mine = [c for c in cs if c.get("cur")]
-    if mine:
-        return money.signed(sum(money.gain(c) or 0 for c in mine), mine[0]["cur"])
-    return fmt.signed(sum(map(_gain, cs)))
+    parts = []
+    units = [c for c in cs if not c.get("cur")]
+    if units or not cs:
+        parts.append(fmt.signed(sum(map(_gain, units))))
+    for cur in dict.fromkeys(c["cur"] for c in cs if c.get("cur")):
+        parts.append(money.signed(sum(money.gain(c) or 0 for c in cs if c.get("cur") == cur), cur))
+    txt = " et ".join(parts)
+    return fmt.esc(txt) if html else txt
 
 
 def _bilan_simple(days, rows, picks, combos):
@@ -425,8 +430,7 @@ def _bilan_detail(bets, days, rows, picks, combos):
         tiers.setdefault(c["tier"].split(" (")[0], []).append(c)
     for tier, rows_ in tiers.items():
         nn = len(rows_); ww = sum(1 for r in rows_ if r["result"] == "win")
-        gain = sum(r["stake"] * (r.get("odds_final", r["odds"]) - 1) if r["result"] == "win" else -r["stake"] for r in rows_)
-        lines.append(f"{tier} : {ww}/{nn} | {gain:+.1f} unités")
+        lines.append(f"{tier} : {ww}/{nn} | {_sum_txt(rows_, html=False)}")      # unités ou devise (cote corrigée, « pas joué »)
     if sent:
         lines.append("Par marché (envoyés) :")
         markets = {}

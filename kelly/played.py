@@ -9,10 +9,11 @@ Le pari noté est celui du jour, sinon le plus récent pas encore réglé. Stock
 le mode réel de la bankroll (bankroll.py).
 """
 import math
+import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
-from . import bankroll, combos as CB, config as C, fair, fmt, store, telegram, track
+from . import bankroll, combos as CB, config as C, fair, fmt, money as M, store, telegram, track
 
 MAX_ODDS = 10000.0
 
@@ -28,11 +29,37 @@ def tier_words():
 
 
 def _num(s):
-    try:
-        x = float(str(s).replace(",", "."))
-    except ValueError:
+    """Une cote : « 5,40 » ou « 5.40 » (ni signe, ni exposant, ni inf / nan) ; None sinon."""
+    if not re.fullmatch(r"\d+(?:[.,]\d+)?", str(s).strip()):
         return None
+    x = float(str(s).strip().replace(",", "."))
     return x if math.isfinite(x) else None
+
+
+def parse_odds_stake(args, strict=False):
+    """« 5,40 », « 5,40 2 000 », « 5.40 2.000 FCFA » -> (cote, mise | None, erreur | None). La cote est le premier mot ; la mise lit les
+    milliers (voir money.take_amount). `strict` (message libre sans commande) : « 2 000 » ou « 2 500 » seuls peuvent être une cote
+    entière et une mise, ou une mise sans cote : erreur « ambigu », jamais de devinette."""
+    tokens = M.split_tokens(args)
+    if tokens and M.CUR_RE.fullmatch(tokens[-1]) and len(tokens) > 1:       # devise en fin de message : ignorée
+        tokens = tokens[:-1]
+    odds = _num(tokens[0]) if tokens else None
+    if odds is None:
+        return None, None, "invalide"
+    rest = tokens[1:]
+    if strict and len(tokens) == 2 and re.fullmatch(r"\d{1,3}", tokens[0]) and re.fullmatch(r"\d{3}(?:[.,]\d+)?", rest[0]):
+        return odds, None, "ambigu"
+    if not rest:
+        return odds, None, None
+    stake, n = M.take_amount(rest)
+    if stake is None or n != len(rest):
+        return odds, None, "invalide"
+    return odds, stake, None
+
+
+def unfunded(t):
+    """Pari sans mise sur le budget du jour (trop petite pour l'arrondi) : ni « Autre cote » ni note."""
+    return not t.item.get("cur") and t.stake == 0
 
 
 def _pick(items, day):
@@ -73,7 +100,7 @@ def find(word, day):
         r = _pick(single_rows(rows, store.load("bets.json", {"combos": []}).get("combos", [])), day)
         if not r:
             return "Pas de pari du jour à noter (ni aujourd'hui ni en attente de résultat)."
-        st = r["stake"] if r.get("cur") else bankroll.stake(r["prob"], r["odds"], "⭐", bankroll.load()["bankroll"])
+        st = r["stake"] if r.get("cur") or r.get("stake") == 0 else bankroll.stake(r["prob"], r["odds"], "⭐", bankroll.load()["bankroll"])
         return Target(r, r["odds"], st, f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
                       "cote typique")
     if w.startswith("v") and w[1:].isdigit():
@@ -103,10 +130,10 @@ def command(args, day, now=None):
                 "Exemple : /joue sur 5,40")
     if isinstance(t, str):
         return t
-    odds = _num(args[1])
-    stake = _num(args[2]) if len(args) > 2 else t.stake
-    if odds is None or stake is None or stake < 0:
-        return "Cote ou mise invalide. Exemple : /joue sur 5,40 2 (cote 5,40, mise 2 u)."
+    odds, given, err = parse_odds_stake(args[1:])
+    if odds is None or err or (given is not None and given < 0):
+        return "Cote ou mise invalide. Exemple : /joue sur 5,40 2 (cote 5,40, mise 2 u) ; /joue sur 5,40 2 000 (mise 2 000 FCFA)."
+    stake = t.stake if given is None else given
     if t.item.get("result") is not None:
         return f"Le {t.label} est déjà réglé : trop tard pour le noter."
     if odds == 0:
@@ -117,6 +144,10 @@ def command(args, day, now=None):
     if not 1.0 < odds <= MAX_ODDS:
         return "La cote doit être supérieure à 1. Exemple : /joue sur 5,40"
     on_budget = bool(t.item.get("cur"))              # pari misé sur le budget du jour : pas de bankroll, la cote corrige le bilan
+    if not on_budget and t.stake == 0 and (M.active() or given is None):
+        return f"Le {t.label} n'a pas de mise sur ton budget du jour (trop petite) : rien à noter."
+    if not stake > 0:
+        return "La mise doit être supérieure à 0. Exemple : /joue sur 5,40 2 (annuler : /joue sur 0)."
     first = not on_budget and not bankroll.load().get("real")
     t.item["played"] = {"odds": round(odds, 2), "stake": round(stake, 2),
                         "at": (now or datetime.now(timezone.utc)).isoformat(timespec="minutes")}
@@ -154,11 +185,15 @@ def todo(day):
     if any(x.get("cur") for _, x, _, _ in items_):
         return _budget_list(items_, day)
     for name, x, ref, what in items_:
+        if not x.get("cur") and x.get("stake") == 0 and x.get("result") is None:     # budget du jour trop petit pour ce pari
+            lines.append(f"▫️ {name} : pas de mise (trop petite pour ton budget)")
+            continue
         lines.append(_todo_line(name, x, ref, f"/joue {what} <cote>"))
         if not x.get("played") and x.get("result") is None:
             rows.append([(f"✅ {name} — {fmt.odds_txt(ref)}", f"joue|{what}|{day}")])
     text = "\n".join(["🧾 Tes paris du jour", ""] + lines + ["", "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet."
-                                                         if rows else "Tout est noté 👍"])
+                                                         if rows else ("Rien à jouer avec ton budget d'aujourd'hui."
+                                                                       if any("pas de mise" in x for x in lines) else "Tout est noté 👍")])
     return telegram.with_buttons(text, telegram.inline(rows)) if rows else text
 
 
@@ -198,10 +233,23 @@ def items(bets, rows, fair_rows, days=None, today=None):
     out = [("réel", fmt.tier_word(c["tier"]), c, c["odds"]) for c in bets["combos"] if c.get("played")]
     out += [("réel", "Pari du jour", r, r["odds"]) for r in single_rows(rows, bets["combos"]) if r.get("played")]
     out += [("vérif", "À vérifier", c, c["min_odds"]) for c in fair_rows if c.get("played")]
+    out = [x for x in out if not x[2].get("skipped")]             # « ❌ Pas joué » : sorti du bilan
     if days:
         cut = str((datetime.fromisoformat(str(today)) if today else datetime.now(timezone.utc)).date() - timedelta(days=days))
         out = [x for x in out if x[2]["date"] >= cut]
     return out
+
+
+def _gain_txt(xs):
+    """Résultat des paris joués et réglés : en unités pour ceux de la bankroll, en devise pour ceux misés sur le budget (jamais
+    mélangés) : « +12 u », « −1 000 FCFA » ou « +12 u et −1 000 FCFA »."""
+    parts = []
+    units = [x for x in xs if not x.get("cur")]
+    if units or not xs:
+        parts.append(fmt.signed(sum(bankroll.played_gain(x) for x in units)))
+    for c in dict.fromkeys(x["cur"] for x in xs if x.get("cur")):
+        parts.append(M.signed(sum(bankroll.played_gain(x) for x in xs if x.get("cur") == c), c))
+    return " et ".join(parts)
 
 
 def summary_lines(bets, rows, fair_rows, days=None, detail=False, today=None):
@@ -215,8 +263,8 @@ def summary_lines(bets, rows, fair_rows, days=None, detail=False, today=None):
     lines = []
     if done:
         w = sum(1 for x in done if x[2]["result"] == "win")
-        gain = sum(bankroll.played_gain(x[2]) for x in its if x[2].get("result") in bankroll.DONE)
-        lines.append(f"Joués chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} · résultat {fmt.signed(gain)}{unk_txt}")
+        gain = _gain_txt([x[2] for x in its if x[2].get("result") in bankroll.DONE])
+        lines.append(f"Joués chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} · résultat {gain}{unk_txt}")
     else:
         lines.append(f"Joués chez 1xBet : {len(its)} noté{'s' if len(its) > 1 else ''}, aucun réglé pour l'instant{unk_txt}")
     real = [x for x in its if x[0] == "réel"]

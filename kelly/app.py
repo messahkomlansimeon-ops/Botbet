@@ -39,10 +39,10 @@ def bank_line(bets_combos=None):
 
 
 def day_stakes(top, built, built_fair):
-    """Mises du jour sur le budget (money.allocate) : ({"pari" | titre du palier | ("fair", cible): mise}, misé, gardé) ; ({}, 0, 0)
-    sans budget du jour."""
+    """Mises du jour sur le budget (money.allocate) : ({"pari" | titre du palier | ("fair", cible): mise}, misé, gardé, journée pauvre) ;
+    ({}, 0, 0, False) sans budget du jour."""
     if not money.active():
-        return {}, 0, 0
+        return {}, 0, 0, False
     keys, items = [], []
     if top:
         keys.append("pari")
@@ -53,8 +53,8 @@ def day_stakes(top, built, built_fair):
     for target, (_, min_total, prob) in built_fair:
         keys.append(("fair", target))
         items.append({"kind": "fair", "tier": min_total, "prob": prob, "odds": min_total})
-    stakes, spent, kept = money.allocate(items)
-    return dict(zip(keys, stakes)), spent, kept
+    stakes, spent, kept, poor = money.allocate(items, detail=True)
+    return dict(zip(keys, stakes)), spent, kept, poor
 
 
 def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None):
@@ -74,7 +74,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     built = [(t, c) for t, c in plan if c]
     missing = [t for t, c in plan if not c and t not in rejected]
     built_fair = [(t, c) for t, c in fair_combos if c]
-    stakes, spent, kept = day_stakes(top, built, built_fair)
+    stakes, spent, kept, poor = day_stakes(top, built, built_fair)
     cur = money.cur()
     if fair_stakes is not None:
         fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple)) if st})
@@ -88,7 +88,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         if built_fair:
             head.append(f"🎲 {len(built_fair)} combiné{'s' if len(built_fair) > 1 else ''} à vérifier chez 1xBet "
                         + fmt.i("(cotes de Kelly, pas du bookmaker)"))
-        head.append(money.budget_line(spent, kept) if money.active() else
+        head.append(money.budget_line(spent, kept, poor) if money.active() else
                     "💡 " + fmt.i("Écris « budget 5000 » pour avoir tes mises en FCFA, prises sur un budget par jour."))
         if missing or rejected:
             head.append("")
@@ -100,24 +100,26 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     if world:
         messages.append(monde.tour_du_monde(world, len(pronos), why_no_odds))
     if top:
-        if stakes.get("pari"):
-            top["stake"], top["cur"] = stakes["pari"], cur
-        messages.append(telegram.with_buttons(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari"))),
-                                              chat.played_button("pari", day)))
+        if money.active():                          # mise 0 : notée telle quelle (stake 0, sans devise) = pas de mise sur le budget
+            top["stake"] = stakes.get("pari", 0)
+            if top["stake"]:
+                top["cur"] = cur
+        messages.append(chat.with_played_button(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari"))), "pari", day,
+                                                funded=bool(stakes.get("pari"))))
         sent_picks.append(top)
     for title, combo in built:
         picks_, odds_, prob = combo
         st = stakes.get(title, 0) if money.active() else bankroll.stake(prob, odds_, title, bank)
-        messages.append(telegram.with_buttons(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
-                                                        stake_txt=mise(st)),
-                                              chat.played_button(played.norm(fmt.tier_word(title)), day)))
+        messages.append(chat.with_played_button(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
+                                                          stake_txt=mise(st)),
+                                                played.norm(fmt.tier_word(title)), day, funded=bool(st)))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
                             "stake": st} | ({"cur": cur} if money.active() and st else {}))
     for target, (legs, min_total, prob) in built_fair:
-        messages.append(telegram.with_buttons(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                             stake_txt=mise(stakes.get(("fair", target)))),
-                                              chat.played_button(f"v{target}", day)))
+        messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
+                                                               stake_txt=mise(stakes.get(("fair", target)))),
+                                                f"v{target}", day, funded=bool(stakes.get(("fair", target)))))
     if pronos:
         messages.append(fmt.pronos(pronos, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
     if not messages:
@@ -147,7 +149,7 @@ def _signed(x, item):
     """Gain d'un pari : en devise s'il est misé sur le budget du jour, sinon en unités ; « pas joué » s'il a été retiré."""
     if item.get("skipped"):
         return fmt.i("pas joué")
-    return money.signed(x, item["cur"]) if item.get("cur") else fmt.signed(x)
+    return fmt.esc(money.signed(x, item["cur"]) if item.get("cur") else fmt.signed(x))
 
 
 def combo_result(c, by_key):
@@ -160,7 +162,7 @@ def combo_result(c, by_key):
         gain = stake * (odds_ - 1)
         if c.get("played"):
             odds_, gain = c["played"]["odds"] * odds_ / c["odds"], bankroll.played_gain(c)
-        where = " chez 1xBet" if c.get("played") else ""
+        where =" chez 1xBet" if c.get("played") else ""
         return "\n".join([f"{fmt.b(f'✅ {fmt.esc(name)} gagné — cote {fmt.odds_txt(odds_)}{where}')} · {_signed(gain, c)}"]
                          + [leg_result_line(r) for r in legs if r])
     if c["result"] == "void":
@@ -608,10 +610,10 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 💰 <b>Mon budget</b> : voir ou changer ton budget du jour
 
 <b>Ton budget du jour</b>
-Écris une fois <i>budget 5000</i> : chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la mise de chacun. Les jours pauvres, elle en garde une partie. Change-le quand tu veux.
+Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>) : chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la mise de chacun. Les jours pauvres, elle en garde une partie. Change-le quand tu veux.
 
 <b>Tu n'as pas joué un pari ?</b>
-Kelly compte que tu joues ce qu'elle propose. Sous le pari, <b>❌ Pas joué</b> le retire de ton bilan, <b>✏️ Autre cote</b> corrige la cote si 1xBet payait autre chose.
+Kelly compte que tu joues ce qu'elle propose. Sous le pari, <b>❌ Pas joué</b> le retire de ton bilan, <b>✏️ Autre cote</b> corrige la cote si 1xBet payait autre chose (réponds par exemple <i>5,40</i>, ou <i>5,40 2 000</i> avec ta mise).
 
 <b>Tu peux aussi écrire</b>
 • un nom d'équipe : <i>Flamengo</i>
@@ -746,13 +748,26 @@ def features_lines(f, only=None, head="Chiffres d'avant-match"):
     return lines if len(lines) > 4 else []
 
 
+def event_matches(items, query):
+    """Paris dont le match contient `query` : sans casse ni accents (« Atletico » trouve « Atlético Madrid »), puis, faute de mieux,
+    par ressemblance avec le nom d'une équipe (comme la détection des équipes du texte libre, chat._team_command)."""
+    q = played.norm(query)
+    if not q:
+        return []
+    found = [c for c in items if q in played.norm(c["event"])]
+    if found:
+        return found
+    from .sources import names
+    return [c for c in items if any(t and names.team_sim(query, t) >= 0.8 for t in (c.get("home"), c.get("away")))]
+
+
 def analyse(picks, query, pronos=()):
     """Texte de /analyse : analyse approfondie d'un match du jour + ses meilleurs paris avec leur raison."""
     if not query:
         return "Exemple : /analyse Arsenal"
-    found = [c for c in picks if query.lower() in c["event"].lower()]
+    found = event_matches(picks, query)
     if not found:                               # match sans cotes réelles : analyse seule (+ pronostics)
-        free = [c for c in pronos if query.lower() in c["event"].lower()]
+        free = event_matches(pronos, query)
         events = list(dict.fromkeys(c["event"] for c in free))
         if not free:
             return f"Aucun match du jour ne contient « {query} »."
@@ -836,6 +851,8 @@ def _handle_command(text):
                 amount = float(args[0].replace(",", "."))
             except ValueError:
                 return "Montant invalide. Exemple : /bank 50000"
+            if not math.isfinite(amount) or amount <= 0 or amount > money.MAX_AMOUNT:        # « /bank inf », « /bank -5 »
+                return "Montant invalide. Exemple : /bank 50000"
             b = {**b, "bankroll": amount, "initial": amount}
             bankroll.save(b)
             return f"Bankroll réglée à {fmt.trim(amount, 2)} unités. Les mises conseillées s'adaptent dès demain."
@@ -867,10 +884,9 @@ def _handle_command(text):
     if cmd == "/match":
         if not args:
             return "Exemple : /match PSG"
-        q = " ".join(args).lower()
-        found = [c for c in picks if q in c["event"].lower()]
+        found = event_matches(picks, " ".join(args))
         if not found:
-            free = [c for c in pronos if q in c["event"].lower()]
+            free = event_matches(pronos, " ".join(args))
             if free:
                 return fmt.pronos(free, 8)
             return f"Aucun match du jour ne contient « {' '.join(args)} »."
@@ -885,6 +901,8 @@ def _handle_command(text):
         try:
             target = float(args[0].replace(",", "."))
         except (IndexError, ValueError):
+            return "Exemple : /combi 30"
+        if not math.isfinite(target) or target <= 0:        # « /combi inf », « /combi nan », « /combi -5 »
             return "Exemple : /combi 30"
         live = upcoming(picks)
         return custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live)
