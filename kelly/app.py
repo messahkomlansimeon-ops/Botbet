@@ -370,8 +370,9 @@ def world_report(scan, picks, day, now):
         except Exception as e:                      # noqa: BLE001
             print(f"[monde] prochains matchs ignorés : {e}", file=sys.stderr)
     try:
-        pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.SCAN_SECONDS, africa=africa)
-        if C.SOURCES_REFRESH:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé
+        xb = C.SOURCES_REFRESH and C.XBET_ENABLED
+        pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.SCAN_SECONDS, africa=africa, all_families=xb)
+        if xb:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé
             xprice.apply(pronos)
         fair.record(pronos, day, shown=CB.best_per_match(pronos))     # suivis : les montrés + d'autres en silence (fiabilité)
     except Exception as e:                          # noqa: BLE001
@@ -463,7 +464,7 @@ def run_daily(sample=False):
     settle.record_combos(sent_combos, day)
     fair.record_combos([(t, c) for t, c in fair_combos if c], day, fair_stakes, money.cur() if fair_stakes else None)
     # /top, /match, /combi relisent ces pronostics : les 40 meilleurs + les autres assez solides pour un combiné à cote juste
-    keep = pronos[:40] + [c for c in pronos[40:] if CB.fair_eligible(c)][:40]
+    keep = pronos[:40] + [c for c in pronos[40:] if CB.fair_eligible(c) or c.get("xgid")][:300]    # trouvés chez 1xBet : relus à 15:00
     store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
     if not sample:                                  # avant l'envoi : mises et paris sont écrits, une relance ne les doublerait pas
         store.save(DAILY_FILE, {"day": str(day), "at": now.isoformat()})

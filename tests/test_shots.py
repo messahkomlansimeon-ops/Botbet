@@ -24,10 +24,12 @@ def test_shots_kept_per_match():
     odds.match_numbers = lambda h, a, k: {"n_home": 8, "n_away": 8}
     try:
         pronos = fair.make({"leagues": {"soccer_epl": [ev]}}, day=date.fromisoformat(DAY))
+        every = fair.make({"leagues": {"soccer_epl": [ev]}}, day=date.fromisoformat(DAY), all_families=True)
     finally:
         fair._options, odds.match_numbers = old_opts, old_num
     markets = [c["market"] for c in pronos]
     assert "team_shots_total" in markets and "team_sot_total" in markets and len(markets) == 4, markets
+    assert len(every) == 5 and all(c.get("alts") for c in every), "relevé 1xBet : chaque marché du match est présenté à 1xBet"
     assert C.MARKET_WEIGHT["team_shots_total"] == C.MARKET_WEIGHT["alternate_totals_corners"]
     print("ok  tirs gardés pour chaque match")
 

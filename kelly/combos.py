@@ -306,7 +306,8 @@ def best_per_match(pronos):
     aucune cote 1xBet (relevé en panne), les pronostics « à vérifier » (cote mini)."""
     real = any(c.get("xodds") for c in pronos)
     best = {}
-    for c in sorted(pronos, key=lambda c: -c.get("score", 0)):
+    # à la cote 1xBet : le pari du match qui rapporte le plus (valeur x proba, comme xprice.choose) ; sinon le mieux classé
+    for c in sorted(pronos, key=lambda c: -(c["xev"] * c["prob"] if real and c.get("xodds") else c.get("score", 0))):
         if c["id"] not in best and viable(c) and (c.get("xodds") or not real):
             best[c["id"]] = c
     return list(best.values())

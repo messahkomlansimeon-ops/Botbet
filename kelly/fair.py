@@ -267,11 +267,13 @@ def same_match(a, b):
             and stats.team_sim(a["away_team"], b["away_team"]) >= 0.8)
 
 
-def make(scan, picks=(), day=None, deadline=None, africa=()):
+def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False):
     """Pronostics du jour, du meilleur au moins bon (au plus 2 par match). `scan` : relevé gratuit (odds.scan_today),
     `picks` : sélections avec cotes réelles (leurs marchés ne sont pas refaits : seulement corners/cartons des matchs
     payés qui n'ont pas de ligne chez les books). `africa` : matchs africains du jour (stats.africa_matches), analysés avec
-    les seuls profils API-Football. `deadline` : instant time.monotonic au-delà duquel on s'arrête."""
+    les seuls profils API-Football. `deadline` : instant time.monotonic au-delà duquel on s'arrête. `all_families` : garder le
+    meilleur pronostic de CHAQUE marché du match (relevé 1xBet : la cote réelle choisit ensuite le pari, kelly/xprice.py) au lieu
+    des 2 meilleurs plus tirs et tirs cadrés."""
     have = {}
     for c in picks:
         have.setdefault(c["id"], set()).add(c["market"])
@@ -316,7 +318,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=()):
                 c["conf"] = round(simple_q(f, b[0]), 2)
             picks_.append(c)
         best = sorted(picks_, key=lambda c: -c["score"])
-        keep = best[:2]
+        keep = best if all_families else best[:2]
         for prefix in ("team_shots_", "team_sot_"):          # tirs et tirs cadrés : toujours le meilleur de chaque, pour leurs combinés
             shot = next((c for c in best if c["market"].startswith(prefix)), None)
             if shot and shot not in keep:
