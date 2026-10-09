@@ -6,7 +6,8 @@ match plus favorable qu'un match moyen (référence), cote 1xBet >= cote mini de
 deux lignes, la plus grande valeur x proba (niveau modéré : à valeur égale, la plus probable). Le pronostic porte alors
 c["xodds"] (cote 1xBet), c["xev"] (valeur : proba x cote - 1) et c["xp"] (proba de 1xBet sans sa marge, pour comparaison).
 Ligne proposée par 1xBet mais trop mal payée : c["xodds"] < c["min_odds"], le pronostic n'est plus viable (combos.viable).
-Marché absent chez 1xBet ou match non trouvé : le pronostic reste « à vérifier » (cote mini), comme avant.
+Match trouvé mais pari absent chez 1xBet (pas de tirs en Ligue 2...) : c["xnone"], injouable, plus viable. Match non trouvé ou pas
+relevé : le pronostic reste « à vérifier » (cote mini) dans la liste, mais n'entre plus dans un combiné (combos.fair_legs).
 """
 import sys
 import time
@@ -75,7 +76,7 @@ def price(c, px):
 def apply(pronos, fetch=None):
     """Cotes 1xBet des pronostics du jour (en place, dans la limite de C.XBET_SECONDS et C.XBET_MAX_MATCHES). Ne lève jamais.
     -> {"matches": matchs trouvés chez 1xBet, "value": pronostics jouables, "low": pronostics trop mal payés}."""
-    out = {"matches": 0, "value": 0, "low": 0}
+    out = {"matches": 0, "value": 0, "low": 0, "none": 0}
     if not C.XBET_ENABLED or not pronos:
         return out
     try:
@@ -87,12 +88,15 @@ def apply(pronos, fetch=None):
     for c in pronos:
         m = found.get(c["id"])
         if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
-            for k in ("xodds", "xev", "xp"):
+            for k in ("xodds", "xev", "xp", "xnone"):
                 c.pop(k, None)
             c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
         r = price(c, m["px"]) if m else None
         if r:
             out[r] += 1
+        elif m:                                     # match trouvé, mais 1xBet ne propose pas ce pari : injouable
+            c["xnone"] = 1
+            out["none"] += 1
     print(f"[1xbet] {out['matches']} match(s) trouvé(s) chez 1xBet : {out['value']} pronostic(s) jouable(s) à la cote 1xBet, "
-          f"{out['low']} trop mal payé(s).", file=sys.stderr)
+          f"{out['low']} trop mal payé(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
     return out

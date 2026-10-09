@@ -240,10 +240,12 @@ def pronos(items, limit=10, title=None, intro=None):
         return Html(b("🎲 Pronostics Kelly") + "\n" + i("Aucun pronostic assez solide : Kelly ne montre que des pronostics "
                                                                  "viables (assez de chances et de données)."))
     priced = any(c.get("xodds") for c in shown)
+    unpriced = not all(c.get("xodds") for c in shown)
     lines = [b(title or "🎲 Pronostics Kelly"),
              i(intro) if intro else i("Le meilleur pronostic de chaque match, s'il est solide. "
                + ("💎 = cote 1xBet relevée par Kelly aujourd'hui et assez haute pour jouer (vérifie qu'elle n'a pas baissé). "
-                  if priced else "") + "« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée.")]
+                  if priced else "")
+               + ("« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée." if unpriced else ""))]
     by = {}
     for c in shown:
         by.setdefault(c["id"], []).append(c)

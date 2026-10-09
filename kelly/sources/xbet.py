@@ -22,7 +22,7 @@ from datetime import datetime
 from urllib.parse import urlencode
 
 from .. import config as C, stats, store
-from . import http, state
+from . import http, names, state
 
 SOURCE = "xbet"
 DOMAIN = "1xbet.ci"
@@ -139,20 +139,36 @@ def _ts(iso):
     return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
 
 
+def _words(name):
+    return {w for w in names.norm(name).split() if len(w) >= 4 and w not in stats.GENERIC}
+
+
+def loose(a, b):
+    """Deux noms qui partagent un mot distinctif : l'un dans l'autre (« aldosivi » / « caaldosivi ») ou mêmes 5 premières lettres
+    (« seinajoki » / « seinajoen ») ; les mots génériques (club, atletico, united...) ne comptent pas."""
+    return any(x in y or y in x or (len(x) >= 5 and len(y) >= 5 and x[:5] == y[:5]) for x in _words(a) for y in _words(b))
+
+
 def find(ev, cands):
-    """Match 1xBet d'un événement Kelly (home_team, away_team, commence_time) : coup d'envoi à 3 h près et les deux équipes
-    reconnues, ou même coup d'envoi (10 min) avec une équipe sûre et l'autre ressemblante (« SSC Naples » / « Napoli »)."""
+    """Match 1xBet d'un événement Kelly (home_team, away_team, commence_time), parmi les matchs du MÊME championnat :
+    coup d'envoi à 3 h près et les deux équipes reconnues ; ou même coup d'envoi (10 min) avec une équipe sûre, ou les deux noms qui
+    se recoupent (« CAAldosivi » / « Aldosivi Mar del Plata »), à condition qu'un seul match du championnat convienne à cette heure
+    (une équipe ne joue jamais deux matchs en même temps)."""
     t = _ts(ev["commence_time"])
-    best, score = None, 0.0
+    best, score, near = None, 0.0, []
     for g in cands:
         dt = abs(g["ts"] - t)
         if dt > 3 * 3600:
             continue
         sh, sa = stats.team_sim(ev["home_team"], g["home"]), stats.team_sim(ev["away_team"], g["away"])
-        ok = min(sh, sa) >= 0.8 or (dt <= 600 and max(sh, sa) >= 0.9 and min(sh, sa) >= 0.5)
-        if ok and sh + sa > score:
+        if min(sh, sa) >= 0.8 and sh + sa > score:
             best, score = g, sh + sa
-    return best
+        elif dt <= 600 and (max(sh, sa) >= 0.85 or ((sh >= 0.6 or loose(ev["home_team"], g["home"]))
+                                                    and (sa >= 0.6 or loose(ev["away_team"], g["away"])))):
+            near.append(g)
+    if best:
+        return best
+    return near[0] if len(near) == 1 else None
 
 
 def _cells(groups):

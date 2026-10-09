@@ -105,6 +105,16 @@ def test_find_match():
     assert xbet.find(naples, [{"gid": 3, "home": "SSC Naples", "away": "Juventus", "ts": KO}])["gid"] == 3      # même heure
     assert xbet.find(naples, [{"gid": 4, "home": "SSC Naples", "away": "Juventus", "ts": KO + 7200}]) is None   # 2 h d'écart
     assert xbet.find(EV, [{"gid": 5, "home": "Malmö", "away": "Elfsborg", "ts": KO}]) is None
+    # noms très différents chez 1xBet : même heure, mots qui se recoupent, un seul match possible
+    sjk = {"id": "s", "home_team": "SJK Seinäjoki", "away_team": "FC Lahti", "commence_time": "2026-10-09T19:00:00Z"}
+    ald = {"id": "a", "home_team": "Aldosivi Mar del Plata", "away_team": "Sarmiento de Junin", "commence_time": "2026-10-09T19:00:00Z"}
+    pool = [{"gid": 6, "home": "Seinäjoen Jalkapallokerho", "away": "Lahti", "ts": KO},
+            {"gid": 7, "home": "CAAldosivi", "away": "Club Atletico Sarmiento Junin", "ts": KO},
+            {"gid": 8, "home": "à domicile", "away": "à l'extérieur", "ts": KO}]
+    assert xbet.find(sjk, pool)["gid"] == 6 and xbet.find(ald, pool)["gid"] == 7
+    assert xbet.find({"id": "r", "home_team": "Racing Club", "away_team": "Atletico Tucuman", "commence_time": EV["commence_time"]},
+                     [{"gid": 9, "home": "Club Atletico Sarmiento", "away": "Atletico Mitre", "ts": KO}]) is None   # mots génériques
+    assert xbet.find(ald, [pool[1], pool[1] | {"gid": 10}]) is None                       # deux candidats : on ne devine pas
     print("ok  rapprochement des matchs (noms + heure)")
 
 
@@ -192,13 +202,18 @@ def test_choose_line_and_viability():
     # 1xBet paie trop peu : pronostic gardé pour mémoire mais plus viable (ni montré ni dans un combiné)
     low = prono("alternate_totals_corners", "Under", 10.5, 0.72, alts=[["Under", 10.5, 0.72, None]])
     assert xprice.price(low, px) == "low" and low["xodds"] == 1.45 and not CB.viable(low)
-    # marché que 1xBet ne propose pas : inchangé, « à vérifier »
+    # marché que 1xBet ne propose pas : price() ne trouve rien (apply() le marque alors « absent de 1xBet », plus viable)
     none = prono("team_fouls_total", "Over", 22.5, 0.66)
     assert xprice.price(none, px) is None and "xodds" not in none and CB.viable(none)
-    best = CB.best_per_match([none, c])
-    assert best == [c], "à valeur égale de classement, le pronostic jouable chez 1xBet passe devant"
-    legs = CB.fair_legs([c, none | {"id": "e9"}])
-    assert {l["odds"] for l in legs} == {1.99, none["min_odds"]}
+    assert not CB.viable(none | {"xnone": 1})
+    absent = prono("team_fouls_total", "Over", 22.5, 0.66)                                  # même match (e1), trouvé chez 1xBet
+    assert xprice.apply([absent], fetch=lambda *a, **k: {"e1": {"gid": 900, "px": px}})["none"] == 1
+    assert absent["xnone"] == 1 and absent["xgid"] == 900 and not CB.viable(absent)
+    other = none | {"id": "e9"}
+    assert CB.best_per_match([none, c, other]) == [c], "cotes 1xBet du jour connues : seulement les pronostics à leur cote 1xBet"
+    assert [l["odds"] for l in CB.fair_legs([c, other])] == [1.99], "aucune cote inventée dans un combiné"
+    assert [l["odds"] for l in CB.fair_legs([other])] == [other["min_odds"]], "relevé en panne : « à vérifier » comme avant"
+    assert CB.best_per_match([other]) == [other]
     print("ok  meilleure ligne à la cote 1xBet, pronostic mal payé écarté")
 
 
@@ -214,10 +229,11 @@ def test_apply_and_messages():
     def fetch(events, deadline=None, wanted=None):
         seen.update(events=[e["id"] for _, e in events], wanted=wanted)
         return {"e1": {"gid": 900, "px": px}}
-    assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0}
+    assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0, "none": 0}
     assert seen["events"] == ["e1", "e2"] and seen["wanted"]["e1"] == {"alternate_totals_corners"}
     text = fmt.pronos(CB.best_per_match(pronos))
-    assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text and "— mini <b>" in text, text
+    assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text, text
+    assert "— mini <b>" not in text and "« mini »" not in text, "le pronostic sans cote 1xBet n'est pas montré"
     real = fmt.fair_combo(3.96, [pronos[0], pronos[0] | {"id": "x"}], 0.36, 0.5)
     assert real.startswith("<b>💎 COMBINÉ AUX COTES 1XBET</b>") and "🎯 Cote <b>" in real and "✔️ Cote 1xBet <b>1,99</b>" in real
     mixed = fmt.fair_combo(3.0, [pronos[0], pronos[1]], 0.4, 0.5)
@@ -225,7 +241,7 @@ def test_apply_and_messages():
     old = C.XBET_ENABLED
     C.XBET_ENABLED = False
     try:
-        assert xprice.apply(pronos, fetch=lambda *a, **k: 1 / 0) == {"matches": 0, "value": 0, "low": 0}
+        assert xprice.apply(pronos, fetch=lambda *a, **k: 1 / 0)["matches"] == 0
     finally:
         C.XBET_ENABLED = old
     assert xprice.apply(pronos, fetch=lambda *a, **k: 1 / 0)["matches"] == 0              # panne : le matin continue

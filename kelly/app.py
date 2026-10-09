@@ -1030,7 +1030,9 @@ def custom_combo(picks, pronos, target, day, started=False):
     fc = CB.fair_custom(pronos, target)
     if fc:
         legs, min_total, prob = fc
-        head = f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier chez 1xBet."
+        head = (f"{real} : voici un combiné bâti sur les pronostics de Kelly, aux cotes 1xBet relevées par Kelly "
+                f"(cote {fmt.trim(min_total, 1)})." if all(c.get("xodds") for c in legs) else
+                f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier chez 1xBet.")
         return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total)))
     sf = CB.fair_shortfall(pronos, target)
     if sf["matches"] >= 2:
@@ -1038,10 +1040,11 @@ def custom_combo(picks, pronos, target, day, started=False):
     n_cov = apistats.counts()[1] + fmmatch.summary()["usable"]
     first = (f"Impossible de monter un combiné à la cote {t} aujourd'hui.\n• {real}." if picks else
              f"{real} et pas assez de pronostics solides pour un combiné à la cote {t}.")
-    fair_txt = (f"• Pronostics Kelly sans cote : {sf['matches']} match{'s' if sf['matches'] > 1 else ''} avec un pari solide "
-                f"({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou plus) ; en les prenant tous, la cote minimale monte à "
+    kind = "Pronostics Kelly aux cotes 1xBet" if any(c.get("xodds") for c in pronos) else "Pronostics Kelly sans cote"
+    fair_txt = (f"• {kind} : {sf['matches']} match{'s' if sf['matches'] > 1 else ''} avec un pari solide "
+                f"({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou plus) ; en les prenant tous, la cote monte à "
                 f"{fmt.trim(sf['best_total'], 1)} seulement, il en faudrait environ {sf['need']} pour viser {t}." if sf["matches"] else
-                f"• Pronostics Kelly sans cote : aucun pari assez solide aujourd'hui ({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou "
+                f"• {kind} : aucun pari assez solide aujourd'hui ({fmt.pct(C.FAIR_COMBO_MIN_P)} de chances ou "
                 "plus, assez de matchs récents).")
     ok = [x for x in reach if 2.0 <= x < target]
     tip = (f"Réessaie demain, ou demande au plus /combi {fmt.trim(math.floor(max(ok) * 10) / 10, 1)} (le plus haut atteignable aujourd'hui)."

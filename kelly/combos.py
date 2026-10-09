@@ -295,15 +295,19 @@ def viable(c):
         return False
     if c.get("xodds") and c["xodds"] < c.get("min_odds", 0):              # 1xBet paie moins que la cote mini de Kelly : pas joué
         return False
+    if c.get("xnone"):                                                    # match trouvé chez 1xBet, mais ce pari n'y existe pas
+        return False
     return calib.factor(c["market"], sport_key=c.get("sport_key")) >= C.VIABLE_MIN_K
 
 
 def best_per_match(pronos):
-    """Le meilleur pronostic viable de chaque match, un seul par match : d'abord ceux qui sont jouables à la cote 1xBet relevée
-    par Kelly (c["xodds"], kelly/xprice.py), puis les autres (« à vérifier »), chacun dans l'ordre du classement."""
+    """Le meilleur pronostic viable de chaque match, un seul par match, dans l'ordre du classement. Dès que le relevé 1xBet du jour a
+    donné des cotes (kelly/xprice.py), seulement les pronostics jouables à leur cote 1xBet (c["xodds"]) : rien d'inventé ; sans
+    aucune cote 1xBet (relevé en panne), les pronostics « à vérifier » (cote mini)."""
+    real = any(c.get("xodds") for c in pronos)
     best = {}
-    for c in sorted(pronos, key=lambda c: (not c.get("xodds"), -c.get("score", 0))):
-        if c["id"] not in best and viable(c):
+    for c in sorted(pronos, key=lambda c: -c.get("score", 0)):
+        if c["id"] not in best and viable(c) and (c.get("xodds") or not real):
             best[c["id"]] = c
     return list(best.values())
 
@@ -315,9 +319,12 @@ def fair_eligible(c):
 
 
 def fair_legs(pronos):
-    """Jambes d'un combiné à cote juste : les pronostics solides, avec comme « cote » de l'optimiseur la cote 1xBet relevée par Kelly
-    (c["xodds"], jamais sous la cote mini : sinon le pronostic n'est pas viable), sinon la cote minimale à exiger."""
-    return [c | {"odds": c.get("xodds") or c["min_odds"]} for c in pronos if fair_eligible(c) and viable(c)]
+    """Jambes d'un combiné à cote juste : les pronostics solides. Dès que le relevé 1xBet du jour a donné des cotes, SEULEMENT ceux
+    qui ont leur cote 1xBet (c["xodds"], jamais sous la cote mini) : Kelly n'invente pas de cote quand 1xBet en donne. Sans aucune
+    cote 1xBet (relevé en panne) : la cote minimale à exiger, « à vérifier »."""
+    real = any(c.get("xodds") for c in pronos)
+    return [c | {"odds": c.get("xodds") or c["min_odds"]} for c in pronos
+            if fair_eligible(c) and viable(c) and (c.get("xodds") or not real)]
 
 
 def _fair_best(legs, lo, hi):
