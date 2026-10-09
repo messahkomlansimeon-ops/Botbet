@@ -55,7 +55,8 @@ EXTRA_LEAGUES = {
     "africa_egypt_premier_league": 519, "africa_morocco_botola_pro": 530,     # stats de match (fmmatch) : touches, fautes... (Égypte)
 }
 SPORT_TO_LEAGUE["soccer_sweden_superettan"] = 168                       # vérifié : SWE, Superettan
-EXTRA_LEAGUES.update({k: f for rows in C.XB_LEAGUES.values() for k, _, _, f in rows})     # championnats 1xBet (kelly/xworld.py)
+if C.XWORLD_ENABLED:                                                    # XWORLD_ENABLED=0 : ni pages de ligue ni stats pour les championnats 1xBet
+    EXTRA_LEAGUES.update({k: f for rows in C.XB_LEAGUES.values() for k, _, _, f in rows})     # championnats 1xBet (kelly/xworld.py)
 LEAGUES = {k for k in SPORT_TO_LEAGUE if not k.endswith("_")} | set(EXTRA_LEAGUES)
 _QUALIF = (("africa", 10196), ("afc", 10197), ("concacaf", 10198), ("south_america", 10199), ("europe", 10195))
 

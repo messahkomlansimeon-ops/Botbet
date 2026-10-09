@@ -122,10 +122,12 @@ def test_fair_unknown_and_void():
         unk = leg("u", "alternate_totals_corners", "Over", 9.5)                   # score connu, pas de corners
         mk = lambda keys, legs: {"date": "2026-09-20", "tier": 5, "min_odds": 5.0, "prob": 0.2, "keys": keys, "legs": legs,  # noqa: E731
                                  "result": None, "played": {"odds": 5.0, "stake": 1.0, "at": "x"}}
-        store.save(fair.COMBOS_FILE, [mk(["w", "u"], [dict(win), dict(unk)]), mk(["p", "v"], [dict(push), dict(void)]),
-                                      mk(["w", "v"], [dict(win), dict(void)])])
+        store.save(fair.COMBOS_FILE, [mk(["w", "u"], [dict(win), dict(unk)]), mk(["p", "p2"], [dict(push), dict(push, key="p2")]),
+                                      mk(["w", "p"], [dict(win), dict(push)]), mk(["w", "v"], [dict(win), dict(void)])])
         rows, done = settle.settle_fair_combos(NOW, stats_for=lambda b: {})
-        assert [c["result"] for c in rows] == ["unknown", "void", "win"], [c["result"] for c in rows]
+        # jambe sans score trouvé = « unknown » (jamais « void ») : le combiné n'est jamais gagné tant qu'une jambe n'est pas résolue
+        assert [c["result"] for c in rows] == ["unknown", "void", "win", "unknown"], [c["result"] for c in rows]
+        assert rows[3]["legs"][1]["result"] == "unknown"
         bankroll.save({"bankroll": 100.0, "initial": 100.0, "real": True})
         assert bankroll.played_gain(rows[0]) == 0.0 and bankroll.played_gain(rows[1]) == 0.0
         assert bankroll.played_gain(rows[2] | {"legs": [dict(win, result="win")]}) > 0
