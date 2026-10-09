@@ -1245,13 +1245,15 @@ def run_stats_window(now=None, fetch=None, seconds=None):
 def fill_match_stats():
     """Passage horaire : quelques pages de match FotMob (touches, hors-jeu, fautes, tirs...) pour les profils d'équipe. Jamais au passage du matin :
     la page des ligues, lue le matin, est relue depuis le cache. Ne casse jamais le passage."""
+    rep = None
     try:
         rep = fmmatch.fill()
         print("[fmmatch] " + fmmatch.report_line(rep), file=sys.stderr)
-        return rep
     except Exception as e:                          # noqa: BLE001 - facultatif
         print(f"[fmmatch] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-        return None
+    from .sources import s365
+    s365.fill_safe()                                # stats de match 365scores (ligues sans FotMob détaillé) ; ne lève jamais
+    return rep
 
 
 def run_snapshot():

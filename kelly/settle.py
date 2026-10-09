@@ -3,7 +3,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import calib, config as C, ensemble, fair, fmt, learn, odds, played, sharpgap, stats, store, track
-from .sources import fmmatch, footballdata as fd, fotmob, names
+from .sources import fmmatch, footballdata as fd, fotmob, names, s365
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
@@ -200,6 +200,12 @@ def match_stats(b, fdata, stats_for=None):
             fstats = fmmatch.match_stats(b) or fstats
         except Exception as e:                         # noqa: BLE001 - facultatif
             print(f"[settle] FotMob ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+    if soccer and (b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None
+                   or b["market"] in FD_MARKETS and (fstats or {}).get(need) is None):
+        try:                                           # ligues sans FotMob détaillé : stats du match chez 365scores
+            fstats = s365.match_stats(b) or fstats
+        except Exception as e:                         # noqa: BLE001 - facultatif
+            print(f"[settle] 365scores ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     return fstats
 
 
