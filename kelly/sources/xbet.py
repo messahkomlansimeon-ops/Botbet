@@ -92,8 +92,8 @@ def url(endpoint, **params):
 
 def _get_json(address, ttl):
     r = http.fetch(address, SOURCE, ttl, headers=JSON_H)
-    if not r.ok:
-        raise XbetError(r.error or "réponse vide")
+    if not r.ok or r.stale or r.error:         # http.fetch rend l'ANCIEN corps du cache (stale + error) en cas d'échec : jamais des cotes périmées
+        raise XbetError(r.error or ("réponse périmée" if r.ok else "réponse vide"))
     try:
         return json.loads(r.content)
     except ValueError:
@@ -256,7 +256,8 @@ def _events_url(gid):
 
 
 def odds_time(gids):
-    """Instant (timestamp) du plus ancien relevé en cache des matchs 1xBet `gids` (cotes du marché principal) ; None si aucun."""
+    """Instant (timestamp) du plus ancien relevé en cache des matchs 1xBet `gids` (GameId de la cote : le sous-match pour des corners
+    ou des tirs, sinon le match) ; None si aucun."""
     ts = [hit[0].get("fetched_at") for g in gids if g for hit in [http._read(http._key(_events_url(g), JSON_H))] if hit]
     ts = [t for t in ts if t]
     return min(ts) if ts else None
@@ -442,7 +443,7 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
     if live:
         with live_mode(fresh_min):
             return fetch_day(events, deadline, max_matches, wanted)
-    out, errors, leagues, cat = {}, [], {}, None
+    out, errors, leagues, cat, menu_down = {}, [], {}, None, False
     max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches
     ses = _Session()
     if ses.why:
@@ -454,7 +455,7 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
         if ev.get("xgid"):
             g = {"gid": ev["xgid"], "home": ev["home_team"], "away": ev["away_team"]}
         else:
-            if key not in LEAGUES:
+            if key not in LEAGUES or (cat is None and menu_down):
                 continue
             if key not in leagues:
                 try:
@@ -463,8 +464,9 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
                 except XbetError as e:
                     errors.append(f"{key} : {e}")
                     leagues[key] = []
-                    if cat is None:                 # menu illisible : inutile d'insister
-                        break
+                    menu_down = cat is None         # menu illisible : inutile d'insister, mais les matchs à id 1xBet connu restent lus
+                    if menu_down:
+                        continue
             g = find(ev, leagues[key])
             if not g:
                 continue
@@ -521,8 +523,15 @@ def save_coupon(legs):
     ses = _Session()
     if ses.why:
         return None
+
+    def post():
+        r = http.post(BASE + "/service-api/LiveBet/Open/SaveCoupon", body)
+        # proxy en panne AVANT l'envoi (jamais un délai de lecture : le ticket a pu être créé) : session suivante via _Session.call
+        if r and not r.ok and r.error and any(k in r.error for k in ("ProxyError", "ConnectTimeout")):
+            raise XbetError(r.error)
+        return r
     try:
-        r = ses.call(http.post, BASE + "/service-api/LiveBet/Open/SaveCoupon", body)
+        r = ses.call(post)
         if not r or not r.ok or not r.content:
             return None
         data = json.loads(r.content)

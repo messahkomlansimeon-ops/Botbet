@@ -331,32 +331,54 @@ def fair_legs(pronos):
 def _fair_best(legs, lo, hi):
     """Combiné à cote juste : d'abord avec les seules jambes aux cotes 1xBet relevées par Kelly (rien d'inventé), sinon avec toutes."""
     real = [c for c in legs if c.get("xodds")]
-    return best_combo(real, lo, hi) or best_combo(legs, lo, hi)
+    return best_combo(real, lo, hi) or (best_combo(legs, lo, hi) if len(real) < len(legs) else None)     # mêmes jambes : inutile de refaire
+
+
+def _carried(l, by_key):
+    """Jambe d'un combiné dont le match n'a pas été relu : telle quelle (cote et référence 1xBet enregistrées), avec la clé « odds »
+    attendue par l'optimiseur (« xref » repris du pronostic du jour si la jambe enregistrée n'en a pas et que sa cote est la même)."""
+    o = by_key.get(l.get("key")) or {}
+    ref = l.get("xref") or (o.get("xref") if o.get("xodds") == l.get("xodds") else None)
+    return l | {"odds": l.get("odds") or l.get("xodds") or l.get("min_odds")} | ({"xref": ref} if ref else {})
 
 
 def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None):
-    """Combiné `legs` remis aux cotes du moment : `pool` = pronostics à jour (xprice.live_check). Une jambe reste si son match a
-    encore un pari viable du même marché à sa cote 1xBet (la ligne a pu changer) ; sinon elle sort. Cote totale encore >= `lo` :
-    on garde les survivants ; sinon ils sont complétés par le meilleur combiné des remplaçants (`fresh_ids` : matchs relus à
-    l'instant seulement ; `prefix` : marchés permis, combinés spécial tirs) pour revenir dans [lo, hi].
-    -> (jambes, cote, proba, retirées, ajoutées) ou None si impossible."""
+    """Combiné `legs` remis aux cotes du moment : `pool` = pronostics à jour (xprice.live_check). Une jambe dont le match a été relu
+    reste si ce match a encore un pari viable du même marché à sa cote 1xBet (la ligne a pu changer : « changées ») ; sinon elle sort.
+    Une jambe dont le match n'a PAS été relu (`fresh_ids` : matchs relus à l'instant seulement) n'est jamais retirée : reprise telle
+    quelle. Cote totale encore >= `lo` : on garde les survivants (même au-dessus de `hi` : les cotes ont monté) ; sinon ils sont
+    complétés par le meilleur combiné des remplaçants (`prefix` : marchés permis, combinés spécial tirs) pour revenir dans [lo, hi],
+    sans jamais dépasser `hi`.
+    -> (jambes, cote, proba, retirées, ajoutées, changées [(ancienne, nouvelle)]) ou None si impossible."""
     fresh = {}
     for c in fair_legs(pool):
         if c.get("xodds") and (fresh_ids is None or c["id"] in fresh_ids) and (not prefix or c["market"].startswith(prefix)):
             k = (c["id"], c["market"])
             if k not in fresh or c["prob"] > fresh[k]["prob"]:
                 fresh[k] = c
-    keep, removed = [], []
+    by_key = {c.get("key"): c for c in pool}
+    keep, removed, changed = [], [], []
     for l in legs:
+        if fresh_ids is not None and l["id"] not in fresh_ids:
+            keep.append(_carried(l, by_key))
+            continue
         c = fresh.get((l["id"], l["market"]))
-        (keep if c else removed).append(c or l)
+        if not c:
+            removed.append(l)
+            continue
+        keep.append(c)
+        if (l.get("name"), l.get("point")) != (c["name"], c["point"]):
+            changed.append((l, c))
     total = math.prod(c["odds"] for c in keep) if keep else 1.0
+    if fresh_ids is not None and not fresh_ids:                 # rien relu : rien à juger
+        return keep, total, math.prod(c["prob"] for c in keep), [], [], []
     added = []
     if not keep or total < lo:
         used = {c["id"] for c in keep}
         spares = [c for c in fresh.values() if c["id"] not in used]
-        rlo = max(lo / total, 1.01)
-        rhi = max(hi / total, rlo * 1.3)
+        rlo, rhi = max(lo / total, 1.01), hi / total
+        if rhi < rlo:
+            return None
         one = max((c for c in spares if rlo <= c["odds"] <= rhi), key=lambda c: c["prob"], default=None)   # un seul remplaçant suffit ?
         extra = ([one], one["odds"], one["prob"]) if one else best_combo(spares, rlo, rhi)               # sinon plusieurs (2 au moins)
         if not extra:
@@ -364,7 +386,7 @@ def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None):
         added = extra[0]
         keep += added
         total = math.prod(c["odds"] for c in keep)
-    return keep, total, math.prod(c["prob"] for c in keep), removed, added
+    return keep, total, math.prod(c["prob"] for c in keep), removed, added, changed
 
 
 def fair_stake(min_total):

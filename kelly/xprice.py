@@ -3,9 +3,11 @@
 Pour chaque match, Kelly relève les cotes 1xBet des marchés où elle a un pronostic, puis choisit, parmi les lignes de ce marché
 (c["alts"], fair.alternatives), celle qui rapporte le plus à la cote 1xBet RÉELLE : proba corrigée (calib) >= C.VIABLE_MIN_P,
 match plus favorable qu'un match moyen (référence), cote 1xBet >= cote mini de Kelly (1 / proba x (1 + C.FAIR_MARGIN)) ; entre
-deux lignes, la plus grande valeur x proba (niveau modéré : à valeur égale, la plus probable). Le pronostic porte alors
+deux lignes, d'abord celles assez probables pour un combiné (C.FAIR_COMBO_MIN_P), puis la plus grande valeur x proba (niveau
+modéré : à valeur égale, la plus probable). Le pronostic porte alors
 c["xodds"] (cote 1xBet), c["xev"] (valeur : proba x cote - 1) et c["xp"] (proba de 1xBet sans sa marge, pour comparaison).
-Ligne proposée par 1xBet mais trop mal payée : c["xodds"] < c["min_odds"], le pronostic n'est plus viable (combos.viable).
+Ligne proposée par 1xBet mais trop mal payée : c["xodds"] < c["min_odds"], le pronostic n'est plus viable (combos.viable) ; ligne
+trop faible (proba sous C.VIABLE_MIN_P ou sous un match moyen) : même chose, comptée à part (« weak »).
 Match trouvé mais pari absent chez 1xBet (pas de tirs en Ligue 2...) : c["xnone"], injouable, plus viable. Match non trouvé ou pas
 relevé : le pronostic reste « à vérifier » (cote mini) dans la liste, mais n'entre plus dans un combiné (combos.fair_legs).
 """
@@ -47,15 +49,29 @@ def choose(c, px):
         if p < C.VIABLE_MIN_P or (b is not None and p < b) or price < round(1 / p * (1 + C.FAIR_MARGIN), 2):
             continue
         ev = p * price - 1
-        if key is None or ev * p > key:
-            best, key = (name, point, p, p0, b, price, ev), ev * p
+        rank = (p >= C.FAIR_COMBO_MIN_P, ev * p)             # une ligne de valeur qui peut entrer dans un combiné passe avant
+        if key is None or rank > key:
+            best, key = (name, point, p, p0, b, price, ev), rank
     return best
 
 
+def _weak(c):
+    """La ligne actuelle du pronostic échoue à choose() pour une autre raison que le prix : proba corrigée sous C.VIABLE_MIN_P ou sous
+    celle d'un match moyen."""
+    cur = next((a for a in c.get("alts") or [] if (a[0], a[1]) == (c["name"], c["point"])), None)
+    if cur:
+        p = calib.calibrate(c["market"], cur[2], sport_key=c.get("sport_key"))
+        b = None if cur[3] is None else calib.calibrate(c["market"], cur[3], sport_key=c.get("sport_key"))
+    else:                                           # prob et base du pronostic sont déjà corrigées
+        p, b = c["prob"], c.get("base")
+    return p < C.VIABLE_MIN_P or (b is not None and p < b)
+
+
 def price(c, px, refs=None):
-    """Met le pronostic `c` à la cote 1xBet (en place). -> "value" (ligne jouable chez 1xBet), "low" (1xBet paie trop peu) ou None.
+    """Met le pronostic `c` à la cote 1xBet (en place). -> "value" (ligne jouable chez 1xBet), "low" (1xBet paie trop peu), "weak" (ligne trop faible) ou None.
     `refs` (si fourni) : {(marché, côté, ligne): [GameId, Type, Param]} (xbet.prices) -> c["xref"], la référence du pari chez
-    1xBet, pour enregistrer un ticket (un code coupon) au moment du message."""
+    1xBet, pour enregistrer un ticket (un code coupon) au moment du message. "weak" : la ligne du pronostic est proposée mais elle
+    n'est plus assez probable (pas un problème de prix)."""
     pick = choose(c, px)
     if pick:
         name, point, p, p0, b, odd, ev = pick
@@ -77,14 +93,15 @@ def price(c, px, refs=None):
         ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
         if ref:
             c["xref"] = ref
-        return "low"
+        return "weak" if _weak(c) else "low"
     return None
 
 
 def apply(pronos, fetch=None):
     """Cotes 1xBet des pronostics du jour (en place, dans la limite de C.XBET_SECONDS et C.XBET_MAX_MATCHES). Ne lève jamais.
-    -> {"matches": matchs trouvés chez 1xBet, "value": pronostics jouables, "low": pronostics trop mal payés}."""
-    out = {"matches": 0, "value": 0, "low": 0, "none": 0}
+    -> {"matches": matchs trouvés chez 1xBet, "value": pronostics jouables, "low": pronostics trop mal payés, "weak":
+    pronostics à ligne trop faible, "none": absents de 1xBet}."""
+    out = {"matches": 0, "value": 0, "low": 0, "weak": 0, "none": 0}
     if not C.XBET_ENABLED or not pronos:
         return out
     try:
@@ -108,7 +125,7 @@ def apply(pronos, fetch=None):
             c["xnone"] = 1
             out["none"] += 1
     print(f"[1xbet] {out['matches']} match(s) trouvé(s) chez 1xBet : {out['value']} pronostic(s) jouable(s) à la cote 1xBet, "
-          f"{out['low']} trop mal payé(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
+          f"{out['low']} trop mal payé(s), {out['weak']} trop faible(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
     return out
 
 

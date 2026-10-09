@@ -260,7 +260,7 @@ def test_apply_and_messages():
     def fetch(events, deadline=None, wanted=None):
         seen.update(events=[e["id"] for _, e in events], wanted=wanted)
         return {"e1": {"gid": 900, "px": px, "cid": 369147714}}
-    assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0, "none": 0}
+    assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0, "weak": 0, "none": 0}
     assert seen["events"] == ["e1", "e2"] and seen["wanted"]["e1"] == {"alternate_totals_corners"}
     text = fmt.pronos(CB.best_per_match(pronos))
     assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text, text
@@ -564,6 +564,223 @@ def test_refresh_button_and_updates():
     print("ok  bouton « Vérifier ce combiné » et combinés du matin renvoyés seulement s'ils changent")
 
 
+def test_stale_cache_never_served():
+    """A1 : un échec réseau qui rend l'ANCIEN corps du cache n'est jamais pris pour des cotes à jour ; un cache frais reste servi."""
+    import requests
+    from kelly import cache
+    store.save(state.FILE, {})
+    store.save(xbet.USAGE, {})
+    cache.OFFLINE = False
+    u = xbet.url("gameEvents", gameId=5151)
+    body = json.dumps(MAIN).encode()
+    http._write(http._key(u, xbet.JSON_H), {"url": u, "fetched_at": state.clock() - 5 * 3600, "status": 200}, body)
+    # vieux relevé en cache + réseau coupé (robots.txt injoignable) : erreur, pas le vieux corps
+    old_get, old_ps = requests.get, http.PROXIES.pop(xbet.DOMAIN, None)
+    http._robots.clear()
+    requests.get = lambda *a, **k: (_ for _ in ()).throw(requests.ConnectionError("pas de réseau"))
+    try:
+        r = http.fetch(u, xbet.SOURCE, 600, headers=xbet.JSON_H)
+        assert r.ok and r.stale and r.error, "le piège : http.fetch rend l'ancien corps avec stale + error"
+        try:
+            xbet._get_json(u, 600)
+            raise AssertionError("cotes périmées servies")
+        except xbet.XbetError as e:
+            assert str(e)
+        # cache encore frais : repris sans requête
+        assert xbet._get_json(u, 10 * 3600)["constId"] == MAIN["constId"]
+    finally:
+        requests.get = old_get
+        if old_ps:
+            http.PROXIES[xbet.DOMAIN] = old_ps
+    # texte d'erreur du proxy transmis tel quel (basculement de session) ; stale sans erreur (hors ligne) : « réponse périmée »
+    old = http.fetch
+    http.fetch = lambda url, *a, **k: http.Result(url, body, None, from_cache=True, stale=True, error="réseau indisponible (ProxyError)")
+    try:
+        try:
+            xbet._get_json(u, 600)
+        except xbet.XbetError as e:
+            assert "ProxyError" in str(e)
+        http.fetch = lambda url, *a, **k: http.Result(url, body, 200, from_cache=True, stale=True)
+        try:
+            xbet._get_json(u, 600)
+            raise AssertionError("cache périmé servi")
+        except xbet.XbetError as e:
+            assert "périmée" in str(e)
+        # relevé : match non retrouvé (pas de cotes inventées), erreur notée
+        http.fetch = lambda url, *a, **k: http.Result(url, body, None, from_cache=True, stale=True, error="HTTP 500")
+        assert xbet.fetch_day([("soccer_spain_la_liga", EV | {"xgid": 900})]) == {}
+        assert "HTTP 500" in state.health("xbet")["last_error"]
+    finally:
+        http.fetch = old
+    # le proxy de la session 20 est en panne : l'erreur de la lecture périmée fait passer à la session 21
+    saved = os.environ["XBET_PROXY"]
+    os.environ["XBET_PROXY"] = "http://user-GB-20:pw@proxy.test:80"
+    store.save(xbet.USAGE, {})
+
+    def fetch(url, *a, **k):
+        if "-GB-20:" in http.PROXIES[xbet.DOMAIN]:
+            return http.Result(url, body, None, from_cache=True, stale=True, error="réseau indisponible (ProxyError)")
+        return FakeNet().fetch(url, *a, **k)
+    http.fetch = fetch
+    try:
+        got = xbet.fetch_day([("soccer_spain_la_liga", EV | {"xgid": 900})])
+        assert set(got) == {"e1"} and "-GB-21:" in http.PROXIES[xbet.DOMAIN]
+    finally:
+        http.fetch = old
+        os.environ["XBET_PROXY"] = saved
+        store.save(xbet.USAGE, {})
+    print("ok  cotes périmées du cache jamais servies (échec réseau, basculement de session)")
+
+
+def test_post_never_replayed():
+    """A1b : une écriture n'est renvoyée que si la connexion n'a pas pu s'établir ; coupon : bascule de session sur panne du proxy."""
+    import requests
+    from unittest.mock import patch
+    url = "https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon"
+    old_sleep, old_post, old_ps = http._sleep, requests.post, http.PROXIES.pop(xbet.DOMAIN, None)
+    http._sleep = lambda s: None
+    calls = []
+
+    def boom(exc):
+        def post(*a, **k):
+            calls.append(1)
+            raise exc
+        return post
+    try:
+        for exc, n in ((requests.ReadTimeout("lent"), 1), (requests.ConnectTimeout("injoignable"), 2),
+                       (requests.exceptions.ProxyError("502"), 2)):
+            calls.clear()
+            requests.post = boom(exc)
+            r = http.post(url, {"a": 1})
+            assert not r.ok and type(exc).__name__ in r.error and len(calls) == n, (type(exc).__name__, calls)
+        calls.clear()
+        requests.post = lambda *a, **k: calls.append(1) or type("R", (), {"status_code": 503, "content": b"", "headers": {}})()
+        assert http.post(url, {"a": 1}).error == "HTTP 503" and len(calls) == 1, "5xx : la requête a pu arriver"
+    finally:
+        http._sleep, requests.post = old_sleep, old_post
+        if old_ps:
+            http.PROXIES[xbet.DOMAIN] = old_ps
+    # coupon : proxy en panne avant l'envoi -> session suivante ; délai de lecture : jamais renvoyé, pas de code
+    saved = os.environ["XBET_PROXY"]
+    os.environ["XBET_PROXY"] = "http://user-GB-20:pw@proxy.test:80"
+    store.save(xbet.USAGE, {})
+    store.save(state.FILE, {})
+    legs = [{"xodds": 1.68, "xref": [1, 10, 3.5]}, {"xodds": 1.36, "xref": [2, 10, 3.5]}]
+    seen = []
+
+    def mock_post(u, body, headers=None, timeout=None):
+        seen.append(http.PROXIES[xbet.DOMAIN])
+        if "-GB-20:" in seen[-1]:
+            return http.Result(u, None, error="réseau indisponible (ProxyError)")
+        return http.Result(u, json.dumps({"Success": True, "Value": "ZZ9"}).encode(), 200)
+    try:
+        with patch("kelly.sources.http.post", side_effect=mock_post):
+            assert xbet.save_coupon(legs) == "ZZ9" and "-GB-21:" in seen[-1] and len(seen) == 2
+        seen.clear()
+        with patch("kelly.sources.http.post", side_effect=lambda *a, **k: seen.append(1) or http.Result(
+                a[0], None, error="réseau indisponible (ReadTimeout)")):
+            assert xbet.save_coupon(legs) is None and len(seen) == 1, "délai de lecture : le ticket a pu être créé"
+    finally:
+        os.environ["XBET_PROXY"] = saved
+        store.save(xbet.USAGE, {})
+    print("ok  écriture jamais rejouée à tort, coupon : bascule de session")
+
+
+def test_fetch_day_menu_down():
+    """A7 : menu illisible -> les événements sans id 1xBet sont sautés, ceux qui ont un id 1xBet sont quand même relus."""
+    store.save(state.FILE, {})
+    store.save(xbet.USAGE, {})
+
+    def run(net):
+        base = net.fetch
+        net.fetch = lambda url, *a, **k: (net.calls.append(url) or http.Result(url, None, error="HTTP 500") if "leftMenuSports" in url
+                                          else base(url, *a, **k))
+        http.fetch = net.fetch
+        return xbet.fetch_day([("soccer_spain_la_liga", EV), ("soccer_spain_la_liga", EV | {"id": "e2", "xgid": 900}),
+                               ("soccer_spain_la_liga", EV | {"id": "e3"})]), net.calls
+    got, calls = with_net(run)
+    assert set(got) == {"e2"}, got
+    assert sum("leftMenuSports" in u for u in calls) == 1, "le menu n'est pas redemandé pour chaque événement"
+    print("ok  menu illisible : les matchs à id 1xBet connu restent relus")
+
+
+def test_choose_prefers_combo_line():
+    """A4 : une ligne de valeur qui peut entrer dans un combiné (proba >= 60 %) passe avant une ligne à 59 % plus rentable.
+    A6 : ligne trop faible (pas un problème de prix) -> « weak »."""
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    px = {}
+    xbet._ladder(CORNERS["eventGroups"], *xbet.SUBGAMES[2], px)
+    assert C.VIABLE_MIN_P < 0.59 < C.FAIR_COMBO_MIN_P <= 0.75
+    c = prono("alternate_totals_corners", "Over", 9.5, 0.59,
+              alts=[["Over", 9.5, 0.59, None], ["Under", 10.5, 0.75, None]])            # 0,59 x 1,99 vaut plus que 0,75 x 1,45
+    assert xprice.price(c, px) == "value" and (c["name"], c["point"], c["xodds"]) == ("Under", 10.5, 1.45), c
+    assert CB.fair_eligible(c)
+    solo = prono("alternate_totals_corners", "Over", 9.5, 0.59, alts=[["Over", 9.5, 0.59, None]])
+    assert xprice.price(solo, px) == "value" and solo["point"] == 9.5, "seule ligne viable : gardée"
+    weak = prono("alternate_totals_corners", "Over", 9.5, 0.50, alts=[["Over", 9.5, 0.50, None]])
+    assert xprice.price(weak, px) == "weak" and weak["xodds"] == 1.99 and not CB.viable(weak)
+    low = prono("alternate_totals_corners", "Under", 10.5, 0.72, alts=[["Under", 10.5, 0.72, None]])
+    assert xprice.price(low, px) == "low", "bien probable mais mal payé : « low »"
+    got = xprice.apply([weak], fetch=lambda *a, **k: {"e1": {"gid": 900, "px": px}})
+    assert got["weak"] == 1 and got["low"] == 0
+    print("ok  ligne éligible aux combinés préférée, ligne trop faible comptée à part")
+
+
+def test_patch_combo_carry_and_changes():
+    """A2 : jambe dont le match n'a pas été relu reprise telle quelle ; A3 : ligne changée signalée ; A5 : jamais au-dessus de hi."""
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    pool = live_pronos()
+    legs = pool[:4]
+    pool[1]["xnone"] = 1
+    pool[3]["xnone"] = 1                                               # ces deux matchs ne sont PAS relus : jambes gardées
+    res = CB.patch_combo(legs, pool, 5.0, 6.5, fresh_ids={"m0", "m2"})
+    assert [c["id"] for c in res[0]] == ["m0", "m1", "m2", "m3"] and not res[3] and not res[4] and not res[5]
+    assert [c["xodds"] for c in res[0]] == [1.55] * 4 and res[0][1]["odds"] == 1.55, "cote enregistrée gardée"
+    res = CB.patch_combo(legs, pool, 5.0, 6.5, fresh_ids=set())
+    assert [c["id"] for c in res[0]] == [c["id"] for c in legs] and not res[3] and not res[4], "rien relu : rien retiré"
+    # match relu et pari disparu : retiré et remplacé par un match relu
+    res = CB.patch_combo(legs, pool, 5.0, 6.5, fresh_ids={"m1", "m4"})
+    assert [c["id"] for c in res[3]] == ["m1"] and [c["id"] for c in res[4]] == ["m4"], res
+    assert [c["id"] for c in res[0]] == ["m0", "m2", "m3", "m4"]
+    # A3 : même match, autre ligne (Moins de 2,5 buts) -> signalé
+    pool = live_pronos()
+    new = pool[0] | {"point": 2.5, "key": "m0|totals||2.5|Under", "pick": fmt.label("totals", "Under", 2.5, None, "soccer"),
+                     "xref": [900, 10, 2.5]}
+    pool[0] = new
+    res = CB.patch_combo(legs, pool, 5.0, 6.5)
+    assert len(res) == 6 and not res[3] and not res[4] and len(res[5]) == 1
+    old_leg, new_leg = res[5][0]
+    assert old_leg["point"] == 3.5 and new_leg["point"] == 2.5 and new_leg["id"] == "m0"
+    msg = fmt.combo_changes(res[3], res[4], res[5])
+    assert f"🔁 Changé : H0 – A0 : {fmt.esc(legs[0]['pick'])} → {fmt.esc(new['pick'])}" in msg, msg
+    assert fmt.combo_changes([], []) == "" and "🔁" not in fmt.combo_changes([legs[0]], [])
+    # A5 : le complément ne dépasse jamais hi (2 survivants à 2,40 ; un remplaçant à 2,5 ferait 6,0 > 5,2)
+    pool = live_pronos()
+    pool[2]["xodds"] = 2.5
+    assert CB.patch_combo(pool[:2], pool, 5.0, 5.2) is None, "aucun remplaçant dans [lo, hi] : impossible"
+    ok = CB.patch_combo(pool[:2], pool, 5.0, 6.5)
+    assert ok and 5.0 <= ok[1] <= 6.5
+    print("ok  combiné remis à jour : jambes non relues gardées, lignes changées signalées, borne hi respectée")
+
+
+def test_fair_best_single_pass():
+    """A9 : toutes les jambes réelles -> un seul best_combo."""
+    calls = []
+    old = CB.best_combo
+    CB.best_combo = lambda legs, lo, hi=None, *a, **k: calls.append(len(legs)) or None
+    try:
+        legs = [{"id": "a", "xodds": 1.5}, {"id": "b", "xodds": 1.6}]
+        assert CB._fair_best(legs, 2.0, 3.0) is None and calls == [2]
+        calls.clear()
+        CB._fair_best(legs + [{"id": "c"}], 2.0, 3.0)
+        assert calls == [2, 3]
+    finally:
+        CB.best_combo = old
+    print("ok  combiné à cote juste : pas de second calcul sur les mêmes jambes")
+
+
 def main():
     test_parse_and_url()
     test_find_match()
@@ -577,6 +794,12 @@ def main():
     test_combi_live()
     test_refresh_button_and_updates()
     test_save_coupon()
+    test_stale_cache_never_served()
+    test_post_never_replayed()
+    test_fetch_day_menu_down()
+    test_choose_prefers_combo_line()
+    test_patch_combo_carry_and_changes()
+    test_fair_best_single_pass()
     print("tests 1xBet : OK")
 
 

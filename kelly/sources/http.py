@@ -179,16 +179,26 @@ def _request(url, headers=None):
     return (r, None) if r is not None else (None, err)
 
 
+def _not_sent(e):
+    """L'erreur est survenue AVANT l'envoi de la requête (connexion impossible : délai de connexion, proxy, connexion refusée) : la
+    rejouer ne risque pas de doubler une écriture. Un délai de lecture, une coupure en route ou un 5xx : la requête a pu arriver."""
+    if isinstance(e, (requests.ConnectTimeout, requests.exceptions.ProxyError)):
+        return True
+    return isinstance(e, requests.ConnectionError) and not isinstance(e, requests.Timeout) and "NewConnectionError" in repr(e)
+
+
 def post(url, body, headers=None, timeout=TIMEOUT):
     """POST JSON (ticket enregistré chez le bookmaker...) : comme _request mais en écriture — ni cache, ni robots.txt, ni
-    conditionnel : une écriture n'est jamais répétée ni rejouée depuis le cache. Même session proxy par domaine et même compteur
-    WIRE. Retourne un Result : .ok si une réponse HTTP (<500) a été obtenue, .content brut, .error sinon."""
+    conditionnel : une écriture n'est jamais rejouée depuis le cache, ni renvoyée si elle a pu arriver (délai de lecture, 5xx) :
+    un seul nouvel essai, et seulement quand la connexion n'a pas pu s'établir (_not_sent). Même session proxy par domaine et même
+    compteur WIRE. Retourne un Result : .ok si une réponse HTTP (<500) a été obtenue, .content brut, .error sinon."""
     domain = urlparse(url).netloc.lower()
     h = {"User-Agent": UA, "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
     r, err = None, None
     for attempt in (0, 1):
         _wait(domain)
         proxy = PROXIES.get(domain)
+        retry = False
         try:
             if proxy:
                 s = _sessions.get(domain) or _sessions.setdefault(domain, requests.Session())
@@ -197,7 +207,7 @@ def post(url, body, headers=None, timeout=TIMEOUT):
                 r = requests.post(url, headers=h, json=body, timeout=timeout)
             _count(domain, r)
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
-            r, err = None, f"réseau indisponible ({type(e).__name__})"
+            r, err, retry = None, f"réseau indisponible ({type(e).__name__})", _not_sent(e)
             stale = _sessions.pop(domain, None)    # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
             if stale:
                 stale.close()
@@ -205,9 +215,10 @@ def post(url, body, headers=None, timeout=TIMEOUT):
         if r is not None and r.status_code < 500:
             return Result(url, r.content, r.status_code)
         if r is not None:
-            err = f"HTTP {r.status_code}"
-        if attempt == 0:
+            err = f"HTTP {r.status_code}"           # le serveur a reçu la requête : jamais renvoyée
+        if attempt == 0 and retry:
             continue
+        break
     return Result(url, None, error=err)
 
 
