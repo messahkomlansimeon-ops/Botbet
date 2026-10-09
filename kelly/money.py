@@ -320,8 +320,8 @@ def gain(x):
 
 
 def items(bets, rows, fair_rows):
-    from .played import single_rows
-    return list(bets.get("combos", [])) + single_rows(rows, bets.get("combos", [])) + list(fair_rows)
+    from .played import gap_rows, single_rows
+    return list(bets.get("combos", [])) + single_rows(rows, bets.get("combos", [])) + gap_rows(rows) + list(fair_rows)
 
 
 def _counted(bets, rows, fair_rows, days=None, today=None):

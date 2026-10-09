@@ -20,7 +20,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import fmt, money, played, store, telegram
+from . import fmt, money, played, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
@@ -94,10 +94,44 @@ def with_played_button(text, what, day, stake=0, refresh=None, xrefresh=False, l
     return telegram.with_buttons(text, {"inline_keyboard": rows}) if rows else text
 
 
+def gap_markup(items, day):
+    """Boutons d'un message « 💰 1xBet paie plus que le marché » : un bloc par pari, `items` = [(mot « g<n> », nom court, mise conseillée en FCFA, note ou
+    None)]. Pas noté : « ✅ Je l'ai joué : nom — mise » ; noté : « ✅ Joué à … » (inerte), « ✏️ Autre cote » et « ↩️ Annuler »."""
+    day = str(day)[:10]
+    rows = []
+    for what, name, stake, p in items:
+        if p:
+            rows += [[(f"✅ {name} · joué à {fmt.odds_txt(p['odds'])} · {money.money(p['stake'])}", None)],
+                     [("✏️ Autre cote", f"joue|{what}|{day}"), ("↩️ Annuler", f"annule|{what}|{day}")]]
+        else:
+            rows.append([(f"✅ Je l'ai joué : {name}" + (f" — {money.money(stake)}" if stake else ""), f"joue|{what}|{day}")])
+    return telegram.inline(rows)
+
+
+def gap_state_markup(what, day):
+    """Boutons de TOUT le message « 💰 1xBet paie plus que le marché » qui contient le pari `what`, d'après l'état de chacun dans le suivi (les paris d'un même
+    message ont la même marque r["gap"]["batch"]) ; un message d'un seul pari garde aussi son « 📋 Copier le code ». None si le pari n'existe plus."""
+    day = str(day)[:10]
+    rows = played.gap_rows(track.load())
+    me = next((r for r in rows if played.gap_what(r) == what and r.get("date") == day), None)
+    if me is None:
+        return None
+    batch = (me.get("gap") or {}).get("batch")
+    mates = sorted((r for r in rows if r.get("date") == day and (r.get("gap") or {}).get("batch") == batch), key=lambda r: r["gap_n"])
+    items = [(played.gap_what(r), played.short_pick(r), 0 if r.get("played") else money.suggested(r), r.get("played")) for r in mates]
+    markup = gap_markup(items, day)
+    if len(mates) == 1:
+        markup["inline_keyboard"] += telegram.copy_row(mates[0].get("coupon"))
+    return markup
+
+
 def refresh_button(what, day, label="🎟️ Vérifier ce combiné"):
     """Bouton « 🎟️ Vérifier ce combiné » du pari `what` du jour `day` : combiné à cote juste « v<palier> » ou combiné réel / pari du jour
-    aux cotes 1xBet (jamais pour un pari « à vérifier » à cote mini, ni réglé) ; None sinon."""
+    aux cotes 1xBet (jamais pour un pari « à vérifier » à cote mini, ni réglé, ni pour un pari « 1xBet paie plus que le marché » : sa cote vient d'être
+    relue en direct) ; None sinon."""
     day = str(day)[:10]
+    if played.is_gap(what):
+        return None
     t = played.find(what, day)
     if t is None or isinstance(t, str) or t.item.get("result") is not None:
         return None
@@ -257,6 +291,9 @@ def _refresh_msg(message_id, what, day, page=None):
     """Remplace ce que montre le message `message_id` après une note ou une annulation : les boutons du pari (message d'un pari), ou, pour la liste « Mes
     paris » (`page` : son numéro), la page entière, texte et boutons."""
     if page is None:
+        if played.is_gap(what):                      # message « 💰 1xBet paie plus que le marché » : les boutons de tous ses paris, pas ceux d'un seul
+            telegram.edit_buttons(message_id, gap_state_markup(what, day) or {"inline_keyboard": []})
+            return
         telegram.edit_buttons(message_id, keep_refresh(state_buttons(what, day), what, day) or {"inline_keyboard": []})
         return
     lst = played.todo(day, page)

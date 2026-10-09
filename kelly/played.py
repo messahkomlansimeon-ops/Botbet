@@ -5,7 +5,9 @@ cote mini pour les combinés à vérifier).
 
 /joue <quoi> <cote> [mise]   quoi : sur, costaud, special, mechant, monstre (combinés du jour), pari (pari du jour),
                               v5, v12, v25 (combinés à vérifier chez 1xBet, par cote mini visée), vm1, vm2... (combis sur mesure suivis par
-                              « ✅ Je le joue », voir kelly/custom.py). Cote 0 : annule la note.
+                              « ✅ Je le joue », voir kelly/custom.py), g1, g2... (paris « 💰 1xBet paie plus que le marché », voir
+                              kelly/sharpgap.py : lignes de tracked.json marquées r["sharpgap"], numérotées r["gap_n"] dans la journée).
+                              Cote 0 : annule la note.
 Mise par défaut : la mise conseillée du budget du jour (money.suggested) ; sans mise conseillée, Kelly la demande (jamais d'unités).
 Le pari noté est celui du jour, sinon le plus récent pas encore réglé. Stockage dans le pari lui-même : x["played"] =
 {odds, stake, at} et x["cur"] = la devise (FCFA) de la mise (combiné de bets.json, ligne envoyée de tracked.json, combiné de
@@ -98,6 +100,35 @@ def single_rows(rows, combos):
             and (r["single"] if "single" in r else (r.get("date"), r["key"]) not in in_combo)]
 
 
+GAP_RE = re.compile(r"g\d+")
+
+
+def is_gap(what):
+    """Le mot `what` désigne-t-il un pari « 💰 1xBet paie plus que le marché » (« g1 », « g12 ») ?"""
+    return bool(GAP_RE.fullmatch(str(what)))
+
+
+def gap_rows(rows):
+    """Lignes de tracked.json des paris « 💰 1xBet paie plus que le marché » (track.record_gap) qui ont leur numéro « g<n> » : tous sauf celui qui est aussi le pari
+    du jour (il reste noté comme « pari », une seule ligne ne compte jamais deux fois dans l'argent)."""
+    return [r for r in rows if r.get("sharpgap") and r.get("sent") and r.get("gap_n") and r.get("single") is not True]
+
+
+def gap_what(r):
+    return f"g{r['gap_n']}"
+
+
+def short_pick(r, size=24):
+    """Le pari d'une ligne de suivi, raccourci pour un bouton : « Plus de 2,5 buts »."""
+    pick = str(r.get("pick") or r.get("name") or "")
+    return pick if len(pick) <= size else pick[:size - 1].rstrip() + "…"
+
+
+def gap_name(r, size=30):
+    """« 1xBet en retard : Lyon gagne » : le nom d'un tel pari dans « Mes paris »."""
+    return "1xBet en retard : " + short_pick(r, size)
+
+
 class Target:
     """Ce que désigne un mot de /joue : le pari, sa cote de référence, sa mise conseillée (FCFA, 0 si Kelly n'en donne pas), et comment le
     sauver. `known` : la cote 1xBet du pari est CONNUE (price_info : cote 1xBet de la version en cours, pas une cote mini ni une cote de
@@ -127,6 +158,14 @@ def find(word, day):
         px = price_info("pari", r)
         return Target(r, px["odds"], M.suggested(r), f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
                       "cote 1xBet" if px["real"] else "cote typique", _known(px))
+    if is_gap(w):                                     # g1, g2... : paris « 💰 1xBet paie plus que le marché » du jour
+        rows = track.load()
+        r = _pick([r for r in gap_rows(rows) if r["gap_n"] == int(w[1:])], day)
+        if not r:
+            return f"Pas de pari « {w} » à noter (ni aujourd'hui ni en attente de résultat)."
+        px = price_info(w, r)
+        return Target(r, px["odds"], M.suggested(r), f"pari « 1xBet paie plus que le marché » du {fmt.fr_day(r['date'])} ({r['pick']})",
+                      lambda: track.save(rows), "cote 1xBet" if px["real"] else "cote typique", _known(px))
     if w.startswith("v") and len(w) > 1:              # v5, v12, v25 ; vtc5 / vtv5 : combinés « spécial tirs » ; vm1, vm2... : combis sur mesure
         rows = fair.load_combos()
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
@@ -283,7 +322,9 @@ def todo(day, page=None):
     d'un message déjà envoyé, rafraîchie après une note : chat.on_callback). Les boutons d'une page portent son numéro (« joue|sur|jour|l1 »)."""
     bets = store.load("bets.json", {"picks": [], "combos": []})
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
-    items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
+    rows_ = track.load()
+    items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(rows_, bets["combos"]) if r["date"] == day]
+    items_ += [(gap_name(r), r, r["odds"], gap_what(r)) for r in gap_rows(rows_) if r["date"] == day]
     items_ += [(custom_name(c) if is_custom(c) else _fair_name(c["tier"], is_real(c), c), c, c["min_odds"], f"v{c['tier']}")
                for c in fair.load_combos() if c["date"] == day]
     if not items_:
@@ -370,6 +411,7 @@ def items(bets, rows, fair_rows, days=None, today=None):
     """Paris notés : [(genre, nom, élément, cote de référence)], genre = « réel » (cotes réelles) ou « vérif »."""
     out = [("réel", fmt.tier_word(c["tier"]), c, c["odds"]) for c in bets["combos"] if c.get("played")]
     out += [("réel", "Pari du jour", r, r["odds"]) for r in single_rows(rows, bets["combos"]) if r.get("played")]
+    out += [("réel", "1xBet en retard", r, r["odds"]) for r in gap_rows(rows) if r.get("played")]
     out += [("vérif", "À vérifier", c, c["min_odds"]) for c in fair_rows if c.get("played")]
     out = [x for x in out if not x[2].get("skipped")]             # « ❌ Pas joué » : sorti du bilan
     if days:

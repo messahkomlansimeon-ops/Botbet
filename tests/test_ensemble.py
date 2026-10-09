@@ -1,6 +1,6 @@
 """Ensemble adaptatif (kelly/ensemble.py), écarts sharp (kelly/sharpgap.py) et chemin « ensemble » de xprice, hors ligne : devig 2 et 3 issues,
 renormalisation des poids, apprentissage lent avec rappel vers l'a priori, veto et règle de valeur, journal des avis, écarts sharp (filtres,
-fraîcheur), et chemin d'origine de xprice STRICTEMENT inchangé quand C.ENSEMBLE_ENABLED est faux.
+fraîcheur), et chemin d'origine de xprice STRICTEMENT inchangé quand C.ENSEMBLE_ENABLED est faux (le mode mixte par défaut : tests/test_ensemble_wiring.py).
 Lancer : python -m tests.test_ensemble"""
 import copy
 import math
@@ -432,32 +432,42 @@ def scenario(rng):
     return c, px, refs
 
 
-def test_xprice_off_by_default_is_identical():
+def test_xprice_switched_off_is_identical():
+    """ENSEMBLE_ENABLED=0 (interrupteur général, par l'environnement) : le chemin d'origine de xprice, strictement. Le défaut est « mixte » (voir
+    test_mixed_defaults_and_inactive_families dans tests/test_ensemble_wiring.py)."""
     fresh()
-    assert C.ENSEMBLE_ENABLED is False, "désactivé par défaut"
-    rng = random.Random(2026)
-    seen = {"value": 0, "low": 0, "weak": 0, None: 0}
-    for i in range(400):
-        c, px, refs = scenario(rng)
-        a, b = copy.deepcopy(c), copy.deepcopy(c)
-        assert xprice.choose(a, px) == legacy_choose(b, px)
-        ra, rb = xprice.price(a, px, refs), legacy_price(b, px, refs)
-        assert ra == rb and a == b, (i, ra, rb, a, b)
-        seen[ra] += 1
-        assert not ({"p_model", "p_ens", "p_x", "p_sharp", "xveto", "xwhy", "ew", "esrc"} & set(a)), "aucun champ d'ensemble hors option"
-        assert a.get("min_odds") == b.get("min_odds") and a.get("prob") == b.get("prob")
-    assert all(seen[k] > 20 for k in ("value", "low", "weak")) and seen[None] > 5, seen
-    # apply() : même résultat, sans clé « veto », aucune écriture de l'ensemble
-    c, px, refs = scenario(random.Random(7))
-    found = {"s": {"gid": 900, "px": px, "refs": refs}}
-    out = xprice.apply([copy.deepcopy(c)], fetch=lambda *a, **k: found, picks=[{"id": "x"}])
-    assert set(out) == {"matches", "value", "low", "weak", "none"} and not store.exists(E.FILE) and not store.exists(E.LOG_FILE)
-    print("ok  chemin d'origine de xprice identique à l'ancien (400 scénarios), aucun champ ni fichier d'ensemble")
+    C.ENSEMBLE_ENABLED = False
+    try:
+        rng = random.Random(2026)
+        seen = {"value": 0, "low": 0, "weak": 0, None: 0}
+        for i in range(400):
+            c, px, refs = scenario(rng)
+            a, b = copy.deepcopy(c), copy.deepcopy(c)
+            assert xprice.choose(a, px) == legacy_choose(b, px)
+            ra, rb = xprice.price(a, px, refs), legacy_price(b, px, refs)
+            assert ra == rb and a == b, (i, ra, rb, a, b)
+            seen[ra] += 1
+            assert not ({"p_model", "p_ens", "p_x", "p_sharp", "xveto", "xwhy", "ew", "esrc"} & set(a)), "aucun champ d'ensemble éteint"
+            assert a.get("min_odds") == b.get("min_odds") and a.get("prob") == b.get("prob")
+        assert all(seen[k] > 20 for k in ("value", "low", "weak")) and seen[None] > 5, seen
+        # apply() : même résultat, sans clé « veto », aucune écriture de l'ensemble
+        c, px, refs = scenario(random.Random(7))
+        found = {"s": {"gid": 900, "px": px, "refs": refs}}
+        out = xprice.apply([copy.deepcopy(c)], fetch=lambda *a, **k: found, picks=[{"id": "x"}])
+        assert set(out) == {"matches", "value", "low", "weak", "none"} and not store.exists(E.FILE) and not store.exists(E.LOG_FILE)
+        assert E.explain_c({"market": "totals", "p_x": 0.5, "p_model": 0.6}) == "" and E.legend() == "" and not E.logging_on() and not E.is_active("totals")
+    finally:
+        C.ENSEMBLE_ENABLED = True
+    print("ok  ENSEMBLE_ENABLED=0 : chemin d'origine de xprice identique à l'ancien (400 scénarios), aucun champ ni fichier d'ensemble")
 
 
 def test_xprice_opt_in_path():
+    """Le chemin « ensemble » de xprice dans TOUTES les familles (phase 1) : ici ENSEMBLE_ACTIVE_FAMILIES les contient toutes ; le mode mixte par défaut
+    (buts, 1N2, double chance, les 2 marquent seulement) est testé dans tests/test_ensemble_wiring.py."""
     fresh()
+    old_active = C.ENSEMBLE_ACTIVE_FAMILIES
     C.ENSEMBLE_ENABLED = True
+    C.ENSEMBLE_ACTIVE_FAMILIES = frozenset({"goals", "btts", "dc", "h2h", "corners", "cards", "shots", "sot", "fouls", "throws", "offsides"})
     try:
         base = {"key": "m|totals||1.5|Over", "id": "m", "sport_key": "soccer_epl", "home": "A", "away": "B", "commence": "2026-10-09T19:00:00Z",
                 "market": "totals", "name": "Over", "point": 1.5, "who": None, "prob": 0.76, "p0": 0.76, "min_odds": 1.4, "conf": 0.6, "n_min": 8,
@@ -541,10 +551,12 @@ def test_xprice_opt_in_path():
         assert xprice._pick_price(real, px, refs) and real["p_x"] == round(p_x, 4) and real["p_sharp"] == 0.74
     finally:
         C.ENSEMBLE_ENABLED = False
+        C.ENSEMBLE_ACTIVE_FAMILIES = old_active
         fresh()
     # retour à l'option désactivée : plus rien d'ensemble
     c = copy.deepcopy(base)
     assert xprice.price(c, px, refs) in ("value", "low") and "p_model" not in c and "p_ens" not in c
+    C.ENSEMBLE_ENABLED = True
     print("ok  chemin ensemble de xprice : p_ens dans prob, p_model à part, veto, min_odds cohérent, re-pricing stable, sharp attaché")
 
 
@@ -636,7 +648,7 @@ def main():
     test_learning_is_slow_and_shrunk()
     test_value_rule_and_veto()
     test_attach_and_log()
-    test_xprice_off_by_default_is_identical()
+    test_xprice_switched_off_is_identical()
     test_xprice_opt_in_path()
     test_sharpgap()
     print("tests ensemble : OK")

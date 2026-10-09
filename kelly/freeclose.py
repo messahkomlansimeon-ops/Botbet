@@ -16,7 +16,7 @@ l'apprentissage (learn.train_clv) : un pari vraiment relevé reste la meilleure 
 import math
 from datetime import datetime, timedelta
 
-from . import config as C, stats
+from . import config as C, sharpgap, stats
 from .sources import betexplorer, footballdata as fd
 
 GOAL_LINE = 2.5                       # seule ligne de buts des cotes de clôture de football-data
@@ -103,5 +103,7 @@ def fill(rows, now, fdata=None, bx=None):
         p_close, src = got
         r.update(close_prob=round(p_close, 4), close_src=src, closed_at=f"free:{src.split('/')[0]}",
                  clv=round(math.log(p_close / p_take), 4), w=C.FREE_CLOSE_WEIGHT)
+        if r.get("sharpgap") and r.get("xodds") and src == "football-data/ps":       # pari « 1xBet en retard » : clôture de Pinnacle, gratuite
+            r["gap_edge_close"], r["gap_close_src"] = sharpgap.close_edge(r["xodds"], p_close), "pinnacle"
         n += 1
     return n

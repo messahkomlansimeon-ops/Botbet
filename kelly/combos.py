@@ -296,13 +296,16 @@ def skip_line(missing, n_events, anything=True):
 def viable(c):
     """Pronostic sans cote assez solide pour être montré ou joué (C.VIABLE_*) : assez de chances après correction de fiabilité, assez
     de matchs de données pour les deux équipes, données de qualité suffisante, match plus favorable au pari qu'un match moyen du
-    championnat (c["base"], modèle approfondi), et marché ou championnat où Kelly ne s'est pas montrée trop sûre d'elle."""
-    from . import calib
+    championnat (c["base"], modèle approfondi), et marché ou championnat où Kelly ne s'est pas montrée trop sûre d'elle.
+    Famille où l'ensemble décide (ensemble.is_active : buts, 1N2...) : c["prob"] est la proba RETENUE p_ens, donc le seuil C.VIABLE_MIN_P s'applique à elle ;
+    le veto (c["xveto"]) et une cote 1xBet sous la cote mini relevée (c["min_odds"], (1 + marge) / p_ens) écartent le pari comme avant. La référence c["base"] est
+    une proba du MODÈLE (un match moyen vu par Kelly) : elle se compare à la proba du modèle (c["p_model"]), pas à p_ens (voir ensemble.model_prob)."""
+    from . import calib, ensemble
     if c.get("prob", 0) < C.VIABLE_MIN_P or c.get("conf", 1.0) < C.VIABLE_MIN_Q:
         return False
     if c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N:
         return False
-    if c.get("base") is not None and c["prob"] < c["base"]:
+    if c.get("base") is not None and ensemble.model_prob(c) < c["base"]:
         return False
     if c.get("xodds") and c["xodds"] < c.get("min_odds", 0):              # 1xBet paie moins que la cote mini de Kelly : pas joué
         return False

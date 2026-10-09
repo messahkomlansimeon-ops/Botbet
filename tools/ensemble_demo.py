@@ -7,6 +7,8 @@ today.json (pronostics du jour et paris réels), combi_sent.json (combinés sur 
 ensemble.json (poids appris, s'il existe). Affiche :
   1. les 💎 d'aujourd'hui avec la proba du modèle (liste actuelle) et avec l'ensemble (liste de l'ensemble), par famille, avec exemples
      « 1xBet : X % · Sharp : Y % · Kelly : Z % · retenu : W % » ;
+  1b. la liste « MIXTE » (mode par défaut de la phase 2 : l'ensemble décide pour les buts, le 1N2, la double chance et « les 2 marquent » ;
+     les autres familles gardent la règle d'avant) et, avec --render, le texte exact du message des pronostics (fmt.pronos) et de « 🔝 Paris du jour » (/top) ;
   2. ce que deviendraient les combinés sur mesure du jour (m1, m2, m8...) : probabilité et espérance avec la proba retenue ;
   3. les écarts sharp (sharpgap.scan) des paris réels du jour.
 Limites de la copie : today.json ne garde que la cote 1xBet de la ligne choisie (pas toutes les cotes du match) -> l'ensemble n'y est évalué que sur
@@ -26,6 +28,7 @@ ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 ap.add_argument("--data-dir", default=os.environ.get("DATA_DIR"), help="dossier contenant kelly.db (copié, jamais modifié)")
 ap.add_argument("--now", help="instant de référence ISO (défaut : heure d'écriture de today.json)")
 ap.add_argument("--examples", type=int, default=8)
+ap.add_argument("--render", action="store_true", help="affiche le texte du message des pronostics et de /top en mode mixte")
 args = ap.parse_args()
 if not args.data_dir or not os.path.isfile(os.path.join(args.data_dir, "kelly.db")):
     sys.exit("--data-dir : dossier avec kelly.db requis (utilise une copie du snapshot)")
@@ -41,7 +44,7 @@ os.environ["XBET_PROXY_FILE"] = os.path.join(tmp, "pas-de-fichier.env")
 os.environ.pop("TELEGRAM_TOKEN", None)
 sys.path.insert(0, ROOT)
 
-from kelly import calib, combos as CB, config as C, ensemble as E, sharpgap, store  # noqa: E402
+from kelly import app, calib, combos as CB, config as C, ensemble as E, fmt, sharpgap, store  # noqa: E402
 
 
 def pc(p):
@@ -80,6 +83,33 @@ def ensemble_view(c, now):
     if v["p"] is not None:
         c2.update(prob=v["p"], p_model=pm, p_x=px, p_sharp=ps, min_odds=E.min_price(v["p"]), xev=v["ev"])
     return v, c2, approx
+
+
+def mixed_view(pronos, views):
+    """La liste de 💎 du mode mixte : les pronostics d'une famille que l'ensemble décide passent par sa règle (valeur, veto, proba retenue >= VIABLE_MIN_P, modèle
+    au moins égal à la référence), les autres gardent leur état actuel (règle d'avant) avec leurs avis en fantôme. -> pronostics prêts pour fmt.pronos."""
+    out = []
+    for c in pronos:
+        if not c.get("xodds"):
+            continue
+        if E.is_active(c["market"]):
+            w = views.get(c["key"])
+            if not w:
+                continue
+            v, c2, approx = w
+            b = c.get("base")
+            if not v["ok"] or v["p"] < C.VIABLE_MIN_P or (b is not None and v["parts"]["p_model"] < b):
+                continue
+            c3 = {k: x for k, x in c2.items() if k != "base"}                       # la référence se compare à la proba du MODÈLE (fait ci-dessus)
+            c3 |= {"p_ens": v["p"], "base": b}
+            c3["prob"], c3["p_x"] = v["p"], c2.get("p_x")
+            if CB.viable(c3 | {"base": None}):
+                out.append(c3 | {"base": b})
+        else:
+            px = c.get("xp")
+            p, parts = E.combine(E.family(c["market"]), c["prob"], px, E.sharp_for(c, c["name"], c["point"]))
+            out.append(c | {"p_model": c["prob"], "p_x": px, "p_ens": p})
+    return CB.best_per_match(out)
 
 
 def main():
@@ -147,6 +177,10 @@ def main():
     print(f"Communs aux deux listes : {len(cur_keys & ens_keys)} ; seulement dans l'actuelle : {len(cur_keys - ens_keys)} ; seulement avec l'ensemble : {len(ens_keys - cur_keys)}")
     fam_cur, fam_ens = Counter(E.family(c["market"]) for c in cur), Counter(E.family(c["market"]) for c in ens)
     priced = Counter(E.family(c["market"]) for c in pronos if c.get("xodds"))
+    mixed = mixed_view(pronos, views)
+    fam_mix = Counter(E.family(c["market"]) for c in mixed)
+    print(f"\n💎 en mode MIXTE (ensemble pour {', '.join(sorted(calib.LABELS.get(f, f) for f in C.ENSEMBLE_ACTIVE_FAMILIES))} ; règle d'avant ailleurs) : {len(mixed)}"
+          f" (actuels : {len(cur)}) — par famille : " + ", ".join(f"{calib.LABELS.get(f, f)} {n}" for f, n in sorted(fam_mix.items(), key=lambda kv: -kv[1])))
     print("\n  famille            cotés 1xBet   💎 actuels   valeur (ensemble, avant seuil de proba)   💎 ensemble")
     for fam in sorted(set(fam_cur) | set(fam_ens) | set(priced), key=lambda f: -priced[f]):
         print(f"  {calib.LABELS.get(fam, fam):18s} {priced[fam]:11d} {fam_cur[fam]:12d} {value_only[fam]:20d} {fam_ens[fam]:30d}")
@@ -177,6 +211,14 @@ def main():
     for g, c in gaps[:4]:
         v, _, approx = views[c["key"]]
         print(f"   • {label(c)} : écart {g * 100:.0f} points — {opinions_line(v['parts'], approx)}")
+
+    if args.render:
+        print("\n--- 1b. rendu en mode mixte (texte envoyé à Telegram, balises retirées) ---")
+        when = today.get("xbet_at")
+        print(fmt.plain(str(fmt.pronos(mixed, C.FAIR_MAX, when=when))))
+        live = [c for c in picks if (c.get("commence") or "9") > now.strftime("%Y-%m-%dT%H:%M")]
+        print("\n·········· 🔝 Paris du jour (/top) ··········")
+        print(fmt.plain(str(app.top_reply(live, [c for c in mixed if (c.get("commence") or "9") > now.strftime("%Y-%m-%dT%H:%M")], when, today.get("picks_at") or when))))
 
     # ---------- 2. combinés sur mesure ----------
     sent = store.load("combi_sent.json", {})

@@ -9,7 +9,7 @@ import math
 import os
 from datetime import date, datetime, timedelta, timezone
 
-from . import combos as CB, config as C, learn, store
+from . import combos as CB, config as C, ensemble, learn, money, sharpgap, store
 
 FIELDS = ("key", "id", "sport_key", "group", "event", "home", "away", "league", "commence", "market",
           "who", "point", "name", "pick", "odds", "best_odds", "prob", "prob_book", "book", "edge", "spread", "steam", "weight",
@@ -110,6 +110,46 @@ def record(picks, sent_keys, day, now=None, single_key=None):
     return added
 
 
+def record_gap(entries, day, now=None, read_at=None):
+    """Enregistre les paris « 💰 1xBet paie plus que le marché » annoncés (sharpgap) : entries = [(pari de today.json avec toutes ses données, candidat
+    sharpgap avec "n" et "batch" (sharpgap.reserve), mise conseillée en FCFA, 0 si trop petite, None sans budget du jour ; code coupon ou None)]. Un pari déjà suivi (jambe d'un combiné, fantôme,
+    pari du jour) reçoit la marque ; sinon une ligne neuve, comme track.record, ENVOYÉE (r["sent"] : sa clôture est relevée dans le budget « closing » et son
+    règlement est celui des autres paris). Marques : r["sharpgap"] = True, r["gap_n"] (numéro « g<n> » du jour), r["gap"] (écart, proba sharp, cote juste, heure du
+    relevé sharp...), r["single"] = False (jamais le « pari du jour » : played.single_rows l'ignore). Prix 1xBet de la ligne : le candidat (relu en direct), sauf
+    pour le pari du jour, dont la ligne garde son prix. Un candidat sans numéro ("n" absent : l'écart est aussi le pari du jour, déjà suivi) est seulement marqué.
+    Mise : celle du budget du jour (None : pas de budget, la mise sera calculée à la note). `read_at` : heure « HH:MM » de la lecture
+    des cotes 1xBet (le matin : la fin du relevé ; sinon maintenant). -> nombre de lignes marquées."""
+    now = now or datetime.now(timezone.utc)
+    rows = load()
+    by_key = {r["key"]: r for r in rows}
+    n = 0
+    for pick, cand, stake, code in entries:
+        mark = {"sharpgap": True, "gap": {k: cand.get(k) for k in ("edge", "p_sharp", "src", "n_sharp", "fair_odds", "xodds", "sharp_at", "batch")}
+                                          | {"at": now.strftime("%H:%M")}}
+        r = by_key.get(cand["key"])
+        if not cand.get("n"):                                # écart qui est AUSSI le pari du jour : seulement marqué (mesure contre Pinnacle), pas de numéro « g<n> »
+            if r is not None:
+                r.update(mark)
+                n += 1
+            continue
+        mark |= {"gap_n": cand["n"], "sent": True}
+        if r is None:
+            r = {k: _typical(pick).get(k) for k in FIELDS} | {
+                "date": str(day), "taken_at": now.isoformat(timespec="minutes"), "features": learn.features(_typical(pick), now),
+                "close_odds": None, "close_prob": None, "closed_at": None, "clv": None, "result": None, "single": False}
+            rows.append(r)
+            by_key[r["key"]] = r
+        r.setdefault("single", False)
+        r.update(mark)
+        if r.get("single") is not True:                      # le pari du jour garde SON prix et SA mise
+            r.update(xodds=cand["xodds"], xref=cand.get("xref"), xat=read_at or now.strftime("%H:%M"), stake=stake, cur=(money.cur() if stake else None))
+            if code:
+                r["coupon"] = code
+        n += 1
+    save(rows)
+    return n
+
+
 def pending_closing(rows, now):
     """Paris sans clôture dont le match démarre dans la fenêtre (ou est passé : « missed »).
     Gratuit : seuls les paris envoyés sont à clôturer (les fantômes servent par leurs résultats),
@@ -150,6 +190,9 @@ def close(rows, closing_picks, now):
         r["close_odds"], r["close_prob"] = c["odds"], round(c["prob"], 4)
         r["closed_at"] = now.isoformat(timespec="minutes")
         r["clv"] = round(math.log(r["odds"] / c["odds"]), 4)
+        s = ensemble.sharp_of(c) if r.get("sharpgap") and r.get("xodds") else None
+        if s:                                               # pari « 1xBet en retard » : sa cote contre la clôture sans marge du book de référence
+            r["gap_edge_close"], r["gap_close_src"] = sharpgap.close_edge(r["xodds"], s[0]), s[1]
         n += 1
     return n
 

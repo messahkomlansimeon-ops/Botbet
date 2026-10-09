@@ -43,6 +43,16 @@ def _list(name, default):
     return [x.strip() for x in (os.environ.get(name) or default).split(",") if x.strip()]
 
 
+def _set(name, default):
+    """« goals,h2h » -> frozenset({"goals", "h2h"}) ; « none » (ou aucune, 0, -, non) : ensemble vide ; variable absente ou vide : `default`."""
+    raw = (os.environ.get(name) or "").strip().lower()
+    if not raw:
+        return frozenset(default)
+    if raw in ("none", "aucune", "aucun", "0", "-", "non", "no"):
+        return frozenset()
+    return frozenset(x.strip() for x in raw.split(",") if x.strip())
+
+
 MAX_SPORTS = _int("MAX_SPORTS", 6)       # plafond de ligues AVEC matchs du jour (les plus chargées d'abord)
 PROP_EVENTS = _int("PROP_EVENTS", 8)     # matchs avec marchés détaillés (le budget limite avant)
 # Budget The Odds API (forfait gratuit : 500 crédits/mois). Voir kelly/budget.py.
@@ -450,8 +460,15 @@ STATS_NEG_MINUTES = _float("STATS_NEG_MINUTES", 20)
 # Les probas de Kelly (modèle de force + profils) perdent face au marché sur les buts et le 1N2 (audit : log-loss modèle > marché ; mêler
 # le modèle n'améliore jamais, poids optimal 0 ; les paris où le modèle s'écarte le plus du marché perdent 9 à 16 %). La proba retenue est donc une
 # COMBINAISON, en log-cotes, des avis disponibles : marché « sharp » (The Odds API, Pinnacle), marché 1xBet (sa cote sans marge), modèle de Kelly.
-# Désactivé par défaut : rien ne change en production tant que ENSEMBLE_ENABLED n'est pas posé (intégration en phase 2).
-ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", False)
+# Mode « mixte » (phase 2) : l'ensemble DÉCIDE pour les familles où le marché a prouvé qu'il vaut mieux que le modèle (ENSEMBLE_ACTIVE_FAMILIES : buts,
+# 1N2, double chance, les 2 marquent) ; ailleurs (corners, cartons, tirs, fautes, touches, hors-jeu) la règle d'avant reste (proba du modèle face à la
+# cote 1xBet, marge FAIR_MARGIN), mais les avis de l'ensemble y sont calculés, affichés et JOURNALISÉS (« fantôme ») pour que les poids apprennent aussi.
+#   ENSEMBLE_ENABLED=0         tout éteint d'un coup : comportement d'avant l'ensemble (rien décidé, calculé, affiché, journalisé ni appris)
+#   ENSEMBLE_ACTIVE_FAMILIES   familles où l'ensemble décide (« goals,h2h,dc,btts » ; « none » : aucune, mode fantôme seulement)
+#   ENSEMBLE_LOG=0             plus de journal des avis ni d'apprentissage (décisions et affichage inchangés)
+ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", True)
+ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts"))
+ENSEMBLE_LOG = _bool("ENSEMBLE_LOG", True)
 ENSEMBLE_MARGIN = _float("ENSEMBLE_MARGIN", 0.03)             # valeur : cote 1xBet x proba retenue >= 1 + marge
 ENSEMBLE_REQUIRE_MARKET = _bool("ENSEMBLE_REQUIRE_MARKET", True)  # vrai : pas de valeur sans AU MOINS un avis de marché (sharp ou 1xBet sans marge), dans toutes les familles
 ENSEMBLE_MAX_DISAGREE = _float("ENSEMBLE_MAX_DISAGREE", 0.12)  # veto : |proba du modèle - proba du marché| au-delà (familles où le marché pèse beaucoup)
@@ -480,4 +497,9 @@ SHARPGAP_MAX_AGE_MIN = _int("SHARPGAP_MAX_AGE_MIN", 120)      # âge maximal du 
 SHARPGAP_MAX_X_AGE_MIN = _int("SHARPGAP_MAX_X_AGE_MIN", 240)  # âge maximal du relevé 1xBet (min) ; inconnu = accepté (re-vérifié en direct avant envoi)
 SHARPGAP_SOON_MIN = _int("SHARPGAP_SOON_MIN", 20)             # match qui commence dans moins de N min : trop tard pour jouer
 SHARPGAP_MIN_SHARP = _int("SHARPGAP_MIN_SHARP", 2)            # books de référence au moins, sauf si Pinnacle en fait partie
+# Paris « 💰 1xBet paie plus que le marché » (phase 2) : annoncés le matin et aux relevés, suivis comme les autres paris (note, argent, clôture, bilan).
+SHARPGAP_ENABLED = _bool("SHARPGAP_ENABLED", True)            # 0 : plus de section, plus d'alerte, plus de suivi neuf
+SHARPGAP_MAX_SHOWN = _int("SHARPGAP_MAX_SHOWN", 3)            # paris au plus dans la section du matin (les plus gros écarts d'abord)
+SHARPGAP_MAX_DAY = _int("SHARPGAP_MAX_DAY", 6)                # paris au plus annoncés par jour (matin + relevés + alertes)
+SHARPGAP_PRESCREEN = _float("SHARPGAP_PRESCREEN", 0.02)       # relevés et alertes : seuls les paris à moins de 2 points du seuil, au prix du matin, sont relus en direct
 # ===================================================================================================================================

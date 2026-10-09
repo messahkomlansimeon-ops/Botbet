@@ -9,8 +9,9 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, custom, fair, fmt, freeclose, learn,
-               migrate, monde, money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xalerts, xprice, xworld)
+from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, custom, ensemble, fair, fmt, freeclose, gapbets,
+               learn, migrate, monde, money, odds, played, settle, sharpgap, sources, stats, store, strength, telegram, track, weekly, xalerts, xprice,
+               xworld)
 from .sources import fmmatch, http, xbet
 from .telegram import Html
 
@@ -37,15 +38,18 @@ def money_line(combos=None):
     return "\n".join(lines + ([streak] if streak else []))
 
 
-def day_stakes(top, built, built_fair):
-    """Mises du jour sur le budget (money.allocate) : ({"pari" | titre du palier | ("fair", cible): mise}, misé, gardé, journée pauvre) ;
-    ({}, 0, 0, False) sans budget du jour."""
+def day_stakes(top, built, built_fair, gaps=()):
+    """Mises du jour sur le budget (money.allocate) : ({"pari" | titre du palier | ("fair", cible) | ("gap", clé du pari « 1xBet paie plus que le marché »): mise},
+    misé, gardé, journée pauvre) ; ({}, 0, 0, False) sans budget du jour."""
     if not money.active():
         return {}, 0, 0, False
     keys, items = [], []
     if top:
         keys.append("pari")
         items.append({"kind": "pari", "tier": "pari", "prob": top["prob"], "odds": top["odds"]})
+    for g in gaps:
+        keys.append(("gap", g["key"]))
+        items.append(gapbets.stake_item(g))
     for title, (_, odds_, prob) in built:
         keys.append(title)
         items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_})
@@ -59,14 +63,17 @@ def day_stakes(top, built, built_fair):
 RETRY_BUTTON = "touche « 🎟️ Vérifier ce combiné »"        # sous un combiné qui devait avoir son code coupon et ne l'a pas eu (fmt.coupon_block)
 
 
-def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None, odds_time=None, fair_coupons=None):
+def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None, odds_time=None, fair_coupons=None, gaps=None,
+              gap_out=None):
     """Messages du jour + enregistrement des paris envoyés. `world` : cache « tour du monde » (monde.build), `pronos` :
     pronostics sans cote (fair.make), `fair_combos` : [(palier, combiné à cote juste | None)] (combos.fair_plan), un message
     chacun, à part des combinés réels. Un message par combiné ; les paliers impossibles à bâtir avec
     des jambes de qualité sont signalés UNE fois, en une ligne, dans l'en-tête. Toujours au moins un message utile : le tour
     du monde et les pronostics remplacent les combinés les jours sans cotes réelles. Avec un budget du jour (money), les mises sont
     prises dessus ; `fair_stakes` (dict) reçoit celles des combinés à vérifier, pour leur suivi, `fair_coupons` (dict) leurs codes coupon.
-    `odds_time` : heure « HH:MM » du relevé 1xBet, rappelée sous les combinés et les pronostics aux cotes 1xBet."""
+    `odds_time` : heure « HH:MM » du relevé 1xBet, rappelée sous les combinés et les pronostics aux cotes 1xBet. `gaps` : écarts sharp du jour (sharpgap.find) ->
+    le message « 💰 1xBet paie plus que le marché » (au plus C.SHARPGAP_MAX_SHOWN, jamais le pari du jour), mises prises sur le budget du jour comme les autres
+    paris ; `gap_out` (liste) reçoit [(pari, candidat numéroté, mise, code)] à suivre (track.record_gap, APRÈS track.record)."""
     quality = CB.make_pool(picks)
     n_events = len({c["id"] for c in picks})
     messages, sent_picks, sent_combos = [], [], []
@@ -76,10 +83,14 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     built = [(t, c) for t, c in plan if c]
     missing = [t for t, c in plan if not c and t not in rejected]
     built_fair = [(t, c) for t, c in fair_combos if c]
-    stakes, spent, kept, poor = day_stakes(top, built, built_fair)
+    top_gap = [g for g in (gaps or []) if top and g["key"] == top["key"]]
+    gaps = [g for g in (gaps or []) if not (top and g["key"] == top["key"])][:C.SHARPGAP_MAX_SHOWN]      # le pari du jour a déjà son message et son bouton
+    if top_gap and gap_out is not None:                  # ... mais il reste un écart sharp : marqué dans le suivi pour mesurer sa clôture contre Pinnacle
+        gap_out.append((top, top_gap[0], None, None))
+    stakes, spent, kept, poor = day_stakes(top, built, built_fair, gaps)
     cur = money.cur()
     if fair_stakes is not None:
-        fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple))})   # 0 compris
+        fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple) and k[0] == "fair")})   # 0 compris
     mise = lambda st: (money.money(st) if st else "pas de mise (trop petite pour ton budget)") if money.active() else None    # noqa: E731
     if picks:
         n_world = monde.total(world) if world else 0
@@ -111,6 +122,16 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
             messages.append(monde.tour_du_monde(world, len(CB.best_per_match(pronos)), why_no_odds))
         except Exception as e:                      # noqa: BLE001 - le tour du monde est facultatif : le reste du matin part quand même
             print(f"[monde] message du tour du monde ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+    if gaps:                                        # 💰 le seul écart que Kelly a mesuré : tout de suite après l'en-tête
+        try:
+            gmsg, rec = gapbets.message(gaps, picks, day, now_utc(), "matin", {g["key"]: stakes.get(("gap", g["key"]), 0) for g in gaps}
+                                        if money.active() else None, when=odds_time)
+            if gmsg is not None:
+                messages.append(gmsg)
+                if gap_out is not None:
+                    gap_out.extend(rec)
+        except Exception as e:                      # noqa: BLE001 - la section est facultative : le reste du matin part quand même
+            print(f"[sharp] section « 1xBet paie plus que le marché » ignorée : {type(e).__name__}: {e}", file=sys.stderr)
     if top:
         if money.active():                          # mise 0 : notée telle quelle (stake 0, sans devise) = pas de mise sur le budget
             top["stake"] = stakes.get("pari", 0)
@@ -239,7 +260,9 @@ def results_message(bets, rows, settled):
     done = [c for c in bets["combos"] if c.get("result") and not c.get("reported")]
     singles = [b for b in settled if b.get("sent") and (b.get("date"), b["key"]) in single_keys
                and b["result"] in ("win", "loss", "unknown")]
-    if not done and not singles:
+    gaps = [b for b in settled if b.get("sharpgap") and b.get("sent") and b.get("result") in ("win", "loss", "unknown")
+            and (b.get("date"), b["key"]) not in single_keys and by_key.get(b["key"]) is not None and not by_key[b["key"]].get("gap_reported")]
+    if not done and not singles and not gaps:
         return None
     blocks = []
     for b in singles:
@@ -249,6 +272,15 @@ def results_message(bets, rows, settled):
             continue
         icon = "✅" if b["result"] == "win" else "❌"
         blocks.append(f"{fmt.b(f'{icon} Pari du jour — {single_price(b)}')}{single_gain_txt(b)}\n{leg_result_line(b)}")
+    for b in gaps:                                  # 💰 paris « 1xBet paie plus que le marché » : annoncés avec leur code, leur résultat est dit aussi
+        by_key[b["key"]]["gap_reported"] = True
+        row = by_key[b["key"]]
+        if b["result"] == "unknown":
+            blocks.append(f"{fmt.b('❔ 1xBet paie plus que le marché — non vérifiable')} : Kelly n'a pas trouvé les stats de {fmt.esc(b['home'])} – "
+                          f"{fmt.esc(b['away'])} (vérifie chez 1xBet)\n{leg_result_line(b)}")
+            continue
+        icon = "✅" if b["result"] == "win" else "❌"
+        blocks.append(f"{fmt.b(f'{icon} 1xBet paie plus que le marché — {single_price(row)}')}{single_gain_txt(row)}\n{leg_result_line(b)}")
     for c in done:
         c["reported"] = True
         blocks.append(combo_result(c, by_key))
@@ -296,7 +328,11 @@ def morning_report(now):
     if res:
         msgs.append(res)
         _step("sauvegarde des résultats", lambda: store.save("bets.json", bets))
+        _step("sauvegarde du suivi (résultats annoncés)", lambda: track.save(rows))        # marque « gap_reported » des paris 1xBet en retard
     msgs += _step("pronostics sans cote", lambda: fair_report(now), [])
+    got_ens = _step("journal des avis de l'ensemble", lambda: settle.settle_ensemble(now))      # après le règlement des pronostics : leurs stats sont en cache
+    if got_ens and (got_ens[0] or got_ens[1]):
+        print(f"[ensemble] journal : {len(got_ens[0])} ligne(s) réglée(s), {got_ens[1]} apprise(s)", file=sys.stderr)
     msgs += _step("combinés à vérifier", lambda: fair_combos_report(now, fair_settled), [])
     d = _step("apprentissage (texte)", lambda: learn.describe_simple(model, rows))
     if d:
@@ -446,8 +482,8 @@ def world_report(scan, picks, day, now):
     try:
         xb = C.SOURCES_REFRESH and C.XBET_ENABLED
         pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.FAIR_SECONDS, africa=africa, all_families=xb)
-        if xb:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé
-            xprice.apply(pronos)
+        if xb:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé (les paris réels donnent l'avis sharp)
+            xprice.apply(pronos, picks=picks)
         fair.record(pronos, day, shown=CB.best_per_match(pronos))     # suivis : les montrés + d'autres en silence (fiabilité)
     except Exception as e:                          # noqa: BLE001
         print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)
@@ -495,6 +531,35 @@ def daily_entry(sample=False, force=False):
     return 1 if DELIVERY["failed"] and not DELIVERY["sent"] else 0
 
 
+def log_opinions(rows, day, now=None):
+    """Journal des avis de l'ensemble (ensemble.record) : le modèle, 1xBet sans marge et le book de référence de chaque pronostic ou pari réel, gardés jusqu'à
+    leur règlement (settle.settle_ensemble) pour que les poids apprennent dans TOUTES les familles, décidées par l'ensemble ou non. Ne lève jamais.
+    -> nombre de lignes ajoutées."""
+    if not ensemble.logging_on():
+        return 0
+    try:
+        n = ensemble.record(rows, str(day), now or now_utc())
+        print(f"[ensemble] {n} avis ajouté(s) au journal ({len(rows)} pari(s) examiné(s))", file=sys.stderr)
+        return n
+    except Exception as e:                          # noqa: BLE001 - le journal est facultatif : le matin part quand même
+        print(f"[ensemble] journal des avis ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
+
+
+def morning_gaps(picks, pronos, day, odds_at):
+    """Écarts sharp du matin (sharpgap.find) sur les paris réels remis au prix 1xBet : la cote 1xBet dépasse la cote juste d'un book de référence lu il y a moins de
+    C.SHARPGAP_MAX_AGE_MIN minutes. [] si l'option est éteinte ou sans paris chiffrés. Ne lève jamais."""
+    if not C.SHARPGAP_ENABLED or not picks:
+        return []
+    try:
+        found = sharpgap.find({"day": str(day), "picks": picks, "pronos": pronos, "picks_at": odds_at, "xbet_at": odds_at}, now_utc())
+        print(f"[sharp] {len(found)} écart(s) : 1xBet paie plus que la cote juste des books de référence", file=sys.stderr)
+        return found
+    except Exception as e:                          # noqa: BLE001
+        print(f"[sharp] écarts ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+        return []
+
+
 def run_daily(sample=False):
     now = now_utc()
     scan = None
@@ -516,7 +581,7 @@ def run_daily(sample=False):
         events = odds.fetch_events(day, after=now, scan=scan)
         print(f"[budget] {budget.line()}", file=sys.stderr)
     picks = odds.build_picks(events, day, after, history=store.load("odds_history.json", {}), model=model)
-    world, pronos, why, fair_combos, odds_at = None, [], None, [], None
+    world, pronos, why, fair_combos, odds_at, gaps = None, [], None, [], None, []
     if not sample:
         try:
             picks = odds.rescore(stats.enrich(picks, day), model)       # modèle appris : après les stats d'avant-match
@@ -538,6 +603,8 @@ def run_daily(sample=False):
             except Exception as e:                  # noqa: BLE001 - facultatif : sans cote 1xBet, les cotes typiques restent
                 print(f"[1xbet] paris réels ignorés : {type(e).__name__}: {e}", file=sys.stderr)
         odds_at = now_utc().strftime("%H:%M")       # fin du relevé 1xBet : l'heure des cotes des combinés
+        log_opinions(list(pronos) + list(picks), day)          # avis de l'ensemble (journal « fantôme » de toutes les familles)
+        gaps = morning_gaps(picks, pronos, day, odds_at)
         if not scan.get("paid"):
             why = budget.why_not(len(C.FEATURED["soccer"].split(",")), "daily")
             why = "budget de cotes du jour épuisé" if why else None
@@ -546,10 +613,15 @@ def run_daily(sample=False):
             fair_combos = fair_plan_all(pronos)
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
-    fair_stakes, fair_coupons = {}, {}
+    fair_stakes, fair_coupons, gap_rows = {}, {}, []
     messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos, fair_stakes, odds_time=odds_at,
-                                                  fair_coupons=fair_coupons)
+                                                  fair_coupons=fair_coupons, gaps=gaps, gap_out=gap_rows)
     track.record(picks, {c["key"] for c in sent_picks}, day, now, single_key=single_key(sent_picks))
+    if gap_rows:                                    # 💰 suivis comme les autres paris, APRÈS track.record (le pari du jour garde sa marque)
+        try:
+            track.record_gap(gap_rows, day, now, read_at=odds_at)
+        except Exception as e:                      # noqa: BLE001 - le suivi neuf ne bloque pas le matin
+            print(f"[sharp] suivi des écarts ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     settle.record_combos(sent_combos, day)
     fair.record_combos([(t, c) for t, c in fair_combos if c], day, fair_stakes, money.cur() if fair_stakes else None,
                        coupons=fair_coupons, at=odds_at)
@@ -632,7 +704,7 @@ def plan_closing(due, combos, bulk=True):
 COMBO_UPDATES = "combo_updates.json"     # dernière version envoyée de chaque combiné du matin : {"day", "tiers": {palier: {keys, total, legs, dead?}}}
 
 
-LAST_REFRESH = {"matches": 0, "new": 0, "updated": 0, "single": 0}       # bilan du dernier run_xbet_refresh (réponse du relevé manuel)
+LAST_REFRESH = {"matches": 0, "new": 0, "updated": 0, "single": 0, "gap": 0}       # bilan du dernier run_xbet_refresh (réponse du relevé manuel)
 
 
 def _current_day(today, now):
@@ -736,6 +808,7 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
     if got:
         today["xbet_at"] = now.strftime("%H:%M")    # heure du dernier relevé 1xBet (partiel ou non) ; l'heure de chaque cote est dans c["xat"] (fmt.pronos)
     store.save("today.json", today)                 # mêmes objets : les pronostics à venir portent les nouvelles cotes
+    log_opinions(upcoming_, today["day"], now)      # derniers avis de l'ensemble avant le match (journal d'apprentissage)
     if new:
         fair.record(new, today["day"], shown=new)
         telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet", when=now.strftime("%H:%M"),
@@ -743,8 +816,9 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
                                        "depuis ce matin). Vérifie la cote avant de valider."))
     n_upd = _update_combos(today["day"], pronos, now, got)
     n_single = _upgrade_single(today, now, got, fetch)          # pari du jour sans cote 1xBet au matin : s'il y est maintenant, avec son code
-    xalerts.on_refresh(today, now, got, upcoming_, fetch)       # ⚠️ mes paris en danger, 📈 mieux payé qu'au matin (un message, jamais d'erreur)
-    LAST_REFRESH.update(matches=len(got), new=len(new), updated=n_upd, single=n_single)
+    xalerts.LAST["gap"] = 0
+    xalerts.on_refresh(today, now, got, upcoming_, fetch)       # ⚠️ mes paris en danger, 📈 mieux payé qu'au matin, 💰 1xBet paie plus que le marché (jamais d'erreur)
+    LAST_REFRESH.update(matches=len(got), new=len(new), updated=n_upd, single=n_single, gap=xalerts.LAST["gap"])
     print(f"[1xbet] relevé : {len(upcoming_)} pronostic(s) à venir, {len(new)} nouveau(x) 💎 annoncé(s), "
           f"{n_upd} combiné(s) du matin renvoyé(s) à jour, pari du jour {'passé aux cotes 1xBet' if n_single else 'inchangé'}", file=sys.stderr)
     return len(new)
@@ -768,7 +842,7 @@ def manual_refresh(now=None, fetch=None):
                 f"Rendez-vous demain à {C.DAY_END_HOUR:02d}h00.")
     telegram.send(f"⏳ J'actualise les cotes 1xBet des paris du jour (jusqu'à {math.ceil(C.XBET_MANUAL_SECONDS / 60)} minutes) : "
                   "tes combinés et les paris 💎 d'abord…", queue=False)
-    LAST_REFRESH.update(matches=0, new=0, updated=0, single=0)
+    LAST_REFRESH.update(matches=0, new=0, updated=0, single=0, gap=0)
     run_xbet_refresh(now, fetch, announce=True, live=True, seconds=C.XBET_MANUAL_SECONDS)
     st = LAST_REFRESH
     if not st["matches"]:                           # rien n'a été lu : le délai entre deux relevés n'est pas armé (on peut réessayer tout de suite)
@@ -778,7 +852,8 @@ def manual_refresh(now=None, fetch=None):
     store.save("today.json", today)
     return (f"✅ Cotes 1xBet actualisées à {now:%H:%M} : {st['matches']} match(s) relu(s), {st['new']} nouveau(x) pari(s) 💎, "
             f"{st['updated']} combiné(s) du matin mis à jour." + (" Le pari du jour est maintenant aux cotes 1xBet." if st["single"] else "")
-            + ("" if st["new"] or st["updated"] or st["single"] else " Rien de nouveau à jouer."))
+            + (f" {st['gap']} pari(s) 💰 « 1xBet paie plus que le marché » envoyé(s)." if st["gap"] else "")
+            + ("" if st["new"] or st["updated"] or st["single"] or st["gap"] else " Rien de nouveau à jouer."))
 
 
 def _stake_txt(row):
@@ -1022,6 +1097,7 @@ def run_track(events_for=None, now=None, xfetch=None):
                 if not ev:
                     continue
                 ev["sport_key"] = sk
+                ev.setdefault("read_at", now.isoformat(timespec="seconds"))      # vraie heure de lecture : fraîcheur de la proba sharp (sharpgap)
                 day = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")).date()
                 closing += odds.build_picks([ev], day)
         except Exception as e:                      # noqa: BLE001 - un match en erreur ne bloque pas les autres

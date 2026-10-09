@@ -466,6 +466,7 @@ def live_pronos(n=7):
     """Pronostics 💎 d'un jour à venir (moins de 3,5 buts à 1,55), match m0..m(n-1), id 1xBet 900+i."""
     return [prono("totals", "Under", 3.5, 0.72) | {"id": f"m{i}", "home": f"H{i}", "away": f"A{i}", "commence": KO2, "xodds": 1.55,
                                                     "xev": 0.12, "xgid": 900 + i, "xref": [900 + i, 10, 3.5],
+                                                    "psh": {"under|3.5": [0.70, "pinnacle", 1]},    # Pinnacle voit 70 % (buts : le marché décide)
                                                     "key": f"m{i}|totals||3.5|Under"} for i in range(n)]
 
 

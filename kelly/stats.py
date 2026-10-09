@@ -720,6 +720,13 @@ def stats_known(fixture_id):
     return True
 
 
+def cached_stats(fixture_id):
+    """Statistiques d'un match DÉJÀ téléchargées (cache disque), ou None : jamais une requête de plus (règlement du journal de l'ensemble, qui ne doit pas
+    entamer le quota du jour)."""
+    cur = _stats_cache().get(str(fixture_id))
+    return cur if isinstance(cur, dict) and not cur.get("missing") else None
+
+
 def fixture_stats(fixture_id, players=True):
     """Totaux du match : corners, cartons, tirs, tirs cadrés, fautes, par équipe et au total, et stats par joueur. Mis en cache
     (pour la durée STATS_KEEP_DAYS) : un match déjà demandé ne l'est jamais deux fois.

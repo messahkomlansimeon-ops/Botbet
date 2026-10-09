@@ -60,7 +60,8 @@ def prono(i, **kw):
          "event": f"H{i} - A{i}", "market": "totals", "name": "Under", "point": 3.5, "who": None, "prob": 0.72, "p0": 0.72,
          "min_odds": 1.46, "conf": 0.6, "n_min": 8, "score": 0.2 - i / 1000, "key": f"m{i}|totals||3.5|Under",
          "pick": fmt.label("totals", "Under", 3.5, None, "soccer"), "xodds": 1.55, "xodds0": 1.55, "xev": 0.12, "xgid": 900 + i,
-         "xref": [900 + i, 10, 3.5]}
+         "xref": [900 + i, 10, 3.5],
+         "psh": {"under|3.5": [0.70, "pinnacle", 1]}}      # Pinnacle voit 70 % : sans avis du marché, l'ensemble (buts) ne validerait jamais ce pari
     return c | kw
 
 

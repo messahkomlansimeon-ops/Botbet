@@ -6,7 +6,7 @@ data/weekly.json : {"week": "AAAA-Sss"} de la dernière semaine envoyée.
 """
 from datetime import datetime, timedelta, timezone
 
-from . import calib, config as C, fair, fmt, learn, money, played, settle, store, track
+from . import calib, config as C, ensemble, fair, fmt, learn, money, played, settle, sharpgap, store, track
 
 FILE = "weekly.json"
 FAIR_GAP = 0.03            # écart réussite / annonce sous lequel une famille est « fiable »
@@ -83,10 +83,17 @@ def message(now=None):
     fl = settle.fair_line(fair.load(), 7, now.date())
     if fl:
         blocks.append([f"🎲 {fmt.esc(fl)}"])
+    gl = sharpgap.summary_line(rows, 7, now.date())
+    if gl:
+        blocks.append([f"💰 {fmt.esc(gl)}"])
     data = calib.load()
     fam = _family_lines(data)
     if fam:
         blocks.append(["📏 <b>Fiabilité par marché</b> " + fmt.i("(depuis le début)")] + [fmt.esc(x) for x in fam])
+    el = ensemble.lines()
+    if el:
+        blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(appris sur les résultats : son poids face au marché, Pinnacle face à 1xBet)")]
+                      + [fmt.esc(x) for x in el])
     lg = calib.league_rows(data)
     if len(lg) >= 2:
         best, worst = lg[0], lg[-1]

@@ -38,12 +38,18 @@ exponentiel (demi-vie ENSEMBLE_HALF_LIFE résultats) pour suivre un marché qui 
 ({"fam": {famille: {"m": {"ll": [40 nombres], "n": effectif}, "s": {...}}}, "done": {clé du pronostic: jour}}) : l'apprentissage est
 idempotent par clé de pronostic, que le résultat vienne de data/ensemble_log.json ou de data/fair.json.
 
+Mode « mixte » (phase 2, config.ENSEMBLE_ENABLED / ENSEMBLE_ACTIVE_FAMILIES / ENSEMBLE_LOG) : l'ensemble DÉCIDE seulement dans les familles
+actives (is_active : buts, 1N2, double chance, les 2 marquent par défaut), là où le marché a prouvé qu'il vaut mieux que le modèle. Ailleurs la règle
+d'avant reste, mais les avis (1xBet, sharp, modèle, proba retenue) y sont calculés (xprice._shadow), affichés (explain_c, sans « retenu ») et
+journalisés comme partout, pour que les poids apprennent aussi dans les familles non actives avant d'y être jamais utilisés.
+
 Journal des avis (record / settle_log) : data/ensemble_log.json garde, pour chaque pronostic ou pari (montré ou non), ses avis au dernier relevé
 avant le match (« pm » modèle, « px » 1xBet, « ps » sharp) dans les MÊMES champs que data/fair.json (ROW) pour être réglé par le même code
 (settle._settle_fair_row) ; n'y entrent que les lignes ayant le modèle ET au moins un avis de marché, ou sharp ET 1xBet (les autres n'apprennent
 rien). Les proba « px » approchées (double chance sans ses 3 cotes) n'y entrent jamais.
 """
 import math
+import sys
 from datetime import date, datetime, timedelta, timezone
 
 from . import calib, config as C, odds, store
@@ -79,6 +85,38 @@ def family(market):
 
 def prior_model(fam):
     return C.ENSEMBLE_PRIOR_MODEL.get(fam, C.ENSEMBLE_PRIOR_OTHER)
+
+
+def enabled():
+    """L'ensemble est-il allumé (config.ENSEMBLE_ENABLED) ? Faux : comportement d'avant, rien de calculé, affiché ni journalisé."""
+    return bool(C.ENSEMBLE_ENABLED)
+
+
+def is_active(market):
+    """L'ensemble DÉCIDE-t-il pour ce marché ? Allumé et famille (calib.family) dans config.ENSEMBLE_ACTIVE_FAMILIES : alors c["prob"] d'un pronostic
+    est la proba retenue. Sinon (corners, cartons, tirs...) la règle d'avant s'applique et les avis ne servent qu'à l'affichage et au journal."""
+    return bool(C.ENSEMBLE_ENABLED) and family(market) in C.ENSEMBLE_ACTIVE_FAMILIES
+
+
+def logging_on():
+    """Le journal des avis et l'apprentissage sont-ils allumés (ENSEMBLE_ENABLED et ENSEMBLE_LOG) ?"""
+    return bool(C.ENSEMBLE_ENABLED and C.ENSEMBLE_LOG)
+
+
+def model_prob(c):
+    """Proba du MODÈLE de Kelly du pronostic `c` : c["p_model"] quand l'ensemble a décidé de sa proba (famille active : c["prob"] est alors la proba
+    retenue p_ens, pas celle du modèle), sinon c["prob"]. Les comparaisons entre modèles (référence c["base"] d'un match moyen) lisent celle-ci."""
+    if C.ENSEMBLE_ENABLED and c.get("p_ens") is not None and c.get("p_model") is not None and is_active(c["market"]):
+        return c["p_model"]
+    return c["prob"]
+
+
+LEGEND = "Sur les buts et le résultat, Kelly suit surtout la cote 1xBet ; ailleurs, ses statistiques."      # fin de la légende 💎 (fmt.pronos)
+
+
+def legend():
+    """Phrase de la légende 💎 qui dit ce que Kelly suit, ou '' quand aucune famille n'est décidée par l'ensemble."""
+    return LEGEND if C.ENSEMBLE_ENABLED and C.ENSEMBLE_ACTIVE_FAMILIES else ""
 
 
 def pool_market(p_sharp, p_x, ws):
@@ -448,20 +486,25 @@ def explain(parts, p=None):
 
 
 def explain_c(c):
-    """explain() d'un pronostic remis au prix par xprice avec l'ensemble (c["p_ens"], c["p_model"], c["p_x"], c["p_sharp"]) ; '' sinon."""
-    if c.get("p_ens") is None:
+    """Ligne d'avis d'un pronostic ou d'un pari réel remis au prix 1xBet : « 1xBet : 49 % · Kelly : 71 % » (+ « Sharp : 52 % » si un book de référence
+    couvre le pari, + « retenu : 61 % » dans une famille où l'ensemble décide, voir is_active). '' sans avis de 1xBet (c["p_x"]) ou ensemble éteint :
+    pas de ligne là où il n'y a rien à comparer."""
+    if not C.ENSEMBLE_ENABLED or c.get("p_x") is None:
         return ""
-    return explain({"p_x": c.get("p_x"), "p_sharp": c.get("p_sharp"), "p_model": c.get("p_model")}, c["p_ens"])
+    p = c.get("p_ens") if is_active(c["market"]) else None
+    bits = [f"{n} : {pct(v)}" for n, v in (("1xBet", c.get("p_x")), ("Sharp", c.get("p_sharp")), ("Kelly", c.get("p_model"))) if v is not None]
+    return " · ".join(bits + ([f"retenu : {pct(p)}"] if p is not None else []))
 
 
 def lines(data=None):
-    """Une ligne par famille apprise : « buts : modèle 12 % (a priori 12 %), sharp 75 % — 130 résultats »."""
+    """Une ligne par famille apprise, en mots simples : « buts : Kelly compte pour 12 % (prévu 12 %), Pinnacle 75 % du marché (prévu 75 %) — 130 résultats »
+    (« Kelly » : poids du modèle face au marché ; « Pinnacle » : part des books de référence dans l'avis du marché face à 1xBet)."""
     d = load() if data is None else data
     out = []
     for fam in sorted(d.get("fam") or {}):
         w = weights(fam, d)
-        out.append(f"{calib.LABELS.get(fam, fam)} : modèle {w['wm'] * 100:.0f} % (a priori {w['prior_wm'] * 100:.0f} %), sharp {w['ws'] * 100:.0f} % "
-                   f"(a priori {w['prior_ws'] * 100:.0f} %) — {w['n_m']:.0f} résultats")
+        out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour {w['wm'] * 100:.0f} % (prévu {w['prior_wm'] * 100:.0f} %), Pinnacle "
+                   f"{w['ws'] * 100:.0f} % du marché (prévu {w['prior_ws'] * 100:.0f} %) — {w['n_m']:.0f} résultats")
     return out
 
 
@@ -493,9 +536,14 @@ def record(rows, day, now=None, name=LOG_FILE):
             continue
         old = by_key.get(c["key"])
         if old is not None:
-            if old.get("result") is None:
-                old.update(pm=None if pm is None else round(pm, 4), px=None if px is None else round(px, 4),
-                           ps=None if ps is None else round(ps, 4), xodds=c.get("xodds"))
+            if old.get("result") is None:                  # dernier relevé avant le match ; un avis absent du nouveau relevé ne ternit pas l'ancien
+                for k, v in (("pm", pm), ("px", px), ("ps", ps)):
+                    if v is not None:
+                        old[k] = round(v, 4)
+                if pm is not None:
+                    old["prob"] = round(pm, 4)
+                if c.get("xodds"):
+                    old["xodds"] = c["xodds"]
             continue
         row = {k: c.get(k) for k in ROW} | {"prob": None if pm is None else round(pm, 4), "pm": None if pm is None else round(pm, 4),
                                             "px": None if px is None else round(px, 4), "ps": None if ps is None else round(ps, 4),
@@ -513,7 +561,14 @@ def settle_log(settle_one, name=LOG_FILE):
     settle.py, le même que data/fair.json), apprend des lignes réglées et enregistre. -> (lignes réglées cette fois, lignes apprises)."""
     log = store.load(name, [])
     log = log if isinstance(log, list) else []
-    settled = [r for r in log if r.get("result") is None and settle_one(r)]
+
+    def safe(r):                                    # une ligne bancale (nom d'équipe introuvable, source en panne...) ne bloque pas les autres
+        try:
+            return settle_one(r)
+        except Exception as e:                      # noqa: BLE001
+            print(f"[ensemble] ligne {r.get('key')} non réglée : {type(e).__name__}: {e}", file=sys.stderr)
+            return False
+    settled = [r for r in log if r.get("result") is None and safe(r)]
     learned = learn(log)
     store.save(name, log)
     return settled, learned

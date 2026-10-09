@@ -10,6 +10,11 @@
      toujours de la valeur -> « c'est le moment », avec un code coupon.
   ✅ Bonne nouvelle : un pari que tu as joué (noté : « ✅ Je l'ai joué », « ✅ Je le joue », /joue) dont le marché a baissé de
      C.ALERT_ODDS_DROP depuis le matin (tu as pris une meilleure cote).
+  💰 1xBet paie plus que le marché (gap) : un écart sharp NEUF (kelly/sharpgap.py : la cote 1xBet dépasse la cote juste d'un book de référence frais),
+     relevé aux relevés 1xBet (15:00, mise à jour manuelle) ou aux passages horaires (la clôture qui vient d'être relevée donne le prix frais du book de référence).
+     Le prix 1xBet est RELU en direct (Reader, mêmes plafonds que les autres alertes) et l'écart recalculé à ce prix avant d'envoyer ; jamais deux fois le même
+     pari dans la journée (data/sharpgap_sent.json). Le pari part dans SON message (kelly/gapbets.py : code coupon, mise, « ✅ Je l'ai joué »), suivi comme le
+     pari de la section du matin.
 
 Un seul message par passage (💰 d'abord, puis ⚠️, 📈, ✅), C.XALERT_MAX_ITEMS alertes au plus ; data/alerts_sent.json retient la dernière cote
 alertée de chaque pari (pas deux fois la même alerte sans nouveau mouvement). Les relectures 1xBet sont plafonnées et ne lèvent jamais.
@@ -18,14 +23,15 @@ import math
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import chat, combos as CB, config as C, fair, fmt, money, played, store, telegram, track, xprice
+from . import chat, combos as CB, config as C, ensemble, fair, fmt, gapbets, money, played, sharpgap, store, telegram, track, xprice
 from .sources import state, xbet
 from .telegram import Html
 
 FILE = "alerts_sent.json"                   # {"day", "items": {"clé du pari|type": dernière cote alertée}}
-TYPES = ("lag", "danger", "rise", "good")   # ordre d'affichage
-TITLES = {"lag": "💰 1xBet est en retard : joue maintenant", "danger": "⚠️ Mes paris en danger",
+TYPES = ("lag", "gap", "danger", "rise", "good")   # ordre d'affichage
+TITLES = {"lag": "💰 1xBet est en retard : joue maintenant", "gap": fmt.GAP_TITLE, "danger": "⚠️ Mes paris en danger",
           "rise": "📈 Mieux payé chez 1xBet qu'au premier relevé : c'est le moment", "good": "✅ Bonne nouvelle"}
+LAST = {"gap": 0}                           # écarts sharp annoncés par le dernier passage (réponse de la mise à jour manuelle)
 ADVICE = "Si tu ne l'as pas encore joué : touche « 🎟️ Vérifier ce combiné » ou demande un combi."
 
 
@@ -67,9 +73,10 @@ def _x_now(m, c):
     return (px[key], (m.get("refs") or {}).get(key)) if key else (None, None)
 
 
-def _item(kind, key, odds, text, rank=0.0, coupon=None, buttons=()):
-    """Une alerte : `odds` = dernière cote alertée (dédoublonnage), `coupon` = pari seul à enregistrer chez 1xBet ({xref, xodds})."""
-    return {"type": kind, "key": key, "odds": odds, "text": text, "rank": rank, "coupon": coupon, "buttons": [b for b in buttons if b]}
+def _item(kind, key, odds, text, rank=0.0, coupon=None, buttons=(), **extra):
+    """Une alerte : `odds` = dernière cote alertée (dédoublonnage), `coupon` = pari seul à enregistrer chez 1xBet ({xref, xodds}). `extra` : données propres
+    au type (« 💰 gap » : le pari et son candidat, voir gap_items)."""
+    return {"type": kind, "key": key, "odds": odds, "text": text, "rank": rank, "coupon": coupon, "buttons": [b for b in buttons if b]} | extra
 
 
 # ---------- relectures 1xBet plafonnées ----------
@@ -142,6 +149,9 @@ def took_bets(rows, combos, day):
     mêmes clés."""
     took = {}
     for r in played.single_rows(rows, combos):
+        if r.get("date") == day and r.get("result") is None and _took(r):
+            took[r["key"]] = r["played"].get("odds") or r.get("xodds") or r.get("odds")
+    for r in played.gap_rows(rows):                  # paris « 1xBet paie plus que le marché » notés (g<n>)
         if r.get("date") == day and r.get("result") is None and _took(r):
             took[r["key"]] = r["played"].get("odds") or r.get("xodds") or r.get("odds")
     for x in combos:
@@ -225,6 +235,62 @@ def lag_items(alerts, today, reader, now, noted=(), skip=()):
                          f"💎 1xBet n'a pas suivi : valeur {fmt.b(fmt.signed(round(value * 100), ' %'))} avec la nouvelle probabilité du marché\n"
                          f"{stake}", rank=value, coupon={"xref": ref, "xodds": x} if ref else None))
     return out
+
+
+# ---------- 💰 1xBet paie plus que le marché ----------
+
+def _fresh_sharp(picks, closing, now):
+    """Les paris réels du jour avec, quand la clôture qui vient d'être relevée (`closing`, odds.build_picks) les couvre, LEUR proba sharp fraîche (prob_book,
+    prob_src, n_sharp) et l'heure de sa lecture : le prix du book de référence d'il y a quelques minutes, pas celui du matin."""
+    fresh = {c["key"]: c for c in closing or [] if ensemble.sharp_of(c)}
+    out = []
+    for c in picks:
+        f = fresh.get(c["key"])
+        out.append(c if f is None else c | {k: f[k] for k in ("prob_book", "prob_src", "n_sharp") if k in f}
+                   | {"sharp_at": f.get("sharp_at") or now.isoformat()})
+    return out
+
+
+def gap_items(today, now, reader, closing=(), skip=()):
+    """💰 Les écarts sharp NEUFS du jour : paris réels de `today` (data/today.json) dont la proba sharp est FRAÎCHE (sharpgap.scan ; `closing` : la clôture du passage
+    horaire rafraîchit la proba sharp) et dont la cote 1xBet du matin est à moins de C.SHARPGAP_PRESCREEN du seuil, pas encore annoncés aujourd'hui
+    (data/sharpgap_sent.json), pas dans `skip` (notés, pari du jour), dans la limite des annonces du jour (sharpgap.room). Le prix 1xBet est RELU en direct (`reader`,
+    plafonné comme les autres alertes) puis l'écart recalculé à CE prix (sharpgap.check) : sous le seuil, périmé ou pari retiré = rien. Sans lecture possible :
+    rien (jamais un prix non vérifié)."""
+    day = today.get("day")
+    if not C.SHARPGAP_ENABLED or not day or not today.get("picks"):
+        return []
+    picks = _fresh_sharp(today["picks"], closing, now)
+    seen, room = sharpgap.sent_keys(day), sharpgap.room(day)
+    res = sharpgap.scan(today | {"picks": picks}, now, min_edge=C.SHARPGAP_EDGE - C.SHARPGAP_PRESCREEN, x_fresh=False)
+    new = [x for x in res["cands"] if x["key"] not in seen and x["key"] not in skip][:room]
+    by_key = {c["key"]: c for c in picks}
+    out = []
+    for x in new:
+        pick = by_key[x["key"]]
+        m = reader.get(x)
+        price, ref = _x_now(m, x) if m else (None, None)
+        if not price:
+            continue
+        cand, _ = sharpgap.check(pick, price, ref, m.get("gid") or x.get("xgid"), now)
+        if cand is None:
+            continue
+        cand = cand | {"xcid": m.get("cid") or x.get("xcid")}
+        d = sharpgap.describe(cand)
+        out.append(_item("gap", cand["key"], cand["xodds"], f"{d['title']} — {d['line']}", rank=cand["edge"], pick=pick, cand=cand))
+    return out
+
+
+def _send_gap(entries, day, now):
+    """Envoie le message des écarts sharp `entries` ([(pari, candidat)]) : gapbets.message (numéros, codes, mises, boutons) puis le suivi (track.record_gap).
+    -> le message, ou None."""
+    msg, rec = gapbets.message([x for _, x in entries], [p for p, _ in entries], day, now, "alerte", when=now.strftime("%H:%M"))
+    if msg is None:
+        return None
+    track.record_gap(rec, day, now)                   # retenus avant l'envoi : un message mis en attente (réseau) n'est pas doublé
+    LAST["gap"] += len(rec)
+    telegram.send(msg)
+    return msg
 
 
 # ---------- ⚠️ mes paris en danger / 📈 mieux payé ----------
@@ -334,6 +400,19 @@ def send(items, day, now):
     shown, more = items[:C.XALERT_MAX_ITEMS], len(items) - C.XALERT_MAX_ITEMS
     if not shown:
         return None
+    gaps = [it for it in shown if it["type"] == "gap"]
+    gap_msg = None
+    if gaps:                                        # 💰 écarts sharp : leur propre message (boutons « ✅ Je l'ai joué » refaits pour tout le message à chaque note)
+        try:
+            gap_msg = _send_gap([(it["pick"], it["cand"]) for it in gaps], day, now)
+        except Exception as e:                      # noqa: BLE001 - un écart en échec ne bloque pas les autres alertes
+            print(f"[alertes] écarts sharp ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+        for it in gaps:
+            sent["items"][f"{it['key']}|{it['type']}"] = it["odds"]
+        shown = [it for it in shown if it["type"] != "gap"]
+        if not shown:
+            store.save(FILE, sent)
+            return gap_msg
     blocks, buttons, codes = [f"🔔 {fmt.b('Alertes Kelly')} · {now.strftime('%H:%M')}"], [], []
     for kind in TYPES:
         group = [it for it in shown if it["type"] == kind]
@@ -361,16 +440,32 @@ def send(items, day, now):
     return msg
 
 
+def _singles(rows, combos, day):
+    """Clés du pari du jour (ligne envoyée seule, played.single_rows) : il a déjà son message et son bouton, jamais repris dans « 1xBet paie plus que le marché »."""
+    return {r["key"] for r in played.single_rows(rows, combos) if r.get("date") == day}
+
+
+def _gap_items_safe(today, now, reader, closing, skip):
+    """gap_items, sans jamais lever : un écart sharp en échec ne bloque ni les autres alertes ni le passage."""
+    try:
+        return gap_items(today, now, reader, closing, skip)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[alertes] écarts sharp ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+        return []
+
+
 def on_market(alerts, closing, today, rows, combos, day, now, fetch=None):
     """Passage horaire (app.run_track, app.run_alert) : 💰 et ✅ à partir des mouvements du marché `alerts` (app.find_alerts) et des paris
     de clôture `closing`. `today` : data/today.json du jour en cours ({} sinon). -> le message envoyé ou None. Ne lève jamais."""
     if not C.XALERTS_ENABLED:
         return None
     try:
+        LAST["gap"] = 0
         took, noted = took_bets(rows, combos, day)
         good = good_items(closing, rows, took)
-        lag = lag_items(alerts, today, Reader(fetch), now, noted, {it["key"] for it in good})
-        return send(lag + good, day, now)
+        reader = Reader(fetch)
+        lag = lag_items(alerts, today, reader, now, noted, {it["key"] for it in good})
+        return send(lag + good + _gap_items_safe(today, now, reader, closing, noted | _singles(rows, combos, day)), day, now)
     except Exception as e:                          # noqa: BLE001 - une alerte en échec ne bloque jamais le passage horaire
         print(f"[alertes] ignorées : {type(e).__name__}: {e}", file=sys.stderr)
         return None
@@ -385,10 +480,14 @@ def on_refresh(today, now, got, upcoming, fetch=None):
     try:
         day = today["day"]
         rows, combos = track.load(), store.load("bets.json", {"combos": []}).get("combos", [])
-        prices = Prices(Reader(fetch), now)
+        LAST["gap"] = 0
+        reader = Reader(fetch)
+        prices = Prices(reader, now)
         targets = real_targets(today, rows, combos, day, now)
+        noted = took_bets(rows, combos, day)[1]
         items = (danger_items(targets, prices, day)
-                 + rise_items(upcoming, got, today.get("xbet_at") or now.strftime("%H:%M"), targets, prices, took_bets(rows, combos, day)[1]))
+                 + rise_items(upcoming, got, today.get("xbet_at") or now.strftime("%H:%M"), targets, prices, noted)
+                 + _gap_items_safe(today, now, reader, (), noted | _singles(rows, combos, day)))
         return send(items, day, now)
     except Exception as e:                          # noqa: BLE001 - une alerte en échec ne bloque jamais le relevé
         print(f"[alertes] ignorées : {type(e).__name__}: {e}", file=sys.stderr)

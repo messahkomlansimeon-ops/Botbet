@@ -2,7 +2,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import calib, config as C, fair, fmt, learn, odds, played, stats, store, track
+from . import calib, config as C, ensemble, fair, fmt, learn, odds, played, sharpgap, stats, store, track
 from .sources import fmmatch, footballdata as fd, fotmob, names
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
@@ -306,6 +306,31 @@ def settle_fair(now=None, stats_for=None):
     return rows, settled
 
 
+def _cached_fstats(b):
+    """Statistiques d'un match d'après le cache d'API-Football seulement (stats.cached_stats), au format de match_stats ; None sinon. Aucune requête de
+    statistiques de plus : celles déjà payées en quota par le règlement des paris et des pronostics servent aussi au journal de l'ensemble."""
+    if not stats.enabled():
+        return None
+    fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
+    cur = stats.cached_stats(fx["id"]) if fx else None
+    if not cur:
+        return None
+    teams = cur.get("teams") or {}
+    return dict(cur, side={"home": teams.get(str(fx["home_id"])), "away": teams.get(str(fx["away_id"]))})
+
+
+def settle_ensemble(now=None, stats_for=None):
+    """Règle le journal des avis de l'ensemble (data/ensemble_log.json) avec le règlement gratuit des pronostics (_settle_fair_row : API-Football, football-data,
+    FotMob), puis apprend des lignes réglées (ensemble.learn : poids appris par famille, idempotent par clé). Les statistiques d'un match (corners, cartons,
+    tirs...) viennent des caches seulement (API-Football jamais redemandé ici : _cached_fstats, football-data, FotMob) ; une ligne dont le résultat reste introuvable
+    devient « unknown » ou « void » comme un pronostic et n'apprend rien. -> (lignes réglées, lignes apprises) ; ([], 0) quand le journal est éteint."""
+    if not ensemble.logging_on():
+        return [], 0
+    now = now or datetime.now(timezone.utc)
+    fdata = FootballData()
+    return ensemble.settle_log(lambda r: _settle_fair_row(r, now, fdata, stats_for or _cached_fstats))
+
+
 def settle_fair_combos(now=None, stats_for=None):
     """Règle les combinés à cote juste (data/fair_combos.json) : perdu dès qu'une jambe est perdue, gagné quand toutes sont
     gagnées (jambes remboursées ignorées). Une jambe sans score trouvé est « unknown », pas « void » : le combiné est alors « unknown »,
@@ -467,6 +492,9 @@ def _bilan_simple(days, rows, picks, combos):
     free = [x for x in (fair_line(fair.load(), days), fair_combo_line(fair.load_combos(), days)) if x]
     if free:
         blocks.append([f"🎲 {fmt.esc(x)}" for x in free])
+    gl = sharpgap.summary_line(rows, days)
+    if gl:
+        blocks.append([f"💰 {fmt.esc(gl)}"])
     cl, ll = calib.lines(), calib.league_lines(limit=3)
     if cl:
         blocks.append(["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(pronostics réglés, depuis le début)")] + [f"• {fmt.esc(x)}" for x in cl])
@@ -512,6 +540,13 @@ def _bilan_detail(bets, days, rows, picks, combos):
     fc = fair_combo_line(fair.load_combos(), days)
     if fc:
         lines.append(fc)
+    gl = sharpgap.summary_line(rows, days)
+    if gl:
+        lines.append(gl)
+    el = ensemble.lines()
+    if el:
+        lines.append("Qui Kelly écoute, appris sur les résultats (Kelly face au marché, Pinnacle face à 1xBet) :")
+        lines += [f"• {x}" for x in el]
     cl = calib.lines(detail=True)
     if cl:
         lines.append("Fiabilité par marché (pronostics sans cote, depuis le début) :")

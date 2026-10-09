@@ -280,12 +280,25 @@ def _bulk_key(day, key, markets):
     return f"odds|{day}|{key}|{markets}"
 
 
+def read_stamp(ts=None):
+    """Heure ISO (UTC, à la seconde) d'une lecture de The Odds API : `ts` = instant (secondes, comme cache.clock) ; maintenant sans argument.
+    Posée sur les matchs lus (ev["read_at"], ev["read_m"]) puis sur chaque pari (c["sharp_at"], voir build_picks) : la fraîcheur d'une proba sharp
+    (sharpgap, ensemble.sharp_for) est celle de la VRAIE lecture, pas celle de l'écriture de today.json."""
+    return datetime.fromtimestamp(cache.clock() if ts is None else ts, tz=timezone.utc).isoformat(timespec="seconds")
+
+
 def _cached_bulk(day, key, markets, frm):
-    """Réponse payante du jour déjà en cache (relevé du matin) : relue sans crédit si elle couvre la période, sinon None."""
+    """Réponse payante du jour déjà en cache (relevé du matin) : relue sans crédit si elle couvre la période, sinon None. Les matchs portent l'heure
+    de leur VRAIE lecture (ev["read_at"] : celle de l'écriture du cache)."""
     got = cache.load(_bulk_key(day, key, markets), C.ODDS_CACHE_HOURS)
     if got is None or got[1].get("frm", "~") > frm:
         return None
-    return [e for e in got[0] if e.get("commence_time", frm) >= frm]
+    stamp = read_stamp(got[1].get("fetched_at")) if got[1].get("fetched_at") else None
+    out = [e for e in got[0] if e.get("commence_time", frm) >= frm]
+    if stamp:
+        for e in out:
+            e.setdefault("read_at", stamp)
+    return out
 
 
 def _prepaid_today(day, after, scan=None):
@@ -353,8 +366,10 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
             try:
                 raw = get(f"/sports/{key}/odds", use=use, regions="eu", oddsFormat="decimal", markets=markets, **window) or []
                 cache.save(_bulk_key(day, key, markets), raw, frm=frm)
+                stamp = read_stamp()                    # lecture réelle, posée APRÈS l'écriture du cache : le cache ne garde pas l'heure ici
                 for ev in raw:
                     ev["sport_key"] = key
+                    ev["read_at"] = stamp
                     ev.setdefault("bookmakers", [])
                     events.append(ev)
                 used += n
@@ -386,9 +401,11 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
     for k, (ev, market) in enumerate(jobs):
         ck = f"odds|{day}|{ev['sport_key']}|{ev['id']}|{market}"
         got = cache.load(ck, C.ODDS_CACHE_HOURS)
+        stamp = None
         if got is not None:                             # déjà demandé aujourd'hui (même un refus 422) : zéro crédit
             cache.hit("odds", 1)
             data = got[0]
+            stamp = read_stamp(got[1].get("fetched_at")) if got[1].get("fetched_at") else None
         else:
             why = budget.why_not(1, use)
             if why:
@@ -403,6 +420,9 @@ def fetch_events(day, props=True, optional=False, use="daily", after=None, scan=
                     cache.save(ck, {"bookmakers": []})
                 continue
             cache.save(ck, data)
+            stamp = read_stamp()
+        if stamp:
+            ev.setdefault("read_m", {})[market] = stamp      # heure de lecture de CE marché détaillé (sinon celle du relevé vedette, ev["read_at"])
         for bk in (data or {}).get("bookmakers", []):
             mine = next((b for b in ev["bookmakers"] if b["key"] == bk["key"]), None)
             if mine is None:
@@ -649,6 +669,9 @@ def build_picks(events, day, after=None, history=None, model=None):
                          + (weight - 1) * 0.05,
                 "why": ", ".join(signals),
             }
+            read = (ev.get("read_m") or {}).get(market) or ev.get("read_at")      # VRAIE heure de lecture chez The Odds API (fraîcheur du sharp)
+            if read:
+                c["sharp_at"] = read
             if model and model.get("adopted"):
                 c["heuristic"] = c["score"]
                 c["score"] = learn.predict(model, learn.features(c, now))

@@ -214,11 +214,25 @@ def price_txt(c, real=False, when=None):
     return f"cote de référence {b(odds_txt(c['odds']))} " + i("(pas 1xBet)")
 
 
+def opinion_line(c):
+    """Ligne d'avis sous un pari (pronostic 💎 ou jambe d'un combiné) : « 📊 1xBet : 49 % · Kelly : 71 % » (+ « · retenu : 61 % » là où l'ensemble
+    décide) ; '' sans avis de 1xBet. Italique, HTML échappé."""
+    from . import ensemble                           # import tardif : ensemble importe odds, qui importe fmt
+    try:
+        txt = ensemble.explain_c(c)
+    except (KeyError, TypeError, ValueError):
+        txt = ""
+    return i(f"📊 {esc(txt)}") if txt else ""
+
+
 def leg(n, c, reason=None, price=None):
     """Bloc d'une jambe : le match, le pari et sa cote, la raison (une information par ligne). `price` : libellé de la cote (price_txt)
     à la place de la cote en gras."""
     note = best_note(c)
     lines = [_match_line(n, c), f"👉 {esc(c['pick'])} — {price or b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else "")]
+    ens = opinion_line(c)
+    if ens:
+        lines.append(ens)
     why = why_line(c, reason)
     if why:
         lines.append(f"💡 {i(esc(why))}")
@@ -275,6 +289,13 @@ def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + coupon_block(coupon, retry) + xbet_note([c], when))
 
 
+def _legend():
+    """Fin de la légende 💎 : ce que Kelly suit (cote 1xBet sur les buts et le résultat, ses statistiques ailleurs) quand l'ensemble décide ; '' sinon."""
+    from . import ensemble
+    t = ensemble.legend()
+    return esc(t) + " " if t else ""
+
+
 def pronos(items, limit=10, title=None, intro=None, when=None):
     """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale (ou sa cote
     1xBet, 💎). `title` / `intro` : autre titre et autre phrase d'introduction (relevé 1xBet de l'après-midi). `when` : heure « HH:MM »
@@ -295,7 +316,7 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
              i(esc(intro) + esc(stamp) if intro else "Le meilleur pronostic de chaque match, s'il est solide. "
                + ("💎 = cote 1xBet relevée par Kelly " + ("(relevé partiel : l'heure de lecture est indiquée pour chaque pari)" if partial else
                                                           f"à {esc(when)}" if when else "aujourd'hui")
-                  + " et assez haute pour jouer (vérifie qu'elle n'a pas baissé). " if priced else "")
+                  + " et assez haute pour jouer (vérifie qu'elle n'a pas baissé). " + _legend() if priced else "")
                + ("« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée." if unpriced else ""))]
     by = {}
     for c in shown:
@@ -313,9 +334,37 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
             else:
                 lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")
                 lines.append(i(f"   {pct(c['prob'])} de chances{data}"))
+            ens = opinion_line(c)
+            if ens:
+                lines.append("   " + ens)
     if len(items) > len(shown):
         lines += ["", i(f"+ {len(items) - len(shown)} autres : écris un nom d'équipe pour voir un match")]
     return Html("\n".join(lines))
+
+
+# ---------- « 💰 1xBet paie plus que le marché » (kelly/sharpgap.py) ----------
+
+GAP_TITLE = "💰 1xBet paie plus que le marché"
+GAP_INTRO = ("La cote 1xBet est au-dessus de la cote juste des books de référence (Pinnacle, marge retirée) : ce n'est pas un avis de Kelly sur le match, "
+             "c'est un prix en retard chez 1xBet. Vérifie la cote avant de valider.")
+
+
+def gap_block(n, x, d, coupon=None, stake_txt=None):
+    """Un pari « 1xBet paie plus que le marché » : le match, le pari avec la cote 1xBet et la cote juste, l'âge du relevé, la mise conseillée (`stake_txt`, FCFA)
+    et son code coupon en <code>. `x` : candidat de sharpgap, `d` : sharpgap.describe(x), `n` : numéro affiché dans le message (None : sans)."""
+    lines = [_match_line(n, x), f"👉 {esc(d['title'])} — {esc(d['line'])}", i(f"   {esc(d['age'])}")]
+    if stake_txt:
+        lines.append(f"💰 Mise conseillée : {b(esc(stake_txt))}")
+    if coupon:
+        lines.append(f"🎟️ Code coupon 1xBet : {code(coupon)}")
+    return "\n".join(lines)
+
+
+def gap_message(blocks, when=None, budget=True, intro=True):
+    """Le message « 💰 1xBet paie plus que le marché » : titre (heure `when` du relevé), phrase d'explication, un bloc par pari (gap_block), et, sans budget du
+    jour (`budget` faux), une ligne pour le régler."""
+    head = [b(GAP_TITLE + (f" · {esc(when)}" if when else ""))] + ([i(esc(GAP_INTRO))] if intro else [])
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(blocks) + ("" if budget else "\n\n" + no_stake_line()))
 
 
 def combo_changes(removed, added, changed=()):
@@ -331,9 +380,11 @@ def combo_changes(removed, added, changed=()):
 def fair_leg(n, c):
     """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
     chances = i(f"({pct(c['prob'])} de chances)")
+    ens = opinion_line(c)
     if c.get("xodds"):
-        return "\n".join([_match_line(n, c), f"💎 {esc(c['pick'])}", f"✔️ Cote 1xBet {b(num(c['xodds']))}  {chances}"])
-    return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
+        return "\n".join([_match_line(n, c), f"💎 {esc(c['pick'])}", f"✔️ Cote 1xBet {b(num(c['xodds']))}  {chances}"] + ([ens] if ens else []))
+    return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"]
+                      + ([ens] if ens else []))
 
 
 def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, coupon=None, when=None, retry=None, stale=False):
