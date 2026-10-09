@@ -418,6 +418,27 @@ def test_save_coupon():
     print("ok  save_coupon 1xBet (corps exact, code extrait, affichage et repli)")
 
 
+def test_combi_prefers_1xbet():
+    """« combi N » : cotes 1xBet du jour connues -> combiné aux cotes 1xBet, avec le code coupon si toutes les jambes ont leur
+    référence 1xBet (xbet.save_coupon simulé : aucun appel réel)."""
+    from datetime import date
+    from kelly import app
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    store.save("bets.json", {"picks": [], "combos": []})
+    legs = [prono("totals", "Under", 3.5, 0.72) | {"id": f"m{i}", "home": f"H{i}", "away": f"A{i}", "xodds": 1.55, "xev": 0.12,
+                                                    "xref": [900 + i, 10, 3.5]} for i in range(4)]
+    old = xbet.save_coupon
+    xbet.save_coupon = lambda ls: "K7Q2X" if all(c.get("xref") for c in ls) else None
+    try:
+        msg = app.custom_combo([], legs, 5.0, date(2026, 10, 9))
+    finally:
+        xbet.save_coupon = old
+    assert msg.startswith("Voici un combiné aux cotes 1xBet relevées par Kelly"), msg[:200]
+    assert "🎟️ Code coupon 1xBet : <b>K7Q2X</b>" in msg and "<a href" not in msg
+    print("ok  combi N aux cotes 1xBet d'abord, avec code coupon")
+
+
 def main():
     test_parse_and_url()
     test_find_match()
@@ -427,6 +448,7 @@ def main():
     test_apply_and_messages()
     test_afternoon_refresh()
     test_xworld_scan()
+    test_combi_prefers_1xbet()
     test_save_coupon()
     print("tests 1xBet : OK")
 

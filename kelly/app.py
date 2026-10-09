@@ -1002,13 +1002,29 @@ def _handle_command(text):
     return "Commande inconnue. /aide pour la liste."
 
 
+def _fair_reply(fc, head):
+    """Réponse « combiné à cote juste » de custom_combo : phrase d'introduction, combiné, et code coupon 1xBet quand toutes les
+    jambes ont leur référence 1xBet (xbet.save_coupon : ticket sans mise ; échec = pas de code, jamais d'erreur)."""
+    legs, min_total, prob = fc
+    coupon = None
+    if all(c.get("xref") for c in legs):
+        from .sources import xbet
+        coupon = xbet.save_coupon(legs)
+    return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), coupon=coupon))
+
+
 def custom_combo(picks, pronos, target, day, started=False):
-    """/combi <cote> : combiné à cotes réelles d'abord ; s'il est impossible, combiné à cote juste (pronostics Kelly, annoncé
+    """/combi <cote> : dès que les cotes 1xBet du jour sont connues, combiné aux cotes 1xBet (pronostics 💎, code coupon) ; sinon
+    combiné à cotes réelles (The Odds API) d'abord ; s'il est impossible, combiné à cote juste (pronostics Kelly, annoncé
     « à vérifier chez 1xBet » et sans mise de bankroll) ; sinon l'explication précise de ce qui manque et une cote atteignable.
     `picks` et `pronos` : matchs pas encore commencés seulement ; `started` : il y en avait d'autres, déjà commencés."""
     t = fmt.trim(target, 1)
     real = "Pas de cotes réelles aujourd'hui" if not started else "Plus de cotes réelles jouables aujourd'hui (matchs commencés)"
     reach = []                                      # cotes les plus hautes atteignables (réelles, puis cote mini des pronostics)
+    if any(c.get("xodds") for c in pronos):        # cotes 1xBet du jour connues : le combiné se joue chez 1xBet, à SES cotes
+        fc = CB.fair_custom(pronos, target)
+        if fc:
+            return _fair_reply(fc, f"Voici un combiné aux cotes 1xBet relevées par Kelly (cote {fmt.trim(fc[1], 1)}).")
     if picks:
         usage, n_sent = _todays_usage(day, picks)
         combo = CB.custom(picks, target, usage)
@@ -1038,15 +1054,10 @@ def custom_combo(picks, pronos, target, day, started=False):
                 f"permettent pas d'atteindre la cote {t} (les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs)")
     fc = CB.fair_custom(pronos, target)
     if fc:
-        legs, min_total, prob = fc
-        head = (f"{real} : voici un combiné bâti sur les pronostics de Kelly, aux cotes 1xBet relevées par Kelly "
-                f"(cote {fmt.trim(min_total, 1)})." if all(c.get("xodds") for c in legs) else
-                f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier chez 1xBet.")
-        coupon = None
-        if all(c.get("xref") for c in legs):
-            from .sources import xbet
-            coupon = xbet.save_coupon(legs)
-        return Html(fmt.esc(head) + "\n\n" + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), coupon=coupon))
+        return _fair_reply(fc, (f"{real} : voici un combiné bâti sur les pronostics de Kelly, aux cotes 1xBet relevées par Kelly "
+                                f"(cote {fmt.trim(fc[1], 1)})." if all(c.get("xodds") for c in fc[0]) else
+                                f"{real} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier "
+                                "chez 1xBet."))
     sf = CB.fair_shortfall(pronos, target)
     if sf["matches"] >= 2:
         reach.append(sf["best_total"])
