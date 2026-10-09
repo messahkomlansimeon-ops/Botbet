@@ -408,8 +408,14 @@ def test_save_coupon():
 
     # Échec applicatif Success: false -> None
     err_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": False, "Error": "Erreur"}).encode("utf-8"), 200)
-    with patch("kelly.sources.http.post", return_value=err_res):
+    with patch("kelly.sources.http.post", return_value=err_res) as m, patch("kelly.sources.xbet.time.sleep"):
         assert xbet.save_coupon(legs) is None
+        assert m.call_count == 1 + xbet.COUPON_RETRIES             # refus : une 2e tentative, pas plus
+
+    # Refus intermittent puis accepté : le code de la 2e tentative
+    ok_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": True, "Value": "AP89E"}).encode("utf-8"), 200)
+    with patch("kelly.sources.http.post", side_effect=[err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"):
+        assert xbet.save_coupon(legs) == "AP89E"
 
     # Entrées invalides -> None, ne lève jamais
     assert xbet.save_coupon([]) is None

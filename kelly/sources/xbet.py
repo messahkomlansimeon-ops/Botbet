@@ -27,6 +27,8 @@ from .. import config as C, stats, store
 from . import http, names, state
 
 SOURCE = "xbet"
+COUPON_RETRIES = 1            # 2e tentative quand 1xBet refuse un code (refus intermittents)
+COUPON_RETRY_WAIT = 2.0       # secondes avant
 DOMAIN = "1xbet.ci"
 BASE = "https://" + DOMAIN
 FEED = BASE + "/service-api/main-line-feed/v3/"
@@ -574,26 +576,38 @@ def save_coupon(legs):
         if r and not r.ok and r.error and any(k in r.error for k in ("ProxyError", "ConnectTimeout")):
             raise XbetError(r.error)
         return r
+    def attempt():
+        """Un enregistrement -> (code ou None, refus explicite de 1xBet : on peut réessayer). Raison d'un échec écrite au journal."""
+        try:
+            r = ses.call(post)
+            if not r or not r.ok or not r.content:
+                _coupon_fail(f"HTTP {getattr(r, 'status', '?')} {getattr(r, 'error', '') or 'réponse vide'}", legs)
+                return None, False                  # coupure ou erreur réseau : le ticket a pu être créé, jamais renvoyé
+            data = json.loads(r.content)
+            if not data.get("Success"):
+                _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
+                                        ensure_ascii=False), legs)
+                return None, True
+            val = data.get("Value")
+            if isinstance(val, str) and val.strip():
+                return val.strip(), False
+            if isinstance(val, dict) and val.get("Guid"):
+                return str(val["Guid"]).strip(), False
+            _coupon_fail("réponse sans code : " + str(val)[:200], legs)
+            return None, True
+        except Exception as e:                      # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
+            _coupon_fail(f"{type(e).__name__}: {e}", legs)
+        return None, False
+    # refus intermittents de 1xBet (même ticket accepté quelques minutes plus tard) : une 2e tentative, seulement après un « non »
+    # explicite de 1xBet (Success false, réponse sans code) : aucun ticket n'a été créé
     try:
-        r = ses.call(post)
-        if not r or not r.ok or not r.content:
-            _coupon_fail(f"HTTP {getattr(r, 'status', '?')} {getattr(r, 'error', '') or 'réponse vide'}", legs)
-            return None
-        data = json.loads(r.content)
-        if not data.get("Success"):
-            _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
-                                    ensure_ascii=False), legs)
-            return None
-        val = data.get("Value")
-        if isinstance(val, str) and val.strip():
-            return val.strip()
-        if isinstance(val, dict) and val.get("Guid"):
-            return str(val["Guid"]).strip()
-        _coupon_fail("réponse sans code : " + str(val)[:200], legs)
-        return None
-    except Exception as e:                          # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
-        _coupon_fail(f"{type(e).__name__}: {e}", legs)
-        return None
+        code, again = attempt()
+        for _ in range(COUPON_RETRIES):
+            if code or not again:
+                break
+            time.sleep(COUPON_RETRY_WAIT)
+            code, again = attempt()
+        return code
     finally:
         ses.close("enregistrement du coupon")
 
