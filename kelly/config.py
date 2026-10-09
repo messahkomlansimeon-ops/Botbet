@@ -248,6 +248,7 @@ XBET_COUPON_PARTNER = _int("XBET_COUPON_PARTNER", 1)
 XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)
 # Vérification EN DIRECT (combi N, bouton « 🔄 Cotes à jour », relevés de 2 h) : cotes relues à l'instant, sans cache
 XBET_FRESH_MIN = _int("XBET_FRESH_MIN", 5)          # en direct : cotes lues il y a moins de N min reprises telles quelles (pas de proxy)
+XBET_COMBI_FRESH_MIN = _int("XBET_COMBI_FRESH_MIN", 180)   # « combi N » : cotes de moins de 3 h reprises (relevé de 15:00, actualisation)
 XBET_LIVE_DELAY = _float("XBET_LIVE_DELAY", 1.0)    # secondes entre deux requêtes 1xBet en direct (3 s pour les relevés)
 XBET_LIVE_SPARES = _int("XBET_LIVE_SPARES", 8)      # matchs remplaçants relus avec ceux du combiné
 XBET_SOON_MIN = _int("XBET_SOON_MIN", 10)           # match qui commence dans moins de N min : retiré par 1xBet, jamais repris

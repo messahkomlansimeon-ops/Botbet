@@ -471,15 +471,20 @@ def test_live_mode_and_patch():
     print("ok  mode direct (cache, hors ligne, délai) et combiné remis à jour")
 
 
+seen_fresh = []       # durée de fraîcheur demandée à chaque vérification en direct
+
+
 def with_fakes(fn, drop=(), got=True):
     """Exécute fn avec : today.json du jour DAY2, live_check simulé (matchs `drop` retirés), save_coupon simulé, envoi capturé."""
     from kelly import telegram, xprice
     store.save("today.json", {"day": DAY2, "picks": [], "pronos": live_pronos()})
     sent, coupons = [], []
+    seen_fresh.clear()
     real_check = xprice.live_check
 
-    def check(ids, now=None, fetch=None):
-        return real_check(ids, now, fetch=lambda ev, deadline=None, wanted=None, live=True:
+    def check(ids, now=None, fetch=None, fresh_min=None):
+        seen_fresh.append(fresh_min)
+        return real_check(ids, now, fetch=lambda ev, deadline=None, wanted=None, live=True, fresh_min=None:
                                  {k: v for k, v in fake_px(drop).items() if k in {e["id"] for _, e in ev}} if got else {})
     old = (xbet.save_coupon, telegram.send, xprice.live_check)
     xbet.save_coupon = lambda ls: (coupons.append([c["id"] for c in ls]), "K7Q2X")[1]
@@ -502,7 +507,8 @@ def test_combi_live():
     fc = (live_pronos()[:4], 1.55 ** 4, 0.72 ** 4)
     msg, sent, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), drop=("m1",))
     assert sent and sent[0].startswith("⏳"), sent
-    assert msg.startswith("Voici un combiné aux cotes 1xBet vérifiées à 13:00"), msg[:200]
+    assert msg.startswith("Voici un combiné aux cotes 1xBet de 13:00"), msg[:200]
+    assert seen_fresh == [C.XBET_COMBI_FRESH_MIN] == [180], "combi : cotes de moins de 3 h reprises"
     assert "❌ Retiré : H1 – A1" in msg and "➕ Ajouté" in msg and "🎟️ Code coupon 1xBet : <b>K7Q2X</b>" in msg
     assert coupons and "m1" not in coupons[0], "le code est créé avec les paris encore jouables"
     msg, _, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), got=False)
@@ -523,6 +529,7 @@ def test_refresh_button_and_updates():
     msg, _, coupons = with_fakes(lambda: app.refresh_combo("5", DAY2, now=now), drop=("m2",))
     assert "🔄 COMBINÉ À JOUR 13:00" in msg and "❌ Retiré : H2 – A2" in msg and "K7Q2X" in msg, msg[:300]
     assert len(fair.load_combos()) == 1, "le suivi garde le combiné du matin"
+    assert seen_fresh == [None], "bouton « 🔄 Cotes à jour » : la règle des 5 min (XBET_FRESH_MIN), pas celle du combi"
     btn = chat.with_played_button("x", "v5", DAY2, funded=False, refresh=5)
     assert any(b["callback_data"] == f"xmaj|5|{DAY2}" for row in btn.markup["inline_keyboard"] for b in row)
     # relevé de 13:00 : un pari retiré -> combiné renvoyé à jour ; 2e relevé identique -> rien ; pas de liste 💎 avant 15:00

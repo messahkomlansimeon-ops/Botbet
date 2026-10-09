@@ -233,13 +233,14 @@ _ODDS_TTL = [TTL_ODDS]           # C.XBET_FRESH_MIN min pendant live_mode : cote
 
 
 @contextmanager
-def live_mode():
+def live_mode(fresh_min=None):
     """Vérification en direct (combi N, boutons « 🔄 ») : cotes relues même pendant une commande Telegram (hors ligne par ailleurs :
     seul 1xBet est relu), C.XBET_LIVE_DELAY s entre deux requêtes ; celles lues il y a moins de C.XBET_FRESH_MIN min (relevé,
     « Actualiser les cotes » ou combi juste avant) sont reprises du cache : pas de proxy pour rien. Tout est rétabli à la sortie."""
     from .. import cache as kcache
     old = (kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE.get(DOMAIN))
-    kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE[DOMAIN] = False, C.XBET_FRESH_MIN * 60, C.XBET_LIVE_DELAY
+    fresh = C.XBET_FRESH_MIN if fresh_min is None else fresh_min           # « combi N » : C.XBET_COMBI_FRESH_MIN
+    kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE[DOMAIN] = False, fresh * 60, C.XBET_LIVE_DELAY
     try:
         yield
     finally:
@@ -250,10 +251,21 @@ def live_mode():
             http.DELAY_OVERRIDE[DOMAIN] = old[2]
 
 
+def _events_url(gid):
+    return url("gameEvents", cfView=3, countEvents=250, gameId=gid, grMode=4, marketType=2)
+
+
+def odds_time(gids):
+    """Instant (timestamp) du plus ancien relevé en cache des matchs 1xBet `gids` (cotes du marché principal) ; None si aucun."""
+    ts = [hit[0].get("fetched_at") for g in gids if g for hit in [http._read(http._key(_events_url(g), JSON_H))] if hit]
+    ts = [t for t in ts if t]
+    return min(ts) if ts else None
+
+
 def _events(gid):
     # marketType=2 (« Populaires ») : 1X2, double chance, toute l'échelle des buts, les 2 marquent, sous-matchs typés, et pour un
     # sous-match statistique tout son plus/moins (match et équipes) ; 7 Ko compressés au lieu de 48 Ko pour « tous les marchés »
-    return _get_json(url("gameEvents", cfView=3, countEvents=250, gameId=gid, grMode=4, marketType=2), _ODDS_TTL[0])
+    return _get_json(_events_url(gid), _ODDS_TTL[0])
 
 
 def prices(game, markets, home, away):
@@ -421,14 +433,14 @@ def list_leagues(keys, deadline=None):
     return out
 
 
-def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False):
+def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, fresh_min=None):
     """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
     événement qui porte "xgid" (id 1xBet déjà connu : relevé du matin, championnat vu par 1xBet) est lu directement, sans menu ni
     liste du championnat. `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là).
     Voir _Session (proxy, plafond) ; s'arrête au délai `deadline` (time.monotonic) ou après `max_matches` matchs. `live` : cotes
     relues à l'instant (live_mode). Ne lève pas : erreurs dans state (rapport des sources)."""
     if live:
-        with live_mode():
+        with live_mode(fresh_min):
             return fetch_day(events, deadline, max_matches, wanted)
     out, errors, leagues, cat = {}, [], {}, None
     max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches

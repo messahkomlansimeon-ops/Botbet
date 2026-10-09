@@ -112,11 +112,12 @@ def apply(pronos, fetch=None):
     return out
 
 
-def live_check(ids, now=None, fetch=None):
+def live_check(ids, now=None, fetch=None, fresh_min=None):
     """Relit EN DIRECT chez 1xBet les matchs `ids` du jour (data/today.json : id 1xBet connu, un gameEvents + les sous-matchs utiles),
     remet leurs pronostics à la cote du moment (meilleure ligne, trop mal payé, absent), enregistre today.json. Les matchs qui
     commencent dans moins de C.XBET_SOON_MIN min sont laissés de côté (1xBet les retire de l'avant-match).
-    -> (pronostics du jour à jour, ids relus, heure « HH:MM » du relevé). `fetch` : injectable pour les tests."""
+    `fresh_min` : cotes plus récentes reprises du cache (xbet.live_mode). -> (pronostics du jour à jour, ids relus, heure « HH:MM »
+    du relevé). `fetch` : injectable pour les tests."""
     from datetime import datetime, timedelta, timezone
     from . import store
     now = now or datetime.now(timezone.utc)
@@ -127,7 +128,7 @@ def live_check(ids, now=None, fetch=None):
     got = set()
 
     def run(events, deadline=None, wanted=None):
-        found = (fetch or xbet.fetch_day)(events, deadline=deadline, wanted=wanted, live=True)
+        found = (fetch or xbet.fetch_day)(events, deadline=deadline, wanted=wanted, live=True, fresh_min=fresh_min)
         got.update(found)
         return found
     if sel:

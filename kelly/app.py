@@ -1104,7 +1104,7 @@ def _fair_reply(fc, head, changes="", coupon=True, title=None):
                 + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), coupon=code, title=title))
 
 
-def _live_fair(legs, lo, hi, prefix=None, now=None, check=None):
+def _live_fair(legs, lo, hi, prefix=None, now=None, check=None, fresh_min=None):
     """Combiné `legs` vérifié EN DIRECT chez 1xBet : ses matchs + C.XBET_LIVE_SPARES remplaçants (les meilleurs autres paris 💎 du
     jour) relus à l'instant (xprice.live_check), puis CB.patch_combo dans [lo, hi]. -> (résultat de patch_combo ou None, heure,
     relu : faux si 1xBet n'a rien rendu). `check` : injectable pour les tests."""
@@ -1116,7 +1116,7 @@ def _live_fair(legs, lo, hi, prefix=None, now=None, check=None):
                     key=lambda c: -(c.get("xev") or 0) * c["prob"]):
         if c["id"] not in spares:
             spares.append(c["id"])
-    pronos, got, hhmm = (check or xprice.live_check)(mine | set(spares[:C.XBET_LIVE_SPARES]), now)
+    pronos, got, hhmm = (check or xprice.live_check)(mine | set(spares[:C.XBET_LIVE_SPARES]), now, fresh_min=fresh_min)
     if not got:
         return None, hhmm, False
     return CB.patch_combo(legs, upcoming(pronos, now), lo, hi, fresh_ids=got, prefix=prefix), hhmm, True
@@ -1127,7 +1127,7 @@ def _live_reply(fc, lo, hi, now=None, check=None):
     code coupon aux cotes de l'instant. 1xBet injoignable : le combiné aux cotes du dernier relevé, sans code, en le disant."""
     telegram.send("⏳ Je vérifie les cotes 1xBet en direct…", queue=False)
     try:
-        res, hhmm, ok = _live_fair(fc[0], lo, hi, now=now, check=check)
+        res, hhmm, ok = _live_fair(fc[0], lo, hi, now=now, check=check, fresh_min=C.XBET_COMBI_FRESH_MIN)
     except Exception as e:                          # noqa: BLE001 - la réponse part quand même
         print(f"[1xbet] vérification en direct impossible : {type(e).__name__}: {e}", file=sys.stderr)
         res, hhmm, ok = None, "", False
@@ -1138,7 +1138,10 @@ def _live_reply(fc, lo, hi, now=None, check=None):
         return (f"Les cotes 1xBet ont bougé depuis le dernier relevé : plus de combiné à la cote {fmt.trim(lo, 1)} avec des paris "
                 "encore jouables. Essaie une autre cote.")
     legs, total, prob, removed, added = res
-    return _fair_reply((legs, total, prob), f"Voici un combiné aux cotes 1xBet vérifiées à {hhmm} (cote {fmt.trim(total, 1)}).",
+    from .sources import xbet
+    t0 = xbet.odds_time([c.get("xgid") for c in legs])        # cotes de moins de 3 h reprises : l'heure réelle de leur relevé
+    when = datetime.fromtimestamp(t0, tz=timezone.utc).strftime("%H:%M") if t0 else hhmm
+    return _fair_reply((legs, total, prob), f"Voici un combiné aux cotes 1xBet de {when} (cote {fmt.trim(total, 1)}).",
                        fmt.combo_changes(removed, added))
 
 
