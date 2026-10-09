@@ -1,6 +1,7 @@
 """Kelly : point d'entrée.
 
   python bot.py --daily      matin : actualise les stats gratuites, règle hier, bilan, combinés du jour (Telegram)
+                             déjà fait aujourd'hui = ignoré ; --force le refait. Code 1 si aucun message n'a pu partir (en attente)
   python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote, puis stats de match FotMob
   python bot.py --snapshot   relevé des cotes du lendemain (désactivé sur forfait gratuit : budget 0)
   python bot.py --alert      balayage large pour alertes (désactivé sur forfait gratuit : budget 0)
@@ -42,7 +43,7 @@ def main(argv):
     elif "--commands" in argv:
         app.run_commands()
     else:
-        app.run_daily(sample)
+        sys.exit(app.daily_entry(sample, force="--force" in argv))
 
 
 if __name__ == "__main__":

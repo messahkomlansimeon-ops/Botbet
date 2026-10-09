@@ -7,9 +7,14 @@ import time
 
 import requests
 
-from . import store
+from . import config as C, store
 
 LAST_ERROR = ""        # dernière erreur d'envoi (description renvoyée par l'API Telegram)
+OUTBOX = "outbox.json"  # messages dont l'envoi a échoué (réseau / Telegram en panne), renvoyés dans l'ordre par flush_outbox
+LATE_NOTE = "📬 Message en retard (réseau indisponible à l'heure prévue)"
+BUSY = "⏳ Kelly est en plein travail (message du matin ou relevé horaire) : ton action sera faite dès qu'elle a fini."
+TIMEOUT = "⚠️ Kelly est restée trop longtemps occupée : ton action n'a pas pu être faite. Renvoie-la dans quelques minutes."
+_last_fail = [float("-inf")]     # instant (monotonic) du dernier échec réseau : pas de renvoi automatique avant 60 s
 
 
 class Html(str):
@@ -93,10 +98,41 @@ def api(method, **payload):
     raise TelegramError(_scrub(body.get("description") or f"HTTP {r.status_code}"), body.get("error_code", r.status_code))
 
 
-def send(text, chat_id=None):
+def _transient(e):
+    """Panne passagère (réseau, 429, 5xx) : le message vaut d'être remis plus tard. Un 400 (message mal formé, chat inconnu) ne passera jamais."""
+    return e.code is None or e.code == 429 or e.code >= 500
+
+
+def _deliver(part, is_html, markup, chat_id):
+    """Un morceau de message -> réponse de l'API ; lève TelegramError. HTML refusé par Telegram : repli en texte brut."""
+    extra = {"reply_markup": markup} if markup else {}
+    if is_html:
+        try:
+            return api("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True, **extra)
+        except TelegramError as e:
+            if "parse" not in str(e).lower() and "entities" not in str(e).lower():
+                raise
+            print("[telegram] HTML refusé, renvoi en texte brut", file=sys.stderr)
+            part = plain(part)
+    return api("sendMessage", chat_id=chat_id, text=part, **extra)
+
+
+def _enqueue(parts, is_html, markup, chat_id):
+    """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier)."""
+    box = store.load(OUTBOX, [])
+    now = time.time()
+    box += [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
+            for i, p in enumerate(parts)]
+    store.save(OUTBOX, box)
+    print(f"[telegram] {len(parts)} message(s) mis en attente ({len(box)} dans la file) : renvoi dès que le réseau revient", file=sys.stderr)
+
+
+def send(text, chat_id=None, queue=True):
     """Envoie `text` (découpé). `Html` : parse_mode HTML, avec repli en texte brut si Telegram rejette le HTML. Les boutons du
     message (attribut `markup`, with_buttons) vont sur le dernier morceau. Sans identifiants : affiche. Ne lève jamais : renvoie
-    l'id du dernier message envoyé (True sans identifiants), ou False et note l'erreur (stderr + LAST_ERROR) si Telegram refuse."""
+    l'id du dernier message envoyé (True sans identifiants), ou False et note l'erreur (stderr + LAST_ERROR) si Telegram refuse.
+    Panne passagère (réseau, 429, 5xx) : le message est mis en attente (data/outbox.json, voir flush_outbox) derrière ceux qui
+    attendent déjà, pour garder l'ordre ; un refus définitif (400) est abandonné. `queue=False` : message éphémère, jamais mis en attente."""
     global LAST_ERROR
     token, chat = creds()
     chat_id = chat_id or chat
@@ -105,24 +141,63 @@ def send(text, chat_id=None):
         return True
     is_html = isinstance(text, Html)
     parts, markup, sent = _chunks(str(text)), getattr(text, "markup", None), True
+    explicit = chat_id if chat_id != chat else None
+    if queue and store.load(OUTBOX, []):                        # des messages plus anciens attendent : d'abord eux
+        if time.monotonic() - _last_fail[0] > 60:
+            flush_outbox()
+        if store.load(OUTBOX, []):
+            _enqueue(parts, is_html, markup, explicit)
+            return False
     for i, part in enumerate(parts):
-        extra = {"reply_markup": markup} if markup and i == len(parts) - 1 else {}
         try:
-            if is_html:
-                try:
-                    sent = api("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True, **extra)
-                    continue
-                except TelegramError as e:
-                    if "parse" not in str(e).lower() and "entities" not in str(e).lower():
-                        raise
-                    print("[telegram] HTML refusé, renvoi en texte brut", file=sys.stderr)
-                    part = plain(part)
-            sent = api("sendMessage", chat_id=chat_id, text=part, **extra)
+            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id)
         except TelegramError as e:
             LAST_ERROR = f"{e} (code {e.code})" if e.code else str(e)
             print(f"[telegram] envoi échoué : {LAST_ERROR}", file=sys.stderr)
+            if queue and _transient(e):
+                _last_fail[0] = time.monotonic()
+                _enqueue(parts[i:], is_html, markup, explicit)
             return False
     return (sent or {}).get("message_id", True) if isinstance(sent, dict) else True
+
+
+def flush_outbox():
+    """Renvoie dans l'ordre les messages mis en attente ; s'arrête au premier échec passager (le reste attend). Un message plus vieux
+    que C.OUTBOX_MAX_HOURS h est abandonné (note sur stderr), un refus définitif aussi. Le premier message renvoyé, s'il a plus de
+    2 minutes de retard, porte LATE_NOTE. Ne lève jamais. -> (envoyés, restants)."""
+    token, chat = creds()
+    box = store.load(OUTBOX, [])
+    if not box or not token:
+        return 0, len(box)
+    now = time.time()
+    keep = [e for e in box if now - e.get("ts", now) <= C.OUTBOX_MAX_HOURS * 3600]
+    if len(keep) < len(box):
+        print(f"[telegram] {len(box) - len(keep)} message(s) en attente depuis plus de {C.OUTBOX_MAX_HOURS} h abandonné(s)", file=sys.stderr)
+    sent = 0
+    while keep:
+        e = keep[0]
+        target = e.get("chat_id") or chat
+        text = e["text"]
+        if target and sent == 0 and now - e.get("ts", now) > 120:
+            text = f"{LATE_NOTE}\n\n{text}"
+        try:
+            if not target:
+                raise TelegramError("TELEGRAM_CHAT_ID absent")
+            _deliver(text, e.get("html"), e.get("markup"), target)
+        except TelegramError as err:
+            if _transient(err) or not target:
+                _last_fail[0] = time.monotonic()
+                print(f"[telegram] renvoi des messages en attente échoué : {err}", file=sys.stderr)
+                break
+            print(f"[telegram] message en attente refusé définitivement, abandonné : {err}", file=sys.stderr)
+        else:
+            sent += 1
+        keep.pop(0)
+    if len(keep) != len(box):
+        store.save(OUTBOX, keep)
+    if sent:
+        print(f"[telegram] {sent} message(s) en attente renvoyé(s), {len(keep)} restant(s)", file=sys.stderr)
+    return sent, len(keep)
 
 
 def answer_callback(callback_id, text=None):
@@ -146,9 +221,30 @@ def edit_buttons(message_id, markup, chat_id=None):
         return False
 
 
-def poll(handler, timeout=0, on_callback=None):
+def _handle(lock, fn, *args):
+    """Exécute fn(*args) et envoie sa réponse (« Erreur : ... » si elle plante). Avec `lock` (appelable qui prend `on_busy` et renvoie un
+    gestionnaire de contexte, ex. store.data_lock) : le tout sous le verrou des données ; verrou déjà pris -> BUSY tout de suite, puis
+    attente ; attente épuisée -> TIMEOUT. Le verrou est relâché entre deux mises à jour, jamais tenu pendant l'attente longue de Telegram."""
+    def run():
+        try:
+            reply = fn(*args)
+        except Exception as e:                      # noqa: BLE001 - on répond l'erreur
+            reply = f"Erreur : {e}"
+        if reply:
+            send(reply)
+    if lock is None:
+        return run()
+    try:
+        with lock(lambda: send(BUSY, queue=False)):
+            run()
+    except store.LockTimeout:
+        send(TIMEOUT, queue=False)
+
+
+def poll(handler, timeout=0, on_callback=None, lock=None):
     """Lit les nouveaux messages et appuis sur les boutons (une passe) et répond. Ne répond qu'au chat configuré : personne
-    d'autre ne peut piloter le bot. `on_callback(donnée, id du message)` : réponse à un appui sur un bouton (None = rien à dire)."""
+    d'autre ne peut piloter le bot. `on_callback(donnée, id du message)` : réponse à un appui sur un bouton (None = rien à dire).
+    `lock` : voir _handle (le serveur y met store.data_lock, pour ne pas écrire les données pendant le matin ou le relevé horaire)."""
     _, chat = creds()
     state = store.load("telegram.json", {"offset": 0})
     try:
@@ -163,27 +259,17 @@ def poll(handler, timeout=0, on_callback=None):
         state["offset"] = u["update_id"] + 1
         cq = u.get("callback_query")
         if cq:
-            answer_callback(cq.get("id"))
+            answer_callback(cq.get("id"))           # tout de suite, avant une éventuelle attente du verrou : pas de sablier
             cmsg = cq.get("message") or {}
             if on_callback and str(cmsg.get("chat", {}).get("id")) == str(chat):
-                try:
-                    reply = on_callback(cq.get("data") or "", cmsg.get("message_id"))
-                except Exception as e:              # noqa: BLE001 - on répond l'erreur
-                    reply = f"Erreur : {e}"
-                if reply:
-                    send(reply)
+                _handle(lock, on_callback, cq.get("data") or "", cmsg.get("message_id"))
             store.save("telegram.json", state)
             continue
         msg = u.get("message") or {}
         text = (msg.get("text") or "").strip()
         if not text or str(msg.get("chat", {}).get("id")) != str(chat):
             continue
-        try:
-            reply = handler(text)
-        except Exception as e:                      # noqa: BLE001 - on répond l'erreur
-            reply = f"Erreur : {e}"
-        if reply:
-            send(reply)
+        _handle(lock, handler, text)
         store.save("telegram.json", state)          # offset sauvé à chaque commande : jamais traitée deux fois
     store.save("telegram.json", state)
     return len(updates)

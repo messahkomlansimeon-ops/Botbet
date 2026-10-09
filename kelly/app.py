@@ -377,9 +377,44 @@ def world_report(scan, picks, day, now):
     return data, pronos
 
 
+DAILY_FILE = "daily_done.json"
+DELIVERY = {"sent": 0, "failed": 0}        # messages du dernier run_daily : envoyés / mis en attente ou refusés (voir daily_entry)
+
+
+def daily_skip_reason(now):
+    """Pourquoi le matin ne doit PAS tourner maintenant (None = il peut). run_daily note dans data/daily_done.json le jour UTC `day`
+    (= now.date()) qu'il a terminé. Règle : (1) déjà terminé pour la date du jour -> doublon (rattrapage systemd Persistent au
+    démarrage du PC puis timer de 08:00, ou relance manuelle) ; (2) lancé avant C.DAY_END_HOUR h UTC alors que le jour précédent est
+    terminé -> son « jour Kelly » court jusqu'à C.DAY_END_HOUR h : ces matchs sont déjà couverts, le vrai passage de 08:00 suivra ;
+    (3) lancé avant C.DAY_END_HOUR h sans que la veille ait été faite -> rattrapage de la veille manquée : il tourne et compte pour
+    la date du jour, donc le passage de 08:00 qui suit est ignoré par (1). `--force` passe outre."""
+    done = store.load(DAILY_FILE, {}).get("day")
+    today = now.date()
+    if done == str(today):
+        return f"le matin du {today} est déjà fait (data/{DAILY_FILE})"
+    if now.hour < C.DAY_END_HOUR and done == str(today - timedelta(days=1)):
+        return f"{now:%H:%M} UTC < {C.DAY_END_HOUR} h : le jour Kelly du {done} court encore et a déjà été traité"
+    return None
+
+
+def daily_entry(sample=False, force=False):
+    """Point d'entrée de `python bot.py --daily [--force]` -> code de sortie. Ignore le run (0, note sur stderr) si daily_skip_reason le
+    juge doublon, sauf `force`. 1 si AUCUN message du matin n'a pu partir (réseau / Telegram en panne : ils sont en attente dans
+    data/outbox.json, les données du jour sont bien écrites), pour que systemd le signale."""
+    if not (sample or force):
+        why = daily_skip_reason(now_utc())
+        if why:
+            print(f"[daily] ignoré : {why}. Relance avec --force pour le refaire.", file=sys.stderr)
+            return 0
+    run_daily(sample)
+    return 1 if DELIVERY["failed"] and not DELIVERY["sent"] else 0
+
+
 def run_daily(sample=False):
     now = now_utc()
     scan = None
+    DELIVERY.update(sent=0, failed=0)
+    telegram.flush_outbox()                         # messages restés en attente (réseau coupé à l'heure prévue) : avant les nouveaux
     cache.reset()
     if sample:
         events = load_sample()
@@ -424,8 +459,10 @@ def run_daily(sample=False):
     # /top, /match, /combi relisent ces pronostics : les 40 meilleurs + les autres assez solides pour un combiné à cote juste
     keep = pronos[:40] + [c for c in pronos[40:] if CB.fair_eligible(c)][:40]
     store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
+    if not sample:                                  # avant l'envoi : mises et paris sont écrits, une relance ne les doublerait pas
+        store.save(DAILY_FILE, {"day": str(day), "at": now.isoformat()})
     for m in report + messages:
-        telegram.send(m)
+        DELIVERY["sent" if telegram.send(m) else "failed"] += 1
     print(cache.line(), file=sys.stderr)
     if not sample:
         run_track()
@@ -470,6 +507,7 @@ def run_track(events_for=None, now=None):
     Chaque appel payant passe par le budget « closing » ; refusé = sauté (log), jamais d'erreur.
     `events_for(sport_key, ev_id, markets)` : injectable pour les tests (un appel par match, sans budget)."""
     now = now or now_utc()
+    telegram.flush_outbox()                         # messages restés en attente (réseau coupé) : renvoyés avant les alertes du jour
     rows = track.load()
     due, missed = track.pending_closing(rows, now)
     track.mark_missed(rows, missed, now)
@@ -948,12 +986,32 @@ def custom_combo(picks, pronos, target, day, started=False):
                        f"déjà couvertes ({C.APISTATS_MIN_N} matchs ou plus). {tip}"])
 
 
+def _flush_outbox_locked():
+    """Renvoie les messages en attente sous le verrou des données (le matin / le relevé horaire écrivent outbox.json aussi). Verrou pris :
+    on laisse tomber, ce passage les renvoie lui-même au début. Ne lève pas."""
+    if not store.load(telegram.OUTBOX, []):
+        return
+    try:
+        with store.data_lock(wait=0):
+            telegram.flush_outbox()
+    except store.LockTimeout:
+        pass
+
+
 def run_commands(serve=False):
+    """Une passe (--commands, sans verrou : à lancer hors du matin) ou le serveur (--serve) : chaque message / bouton est traité sous
+    le verrou des données (store.data_lock, le même fichier que `flock` dans les unités systemd), relâché entre deux ; les messages
+    en attente sont renvoyés au démarrage puis toutes les minutes tant qu'il en reste."""
     if serve:
         print("Bot à l'écoute (Ctrl+C pour arrêter)...")
+        lock = lambda on_busy: store.data_lock(wait=C.LOCK_WAIT_MIN * 60, on_busy=on_busy)  # noqa: E731
+        last_flush = float("-inf")
         while True:
             try:
-                telegram.poll(handle_command, timeout=30, on_callback=chat.on_callback)
+                if time.monotonic() - last_flush >= 60:
+                    last_flush = time.monotonic()
+                    _flush_outbox_locked()
+                telegram.poll(handle_command, timeout=30, on_callback=chat.on_callback, lock=lock)
             except Exception as e:                  # noqa: BLE001 - le serveur ne s'arrête pas sur une erreur
                 print(f"[serve] {e}", file=sys.stderr)
                 time.sleep(5)
