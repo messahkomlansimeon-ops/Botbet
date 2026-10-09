@@ -183,6 +183,32 @@ PROP_MARKETS = {
 SOURCES_REFRESH = _bool("SOURCES_REFRESH", True)
 # Poids du modèle « vraies stats » face à la proba des books (corners, cartons, tirs : 40 %; buts : 20 %, marché efficace).
 MODEL_WEIGHT = {"corners": 0.4, "cards": 0.4, "player": 0.4, "goals": 0.2}
+def _days(name, default):
+    """Liste de jours d'environnement (« 60,90,110 ») ; vide ou invalide = défaut."""
+    try:
+        return tuple(sorted({int(x) for x in _list(name, default)})) or _days_default(default)
+    except ValueError:
+        return _days_default(default)
+
+
+def _days_default(default):
+    return tuple(int(x) for x in default.split(","))
+
+
+# Réglage mesuré sur l'historique (python bot.py --tune, kelly/tune.py -> data/tuning.json) : demi-vie du modèle de force par ligue et
+# poids des buts face aux books (remplace MODEL_WEIGHT["goals"] là où il est mesuré). Corners et cartons : AUCUNE cote historique dans
+# les CSV football-data, leurs poids restent ceux ci-dessus.
+TUNE_HALF_LIVES = _days("TUNE_HALF_LIVES", "60,90,110,150,220,330,500,800")   # demi-vies candidates (jours) ; 500 et 800 : l optimum mesuré touche 330 sur la plupart des grandes ligues
+TUNE_SECONDS = _int("TUNE_SECONDS", 1800)         # durée maximale d'un passage (reprise au passage suivant)
+TUNE_TEST_DAYS = _int("TUNE_TEST_DAYS", 365)      # fenêtre de test : la dernière saison (walk-forward)
+TUNE_STEP_DAYS = _int("TUNE_STEP_DAYS", 7)        # le modèle est réajusté tous les N jours pendant le test (3 en backtest)
+TUNE_MIN_SPAN_DAYS = _int("TUNE_MIN_SPAN_DAYS", 540)   # historique minimal d'une ligue (environ 2 saisons)
+TUNE_MIN_TEST = _int("TUNE_MIN_TEST", 150)        # matchs de test prédits au minimum, sinon la ligue garde la demi-vie par défaut
+TUNE_MARGIN = _float("TUNE_MARGIN", 0.002)        # gain de log-loss (moyenne 1N2 / plus de 2,5) exigé pour quitter 110 j : évite le bruit
+TUNE_WEIGHT_STEP = 0.05                           # grille du poids des buts : 0, 0,05 ... 0,5
+TUNE_WEIGHT_MAX = 0.5
+TUNE_WEIGHT_ON = (os.environ.get("TUNE_WEIGHT_ON") or "both").strip().lower()   # marchés qui fixent le poids : both (1N2 + plus de 2,5), ou25, 1x2
+TUNE_SHRINK_N = _float("TUNE_SHRINK_N", 600)      # matchs à partir desquels le poids d'une ligue pèse autant que le poids global
 PLAYER_MINUTES = 85        # minutes attendues d'un titulaire régulier (tirs/90 -> tirs du match)
 SOT_RATIO = 0.35           # tirs cadrés ~ 35 % des tirs, si seul le nombre de tirs est connu (FBref bloqué)
 PM_FLAG = 0.08             # écart modèle/books (en proba) à partir duquel la ligne est signalée dans le « pourquoi »
