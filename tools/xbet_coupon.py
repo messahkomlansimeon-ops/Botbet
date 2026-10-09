@@ -127,9 +127,30 @@ def run_test():
         ses.close("test du coupon")
 
 
+def read_coupon(code):
+    """Relit un ticket déjà enregistré (GetCoupon, lecture seule : rien n'est créé) : 1xbet.ci le connaît-il, avec quels paris ?"""
+    from kelly.sources import http, xbet
+    ses = xbet._Session()
+    if ses.why:
+        print(f"1xBet indisponible : {ses.why}")
+        return
+    try:
+        for body in ({"Guid": code, "CfView": 0, "Lng": "fr", "partner": xbet.COMMON["ref"]}, {"Guid": code, "Lng": "fr"}):
+            r = ses.call(http.post, GET_URL, body)
+            print(f"GetCoupon {sorted(body)} -> HTTP {r.status}")
+            try:
+                print(json.dumps(json.loads(r.content or b"{}"), ensure_ascii=False, indent=1)[:2500])
+            except ValueError:
+                print((r.content or b"")[:500])
+    finally:
+        ses.close("relecture du coupon")
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "--format":
         show_format(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--get":
+        read_coupon(sys.argv[2])
     elif len(sys.argv) >= 2 and sys.argv[1] == "--test":
         run_test()
     else:
