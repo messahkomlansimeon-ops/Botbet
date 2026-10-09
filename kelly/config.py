@@ -216,6 +216,15 @@ BEST_NOTE_GAP = 0.05
 DISAGREE_BASE = 0.12
 FEW_BOOKS = 4.0
 DISAGREE_FULL_BOOKS = 14
+# ---- Proba « vraie » : book de référence (kelly/odds.py.consensus) ----
+# Pinnacle est le book le plus précis du marché (marge ~2-3 %, limites hautes, il accepte les gagnants) : quand il affiche
+# TOUTES les issues d'un marché/d'une ligne, la proba de consensus = SHARP_WEIGHT x sa proba (sans marge de Shin) +
+# (1 - SHARP_WEIGHT) x la moyenne (Shin) des autres books. Sans book de référence : moyenne de tous les books.
+# SHARP_BOOKS : clés The Odds API des books de référence (moyenne entre eux s'il y en a plusieurs). Les exchanges
+# ("betfair_ex_eu", "matchbook") ont ~0 marge, ce que la méthode de Shin traite sans réglage (S ~ 1 : proche d'une
+# simple normalisation), mais leurs prix peuvent être minces/en retard : absents par défaut, à ajouter via SHARP_BOOKS.
+SHARP_WEIGHT = min(1.0, max(0.0, _float("SHARP_WEIGHT", 0.7)))
+SHARP_BOOKS = tuple(x.lower() for x in _list("SHARP_BOOKS", "pinnacle"))
 # ---- Plancher de qualité d'une jambe de combiné (kelly/combos.py.leg_reason) ----
 # Une jambe doit porter une vraie raison, sinon elle n'entre dans aucun combiné ni pari du jour :
 #   valeur : écart (proba x cote typique - 1) >= LEG_MIN_EDGE x (1 + FEW_BOOKS / nb de books) ;

@@ -1,4 +1,5 @@
 """Cotes (The Odds API) et construction des sélections."""
+import math
 import os
 import sys
 import time
@@ -467,8 +468,77 @@ def complete(market, group, outs):
     return len(outs) == need and len(names) == need and all(o.get("price") and o["price"] > 1 for o in outs)
 
 
+def _shin_p(q, s, z):
+    """p_i(z) = (sqrt(z^2 + 4(1-z) q^2 / S) - z) / (2(1-z)) (Štrumbelj 2014, package R « implied »), écrite sous la forme
+    équivalente 2a / (sqrt(z^2 + 4(1-z)a) + z), a = q^2 / S : sans division par 1 - z ni soustraction de grands voisins."""
+    a = q * q / s
+    return 2 * a / (math.sqrt(z * z + 4 * (1 - z) * a) + z)
+
+
+def shin_z(prices):
+    """Part z (0 <= z < 1) de trades « d'initiés » estimée par Shin (1993) sur un marché de cotes décimales `prices`, ou 0.0
+    s'il n'y a pas de marge (somme des 1/cote <= 1). z est la racine de sum(p_i(z)) = 1 (bissection : la somme décroît
+    de sqrt(S) > 1 en z = 0 à sum(q_i^2) / S < 1 en z = 1)."""
+    q = [1 / x for x in prices]
+    s = sum(q)
+    if s <= 1 + 1e-12:
+        return 0.0
+    lo, hi = 0.0, 1.0
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        if sum(_shin_p(x, s, mid) for x in q) > 1:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < 1e-14:
+            break
+    return (lo + hi) / 2
+
+
+def shin_probs(prices):
+    """Probabilités « vraies » d'un marché à n issues de cotes décimales `prices` (marge retirée par la méthode de Shin, 1993).
+    Elles somment à 1. Avec q_i = 1/cote_i et S = sum q_i (S > 1 : marge), p_i = (sqrt(z^2 + 4(1-z) q_i^2 / S) - z) / (2(1-z)),
+    z étant choisi pour que sum p_i = 1 (shin_z). Contrairement à la normalisation proportionnelle q_i / S, Shin retire
+    plus de marge aux outsiders qu'aux favoris (biais favori-outsider : le public surmise les longshots), donc ses
+    probas d'outsiders sont plus basses. Sans marge (S <= 1) : q_i / S. Valable à 2 issues comme à 3 ou plus."""
+    q = [1 / x for x in prices]
+    s = sum(q)
+    if s <= 1 + 1e-12:
+        return [x / s for x in q]
+    z = shin_z(prices)
+    ps = [_shin_p(x, s, z) for x in q]
+    t = sum(ps)                                     # renormalise l'erreur résiduelle de la bissection (~1e-14)
+    return [x / t for x in ps]
+
+
+def consensus(entries):
+    """Proba de consensus d'une issue à partir de [(clé du book, proba sans marge)], un élément par book.
+    Si un book de référence (C.SHARP_BOOKS, Pinnacle d'abord) l'affiche : SHARP_WEIGHT x moyenne des books de référence +
+    (1 - SHARP_WEIGHT) x moyenne des autres books (la moyenne des références seule s'il n'y a pas d'autre book).
+    Sinon : moyenne de tous les books. -> (proba, source, nombre de books de référence) ; source « pinnacle » si Pinnacle
+    en fait partie, « sharp » pour un autre book de référence, « consensus » sans référence."""
+    sharp = [p for b, p in entries if b in C.SHARP_BOOKS]
+    rest = [p for b, p in entries if b not in C.SHARP_BOOKS]
+    if not sharp:
+        return sum(rest) / len(rest), "consensus", 0
+    ps = sum(sharp) / len(sharp)
+    p = C.SHARP_WEIGHT * ps + (1 - C.SHARP_WEIGHT) * sum(rest) / len(rest) if rest else ps
+    return p, "pinnacle" if any(b == "pinnacle" for b, _ in entries) else "sharp", len(sharp)
+
+
+def _dc_parts(name, home, away):
+    """Issues du 1X2 couvertes par une double chance (« Alpha or Draw » -> (Alpha, Draw)), ou None si le nom n'est pas lisible."""
+    for a, b in ((home, "Draw"), (home, away), (away, "Draw")):
+        if name in (f"{a} or {b}", f"{b} or {a}"):
+            return a, b
+    return None
+
+
 def build_picks(events, day, after=None, history=None, model=None):
     """Toutes les sélections : proba de consensus, cote typique, valeur et flair.
+
+    Proba de consensus : chaque book est dé-margé par la méthode de Shin (shin_probs), puis Pinnacle, s'il affiche toutes les
+    issues, pèse C.SHARP_WEIGHT face à la moyenne des autres (voir consensus). c["prob_src"] dit laquelle a servi.
 
     La cote d'un pari est la cote TYPIQUE (75e centile des books, voir typical_price), pas le maximum : l'écart de valeur,
     les combinés et les mises la prennent comme référence. La meilleure cote reste dans c["best_odds"] (et c["book"]) pour
@@ -501,21 +571,38 @@ def build_picks(events, day, after=None, history=None, model=None):
                     if m["key"] == "spreads" and pt is not None:
                         pt = abs(pt)                    # handicap : -1.5 / +1.5 forment une paire
                     groups.setdefault((o.get("description"), pt), []).append(o)
-                # double chance : 3 issues dont les probas somment à 2 (pas 1)
-                mass = 2.0 if m["key"] == "double_chance" else 1.0
+                # double chance : 3 issues dont les probas somment à 2 (pas 1) ; Shin n'est défini que pour une somme de 1
+                dc = m["key"] == "double_chance"
                 for (who, _), outs in groups.items():
                     if not complete(m["key"], group, outs):
                         continue                        # un book qui n'affiche pas toutes les issues fausserait le sans-marge
-                    total = sum(1 / o["price"] for o in outs)
-                    for o in outs:
+                    if dc:                              # repli proportionnel de masse 2 (le consensus 1X2 le remplace, voir plus bas)
+                        total = sum(1 / o["price"] for o in outs)
+                        book_ps = [2 / o["price"] / total for o in outs]
+                    else:
+                        book_ps = shin_probs([o["price"] for o in outs])
+                    for o, bp in zip(outs, book_ps):
                         k = (m["key"], who, o.get("point"), o["name"])
-                        probs.setdefault(k, []).append(mass / o["price"] / total)
+                        probs.setdefault(k, []).append((bk["key"].lower(), bp))
                         prices.setdefault(k, []).append((o["price"], bk.get("title", bk["key"])))
-        for k, ps in probs.items():
+        cons = {k: consensus(es) for k, es in probs.items()}
+        # Double chance : somme des deux issues du 1X2 de consensus (Pinnacle compris) quand les 3 issues du 1X2 ont assez de
+        # books. Le 1X2 est le marché le plus liquide et le mieux dé-margé (Shin) ; la double chance des books mous, à marge
+        # élevée et sans Pinnacle, n'apporte pas d'information propre. Sinon : consensus proportionnel de masse 2.
+        h2h = {k[3]: cons[k] for k, es in probs.items()
+               if k[0] == "h2h" and k[1] is None and k[2] is None and len(es) >= C.MIN_BOOKMAKERS}
+        if len(h2h) == 3 and {ev["home_team"], ev["away_team"], "Draw"} == set(h2h):
+            for k in probs:
+                parts = _dc_parts(k[3], ev["home_team"], ev["away_team"]) if k[0] == "double_chance" else None
+                if parts:
+                    cs = [h2h[x] for x in parts]
+                    cons[k] = (sum(c[0] for c in cs), cs[0][1] if cs[0][1] == cs[1][1] else "consensus", min(c[2] for c in cs))
+        for k, es in probs.items():
+            ps = [p for _, p in es]
             if len(ps) < C.MIN_BOOKMAKERS:
                 continue
             market, who, point, name = k
-            p = sum(ps) / len(ps)
+            p, src, n_sharp = cons[k]
             odds, _ = typical_price(prices[k])
             best, best_book = max(prices[k], key=lambda x: x[0])
             if not C.ODDS_RANGE[0] <= odds <= C.ODDS_RANGE[1]:
@@ -525,7 +612,8 @@ def build_picks(events, day, after=None, history=None, model=None):
             spread = (max(ps) - min(ps)) / p
             prev = history.get(key)
             prev_p = prev.get("pb") if isinstance(prev, dict) else None      # « pb » seul : les anciens relevés (« p » mêlé au modèle) sont ignorés
-            steam = (p - prev_p) / prev_p if prev_p else 0.0
+            prev_src = prev.get("src") if isinstance(prev, dict) else None      # source changée (Pinnacle apparu/disparu) : pas un mouvement
+            steam = (p - prev_p) / prev_p if prev_p and prev_src in (None, src) else 0.0
             weight = market_weight(market)
             signals = []
             n_books = len(ps)
@@ -544,7 +632,7 @@ def build_picks(events, day, after=None, history=None, model=None):
                 "commence": ev["commence_time"],
                 "market": market, "who": who, "point": point, "name": name,
                 "pick": label(market, name, point, who, group),
-                "prob": p_cal, "prob_book": p, "odds": odds, "best_odds": best, "book": best_book,
+                "prob": p_cal, "prob_book": p, "prob_src": src, "n_sharp": n_sharp, "odds": odds, "best_odds": best, "book": best_book,
                 "edge": p_cal * odds - 1, "spread": spread, "steam": steam, "n_books": n_books, "weight": weight,
                 "score": (edge + 0.5 * min(1.0, n_books / C.DISAGREE_FULL_BOOKS) * spread + 2 * steam) * weight
                          + (weight - 1) * 0.05,
@@ -575,4 +663,4 @@ def snapshot(picks):
     # seule clé que build_picks lit pour le steam : les anciens relevés, sans « pb », ne comptent plus (pas de migration) ;
     # find_alerts (app.py) lit encore « p ».
     return {c["key"]: {"p": round(c.get("prob_book", c["prob"]), 4), "pb": round(c.get("prob_book", c["prob"]), 4),
-                       "o": c["odds"], "t": now} for c in picks}
+                       "src": c.get("prob_src", "consensus"), "o": c["odds"], "t": now} for c in picks}

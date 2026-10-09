@@ -2605,7 +2605,9 @@ def main():
     print(d, "\n")
     assert "Bilan" in app.handle_command("/bilan") and "BILAN" in app.handle_command("/bilan détail")
     assert "PSG" in app.handle_command("/match psg")
-    assert "COMBINÉ SUR MESURE" in app.handle_command("/combi 30")
+    # cote 3 et non plus 30 : la dé-marge de Shin retire plus de marge aux longshots que la proportionnelle, et ces données
+    # synthétiques ont une marge proportionnelle (sans biais favori-outsider) : il n'y reste que 4 jambes de qualité (max 3,6)
+    assert "COMBINÉ SUR MESURE" in app.handle_command("/combi 3")
     assert "meilleurs paris du jour" in app.handle_command("/top")
     assert "réglée" in app.handle_command("/bank 50000")
     assert "Kelly" in app.handle_command("/aide")
