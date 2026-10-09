@@ -168,6 +168,7 @@ def _league_rate(league, field):
             tot, n = tot + t[field], n + t["n"]
     return tot / n if n else None
 
+
 def _shrunk(t, field, mean):
     """Buts par match d'une équipe du classement, rapprochés de la moyenne de la ligue (poids STANDINGS_PRIOR_N matchs) : en début de
     saison, 3 matchs ne font pas une attaque. Sans moyenne (classement inconnu), le taux brut."""
@@ -175,6 +176,7 @@ def _shrunk(t, field, mean):
     if mean is None:
         return raw
     return (t["n"] * raw + STANDINGS_PRIOR_N * mean) / (t["n"] + STANDINGS_PRIOR_N)
+
 
 def _standings_goals(out, h, a, hv, av, matches=(), league=None):
     """Buts attendus d'un match d'après le classement FotMob (buts marqués et encaissés par match, mêlés comme _expect) : seule
@@ -244,6 +246,7 @@ def _deep(out, home, away, sport_key, referee):
 
 
 AFR_XB = frozenset(row[0] for row in C.XB_LEAGUES.get("afrique", ()))      # Égypte, Maroc, Algérie : vus par 1xBet ET listés « africa » par API-Football
+
 
 def _aps_candidates(prof, sport_key):
     if sport_key in AFR_XB:              # le profil API-Football de ces équipes porte « africa » (fair.make écarte la copie « africa » du match)
