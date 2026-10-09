@@ -264,11 +264,11 @@ def test_apply_and_messages():
     assert seen["events"] == ["e1", "e2"] and seen["wanted"]["e1"] == {"alternate_totals_corners"}
     text = fmt.pronos(CB.best_per_match(pronos))
     assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text, text
-    assert '<a href="https://1xbet.ci/fr/line/football/1/369147714">ouvrir chez 1xBet</a>' in text, "lien vers le match"
+    assert "<a href" not in text, "pas de lien : la cote seulement"
     assert "— mini <b>" not in text and "« mini »" not in text, "le pronostic sans cote 1xBet n'est pas montré"
     real = fmt.fair_combo(3.96, [pronos[0], pronos[0] | {"id": "x"}], 0.36, 0.5)
     assert real.startswith("<b>💎 COMBINÉ AUX COTES 1XBET</b>") and "🎯 Cote <b>" in real and "✔️ Cote 1xBet <b>1,99</b>" in real
-    assert real.count("ouvrir chez 1xBet") == 2
+    assert "<a href" not in real
     mixed = fmt.fair_combo(3.0, [pronos[0], pronos[1]], 0.4, 0.5)
     assert "À VÉRIFIER CHEZ 1XBET" in mixed and "Kelly n'a pas vu toutes les cotes" in mixed
     old = C.XBET_ENABLED
