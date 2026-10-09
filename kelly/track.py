@@ -25,7 +25,6 @@ def _archive(old):
     by_year = {}
     for r in old:
         by_year.setdefault(str(r.get("date") or "")[:4] or "0000", []).append(r)
-    os.makedirs(os.path.dirname(store.path("archive/x")), exist_ok=True)
     for year, rows in by_year.items():
         name = f"archive/tracked-{year}.json"
         cur = store.load(name, [])

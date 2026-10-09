@@ -419,8 +419,7 @@ def test_cache_reuse():
     fits = S.FITS
     m1 = S.get("E0", on, loader)
     assert m1 and S.FITS == fits + 1 and calls == ["E0"]
-    path = store.path("strength_E0.json")
-    assert os.path.exists(path) and 3_000 < os.path.getsize(path) < 120_000, os.path.getsize(path)          # petit JSON compact
+    assert store.exists("strength_E0.json") and 3_000 < store.size("strength_E0.json") < 120_000, store.size("strength_E0.json")  # compact
     assert S.get("E0", on, loader) is m1 and S.FITS == fits + 1 and len(calls) == 1                         # mémoire
     S.reload()                                                                                               # nouveau processus
     m2 = S.get("E0", on, loader)
@@ -457,7 +456,7 @@ def test_cache_reuse():
         assert S.get("E0", on + timedelta(days=60), lambda d: 1 / 0) is None
     assert "[strength] E0 ignoré : ZeroDivisionError" in err.getvalue()
     S.reload()
-    os.remove(store.path("src_footballdata.json"))
+    store.remove("src_footballdata.json")
     print("cache du jour : OK")
 
 

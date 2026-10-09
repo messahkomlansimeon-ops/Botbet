@@ -83,6 +83,12 @@ EPL_FD = "https://football-data.co.uk/mmz4281/2526/E0.csv"
 EPL_US = "https://understat.com/league/EPL/2025"
 EPL_FB = "https://fbref.com/en/comps/9/{}/Premier-League-Stats"
 
+def corrupt(name):
+    """Document illisible dans la base (JSON cassé), comme un ancien fichier abîmé."""
+    with store._db() as con:
+        con.execute("INSERT OR REPLACE INTO docs (name, body, updated) VALUES (?, '{pas du json', 'x')", (name,))
+
+
 
 def fresh(serve=True):
     """Données, cache, horloge et faux réseau neufs."""
@@ -592,7 +598,7 @@ def test_health_report_and_features():
     txt = sources.report()
     assert txt.count("✅") == 5 and all(n in txt for n in ("football-data", "Understat", "FBref", "FotMob", "BetExplorer")), txt
     assert len(txt.splitlines()) == 6
-    total = sum(os.path.getsize(store.path(f)) for f in os.listdir(store.DATA_DIR) if f.startswith("src_"))
+    total = sum(store.size(f) for f in store.names("src_"))
     assert 0 < total < 100_000, total
     # le délai de 6 s est tenu entre les pages FBref
     ts = [e[2] for e in net.log if "fbref.com" in e[0]]
@@ -731,10 +737,10 @@ def test_bootstrap_rows():
     assert learn.boot_rows({"rows": [["2025-01-01", 5, 0.1], ["x"], None]}) == [] and learn.boot_rows(None) == []
 
     # ensure() : télécharge les saisons passées une fois, fichier petit dans data/, relecture sans requête
-    assert not os.path.exists(store.path("bootstrap.json"))
+    assert not store.exists("bootstrap.json")
     out = bootstrap.ensure(["soccer_epl", "soccer_uefa_champs_league"])
     assert out["rows"] and out["seasons"] == ["2223", "2324", "2425", "2526"] and out["current"] == "2526", out["seasons"]
-    assert os.path.getsize(store.path("bootstrap.json")) < 100_000
+    assert store.size("bootstrap.json") < 100_000
     assert {u.split("/")[-2] for u, _, _ in net.log if u.endswith("E0.csv")} == {"2223", "2324", "2425", "2526"}
     n = len(net.log)
     assert bootstrap.ensure(["soccer_epl"])["built"] == out["built"] and len(net.log) == n          # < 7 jours : relu
@@ -855,9 +861,7 @@ def test_refresh_never_raises():
     # profils vides ou corrompus : match_features reste valide
     fresh()
     features.reload()
-    os.makedirs(store.DATA_DIR, exist_ok=True)
-    with open(store.path("src_footballdata.json"), "w") as fh:
-        fh.write("{pas du json")
+    corrupt("src_footballdata.json")
     assert sources.match_features("Arsenal", "Chelsea", "soccer_epl") == {"sources": []}
     assert sources.soccer_leagues(["soccer_epl", "tennis_atp", "soccer_nope"]) == ["soccer_epl"]
     assert "soccer_spain_la_liga" in sources.soccer_leagues(["soccer_"])

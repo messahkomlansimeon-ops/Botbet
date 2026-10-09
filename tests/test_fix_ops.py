@@ -304,8 +304,8 @@ def test_serve_flush():
 
 def test_daily_guard():
     for f in ("daily_done.json",):
-        if os.path.exists(store.path(f)):
-            os.remove(store.path(f))
+        if store.exists(f):
+            store.remove(f)
     d = lambda y, m, dd, h: datetime(y, m, dd, h, 5, tzinfo=UTC)                                                  # noqa: E731
     assert app.daily_skip_reason(d(2026, 10, 9, 8)) is None                      # jamais tourné
     store.save(app.DAILY_FILE, {"day": "2026-10-09"})
@@ -357,8 +357,8 @@ def test_run_daily_wiring():
     app.world_report = lambda scan, picks, day, now: (None, [])
     app.run_track = lambda *a, **k: (0, [])
     app.now_utc = lambda: datetime(2026, 10, 20, 8, 0, tzinfo=UTC)
-    if os.path.exists(store.path(app.DAILY_FILE)):
-        os.remove(store.path(app.DAILY_FILE))
+    if store.exists(app.DAILY_FILE):
+        store.remove(app.DAILY_FILE)
     try:
         with telegram_env(FakeApi()) as fake:
             store.save(telegram.OUTBOX, [{"text": "hier", "html": False, "markup": None, "chat_id": None, "ts": time.time() - 7200}])

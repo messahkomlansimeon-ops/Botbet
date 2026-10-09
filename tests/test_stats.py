@@ -494,9 +494,10 @@ def test_caching_no_refetch():
     assert stats.fixture_stats(77) is None and stats.fixture_stats(77) is None
     stats._neg.clear()
     assert stats.fixture_stats(77) is None and len(calls) == 1, "absence de statistiques mémorisée"
-    cache_ = store.load("stats_cache.json", {})
+    cache_ = stats._stats_cache()                                     # fichier à part (pas dans la base) : cache brut de stats.py
     cache_["77"] = {"missing": str(date.fromisoformat(stats._today()) - timedelta(days=C.STATS_NO_DATA_DAYS + 1))}
-    store.save("stats_cache.json", cache_)
+    with open(stats._stats_path(), "w") as f:
+        json.dump(cache_, f)
     assert stats.fixture_stats(77) is None and len(calls) == 2
     # 6) forfait gratuit : « last », « ids » et les dates hors hier..demain ne sont JAMAIS envoyés (une erreur de plan arrêterait tout)
     calls = reset(lambda u, p: Resp({"errors": [], "response": [1]}))
@@ -790,7 +791,7 @@ def test_apistats_pruning_and_size():
                                    "m": [row(260901 + k) for k in range(15)]} for i in range(400)}
     d["seen"] = {str(i): 260000 + i for i in range(600)}
     apistats.save(d)
-    size = os.path.getsize(store.path("apistats_profiles.json"))
+    size = store.size("apistats_profiles.json")
     loaded = apistats.load()
     assert len(loaded["teams"]) == C.APISTATS_MAX_TEAMS == 300 and size < 300_000, size
     assert all(len(t["m"]) <= 15 for t in loaded["teams"].values()) and loaded["seen"] == {}, "matchs « vus » trop anciens oubliés"

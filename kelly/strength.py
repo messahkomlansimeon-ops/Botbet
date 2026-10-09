@@ -77,10 +77,8 @@ def tuning():
     """Contenu de data/tuning.json ({} si absent ou illisible), gardé en mémoire et relu dès que le fichier change
     (le bot qui tourne en continu voit donc un réglage fraîchement mesuré sans redémarrer). Ne lève jamais."""
     p = store.path(TUNING_FILE)
-    try:
-        st = os.stat(p)
-        sig = (st.st_mtime_ns, st.st_size)
-    except OSError:
+    sig = store.version(TUNING_FILE)
+    if sig is None:
         _tuned.pop(p, None)
         return {}
     hit = _tuned.get(p)
@@ -597,9 +595,7 @@ def _file(div):
 def _save(div, model):
     """Écrit le cache JSON compact de la ligue ; un disque en lecture seule ne doit pas faire perdre le modèle."""
     try:
-        os.makedirs(store.DATA_DIR, exist_ok=True)
-        with open(store.path(_file(div)), "w") as f:
-            json.dump(model, f, separators=(",", ":"), ensure_ascii=False)
+        store.save(_file(div), model, compact=True)
     except OSError as e:
         print(f"[strength] cache {div} non écrit : {e}", file=sys.stderr)
 

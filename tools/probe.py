@@ -163,14 +163,14 @@ def main_sources():
     for fn, keys in (("src_footballdata.json", ("teams", "referees", "leagues")), ("src_understat.json", ("leagues",)),
                      ("src_fbref.json", ("leagues",))):
         data = store.load(fn, {})
-        prof[fn] = {"bytes": os.path.getsize(store.path(fn)) if os.path.exists(store.path(fn)) else 0} | {
+        prof[fn] = {"bytes": store.size(fn)} | {
             k: _count(data, k) for k in keys} | ({"matches": data.get("matches")} if data.get("matches") else {})
     us = (store.load("src_understat.json", {}).get("leagues") or {})
     prof["src_understat.json"]["teams"] = sum(_count(d, "teams") for d in us.values())
     prof["src_understat.json"]["players"] = sum(sum(len(p) for p in (d.get("players") or {}).values()) for d in us.values())
     rep["profiles"] = prof
     rep["bootstrap"] = {"rows": len(boot.get("rows", [])), "seasons": boot.get("seasons"), "matches": boot.get("matches"),
-                        "bytes": os.path.getsize(store.path("bootstrap.json")) if os.path.exists(store.path("bootstrap.json")) else 0}
+                        "bytes": store.size("bootstrap.json")}
     files = [os.path.join(d, f) for d, _, fs in os.walk(os.environ["SOURCES_CACHE_DIR"]) for f in fs]
     rep["cache"] = {"files": len(files), "bytes": sum(os.path.getsize(f) for f in files)}
     teams = sorted(t for t, v in (store.load("src_footballdata.json", {}).get("teams") or {}).items() if v.get("div") == "E0")

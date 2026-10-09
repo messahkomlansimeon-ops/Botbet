@@ -5,9 +5,11 @@ import math
 import os
 import random
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
+from contextlib import closing
 from datetime import date, timedelta
 
 TMP = tempfile.mkdtemp(prefix="kelly-tune-test-")
@@ -18,6 +20,12 @@ os.environ.pop("TELEGRAM_TOKEN", None)
 
 from kelly import config as C, prematch, store, strength as S, tune  # noqa: E402
 from kelly.sources import footballdata as fd  # noqa: E402
+
+def corrupt(name):
+    """Document illisible dans la base (JSON cassé), comme un ancien fichier abîmé."""
+    with store._db() as con:
+        con.execute("INSERT OR REPLACE INTO docs (name, body, updated) VALUES (?, '{pas du json', 'x')", (name,))
+
 
 from tests import synth  # noqa: E402
 
@@ -192,7 +200,7 @@ def test_tune_div_and_file_roundtrip():
         assert S.HALF_LIFE == 110 and r["chosen"] == 110 or r["gain"] >= C.TUNE_MARGIN          # 110 gardé, sauf gain net
         res = tune.run(["E0", "SP1"], lambda d: ms if d == "E0" else [], seconds=600, force=True)
         assert res["done"] == ["E0"] and "SP1" in res["skipped"] and not res["pending"], res
-        data = json.load(open(store.path(tune.FILE)))
+        data = store.load(tune.FILE, None)
         assert set(data) == {"built", "half_life", "goal_weight", "report"} and data["built"][:2] == "20"
         assert data["half_life"] == {"E0": r["chosen"]} and "_global" in data["goal_weight"] and 0 <= data["goal_weight"]["E0"] <= 0.5
         assert data["report"]["E0"]["chosen"] == r["chosen"] and "skipped" in data["report"]["SP1"]
@@ -224,14 +232,11 @@ def test_strength_and_prematch_use_tuned_values():
     m1 = S.get("E0", on, loader=lambda d: ms)
     assert m1["hl"] == 220 and m1["key"].endswith("|hl220"), (m1["hl"], m1["key"])          # le cache du jour est refait avec la nouvelle demi-vie
     store.save(tune.FILE, {"half_life": {"E0": 330}})                                    # fichier modifié : relu sans reload (même processus)
-    os.utime(store.path(tune.FILE), (1, 1))
     assert S.hl_for("E0") == 330
-    open(store.path(tune.FILE), "w").write("{pas du json")
-    os.utime(store.path(tune.FILE), (2, 2))
+    corrupt(tune.FILE)
     assert S.tuning() == {} and S.hl_for("E0") == S.HALF_LIFE                            # fichier illisible : replis
     # prematch : poids des buts de la ligue du pari, repli sur config
     store.save(tune.FILE, {"half_life": {}, "goal_weight": {"E0": 0.35}, "report": {}})
-    os.utime(store.path(tune.FILE), (3, 3))
     S.reload()
     model = S.build(ms, on, div="E0")
     pred = S.predict(model, "Team A", "Team B", on)
@@ -247,7 +252,7 @@ def test_strength_and_prematch_use_tuned_values():
         assert close(prematch.assess(dict(pick, sport_key=sk), f, None)["w"], C.MODEL_WEIGHT["goals"] * prematch.qscale(q))
     prematch.apply(pick, a)
     assert close(pick["prob"], (1 - a["w"]) * 0.5 + a["w"] * a["p"], 1e-9)
-    os.remove(store.path(tune.FILE))
+    store.remove(tune.FILE)
     S.reload()
     assert close(prematch.assess(pick | {"prob": 0.5}, f, None)["w"], C.MODEL_WEIGHT["goals"] * prematch.qscale(q))
     print("strength / prematch : valeurs mesurées et replis : OK")
@@ -272,14 +277,14 @@ def test_time_budget_and_resume():
         res = tune.run(divs, lambda d: [], seconds=25, force=True)
         assert calls == ["E0", "SP1", "I1"] and res["pending"] == ["D1", "F1"] and res["done"] == ["E0", "SP1", "I1"], (calls, res)
         assert res["seconds"] == 30.0                                # une ligue commencée va au bout, aucune n'est commencée après
-        d = json.load(open(store.path(tune.FILE)))
+        d = store.load(tune.FILE, None)
         assert set(d["half_life"]) == {"E0", "SP1", "I1"}            # fichier partiel déjà utilisable
         assert tune.run(divs, lambda d: [], seconds=0)["done"] == [] and calls == ["E0", "SP1", "I1"]          # budget nul : rien
         # reprise : les ligues jamais réglées d'abord (ordre d'importance), les récentes sont sautées
         calls.clear()
         res = tune.run(divs, lambda d: [], seconds=1000)
         assert calls == ["D1", "F1"] and not res["pending"], calls
-        d = json.load(open(store.path(tune.FILE)))
+        d = store.load(tune.FILE, None)
         assert set(d["half_life"]) == set(divs) and d["goal_weight"]["_global"] == 0.0
         # tout est frais : rien à faire ; force : tout refait, les plus anciennes d'abord
         calls.clear()
@@ -299,7 +304,7 @@ def test_time_budget_and_resume():
         tune.clock = tick
         res = tune.run(["E0"], lambda d: ms, seconds=3)
         assert res["done"] == [] and res["pending"] == ["E0"], res
-        assert "E0" not in (json.load(open(store.path(tune.FILE)))["report"]), "pas de résultat partiel"
+        assert "E0" not in (store.load(tune.FILE, None)["report"]), "pas de résultat partiel"
         # une ligue qui plante n'arrête pas les autres
         tune.clock = lambda: 0.0
         res = tune.run(["E0", "SP1"], lambda d: 1 / 0 if d == "E0" else [], seconds=100, force=True)
@@ -325,7 +330,8 @@ def test_main_and_cli():
     r = subprocess.run([sys.executable, "bot.py", "--tune"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, (r.stdout, r.stderr)
     assert "Réglage Kelly" in r.stdout and "0 ligue(s) réglée(s)" in r.stdout and "aucun historique" in r.stdout, r.stdout
-    assert os.path.exists(os.path.join(TMP, "cli-data", "tuning.json"))
+    with closing(sqlite3.connect(os.path.join(TMP, "cli-data", store.DB_FILE))) as con:
+        assert con.execute("SELECT 1 FROM docs WHERE name='tuning.json'").fetchone()
     print("bot.py --tune : OK")
 
 

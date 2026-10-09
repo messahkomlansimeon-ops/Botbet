@@ -17,6 +17,12 @@ os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)
 
+def corrupt(name):
+    """Document illisible dans la base (JSON cassé), comme un ancien fichier abîmé."""
+    with store._db() as con:
+        con.execute("INSERT OR REPLACE INTO docs (name, body, updated) VALUES (?, '{pas du json', 'x')", (name,))
+
+
 from kelly import (app, bankroll, bootstrap, budget, cache, calib, chat, combos as CB, fair, fmt, config as C, learn, odds, played,  # noqa: E402
                    settle, sources, stats, store, telegram, track)
 from kelly.sources import features, footballdata as fd, http, state  # noqa: E402
@@ -286,8 +292,7 @@ def test_budget():
         assert budget.allowance() == 33 and budget.can_spend(3, "daily") and not budget.can_spend(4, "daily")
         assert budget.can_spend(13, "closing") and not budget.can_spend(14, "closing")   # 40 % de 33 = 13
         # un budget.json illisible ne casse rien : on repart du forfait mensuel
-        with open(store.path("budget.json"), "w") as f:
-            f.write("{pas du json")
+        corrupt("budget.json")
         odds.CREDITS.update(remaining=None)
         sb.set_now(datetime(2026, 10, 1, 8, tzinfo=UTC))
         assert budget.allowance() == 16
@@ -793,7 +798,7 @@ def test_bootstrap_training():
         assert "matchs historiques" in d
         store.save("bootstrap.json", {"rows": "illisible"})                 # fichier corrompu : sans effet
         assert not learn.update([])["adopted"]
-        os.remove(store.path("bootstrap.json"))
+        store.remove("bootstrap.json")
         assert learn.describe(learn.update([]), []) == ""
     print("amorçage de l'apprentissage : OK")
 
@@ -959,8 +964,8 @@ def test_run_daily_with_sources():
             assert all("heuristic" in r["features"] for r in rows) and not any("bootstrap" in r["features"] for r in rows)
             boot = store.load("bootstrap.json", {})
             assert len(boot["rows"]) > 200 and boot["seasons"] == ["2324", "2425", "2526", "2627"], boot.get("seasons")
-            assert os.path.getsize(store.path("bootstrap.json")) < 100_000
-            assert os.path.exists(store.path("src_footballdata.json")) and not any("api-sports" in u for u in urls)
+            assert store.size("bootstrap.json") < 100_000
+            assert store.exists("src_footballdata.json") and not any("api-sports" in u for u in urls)
             # le lendemain : le modèle appris sur l'historique est utilisé et le 🧠 annonce les lignes historiques
             model = learn.update(track.load())
             assert model["adopted"] and model["boot_n"] == len(boot["rows"]) and "Historique football-data" in learn.describe(model, track.load())
@@ -1179,7 +1184,7 @@ def test_fair_pronostics():
         scan = {"day": WDAY, "leagues": {"soccer_efl_champ": [ev("m1", "Alpha", "Bravo"), ev("m2", "Inconnu A", "Inconnu B")],
                                          "soccer_uefa_nations_league": [ev("m3", "France", "Italie", "soccer_uefa_nations_league")]}}
         put_team_profiles({"E1": ["Alpha", "Bravo"]})
-        d = json.load(open(store.path("src_footballdata.json")))
+        d = store.load("src_footballdata.json", None)
         for t in d["teams"].values():                                      # 12 corners attendus, 2.6 buts, 4.4 cartons
             for view in ("all", "home", "away"):
                 t[view].update(corners_for=7.0, corners_against=5.0, goals_for=1.5, goals_against=1.1)
@@ -1240,7 +1245,7 @@ def test_fair_pronostics():
         assert fair.record(many_p, WDAY) == C.FAIR_TRACK and fair.record(many_p, WDAY) == 0
         rows = fair.load()
         assert len(rows) == C.FAIR_TRACK and all(r["result"] is None and "score" not in r for r in rows)
-        assert os.path.getsize(store.path("fair.json")) < 5_000 and C.FAIR_TRACK * C.FAIR_KEEP_DAYS * 300 < 40_000      # data/ reste petit
+        assert store.size("fair.json") < 5_000 and C.FAIR_TRACK * C.FAIR_KEEP_DAYS * 300 < 40_000      # data/ reste petit
         fair.record([dict(top, key="old")], "2026-11-30")
         assert [r["key"] for r in fair.load()] == ["old"]                  # les lignes de plus de 10 jours disparaissent
         rows = [{"result": "win", "prob": 0.6, "date": "2026-11-29"}, {"result": "loss", "prob": 0.7, "date": "2026-11-29"},
@@ -1297,7 +1302,7 @@ def test_morning_always_useful():
         assert today["pronos"] and all("score" not in c for c in today["pronos"])
         data = store.load("monde.json", {})
         assert data["day"] == WDAY and data["brk"] == 1 and data["paid"] == [k for k in data["leagues"] if k in paid_leagues] \
-            and sum(len(v) for v in data["leagues"].values()) == 50 and os.path.getsize(store.path("monde.json")) < 20_000
+            and sum(len(v) for v in data["leagues"].values()) == 50 and store.size("monde.json") < 20_000
         fair_rows = store.load("fair.json", [])
         shown_rows = [r for r in fair_rows if not r.get("x")]                     # les montrés : un pronostic viable par match
         assert shown_rows and len({r["id"] for r in shown_rows}) == len(shown_rows) and all(r["result"] is None for r in fair_rows)
@@ -2121,7 +2126,7 @@ def test_replay_oct8():
         assert n_rec == len(rows) == len(built) and all(r["result"] is None and len(r["legs"]) >= 2 for r in rows)
         assert fair.record_combos(built, day) == 0, "pas de doublon"
         assert store.load("bets.json", {"combos": []})["combos"] == [] and bankroll.load()["bankroll"] == 100.0
-        assert os.path.getsize(store.path("fair_combos.json")) < 30_000
+        assert store.size("fair_combos.json") < 30_000
         # --- /combi 25 : cotes réelles impossibles -> combiné à cote juste, clairement annoncé
         keep = pronos[:40] + [c for c in pronos[40:] if CB.fair_eligible(c)][:40]
         store.save("today.json", {"day": str(day), "picks": picks, "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
@@ -2283,7 +2288,7 @@ class saved_files:
         for n, v in self.old.items():
             if v is None:
                 with contextlib.suppress(OSError):
-                    os.remove(store.path(n))
+                    store.remove(n)
             else:
                 store.save(n, v)
         calib._memo.clear()
@@ -2360,7 +2365,7 @@ def test_calibration_tracking():
     cumul de fiabilité par famille gardé pour toujours, et correction des probas d'une famille trop sûre d'elle."""
     with saved_files("fair.json", "calib.json"):
         with contextlib.suppress(OSError):
-            os.remove(store.path("calib.json"))
+            store.remove("calib.json")
         calib._memo.clear()
         assert calib.factor("alternate_totals_corners") == 1.0
         rows = [{"market": "alternate_totals_corners", "prob": 0.7, "p0": 0.7, "result": "win" if i < 55 else "loss"}

@@ -210,11 +210,10 @@ def test_tracked_pruned_to_archive():
     track.save(live + [old_row("g", "2025-12-29")])
     assert [r["key"] for r in store.load("archive/tracked-2025.json", [])] == ["a", "g"]
     assert [r["key"] for r in track.load()] == ["c", "d", "e", "f"]
-    assert not [f for f in os.listdir(os.path.join(store.DATA_DIR, "archive")) if f.endswith(".tmp")]
     # rien d'ancien : fichier courant intact, pas de dossier créé
     wipe()
     track.save([old_row("x", "2026-10-07"), old_row("y", "2026-10-08")])
-    assert len(track.load()) == 2 and not os.path.exists(os.path.join(store.DATA_DIR, "archive"))
+    assert len(track.load()) == 2 and not store.names("archive/")
     # lignes sans date : jamais perdues
     track.save([{"key": "z", "result": "win"}, old_row("y", "2026-10-08")])
     assert len(track.load()) == 2
