@@ -11,9 +11,11 @@ from . import fmt, played, store, telegram
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 Mes paris"], ["💰 Mon budget", "❓ Aide"]]
+MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 Mes paris"], ["💰 Mon budget", "🔄 Actualiser les cotes"],
+        ["❓ Aide"]]
 BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
-           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide"}      # « À noter » : ancien libellé
+           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide",      # « À noter » : ancien libellé
+           "🔄 Actualiser les cotes": "/cotes"}
 COMBI_TARGETS = (3, 5, 10, 20, 50)
 NUM = re.compile(r"^\s*\d[\d\s.,]*(?:\s*(?:[^\W\d_]{1,8}|[€$£¥]))?\s*$")       # « 5,40 », « 5,40 2 000 », « 5,40 2.000 FCFA »
 TOP_TEXTS = ("paris", "paris du jour", "mes paris")                               # exactement : « Paris FC » est une équipe
@@ -21,7 +23,7 @@ WORDS = {"bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "top": 
          "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide", "bonjour": "/aide", "salut": "/aide",
          "joue": "/joue", "jouer": "/joue", "noter": "/joue", "bank": "/bank", "bankroll": "/bank", "monde": "/monde",
          "ligues": "/ligues", "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi",
-         "budget": "/budget"}
+         "budget": "/budget", "actualiser": "/cotes", "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes"}
 
 
 def _now():

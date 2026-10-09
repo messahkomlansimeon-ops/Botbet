@@ -520,16 +520,17 @@ def plan_closing(due, combos, bulk=True):
 COMBO_UPDATES = "combo_updates.json"     # dernière version envoyée de chaque combiné du matin : {"day", "tiers": {palier: {...}}}
 
 
-def run_xbet_refresh(now=None, fetch=None, announce=None):
-    """Relevé 1xBet de la journée (toutes les 2 h de 07:00 à 21:00, kelly-xbet.timer) : les pronostics du matin (data/today.json)
-    dont le match n'a pas commencé sont remis aux cotes 1xBet du moment ; /top et /combi les relisent. Puis :
-    - au relevé de 15:00 seulement (`announce`), la liste des paris 💎 devenus jouables depuis la dernière liste (suivis comme ceux
-      du matin) ;
-    - à chaque relevé, les combinés 💎 du matin sont contrôlés (_update_combos) : renvoyés avec un nouveau code s'ils ont changé.
-    `fetch` : injectable pour les tests (voir xprice.apply). -> nombre de nouveaux 💎 annoncés."""
+LAST_REFRESH = {"matches": 0, "new": 0, "updated": 0}       # bilan du dernier run_xbet_refresh (réponse du relevé manuel)
+
+
+def run_xbet_refresh(now=None, fetch=None, announce=True, live=False):
+    """Relevé 1xBet de la journée (15:00, kelly-xbet.timer, ou à la demande : manual_refresh) : les pronostics du matin
+    (data/today.json) dont le match n'a pas commencé sont remis aux cotes 1xBet du moment ; /top et /combi les relisent. Puis :
+    - `announce` : la liste des paris 💎 devenus jouables depuis la dernière liste (suivis comme ceux du matin) ;
+    - les combinés 💎 du matin sont contrôlés (_update_combos) : renvoyés avec un nouveau code s'ils ont changé.
+    `live` : cotes relues à l'instant (xbet.live_mode). `fetch` : injectable pour les tests. -> nombre de nouveaux 💎 annoncés."""
     from .sources import xbet
     now = now or now_utc()
-    announce = now.hour == 15 if announce is None else announce
     today = store.load("today.json", {})
     kday = now.date() if now.hour >= C.DAY_END_HOUR else now.date() - timedelta(days=1)
     if today.get("day") != str(kday) or not today.get("pronos"):
@@ -544,7 +545,8 @@ def run_xbet_refresh(now=None, fetch=None, announce=None):
     got = set()
 
     def run(events, deadline=None, wanted=None):
-        found = (fetch or xbet.fetch_day)(events, deadline=deadline, wanted=wanted)
+        found = fetch(events, deadline=deadline, wanted=wanted) if fetch else xbet.fetch_day(events, deadline=deadline,
+                                                                                               wanted=wanted, live=live)
         got.update(found)
         return found
     xprice.apply(upcoming_, fetch=run)
@@ -559,9 +561,35 @@ def run_xbet_refresh(now=None, fetch=None, announce=None):
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
                                        "depuis ce matin). Vérifie la cote avant de valider."))
     n_upd = _update_combos(today["day"], pronos, now, got)
+    LAST_REFRESH.update(matches=len(got), new=len(new), updated=n_upd)
     print(f"[1xbet] relevé : {len(upcoming_)} pronostic(s) à venir, {len(new)} nouveau(x) 💎 annoncé(s), "
           f"{n_upd} combiné(s) du matin renvoyé(s) à jour", file=sys.stderr)
     return len(new)
+
+
+def manual_refresh(now=None, fetch=None):
+    """« 🔄 Actualiser les cotes » : le relevé 1xBet complet du jour, tout de suite et en direct (pronostics, 💎 nouveaux, combinés du
+    matin à jour), au plus une fois toutes les C.XBET_MANUAL_GAP minutes (données du proxy). -> réponse."""
+    now = now or now_utc()
+    today = store.load("today.json", {})
+    kday = now.date() if now.hour >= C.DAY_END_HOUR else now.date() - timedelta(days=1)
+    if today.get("day") != str(kday) or not today.get("pronos"):
+        return waiting_note(today, now) or "Pas encore de pronostics du jour : rien à actualiser."
+    last = today.get("xbet_manual")
+    if last and (now - datetime.fromisoformat(last)).total_seconds() < C.XBET_MANUAL_GAP * 60:
+        return (f"Cotes déjà actualisées à {last[11:16]} : réessaie dans quelques minutes (chaque relevé consomme des données "
+                "du proxy).")
+    telegram.send("⏳ J'actualise les cotes 1xBet de tous les paris du jour (1 à 2 minutes)…", queue=False)
+    LAST_REFRESH.update(matches=0, new=0, updated=0)
+    run_xbet_refresh(now, fetch, announce=True, live=True)
+    today = store.load("today.json", {})
+    today["xbet_manual"] = now.isoformat(timespec="seconds")
+    store.save("today.json", today)
+    st = LAST_REFRESH
+    if not st["matches"]:
+        return "1xBet ne répond pas en ce moment : cotes non actualisées. Réessaie dans quelques minutes."
+    return (f"✅ Cotes 1xBet actualisées à {now:%H:%M} : {st['matches']} match(s) relu(s), {st['new']} nouveau(x) pari(s) 💎, "
+            f"{st['updated']} combiné(s) du matin mis à jour." + ("" if st["new"] or st["updated"] else " Rien de nouveau à jouer."))
 
 
 def _update_combos(day, pronos, now, refreshed):
@@ -746,6 +774,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 📊 <b>Mes résultats</b> : gagnés, perdus, ta bankroll
 🧾 <b>Mes paris</b> : les paris du jour et leur mise
 💰 <b>Mon budget</b> : voir ou changer ton budget du jour
+🔄 <b>Actualiser les cotes</b> : Kelly relit tout de suite les cotes 1xBet du jour (sinon : 04:00 et 15:00)
 
 <b>Ton budget du jour</b>
 Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>) : chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la mise de chacun. Les jours pauvres, elle en garde une partie. Change-le quand tu veux.
@@ -1047,6 +1076,8 @@ def _handle_command(text):
             lines.append(f"• {fmt.esc(c['pick'])} — {fmt.b(fmt.odds_txt(c['odds']))} ({fmt.pct(c['prob'])} de chances)"
                          + (f"\n   ↳ {fmt.esc(why)}" if why else ""))
         return Html("\n".join(lines))
+    if cmd in ("/cotes", "/actualiser"):
+        return manual_refresh()
     if cmd == "/combi":
         try:
             target = float(args[0].replace(",", "."))

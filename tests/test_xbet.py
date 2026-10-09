@@ -514,7 +514,7 @@ def test_refresh_button_and_updates():
     store.save(app.COMBO_UPDATES, {})
 
     def refresh(drop, hour):
-        return app.run_xbet_refresh(now=now.replace(hour=hour), fetch=lambda ev, deadline=None, wanted=None:
+        return app.run_xbet_refresh(now=now.replace(hour=hour), announce=False, fetch=lambda ev, deadline=None, wanted=None:
                                     {k: v for k, v in fake_px(drop).items() if k in {e["id"] for _, e in ev}})
     _, sent, _ = with_fakes(lambda: refresh(("m3",), 13))
     assert len(sent) == 1 and "🔄 COMBINÉ À JOUR 13:00" in sent[0] and "❌ Retiré : H3 – A3" in sent[0], sent
@@ -523,11 +523,21 @@ def test_refresh_button_and_updates():
     again = []
     telegram.send = lambda text, *a, **k: again.append(str(text))
     try:
-        app.run_xbet_refresh(now=now.replace(hour=13, minute=30), fetch=lambda ev, deadline=None, wanted=None:
+        app.run_xbet_refresh(now=now.replace(hour=13, minute=30), announce=False, fetch=lambda ev, deadline=None, wanted=None:
                              {k: v for k, v in fake_px(("m3",)).items() if k in {e["id"] for _, e in ev}})
     finally:
         telegram.send = old
     assert not again, "rien n'a changé depuis la dernière version envoyée : pas de message"
+    # relevé manuel « 🔄 Actualiser les cotes » : bilan, puis refus s'il est redemandé moins de 10 min après
+    from kelly import chat
+    assert chat.route("🔄 Actualiser les cotes") == ("/cotes", None) and chat.route("actualiser") == ("/cotes", None)
+    store.save(app.COMBO_UPDATES, {})
+    fetch = lambda ev, deadline=None, wanted=None: {k: v for k, v in fake_px(("m3",)).items() if k in {e["id"] for _, e in ev}}  # noqa: E731
+    reply, sent, _ = with_fakes(lambda: app.manual_refresh(now=now.replace(hour=16), fetch=fetch))
+    assert reply.startswith("✅ Cotes 1xBet actualisées à 16:00 : 7 match(s) relu(s)") and "1 combiné(s) du matin mis à jour" in reply, reply
+    assert sent[0].startswith("⏳") and any("COMBINÉ À JOUR" in m for m in sent), sent
+    again = app.manual_refresh(now=now.replace(hour=16, minute=5), fetch=fetch)
+    assert again.startswith("Cotes déjà actualisées à 16:00"), again
     print("ok  bouton « Cotes à jour » et combinés du matin renvoyés seulement s'ils changent")
 
 
