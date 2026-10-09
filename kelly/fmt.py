@@ -266,9 +266,12 @@ def pronos(items, limit=10, title=None, intro=None):
     return Html("\n".join(lines))
 
 
-def combo_changes(removed, added):
-    """Paris retirés d'un combiné remis aux cotes du moment (retirés par 1xBet ou devenus mal payés) et leurs remplaçants."""
+def combo_changes(removed, added, changed=()):
+    """Paris retirés d'un combiné remis aux cotes du moment (retirés par 1xBet ou devenus mal payés), leurs remplaçants, et les paris
+    dont la ligne ou le côté a changé (`changed` : [(ancien, nouveau)])."""
     lines = [f"❌ Retiré : {esc(c.get('home', '?'))} – {esc(c.get('away', '?'))} ({esc(c.get('pick', ''))})" for c in removed]
+    lines += [f"🔁 Changé : {esc(n.get('home', '?'))} – {esc(n.get('away', '?'))} : {esc(o.get('pick', ''))} → {esc(n.get('pick', ''))}"
+              for o, n in changed]
     lines += [f"➕ Ajouté : {esc(c['home'])} – {esc(c['away'])} ({esc(c['pick'])})" for c in added]
     return "\n".join(lines)
 

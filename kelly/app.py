@@ -616,13 +616,13 @@ def _update_combos(day, pronos, now, refreshed):
                               "(paris retirés ou devenus mal payés) et Kelly ne trouve pas de remplaçants : ne le joue pas.")
                 sent["tiers"][tier] = last | {"dead": True}
             continue
-        legs, total, prob, removed, added = res
+        legs, total, prob, removed, added, changed = res
         keys = [c["key"] for c in legs]
         if set(keys) == set(last["keys"]) and abs(total / (last.get("total") or total) - 1) <= C.XBET_UPDATE_MOVE:
             continue
         hhmm = now.strftime("%H:%M")
         msg = _fair_reply((legs, total, prob), f"🔄 Un combiné du matin a changé chez 1xBet : le voici aux cotes de {hhmm} "
-                                               "(l'ancien code est remplacé).", fmt.combo_changes(removed, added),
+                                               "(l'ancien code est remplacé).", fmt.combo_changes(removed, added, changed),
                           title=f"🔄 COMBINÉ À JOUR {hhmm}")
         telegram.send(telegram.with_buttons(msg, telegram.inline([[("🎟️ Vérifier ce combiné", f"xmaj|{tier}|{day}")]])))
         sent["tiers"][tier] = {"keys": keys, "total": round(total, 3)}
@@ -1138,12 +1138,13 @@ def _live_reply(fc, lo, hi, now=None, check=None):
     if res is None:
         return (f"Les cotes 1xBet ont bougé depuis le dernier relevé : plus de combiné à la cote {fmt.trim(lo, 1)} avec des paris "
                 "encore jouables. Essaie une autre cote.")
-    legs, total, prob, removed, added = res
+    legs, total, prob, removed, added, changed = res
     from .sources import xbet
-    t0 = xbet.odds_time([c.get("xgid") for c in legs])        # cotes de moins de 3 h reprises : l'heure réelle de leur relevé
+    # GameId de la cote (sous-match des corners, tirs...) ; cotes de moins de 3 h reprises : l'heure réelle de leur relevé
+    t0 = xbet.odds_time([(c.get("xref") or [c.get("xgid")])[0] for c in legs])
     when = datetime.fromtimestamp(t0, tz=timezone.utc).strftime("%H:%M") if t0 else hhmm
     return _fair_reply((legs, total, prob), f"Voici un combiné aux cotes 1xBet de {when} (cote {fmt.trim(total, 1)}).",
-                       fmt.combo_changes(removed, added))
+                       fmt.combo_changes(removed, added, changed))
 
 
 def _tier_range(tier):
@@ -1171,9 +1172,10 @@ def refresh_combo(tier, day, now=None, check=None):
     if res is None:
         return ("Les paris de ce combiné ne sont plus jouables chez 1xBet et Kelly ne trouve pas de remplaçants dans la même "
                 "fourchette de cote. Demande plutôt un « combi » sur mesure.")
-    legs, total, prob, removed, added = res
-    head = (f"🔄 Combiné du matin remis aux cotes 1xBet de {hhmm}" + (" : aucun pari à changer." if not (removed or added) else "."))
-    return _fair_reply((legs, total, prob), head, fmt.combo_changes(removed, added), title=f"🔄 COMBINÉ À JOUR {hhmm}")
+    legs, total, prob, removed, added, changed = res
+    head = (f"🔄 Combiné du matin remis aux cotes 1xBet de {hhmm}"
+            + (" : aucun pari à changer." if not (removed or added or changed) else "."))
+    return _fair_reply((legs, total, prob), head, fmt.combo_changes(removed, added, changed), title=f"🔄 COMBINÉ À JOUR {hhmm}")
 
 
 def custom_combo(picks, pronos, target, day, started=False):
