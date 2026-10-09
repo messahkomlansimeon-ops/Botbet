@@ -52,8 +52,10 @@ def choose(c, px):
     return best
 
 
-def price(c, px):
-    """Met le pronostic `c` à la cote 1xBet (en place). -> "value" (ligne jouable chez 1xBet), "low" (1xBet paie trop peu) ou None."""
+def price(c, px, refs=None):
+    """Met le pronostic `c` à la cote 1xBet (en place). -> "value" (ligne jouable chez 1xBet), "low" (1xBet paie trop peu) ou None.
+    `refs` (si fourni) : {(marché, côté, ligne): [GameId, Type, Param]} (xbet.prices) -> c["xref"], la référence du pari chez
+    1xBet, pour enregistrer un ticket (un code coupon) au moment du message."""
     pick = choose(c, px)
     if pick:
         name, point, p, p0, b, odd, ev = pick
@@ -64,11 +66,17 @@ def price(c, px):
                 c["base"] = round(b, 4)
         c.update(prob=round(p, 4), p0=round(p0, 4), fair=round(1 / p, 2), min_odds=round(1 / p * (1 + C.FAIR_MARGIN), 2),
                  xodds=odd, xev=round(ev, 4), xp=xbet.book_prob(px, c["market"], name, None if point is None else float(point)))
+        ref = (refs or {}).get((c["market"], name, None if point is None else float(point)))
+        if ref:
+            c["xref"] = ref
         return "value"
     odd = xbet.lookup(px, c["market"], c["name"], c["point"])
     if odd:
         c.update(xodds=odd, xev=round(c["prob"] * odd - 1, 4),
                  xp=xbet.book_prob(px, c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+        ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+        if ref:
+            c["xref"] = ref
         return "low"
     return None
 
@@ -88,12 +96,12 @@ def apply(pronos, fetch=None):
     for c in pronos:
         m = found.get(c["id"])
         if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
-            for k in ("xodds", "xev", "xp", "xnone"):
+            for k in ("xodds", "xev", "xp", "xnone", "xref"):
                 c.pop(k, None)
             c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
             if m.get("cid"):
                 c["xcid"] = m["cid"]                # id permanent : lien « ouvrir chez 1xBet » (xbet.match_url)
-        r = price(c, m["px"]) if m else None
+        r = price(c, m["px"], m.get("refs")) if m else None
         if r:
             out[r] += 1
         elif m:                                     # match trouvé, mais 1xBet ne propose pas ce pari : injouable
