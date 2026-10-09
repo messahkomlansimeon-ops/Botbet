@@ -10,6 +10,7 @@ Ligne proposée par 1xBet mais trop mal payée : c["xodds"] < c["min_odds"], le 
 trop faible (proba sous C.VIABLE_MIN_P ou sous un match moyen) : même chose, comptée à part (« weak »).
 Match trouvé mais pari absent chez 1xBet (pas de tirs en Ligue 2...) : c["xnone"], injouable, plus viable. Match non trouvé ou pas
 relevé : le pronostic reste « à vérifier » (cote mini) dans la liste, mais n'entre plus dans un combiné (combos.fair_legs).
+Les paris RÉELS de The Odds API (combinés du matin, pari du jour) passent aussi à la cote 1xBet : price_picks.
 """
 import sys
 import time
@@ -126,6 +127,72 @@ def apply(pronos, fetch=None):
             out["none"] += 1
     print(f"[1xbet] {out['matches']} match(s) trouvé(s) chez 1xBet : {out['value']} pronostic(s) jouable(s) à la cote 1xBet, "
           f"{out['low']} trop mal payé(s), {out['weak']} trop faible(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
+    return out
+
+
+def _pick_price(c, px, refs, model=None):
+    """Remet le pari réel `c` (The Odds API) au prix 1xBet de `px` (xbet.prices) -> True si 1xBet le propose. La cote typique d'origine
+    reste dans c["typ_odds"] (avec sa valeur, son book et son score : le suivi et l'apprentissage les relisent, voir track), la valeur
+    est recalculée comme build_picks (proba corrigée x cote - 1) et le score suit l'écart de cote (comme `rescore` avec un modèle appris)."""
+    price = xbet.lookup(px, c["market"], c["name"], c["point"])
+    if not price:
+        return False
+    if c.get("typ_odds") is None:                   # première lecture seulement : une relecture ne perd pas la cote d'origine
+        c.update(typ_odds=c["odds"], typ_edge=c["edge"], typ_book=c.get("book"), typ_best=c.get("best_odds"),
+                 typ_heur=c.get("heuristic", c["score"]))
+        c["why"] = ", ".join(w for w in str(c.get("why") or "").split(", ") if w and not w.startswith("cote plus haute"))
+    d = c.get("prob_book", c["prob"]) * (price - c["odds"]) * c.get("weight", 1.0)       # écart de la valeur brute de build_picks
+    c.update(odds=price, best_odds=price, book="1xBet", xodds=price, edge=c["prob"] * price - 1, score=c["score"] + d)
+    if "heuristic" in c:
+        c["heuristic"] += d
+        if model and model.get("adopted"):
+            from . import learn
+            c["score"] = learn.predict(model, learn.features(c))
+    if c["edge"] > 0.03 and not str(c.get("why") or "").count("à la cote 1xBet"):         # même seuil que build_picks
+        c["why"] = ", ".join(w for w in (f"valeur {c['edge'] * 100:+.0f} % à la cote 1xBet", c.get("why")) if w)
+    ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+    if ref:
+        c["xref"] = ref
+    else:
+        c.pop("xref", None)
+    return True
+
+
+def price_picks(picks, fetch=None, pronos=(), model=None):
+    """Prix 1xBet des paris RÉELS du jour (The Odds API : combinés du matin, pari du jour, /top), juste après leur calcul : l'utilisateur
+    ne joue que chez 1xBet, qui ne paie pas la cote typique des autres books. Pour chaque pari dont le match est chez 1xBet et dont le
+    marché y figure (1X2, double chance, plus/moins de buts, les 2 marquent, corners), c["odds"] devient la cote 1xBet (c["book"] =
+    « 1xBet », c["typ_odds"] = cote typique d'origine, valeur recalculée) et c["xodds"] / c["xref"] / c["xgid"] sont posés : le coupon
+    du combiné peut être enregistré. Aucune cote inventée : dès qu'au moins un pari est chiffré, les autres reçoivent c["xnone"]
+    (match trouvé, pari absent) ou c["xmiss"] (match non trouvé) et ne servent plus (combos.quality_legs). Aucun pari chiffré (1xBet
+    injoignable) : rien ne change. `pronos` : ids 1xBet déjà connus (le relevé des pronostics vient d'être fait : pas de menu ni de liste).
+    `model` : modèle appris (le score est recalculé). Ne lève jamais. -> {"matches", "priced", "none", "missing"}."""
+    out = {"matches": 0, "priced": 0, "none": 0, "missing": 0}
+    if not C.XBET_ENABLED or not picks:
+        return out
+    gids = {c["id"]: c["xgid"] for c in pronos if c.get("xgid")}
+    events = [(k, ev | ({"xgid": gids[ev["id"]]} if ev["id"] in gids else {})) for k, ev in _events(picks) if k in xbet.LEAGUES]
+    try:
+        found = (fetch or xbet.fetch_day)(events, deadline=time.monotonic() + C.XBET_SECONDS, wanted=_wanted(picks)) if events else {}
+    except Exception as e:                          # noqa: BLE001 - une source en panne ne casse pas le matin
+        print(f"[1xbet] cotes des paris réels ignorées : {type(e).__name__}: {e}", file=sys.stderr)
+        return out
+    out["matches"] = len(found)
+    for c in picks:
+        for k in ("xnone", "xmiss"):
+            c.pop(k, None)
+        m = found.get(c["id"])
+        if m:
+            c["xgid"] = m["gid"]
+            if _pick_price(c, m["px"], m.get("refs"), model):
+                out["priced"] += 1
+    if out["priced"]:                               # 1xBet a chiffré au moins un pari : pas de cote typique dans les combinés
+        for c in picks:
+            if not c.get("xodds"):
+                c["xnone" if c["id"] in found else "xmiss"] = 1
+                out["none" if c["id"] in found else "missing"] += 1
+    print(f"[1xbet] paris réels : {out['priced']} chiffré(s) à la cote 1xBet sur {out['matches']} match(s) trouvé(s), "
+          f"{out['none']} absent(s) de 1xBet, {out['missing']} sans match chez 1xBet.", file=sys.stderr)
     return out
 
 

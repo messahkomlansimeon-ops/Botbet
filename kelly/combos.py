@@ -67,9 +67,18 @@ def leg_reason(c):
     return None
 
 
+def x_playable(c, real):
+    """Pari réel jouable au prix que 1xBet paie (xprice.price_picks) : dès que 1xBet a chiffré au moins un pari du jour (`real`), seuls
+    ceux qui ont leur cote 1xBet (c["xodds"]) servent : jamais la cote typique des autres books. Sans aucune cote 1xBet (relevé en
+    panne) : comme avant, sauf un pari déjà déclaré absent de 1xBet (xnone, xmiss)."""
+    return bool(c.get("xodds")) or not (real or c.get("xnone") or c.get("xmiss"))
+
+
 def quality_legs(picks, special=False):
-    """Les jambes qui ont une raison d'être (pour le palier spécial : seulement corners, cartons et stats joueurs)."""
-    return [c for c in picks if (not special or mispriced(c)) and leg_reason(c)]
+    """Les jambes qui ont une raison d'être (pour le palier spécial : seulement corners, cartons et stats joueurs), aux cotes 1xBet
+    quand 1xBet a chiffré les paris du jour (x_playable) : leur valeur est alors calculée à la cote 1xBet."""
+    real = any(c.get("xodds") for c in picks)
+    return [c for c in picks if (not special or mispriced(c)) and x_playable(c, real) and leg_reason(c)]
 
 
 def make_pool(picks):

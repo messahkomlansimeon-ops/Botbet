@@ -257,7 +257,7 @@ def gain(x):
         return -x["stake"]
     if "legs" in x:                                   # combiné à vérifier : compté à la cote mini (1xBet a payé au moins ça)
         return x["stake"] * (_won_odds(x["legs"]) - 1)
-    return x["stake"] * (x.get("odds_final", x["odds"]) - 1)
+    return x["stake"] * (x.get("odds_final", x.get("xodds") or x["odds"]) - 1)      # pari du jour à la cote 1xBet (xodds) quand il en a une
 
 
 def items(bets, rows, fair_rows):

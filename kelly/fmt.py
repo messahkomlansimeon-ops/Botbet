@@ -146,7 +146,7 @@ _STATS = [
 
 
 def _kind(piece):
-    if piece.startswith("cote plus haute"):
+    if piece.startswith(("cote plus haute", "valeur +")):
         return 1
     if piece.startswith("la cote baisse"):
         return 2
@@ -214,22 +214,36 @@ def played_hint(hint):
     return f"\n\n{i(f'Joué chez 1xBet ? Note-le : {esc(hint)}')}" if hint else ""
 
 
-def combo(title, picks, odds_total, prob, stake, reasons=None, hint=None, stake_txt=None):
+def coupon_block(coupon):
+    """Code coupon 1xBet d'un combiné ou d'un pari (xbet.save_coupon), à charger dans l'appli ; '' sans code."""
+    return (f"\n\n🎟️ Code coupon 1xBet : {b(esc(coupon))}\n" + i("Dans l'appli 1xBet : ticket, « Charger le coupon »")) if coupon else ""
+
+
+def xbet_note(legs, when=None):
+    """Pied d'un pari réel dont toutes les cotes sont celles de 1xBet (xprice.price_picks) ; '' sinon. `when` : heure « HH:MM » du relevé."""
+    if not legs or not all(c.get("xodds") for c in legs):
+        return ""
+    return "\n\n" + i(f"💎 Cotes 1xBet de {esc(when)} : vérifie qu'elles n'ont pas baissé avant de valider." if when else
+                       "💎 Cotes relevées chez 1xBet par Kelly : vérifie qu'elles n'ont pas baissé avant de valider.")
+
+
+def combo(title, picks, odds_total, prob, stake, reasons=None, hint=None, stake_txt=None, coupon=None, when=None):
     """Message d'un combiné : titre et cote ; chances, espérance et mise sur deux lignes ; puis les jambes, séparées par une ligne
-    vide. `stake_txt` : la mise prise sur le budget du jour (« 1 500 FCFA »), à la place de la mise en unités."""
+    vide. `stake_txt` : la mise prise sur le budget du jour (« 1 500 FCFA »), à la place de la mise en unités. `coupon` : code coupon
+    1xBet (toutes les jambes aux cotes 1xBet), `when` : heure « HH:MM » de ces cotes."""
     reasons = reasons or {}
     head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
             f"🎯 {len(picks)} paris · {pct(prob)} de chances",
             f"📈 {expect(prob, odds_total).capitalize()} · 💰 " + (f"mise : {b(esc(stake_txt))}" if stake_txt else
                                                                    f"mise conseillée : {b(units(stake))}")]
     legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(legs) + played_hint(hint))
+    return Html("\n".join(head) + "\n\n" + "\n\n".join(legs) + coupon_block(coupon) + xbet_note(picks, when) + played_hint(hint))
 
 
-def single(c, reason=None, title="⭐ PARI DU JOUR", hint=None, stake_txt=None):
-    """Pari du jour : une seule jambe (et sa mise sur le budget du jour, `stake_txt`)."""
+def single(c, reason=None, title="⭐ PARI DU JOUR", hint=None, stake_txt=None, coupon=None, when=None):
+    """Pari du jour : une seule jambe (et sa mise sur le budget du jour, `stake_txt`). `coupon` / `when` : voir combo."""
     head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances" + (f" · 💰 mise : {b(esc(stake_txt))}" if stake_txt else "")]
-    return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + played_hint(hint))
+    return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + coupon_block(coupon) + xbet_note([c], when) + played_hint(hint))
 
 
 def pronos(items, limit=10, title=None, intro=None):
@@ -299,7 +313,6 @@ def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=N
              ("⚠️ Kelly n'a pas vu toutes les cotes de 1xBet : " if any(c.get("xodds") for c in picks) else
               "⚠️ Kelly n'a pas vu les cotes de 1xBet : ") + "joue seulement si CHAQUE pari atteint sa cote mini "
              f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")
-    c_line = (f"\n\n🎟️ Code coupon 1xBet : {b(esc(coupon))}\n" + i("Dans l'appli 1xBet : ticket, « Charger le coupon »")
-              if coupon else "")
+    c_line = coupon_block(coupon)
     return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1))
                 + c_line + "\n\n" + foot + played_hint(hint))

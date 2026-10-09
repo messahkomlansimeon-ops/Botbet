@@ -13,7 +13,7 @@ from . import combos as CB, config as C, learn, store
 
 FIELDS = ("key", "id", "sport_key", "group", "event", "home", "away", "league", "commence", "market",
           "who", "point", "name", "pick", "odds", "best_odds", "prob", "prob_book", "book", "edge", "spread", "steam", "weight",
-          "score", "why", "n_books", "stake", "cur")
+          "score", "why", "n_books", "stake", "cur", "xodds", "xref", "coupon")
 
 
 def load():
@@ -65,6 +65,16 @@ def _ts(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
+def _typical(c):
+    """Le pari tel que The Odds API le voyait au choix (cote typique, valeur, book, score d'origine) quand xprice.price_picks l'a remis à
+    la cote 1xBet. Les lignes de suivi gardent CE prix du marché dans "odds" (le CLV et l'apprentissage le comparent à la clôture, qui
+    vient de The Odds API) ; la cote 1xBet est à part, dans "xodds" (settle, bankroll et money la prennent pour les gains)."""
+    if c.get("typ_odds") is None:
+        return c
+    return c | {"odds": c["typ_odds"], "edge": c.get("typ_edge", c["edge"]), "book": c.get("typ_book"),
+                "best_odds": c.get("typ_best", c["best_odds"]), "heuristic": c.get("typ_heur", c.get("heuristic", c["score"]))}
+
+
 def record(picks, sent_keys, day, now=None, single_key=None):
     """Enregistre les envoyés + les TRACK_TOP meilleurs candidats (3 max par match). `single_key` : clé du pari du jour (envoyé
     seul, même s'il figure aussi dans un combiné) ; sa ligne reçoit r["single"] = True. `prob_book` : proba brute des bookmakers,
@@ -86,9 +96,9 @@ def record(picks, sent_keys, day, now=None, single_key=None):
             continue
         known.add(c["key"])
         single = c["key"] == single_key and not has_single
-        row = {k: c.get(k) for k in FIELDS} | {
+        row = {k: _typical(c).get(k) for k in FIELDS} | {
             "date": str(day), "sent": c["key"] in sent_keys, "taken_at": now.isoformat(timespec="minutes"),
-            "features": learn.features(c, now), "close_odds": None, "close_prob": None, "closed_at": None,
+            "features": learn.features(_typical(c), now), "close_odds": None, "close_prob": None, "closed_at": None,
             "clv": None, "result": None} | ({"single": True} if single else {})
         if c["key"] == single_key and not single:        # deuxième « top » du jour : ni pari du jour, ni mise du budget
             row |= {"single": False, "stake": None, "cur": None}

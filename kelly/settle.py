@@ -262,7 +262,7 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
             combo["odds_final"] = 1.0              # jambes annulées : cote recalculée
             for k in combo["keys"]:
                 if by_key[k]["result"] == "win":
-                    combo["odds_final"] *= by_key[k]["odds"]
+                    combo["odds_final"] *= by_key[k].get("xodds") or by_key[k]["odds"]      # cote 1xBet de la jambe quand elle en a une
             if combo["odds_final"] == 1.0:
                 combo["result"] = "void"
     track.save(rows)
@@ -339,7 +339,7 @@ def record_combos(combos_sent, day):
 def _rate(rows):
     n = sum(1 for r in rows if r["result"] in ("win", "loss"))
     w = sum(1 for r in rows if r["result"] == "win")
-    ret = sum((r["odds"] - 1) if r["result"] == "win" else (-1 if r["result"] == "loss" else 0) for r in rows)
+    ret = sum(((r.get("xodds") or r["odds"]) - 1) if r["result"] == "win" else (-1 if r["result"] == "loss" else 0) for r in rows)
     return n, w, (ret / n * 100 if n else 0.0)
 
 
@@ -398,7 +398,7 @@ def fair_combo_line(rows, days=None, today=None):
 
 
 def _gain(c):
-    return c["stake"] * (c.get("odds_final", c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
+    return c["stake"] * (c.get("odds_final", c.get("xodds") or c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
 
 
 def _sum_txt(cs, html=True):

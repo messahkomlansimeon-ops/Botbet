@@ -60,7 +60,7 @@ def apply_results(items, played_only=False):
                 b["bankroll"] += played_gain(c)
         elif c["result"] in ("win", "loss"):
             c["counted"] = True
-            b["bankroll"] += c["stake"] * (c.get("odds_final", c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
+            b["bankroll"] += c["stake"] * (c.get("odds_final", c.get("xodds") or c["odds"]) - 1) if c["result"] == "win" else -c["stake"]
     b["bankroll"] = round(b["bankroll"], 2)
     save(b)
     return b

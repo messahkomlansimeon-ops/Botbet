@@ -11,7 +11,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, fair, fmt, freeclose, learn, monde,
                money, odds, played, settle, sources, stats, store, strength, telegram, track, weekly, xprice, xworld)
-from .sources import fmmatch, http
+from .sources import fmmatch, http, xbet
 from .telegram import Html
 
 DISCLAIMER = Html("<i>Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
@@ -111,23 +111,26 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
             top["stake"] = stakes.get("pari", 0)
             if top["stake"]:
                 top["cur"] = cur
-        messages.append(chat.with_played_button(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari"))), "pari", day,
+        if top.get("xref") and top.get("xodds"):    # pari du jour à la cote 1xBet : son code coupon (échec = pas de code)
+            top["coupon"] = xbet.save_coupon([top])
+        messages.append(chat.with_played_button(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari")),
+                                                           coupon=top.get("coupon"), when=odds_time), "pari", day,
                                                 funded=bool(stakes.get("pari"))))
         sent_picks.append(top)
     for title, combo in built:
         picks_, odds_, prob = combo
         st = stakes.get(title, 0) if money.active() else bankroll.stake(prob, odds_, title, bank)
+        coupon = xbet.save_coupon(picks_) if all(c.get("xref") and c.get("xodds") for c in picks_) else None      # combiné aux cotes 1xBet
         messages.append(chat.with_played_button(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
-                                                          stake_txt=mise(st)),
+                                                          stake_txt=mise(st), coupon=coupon, when=odds_time),
                                                 played.norm(fmt.tier_word(title)), day, funded=bool(st)))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
-                            "stake": st} | ({"cur": cur} if money.active() and st else {}))
+                            "stake": st} | ({"cur": cur} if money.active() and st else {})
+                           | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
+                               "coupon": coupon} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
     for target, (legs, min_total, prob) in built_fair:
-        coupon = None
-        if all(c.get("xref") for c in legs):
-            from .sources import xbet
-            coupon = xbet.save_coupon(legs)
+        coupon = xbet.save_coupon(legs) if all(c.get("xref") for c in legs) else None
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
                                                                stake_txt=mise(stakes.get(("fair", target))),
                                                                title=CB.shots_title(target), coupon=coupon, when=odds_time),
@@ -466,6 +469,11 @@ def run_daily(sample=False):
         # pour ne prendre ni crédit ni quota aux championnats de The Odds API
         xworld.extend_scan(scan, day, now)
         world, pronos = world_report(scan, picks, day, now)
+        if C.SOURCES_REFRESH and C.XBET_ENABLED:    # paris réels à la cote 1xBet : après le relevé des pronostics (mêmes matchs en cache)
+            try:
+                xprice.price_picks(picks, pronos=pronos, model=model)
+            except Exception as e:                  # noqa: BLE001 - facultatif : sans cote 1xBet, les cotes typiques restent
+                print(f"[1xbet] paris réels ignorés : {type(e).__name__}: {e}", file=sys.stderr)
         odds_at = now_utc().strftime("%H:%M")       # fin du relevé 1xBet : l'heure des cotes des combinés
         if not scan.get("paid"):
             why = budget.why_not(len(C.FEATURED["soccer"].split(",")), "daily")
@@ -1313,7 +1321,9 @@ def custom_combo(picks, pronos, target, day, started=False):
                 txt = money.money(st) + " (sur ton budget du jour)" if st else "pas de mise (trop petite pour ton budget)"
             else:
                 st, txt = bankroll.stake(prob, odds_, "🎯", bankroll.load()["bankroll"]), None
-            msg = fmt.combo("🎯 COMBINÉ SUR MESURE", picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_}, stake_txt=txt)
+            code = xbet.save_coupon(picks_) if all(c.get("xref") and c.get("xodds") for c in picks_) else None
+            msg = fmt.combo("🎯 COMBINÉ SUR MESURE", picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_}, stake_txt=txt,
+                            coupon=code)
             if CB.ev(combo) < C.COMBO_MIN_EV:
                 msg = Html(msg + "\n\n" + fmt.i(f"⚠️ Espérance négative : à ces cotes, ce combiné rend en moyenne "
                                                 f"{fmt.pct(1 - CB.ev(combo))} de moins que la mise. Mise petit, ou vise une autre cote."))
