@@ -287,8 +287,7 @@ def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=N
              ("⚠️ Kelly n'a pas vu toutes les cotes de 1xBet : " if any(c.get("xodds") for c in picks) else
               "⚠️ Kelly n'a pas vu les cotes de 1xBet : ") + "joue seulement si CHAQUE pari atteint sa cote mini "
              f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")
-    # le code n'existe que pour le site 1xbet.ci (partenaire 286) : l'appli « 1xBet Côte d'Ivoire international » répond « code incorrect »
-    c_line = (f"\n\n🎟️ Code coupon 1xBet : {b(esc(coupon))}\n" + i("À charger sur le site 1xbet.ci (navigateur), pas dans l'appli")
+    c_line = (f"\n\n🎟️ Code coupon 1xBet : {b(esc(coupon))}\n" + i("Dans l'appli 1xBet : ticket, « Charger le coupon »")
               if coupon else "")
     return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1))
                 + c_line + "\n\n" + foot + played_hint(hint))

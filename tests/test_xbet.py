@@ -385,7 +385,7 @@ def test_save_coupon():
     req = posted[0]
     assert req["url"] == "https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon"
     b = req["body"]
-    assert b["Summ"] == 0 and b["Vid"] == 1 and b["Kind"] == 3 and b["partner"] == 286 and b["CheckCf"] == 1 and b["notWait"] is True
+    assert b["Summ"] == 0 and b["Vid"] == 1 and b["Kind"] == 3 and b["partner"] == C.XBET_COUPON_PARTNER == 1 and b["CheckCf"] == 1 and b["notWait"] is True
     assert len(b["Events"]) == 2
     assert b["Events"][0] == {
         "GameId": 757965452, "Type": 10, "Coef": 1.68, "Param": 3.5,

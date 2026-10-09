@@ -477,7 +477,7 @@ def save_coupon(legs):
         "Summ": 0,
         "Vid": 1,
         "Kind": 3,
-        "partner": COMMON["ref"],
+        "partner": C.XBET_COUPON_PARTNER,      # 1 : lisible dans l'appli mobile ET sur le site 1xbet.ci (voir config)
         "notWait": True,
         "CheckCf": 1,
     }

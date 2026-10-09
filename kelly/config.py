@@ -242,6 +242,9 @@ XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 150)    # matchs relevés au plus (l
 XBET_PROXY_FILE = os.environ.get("XBET_PROXY_FILE") or (os.path.join(os.environ["DATA_DIR"], "sofa.env") if os.environ.get("DATA_DIR")
                                                          else os.path.expanduser("~/.config/scrap_stat/sofa.env"))
 XBET_DIRECT = _bool("XBET_DIRECT", False)
+# Partenaire des codes coupon : 1 = version internationale, celle de l'appli mobile 1xBet de l'utilisateur (son propre ticket y est
+# rattaché) ; le site 1xbet.ci (286) relit aussi ces codes. Un code créé pour 286 répond « code incorrect » dans l'appli.
+XBET_COUPON_PARTNER = _int("XBET_COUPON_PARTNER", 1)
 XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)        # plafond mensuel de données 1xBet via le proxy (forfait 1 Go partagé avec SofaScore)
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
 FAIR_COMBO_KEEP_DAYS = 14

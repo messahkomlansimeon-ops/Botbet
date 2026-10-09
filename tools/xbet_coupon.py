@@ -148,6 +148,9 @@ def read_coupon(code, partners=PARTNERS):
                 continue
             evs = ((data.get("Value") or {}).get("Events") or []) if isinstance(data.get("Value"), dict) else []
             if evs:
+                if os.environ.get("XBET_RAW"):         # comparaison de deux tickets : champs du ticket et du 1er pari
+                    print(json.dumps({k: v for k, v in data["Value"].items() if k != "Events"}, ensure_ascii=False))
+                    print(json.dumps({k: v for k, v in evs[0].items() if not isinstance(v, (list, dict))}, ensure_ascii=False))
                 print(f"partenaire {p} : CODE RECONNU, {len(evs)} pari(s)")
                 for e in evs:
                     print(f"   {e.get('Opp1')} - {e.get('Opp2')} : {e.get('FullName') or ''} {e.get('MarketName')} @ {e.get('Coef')}")
@@ -162,7 +165,7 @@ if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "--format":
         show_format(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == "--get":
-        read_coupon(sys.argv[2])
+        read_coupon(sys.argv[2], [int(x) for x in sys.argv[3:]] or PARTNERS)
     elif len(sys.argv) >= 2 and sys.argv[1] == "--test":
         run_test()
     else:
