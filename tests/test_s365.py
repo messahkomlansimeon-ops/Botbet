@@ -1051,6 +1051,43 @@ def test_match_stats_for_settlement():
     assert s365.match_stats(bet("Montevideo City Torque", "Peñarol", "2026-09-30")) is None
 
 
+def test_proxy_and_monthly_cap():
+    """S365_PROXY : tout passe par le proxy Webshare de 1xBet (même fichier XBET_PROXY), compté dans data/s365_usage.json, plafond du mois ;
+    sans proxy, rien n'est lu (jamais en direct) ; le proxy est retiré après le passage. Lecture simulée (_fill remplacé) : aucun réseau."""
+    from kelly.sources import xbet
+    fresh()
+    seen = []
+
+    def fake_fill(*a, **kw):
+        seen.append(http.PROXIES.get(s365.HOST))
+        w = http.WIRE.setdefault(s365.HOST, {"bytes": 0, "requests": 0})
+        w["bytes"] += 3000
+        w["requests"] += 2
+        return {"added": 1, "games": 1, "lists": 1, "requests": 2, "left": 0, "errors": []}
+    old = (s365._fill, xbet.proxy, C.S365_PROXY, C.S365_MONTH_MB, kcache.OFFLINE)
+    try:
+        kcache.OFFLINE = False
+        s365._fill, C.S365_PROXY = fake_fill, True
+        xbet.proxy = lambda: "http://user-GB-20:pw@proxy.test:80"
+        rep = s365.fill(max_lists=1)
+        assert seen == ["http://user-GB-20:pw@proxy.test:80"] and s365.HOST not in http.PROXIES, seen
+        u = s365.usage()
+        assert u["bytes"] == 3000 and u["requests"] == 2 and rep["added"] == 1, u
+        assert "pw" not in s365.usage_line()                            # le mot de passe n'est jamais affiché
+        xbet.proxy = lambda: None                                       # pas de proxy : rien n'est lu, jamais en direct
+        rep = s365.fill(max_lists=1)
+        assert rep.get("off") and "proxy introuvable" in rep["why"] and len(seen) == 1, rep
+        xbet.proxy = lambda: "http://user-GB-20:pw@proxy.test:80"
+        C.S365_MONTH_MB = 0.002                                         # plafond du mois atteint (3 000 octets >= 2 000) : rien lu
+        rep = s365.fill(max_lists=1)
+        assert rep.get("off") and "plafond" in rep["why"] and len(seen) == 1, rep
+        C.S365_PROXY = False                                            # S365_PROXY=0 : connexion directe, pas de compteur
+        s365.fill(max_lists=1)
+        assert seen[-1] is None and s365.usage()["bytes"] == 3000
+    finally:
+        s365._fill, xbet.proxy, C.S365_PROXY, C.S365_MONTH_MB, kcache.OFFLINE = old
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     try:

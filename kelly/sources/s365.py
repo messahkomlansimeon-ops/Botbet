@@ -43,6 +43,7 @@ import json
 import os
 import sys
 import time
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -553,7 +554,7 @@ def _used_today(d):
     return r.get("n", 0) if r.get("day") == str(_today()) else 0
 
 
-def fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requests=None, leagues=None):
+def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requests=None, leagues=None):
     """Lit au plus `max_lists` listes de résultats et `max_games` statistiques de match (S365_LISTS_PER_RUN, S365_GAMES_PER_RUN) en `seconds`
     secondes (S365_SECONDS), dans le plafond de requêtes du jour (S365_DAILY). `backfill` : remplissage manuel (S365_BACKFILL_REQUESTS
     requêtes au plus, sans plafond du jour ni limite d'heures, S365_BACKFILL_SECONDS). `leagues` : restreint aux clés données. Ne lève
@@ -688,11 +689,82 @@ def fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_reque
     return rep | summary(d or load())
 
 
+USAGE = "s365_usage.json"      # données 365scores du mois passées par le proxy : {"month", "bytes", "requests", "days": {jour: octets}}
+
+
+def usage(today=None):
+    """Données 365scores du mois en cours passées par le proxy (remises à zéro au changement de mois)."""
+    today = str(today or state.now().date())
+    u = store.load(USAGE, {})
+    return u if isinstance(u, dict) and u.get("month") == today[:7] else {"month": today[:7], "bytes": 0, "requests": 0, "days": {}}
+
+
+def usage_line(u=None):
+    u = u or usage()
+    return f"365scores via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois ({u['requests']} requêtes), plafond {C.S365_MONTH_MB:.0f} Mo"
+
+
+@contextmanager
+def _via_proxy():
+    """Les requêtes 365scores de ce bloc passent par le proxy Webshare de 1xBet (même fichier XBET_PROXY, même session collante que le dernier
+    relevé 1xBet qui a répondu), dans le plafond C.S365_MONTH_MB, compté dans data/s365_usage.json. Jamais de changement de session pour
+    contourner un refus : un 403/429 coupe la source 24 h (http.fetch). Donne None si tout est prêt, sinon la raison de ne rien lire (proxy
+    introuvable : jamais de connexion directe, sauf S365_PROXY=0 ; plafond du mois atteint). Le mot de passe du proxy n'est jamais affiché."""
+    if not C.S365_PROXY:
+        yield None
+        return
+    from . import xbet
+    url = xbet.proxy()
+    saved, base = xbet.usage().get("session"), xbet.session_no(url)
+    if url and isinstance(saved, int) and base is not None and base <= saved < base + xbet.MAX_SESSION_SPAN and xbet.with_session(url, saved):
+        url = xbet.with_session(url, saved)
+    if not url:
+        yield "proxy introuvable (XBET_PROXY) : 365scores n'est pas lu en direct (S365_PROXY=0 pour la connexion directe)"
+        return
+    if usage()["bytes"] >= C.S365_MONTH_MB * 1e6:
+        yield f"plafond mensuel atteint ({usage_line()}) : rien lu"
+        return
+    start = dict(http.WIRE.get(HOST, {"bytes": 0, "requests": 0}))
+    http.PROXIES[HOST] = url
+    try:
+        yield None
+    finally:
+        http.PROXIES.pop(HOST, None)
+        http._sessions.pop(HOST, None)
+        w = http.WIRE.get(HOST, {"bytes": 0, "requests": 0})
+        b, n = w["bytes"] - start["bytes"], w["requests"] - start["requests"]
+        if n:
+            day = str(state.now().date())
+            cur = usage(day)                              # relu : un autre processus a pu compter entre-temps
+            cur["bytes"], cur["requests"] = int(cur["bytes"] + b), cur["requests"] + n
+            cur["days"][day] = int(cur["days"].get(day, 0) + b)
+            cur["days"] = dict(sorted(cur["days"].items())[-40:])
+            store.save(USAGE, cur)
+
+
+def fill(*a, **kw):
+    """_fill par le proxy (_via_proxy) : rien n'est lu si le proxy manque ou si le plafond du mois est atteint. Ne lève jamais."""
+    if not enabled() or kcache.OFFLINE or state.is_blocked(NAME):
+        return _fill(*a, **kw)                            # aucune requête possible : _fill le dit lui-même
+    with _via_proxy() as why:
+        if why:
+            return {"added": 0, "games": 0, "lists": 0, "requests": 0, "left": 0, "errors": [why], "off": True, "why": why}
+        return _fill(*a, **kw)
+
+
+def match_stats(b):
+    """_match_stats (règlement d'un pari) ; ses rares lectures passent par le proxy comme le remplissage, sinon seulement ce qui est déjà lu."""
+    if not C.S365_PROXY or not enabled() or kcache.OFFLINE or state.is_blocked(NAME):
+        return _match_stats(b)
+    with _via_proxy() as why:
+        return _match_stats(b, net=not why)
+
+
 def fill_safe(**kw):
     """fill() pour le passage horaire : imprime la ligne de rapport sur stderr, ne lève jamais."""
     try:
         rep = fill(**kw)
-        print("[s365] " + report_line(rep), file=sys.stderr)
+        print("[s365] " + report_line(rep) + (f" · {usage_line()}" if C.S365_PROXY else ""), file=sys.stderr)
         return rep
     except Exception as e:                                # noqa: BLE001 - facultatif
         print(f"[s365] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
@@ -735,14 +807,14 @@ def _is(home, away, day, key, b):
             and names.team_sim(away or "", b.get("away") or "") >= 0.8)
 
 
-def match_stats(b):
+def _match_stats(b, net=True):
     """Totaux du match d'un pari (touches, hors-jeu, fautes, corners, tirs, tirs cadrés, cartons), au format de fmmatch.match_stats
     (« side » : par équipe) ; None si 365scores ne l'a pas. Lit d'abord les matchs déjà accumulés (S365_RECENT_DAYS jours) ; sinon, si le match est
     listé (file « pending » du passage horaire), lit ses statistiques maintenant : au plus S365_SETTLE_REQUESTS requêtes par exécution, jamais
     hors ligne, jamais source bloquée. Ne lève jamais pour une réponse illisible."""
     d = load()
     r = next((r for r in d["recent"].values() if _is(r.get("h"), r.get("a"), r.get("d"), r.get("sk"), b)), None)
-    if r is None and enabled() and not kcache.OFFLINE and not state.is_blocked(NAME) and _settle["n"] < C.S365_SETTLE_REQUESTS:
+    if r is None and net and enabled() and not kcache.OFFLINE and not state.is_blocked(NAME) and _settle["n"] < C.S365_SETTLE_REQUESTS:
         for gid, p in d["pending"].items():
             if not _is(p.get("hn"), p.get("an"), p.get("d"), p.get("k"), b):
                 continue

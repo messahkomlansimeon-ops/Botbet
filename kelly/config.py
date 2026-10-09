@@ -235,6 +235,8 @@ XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir 
 # seulement (robots.txt, identité KellyBot déclarée, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
 # Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
 S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
+S365_PROXY = _bool("S365_PROXY", True)            # 1 : par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct ; 0 : connexion directe
+S365_MONTH_MB = _float("S365_MONTH_MB", 60)       # plafond mensuel des données 365scores passées par le proxy (1xBet : XBET_MONTH_MB à part)
 S365_GAMES_PER_RUN = _int("S365_GAMES_PER_RUN", 20)   # statistiques de match lues par passage horaire (0 = désactivé)
 S365_LISTS_PER_RUN = _int("S365_LISTS_PER_RUN", 4)    # listes de résultats (ou pages plus anciennes) lues par passage
 S365_SECONDS = _int("S365_SECONDS", 100)          # durée maximale du remplissage d'un passage (3 s entre deux requêtes)

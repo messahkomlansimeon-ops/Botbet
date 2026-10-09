@@ -5,3 +5,4 @@ import os
 
 os.environ.setdefault("STATS_MIN_GAP", "0")
 os.environ.setdefault("STATS_RATE_WAIT", "0")
+os.environ.setdefault("S365_PROXY", "0")            # les suites 365scores testent la connexion polie ; tests/test_s365.py teste le proxy à part
