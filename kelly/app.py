@@ -849,6 +849,16 @@ def upcoming(items, now=None):
     return [c for c in items if (c.get("commence") or "9")[:16] > t]
 
 
+def waiting_note(today, now=None):
+    """Entre minuit et le passage du matin, l'analyse en mémoire est celle de la veille (matchs commencés ou finis) : le dire, avec
+    l'heure de la prochaine analyse, au lieu de « rien aujourd'hui ». '' si l'analyse est celle du jour."""
+    now = now or now_utc()
+    if not today.get("day") or today["day"] >= str(now.date()):
+        return ""
+    return (f"⏳ Les matchs d'aujourd'hui ({fmt.fr_day(now.date())}) seront analysés au passage de "
+            f"{C.DAY_END_HOUR:02d}h00 (heure d'Abidjan). Pour l'instant Kelly n'a que l'analyse d'hier, dont les matchs ont commencé.")
+
+
 def _todays_usage(day, picks):
     """Réutilisation des matchs par les combinés déjà envoyés aujourd'hui (voir combos.Usage)."""
     combos = [c for c in store.load("bets.json", {"combos": []})["combos"] if c.get("date") == str(day)]
@@ -914,7 +924,9 @@ def _handle_command(text):
     if cmd == "/top":
         live, live_pronos = upcoming(picks), upcoming(pronos)
         if not live:
-            return fmt.pronos(CB.best_per_match(live_pronos), 10) if live_pronos else "Tous les matchs du jour ont commencé : rendez-vous demain à 08:00."
+            if live_pronos:
+                return fmt.pronos(CB.best_per_match(live_pronos), 10)
+            return waiting_note(today) or "Tous les matchs du jour ont commencé : rendez-vous demain à 08:00."
         best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10]
         if not best:
             return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
@@ -945,6 +957,8 @@ def _handle_command(text):
         if not math.isfinite(target) or target <= 0:        # « /combi inf », « /combi nan », « /combi -5 »
             return "Exemple : /combi 30"
         live = upcoming(picks)
+        if not live and not upcoming(pronos) and waiting_note(today):
+            return waiting_note(today)
         return custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live)
     return "Commande inconnue. /aide pour la liste."
 
