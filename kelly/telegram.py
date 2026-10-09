@@ -15,6 +15,11 @@ LATE_NOTE = "📬 Message en retard (réseau indisponible à l'heure prévue)"
 BUSY = "⏳ Kelly est en plein travail (message du matin ou relevé horaire) : ton action sera faite dès qu'elle a fini."
 TIMEOUT = "⚠️ Kelly est restée trop longtemps occupée : ton action n'a pas pu être faite. Renvoie-la dans quelques minutes."
 _last_fail = [float("-inf")]     # instant (monotonic) du dernier échec réseau : pas de renvoi automatique avant 60 s
+# Connexion gardée ouverte entre deux appels (0,1 s au lieu de 0,3 s, et presque plus de connexions neuves). Connexion neuve bloquée
+# (route IPv6 vers Telegram : ~1 sur 15 reste muette) : abandon au bout de CONNECT_TIMEOUT s et essai de l'adresse suivante (IPv4),
+# au lieu d'attendre http_timeout (15 à 40 s) avant de répondre.
+_session = requests.Session()
+CONNECT_TIMEOUT = 3
 
 
 class Html(str):
@@ -82,7 +87,12 @@ def api(method, http_timeout=40, **payload):
         raise TelegramError("TELEGRAM_TOKEN absent")
     for attempt in (0, 1):
         try:
-            r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=payload, timeout=http_timeout)
+            try:
+                r = _session.post(f"https://api.telegram.org/bot{token}/{method}", json=payload,
+                                  timeout=(CONNECT_TIMEOUT, http_timeout))
+            except requests.ConnectionError:        # connexion gardée coupée entre-temps : un nouvel essai, sur une connexion neuve
+                r = _session.post(f"https://api.telegram.org/bot{token}/{method}", json=payload,
+                                  timeout=(CONNECT_TIMEOUT, http_timeout))
         except requests.RequestException as e:
             raise TelegramError(f"réseau : {_scrub(e)}") from None
         try:
