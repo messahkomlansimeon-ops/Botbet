@@ -174,6 +174,38 @@ def _request(url, headers=None):
     return (r, None) if r is not None else (None, err)
 
 
+def post(url, body, headers=None, timeout=TIMEOUT):
+    """POST JSON (ticket enregistré chez le bookmaker...) : comme _request mais en écriture — ni cache, ni robots.txt, ni
+    conditionnel : une écriture n'est jamais répétée ni rejouée depuis le cache. Même session proxy par domaine et même compteur
+    WIRE. Retourne un Result : .ok si une réponse HTTP (<500) a été obtenue, .content brut, .error sinon."""
+    domain = urlparse(url).netloc.lower()
+    h = {"User-Agent": UA, "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
+    r, err = None, None
+    for attempt in (0, 1):
+        _wait(domain)
+        proxy = PROXIES.get(domain)
+        try:
+            if proxy:
+                s = _sessions.get(domain) or _sessions.setdefault(domain, requests.Session())
+                r = s.post(url, headers=h, json=body, timeout=timeout, proxies={"http": proxy, "https": proxy})
+            else:
+                r = requests.post(url, headers=h, json=body, timeout=timeout)
+            _count(domain, r)
+        except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
+            r, err = None, f"réseau indisponible ({type(e).__name__})"
+            stale = _sessions.pop(domain, None)    # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
+            if stale:
+                stale.close()
+        _last[domain] = state.clock()
+        if r is not None and r.status_code < 500:
+            return Result(url, r.content, r.status_code)
+        if r is not None:
+            err = f"HTTP {r.status_code}"
+        if attempt == 0:
+            continue
+    return Result(url, None, error=err)
+
+
 def _count(domain, r):
     """Octets réellement transférés pour `r` (corps compressé + en-têtes, estimés) ajoutés à WIRE[domaine]."""
     content = getattr(r, "content", None) or b""
