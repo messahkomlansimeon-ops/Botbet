@@ -235,7 +235,11 @@ def _fair_name(tier, real=False, row=None):
     (cote 25,1) » : le niveau de cote dit lequel c'est (`row` : la ligne de suivi, pour la cote d'un combiné aux cotes 1xBet)."""
     t = CB.shots_title(str(tier))
     if t:
-        return re.sub(r"^\S+ COMBINÉ ", "", t).capitalize()           # « 🎯 COMBINÉ TIRS CADRÉS », « 🧮 COMBINÉ STATS »
+        name = re.sub(r"^\S+ COMBINÉ ", "", t).capitalize()           # « 🎯 COMBINÉ TIRS CADRÉS », « 🧮 COMBINÉ STATS »
+        n = CB.window_no(tier)
+        if n is not None:                                           # « Stats n°1 (17:05) » : combiné envoyé dans la journée par la fenêtre des stats (statswindow)
+            return f"{name} n°{n}" + (f" ({row['at']})" if row and row.get("at") else "")
+        return name
     if real:
         return "Aux cotes 1xBet" + (f" (cote {fmt.trim(row['min_odds'], 1)})" if row and row.get("min_odds") else "")
     return f"À vérifier (cote mini {tier})" if str(tier) else "À vérifier"

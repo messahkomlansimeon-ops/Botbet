@@ -439,8 +439,31 @@ def fair_shots_plan(pronos, tiers=None, usage=None):
 
 
 def shots_title(target):
-    """Titre d'un combiné « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »), None pour les autres combinés à cote juste."""
-    return next((t for k, _, t, _, _ in C.FAIR_SHOTS_TIERS if k == target), None)
+    """Titre d'un combiné « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »), None pour les autres combinés à cote juste. Un combiné de la fenêtre des stats
+    (window_tier : « ts5w1 ») porte celui du palier « stats » du matin."""
+    return next((t for k, _, t, _, _ in C.FAIR_SHOTS_TIERS if k == target), None) or (C.STATS_WINDOW_TITLE if window_no(target) is not None else None)
+
+
+def window_tier(n):
+    """Palier du n-ième « 🧮 COMBINÉ STATS » de la journée envoyé par la fenêtre des stats (kelly/statswindow.py) : « ts5w1 », « ts5w2 »..."""
+    return f"{C.STATS_WINDOW_TIER}{n}"
+
+
+def window_no(tier):
+    """Numéro d'un palier de la fenêtre des stats (« ts5w2 » -> 2) ; None pour tout autre palier (« ts5 », « tc5 », 5...)."""
+    t = str(tier)
+    return int(t[len(C.STATS_WINDOW_TIER):]) if t.startswith(C.STATS_WINDOW_TIER) and t[len(C.STATS_WINDOW_TIER):].isdigit() else None
+
+
+def fair_stats_window(pronos, usage=None, accept=None):
+    """Combiné « stats » de la fenêtre (cote C.STATS_WINDOW_COMBO) : un pari par match, parmi les jambes solides aux cotes 1xBet (fair_legs) des marchés stats, avec leur
+    référence de pari (de quoi enregistrer un code coupon) ; `accept(jambe)` en filtre encore (match dans la fenêtre, cote fraîche). `usage` : les combinés déjà bâtis
+    aujourd'hui (mêmes règles de réutilisation). -> (jambes, cote, proba) ou None."""
+    usage = usage if usage is not None else Usage()
+    lo, hi = C.STATS_WINDOW_COMBO
+    legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(C.STATS_WINDOW_PREFIX) and c.get("xodds") and c.get("xref")
+            and (accept is None or accept(c))]
+    return best_combo(legs, lo, hi)
 
 
 def fair_custom(pronos, target, usage=None):

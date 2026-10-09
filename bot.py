@@ -2,9 +2,12 @@
 
   python bot.py --daily      matin : actualise les stats gratuites, règle hier, bilan, combinés du jour (Telegram)
                              déjà fait aujourd'hui = ignoré ; --force le refait. Code 1 si aucun message n'a pu partir (en attente)
-  python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote, puis stats de match FotMob
+  python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote, puis la fenêtre des stats (paris tirs / fautes / touches
+                             chez 1xBet des matchs qui commencent dans 45 min à 4 h : relus, remis à la cote, « 🧮 COMBINÉ STATS » + 💎 ; STATS_WINDOW_ENABLED=0 l'éteint),
+                             puis stats de match FotMob
                              --own-lock : le processus prend lui-même le verrou des données (pour la clôture et les alertes, puis quelques
-                             millisecondes pour fusionner les pages FotMob lues) au lieu d'être lancé sous `flock` pendant ~3 minutes ;
+                             millisecondes pour choisir et fusionner la fenêtre des stats, puis pour fusionner les pages FotMob lues) au lieu d'être lancé
+                             sous `flock` pendant ~3 minutes ;
                              à utiliser SANS le `flock` de l'unité systemd (voir README), sinon inter-blocage
   python bot.py --snapshot   relevé des cotes du lendemain (désactivé sur forfait gratuit : budget 0)
   python bot.py --alert      balayage large pour alertes (désactivé sur forfait gratuit : budget 0)
@@ -15,6 +18,8 @@
                              budget TUNE_SECONDS (1800 s), reprend où il s'est arrêté ; --force refait tout. À planifier chaque semaine.
                              Mode séparé : ne touche ni aux paris ni à Telegram, ne plante jamais le run du matin.
   python bot.py --xbet       second relevé des cotes 1xBet (15:00) : pronostics du matin remis aux cotes du moment, message si nouveaux 💎
+  python bot.py --stats-window  la fenêtre des stats seule (déjà faite par chaque `--track`) : relit les paris tirs / fautes / touches des matchs qui commencent dans
+                             45 min à 4 h, « 🧮 COMBINÉ STATS » + 💎 si possible. Prend lui-même le verrou des données (seulement pour choisir puis fusionner) ; --no-lock s'il est déjà sous `flock`
   python bot.py --evening    relecture du SOIR : les matchs du jour Kelly pas encore commencés sont réanalysés (stats du moment, sources en cache, aucun appel
                              payant), remis aux cotes 1xBet et fusionnés dans today.json ; UN message « 🌙 Pronostics de ce soir mis à jour : N 💎 »,
                              aucun combiné envoyé (« combi N » les bâtit). Prend lui-même le verrou des données ; --no-lock s'il est déjà lancé sous `flock`
@@ -59,12 +64,19 @@ def main(argv):
             except store.LockTimeout:
                 print("Kelly travaille depuis plus de 10 minutes : passage horaire abandonné", file=sys.stderr)
                 sys.exit(1)
+            app.run_stats_window()                      # paris stats chez 1xBet : verrou pris seulement pour choisir puis fusionner, jamais pendant les requêtes
             app.fill_match_stats()
         else:
             app.run_track()
+            app.run_stats_window()
             app.fill_match_stats()
     elif "--xbet" in argv:
         app.run_xbet_refresh()
+    elif "--stats-window" in argv:
+        if "--no-lock" not in argv:             # à la main (ou par un timer) : le verrou des données n'est pris que pour choisir puis fusionner, jamais pendant les requêtes 1xBet
+            from kelly.sources import fmmatch
+            os.environ[fmmatch.OWN_LOCK_ENV] = "1"
+        app.run_stats_window()
     elif "--evening" in argv:
         if "--no-lock" in argv:                 # déjà sous `flock` (unité systemd) : en reprendre un bloquerait
             app.run_evening()

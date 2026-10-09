@@ -444,13 +444,21 @@ def _spent(start):
     return w["bytes"] - start["bytes"], w["requests"] - start["requests"]
 
 
-def _save_usage(u, start):
+def _save_usage(u, start, session=None):
+    """Ajoute les données de la session (depuis `start`) au compteur du mois. Le compteur est RELU ici : un autre relevé a pu écrire pendant celui-ci (la fenêtre des stats
+    relit 1xBet sans le verrou des données, voir statswindow), sans quoi le plus lent des deux effacerait la consommation de l'autre. `session` : numéro de session Webshare
+    qui a vraiment répondu (à retenir) ; sinon celui déjà enregistré reste."""
     b, n = _spent(start)
     day = str(state.now().date())
-    u["bytes"], u["requests"] = int(u["bytes"] + b), u["requests"] + n
-    u["days"][day] = int(u["days"].get(day, 0) + b)
-    u["days"] = dict(sorted(u["days"].items())[-40:])
-    store.save(USAGE, u)
+    cur = usage(day)
+    cur["bytes"], cur["requests"] = int(cur["bytes"] + b), cur["requests"] + n
+    cur["days"][day] = int(cur["days"].get(day, 0) + b)
+    cur["days"] = dict(sorted(cur["days"].items())[-40:])
+    if session is not None:
+        cur["session"] = session
+    store.save(USAGE, cur)
+    u.clear()
+    u.update(cur)
     return b, n
 
 
@@ -468,6 +476,7 @@ class _Session:
 
     def __init__(self):
         self.u, self.cap, self.switches, self.soft, self.why = usage(), C.XBET_MONTH_MB * 1e6, 0, 0, None
+        self.switched = None                         # numéro de session Webshare adopté pendant ce relevé (None : celle enregistrée reste)
         self.url = proxy()
         self.base, self.trying = session_no(self.url), None
         if state.is_blocked(SOURCE):
@@ -504,6 +513,7 @@ class _Session:
                 out = fn(*a, **kw)
                 if self.trying is not None:         # la session essayée a répondu : elle devient celle des prochains relevés
                     self.u["session"], self.trying = self.trying, None
+                    self.switched = self.u["session"]
                 return out
             except XbetError as e:
                 msg = str(e)
@@ -519,7 +529,7 @@ class _Session:
                 print(f"[1xbet] proxy en panne ({e}) : essai de la session Webshare n° {self.trying}", file=sys.stderr)
 
     def close(self, what):
-        b, n = _save_usage(self.u, self.start)
+        b, n = _save_usage(self.u, self.start, self.switched)
         print(f"[1xbet] {what} : {n} requête(s), {b / 1e3:.0f} Ko via {'le proxy' if self.url else 'la connexion directe'} ; "
               f"{usage_line()}", file=sys.stderr)
 

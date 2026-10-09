@@ -512,3 +512,31 @@ SHARPGAP_MAX_SHOWN = _int("SHARPGAP_MAX_SHOWN", 3)            # paris au plus da
 SHARPGAP_MAX_DAY = _int("SHARPGAP_MAX_DAY", 6)                # paris au plus annoncés par jour (matin + relevés + alertes)
 SHARPGAP_PRESCREEN = _float("SHARPGAP_PRESCREEN", 0.02)       # relevés et alertes : seuls les paris à moins de 2 points du seuil, au prix du matin, sont relus en direct
 # ===================================================================================================================================
+
+# ===== FENÊTRE DES STATS (lot M, kelly/statswindow.py) : bloc à part, ne dépend d'aucun autre réglage ================================
+# 1xBet n'ouvre les sous-matchs « tirs, tirs cadrés, fautes, touches, hors-jeu » que quelques heures avant le coup d'envoi (et les ferme ~30 min avant) : au
+# relevé de 04:00 ils sont presque tous fermés. Le passage horaire (`bot.py --track`, :05 de 05h à 23h) relit donc, pour les SEULS matchs qui commencent dans
+# la fenêtre [STATS_WINDOW_MIN_MIN min ; STATS_WINDOW_MAX_H h], les sous-matchs stats de leurs pronostics stats, remet ces pronostics à la cote 1xBet,
+# envoie au plus STATS_WINDOW_MAX_COMBOS « 🧮 COMBINÉ STATS » par jour (palier « ts5w<n> ») et annonce les nouveaux 💎 stats.
+# Données (≈ 6,4 Ko par requête, voir XBET_MONTH_MB) : un match relu = 1 requête du match + 1 par famille stats ouverte, soit ~12 à 38 Ko ;
+# plafonds : STATS_WINDOW_MAX_MATCHES par passage, STATS_WINDOW_DAY_READS par jour, jamais au-delà de STATS_WINDOW_MONTH_PCT % du plafond mensuel.
+STATS_WINDOW_ENABLED = _bool("STATS_WINDOW_ENABLED", True)          # 0 : plus de relecture horaire des stats (comportement d'avant)
+STATS_WINDOW_MIN_MIN = _int("STATS_WINDOW_MIN_MIN", 45)             # un match qui commence dans moins de N min n'est plus relu : 1xBet ferme les sous-matchs stats ~30 min avant
+STATS_WINDOW_MAX_H = _float("STATS_WINDOW_MAX_H", 4)                # ... ni avant N heures : trop tôt, les sous-matchs stats ne sont pas encore ouverts
+STATS_WINDOW_SECONDS = _int("STATS_WINDOW_SECONDS", 120)            # durée maximale de la relecture d'un passage (1 s entre requêtes en direct)
+STATS_WINDOW_MAX_MATCHES = _int("STATS_WINDOW_MAX_MATCHES", 8)      # matchs relus au plus par passage (ceux qui ont le plus de pronostics stats d'abord)
+STATS_WINDOW_DAY_READS = _int("STATS_WINDOW_DAY_READS", 48)         # relectures de match au plus par jour (tous passages)
+STATS_WINDOW_TRIES = _int("STATS_WINDOW_TRIES", 4)                  # relectures réussies au plus d'un même match par jour (la fenêtre de 4 h compte 4 passages)
+STATS_WINDOW_MISSES = _int("STATS_WINDOW_MISSES", 3)                # passages sans réponse de 1xBet pour un même match avant d'y renoncer pour la journée
+STATS_WINDOW_RETRY_MIN = _int("STATS_WINDOW_RETRY_MIN", 45)         # minutes au moins entre deux relectures d'un même match
+STATS_WINDOW_FRESH_MIN = _int("STATS_WINDOW_FRESH_MIN", 50)         # un pronostic stats à cote 1xBet lue il y a moins de N min n'est pas relu ; plus vieux, il ne sert pas dans un combiné
+STATS_WINDOW_MONTH_PCT = _float("STATS_WINDOW_MONTH_PCT", 85)       # % du plafond mensuel (XBET_MONTH_MB) au-delà duquel la fenêtre se tait (le matin passe avant)
+STATS_WINDOW_MAX_COMBOS = _int("STATS_WINDOW_MAX_COMBOS", 2)        # « 🧮 COMBINÉ STATS » au plus par jour, hors celui du matin (0 : aucun)
+STATS_WINDOW_COMBO = (5.0, 7.0)                                     # fourchette de cote du combiné (comme « ts5 »)
+STATS_WINDOW_ANNOUNCE = _int("STATS_WINDOW_ANNOUNCE", 6)            # nouveaux 💎 stats au plus dans un message « 🧮 Stats ouvertes chez 1xBet » (0 : aucun message)
+STATS_WINDOW_DAY_ANNOUNCE = _int("STATS_WINDOW_DAY_ANNOUNCE", 12)   # nouveaux 💎 stats annoncés au plus par jour
+STATS_WINDOW_NOTE = _bool("STATS_WINDOW_NOTE", True)                # 0 : plus de ligne « les paris stats arrivent quelques heures avant les matchs » au message du matin
+STATS_WINDOW_PREFIX = ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_")   # marchés « stats » (ceux de « ts5 »)
+STATS_WINDOW_TIER = "ts5w"                                          # palier d'un combiné de la fenêtre : « ts5w1 », « ts5w2 »... (« ts5 » reste celui du matin)
+STATS_WINDOW_TITLE = "🧮 COMBINÉ STATS"
+# ===================================================================================================================================
