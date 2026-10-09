@@ -3,6 +3,8 @@
 
 Pari en attente de cote : data/pending.json = {what, day, msg, at} après un appui sur ✅, valable PENDING_MINUTES ; la réponse
 « 5,40 » (ou « 5,40 2000 » avec la mise) le note avec played.command, puis le bouton devient « ✅ Joué à 5,40 ».
+
+Sous un combiné « combi 20 », « ✅ Je le joue » (callback « cjoue|m<n>|<jour> ») le fait suivre comme un combiné du matin : voir kelly/custom.py.
 """
 import re
 from datetime import datetime, timedelta, timezone
@@ -220,6 +222,9 @@ def on_callback(data, message_id=None):
         return app.handle_command(f"/budget {parts[1]}")
     if parts[0] == "combi" and len(parts) == 2:
         return app.handle_command(f"/combi {parts[1]}")
+    if parts[0] == "cjoue" and len(parts) == 3:       # « ✅ Je le joue » sous un combiné « combi N » : il devient un pari suivi
+        from . import custom
+        return custom.track(parts[1], parts[2], message_id)
     if parts[0] == "xmaj" and len(parts) == 3:
         return app.refresh_combo(parts[1], parts[2])
     if parts[0] == "xmajr" and len(parts) == 3:

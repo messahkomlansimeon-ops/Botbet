@@ -3,7 +3,8 @@ joues vraiment, et Kelly mesure l'écart entre la cote de 1xBet et sa cote de r�
 à cotes réelles, cote mini pour les combinés à vérifier).
 
 /joue <quoi> <cote> [mise]   quoi : sur, costaud, special, mechant, monstre (combinés du jour), pari (pari du jour),
-                              v5, v12, v25 (combinés à vérifier chez 1xBet, par cote mini visée). Cote 0 : annule la note.
+                              v5, v12, v25 (combinés à vérifier chez 1xBet, par cote mini visée), vm1, vm2... (combis sur mesure suivis par
+                              « ✅ Je le joue », voir kelly/custom.py). Cote 0 : annule la note.
 Le pari noté est celui du jour, sinon le plus récent pas encore réglé. Stockage dans le pari lui-même : x["played"] =
 {odds, stake, at} (combiné de bets.json, ligne envoyée de tracked.json, combiné de fair_combos.json). Le premier /joue active
 le mode réel de la bankroll (bankroll.py).
@@ -105,18 +106,33 @@ def find(word, day):
         px = price_info("pari", r)
         return Target(r, px["odds"], st, f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
                       "cote 1xBet" if px["real"] else "cote typique")
-    if w.startswith("v") and len(w) > 1:              # v5, v12, v25 ; vtc5 / vtv5 : combinés « spécial tirs »
+    if w.startswith("v") and len(w) > 1:              # v5, v12, v25 ; vtc5 / vtv5 : combinés « spécial tirs » ; vm1, vm2... : combis sur mesure
         rows = fair.load_combos()
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
         if not c:
+            if re.fullmatch(r"vm\d+", w):
+                return f"Pas de combi sur mesure « {w} » à noter (ni aujourd'hui ni en attente de résultat)."
             return None if not (w[1:].isdigit() or CB.shots_title(w[1:])) else \
                 f"Pas de combiné à vérifier « {_fair_name(w[1:])} » à noter (ni aujourd'hui ni en attente de résultat)."
-        what = (f"combiné aux cotes 1xBet (cote {fmt.odds_txt(c['min_odds'])})" if is_real(c)
+        what = (custom_name(c).lower() if is_custom(c) else
+                f"combiné aux cotes 1xBet (cote {fmt.odds_txt(c['min_odds'])})" if is_real(c)
                 else f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])})")
-        return Target(c, c["min_odds"], c["stake"] if c.get("cur") or c.get("stake") == 0 else CB.fair_stake(c["min_odds"]),
+        # combi sur mesure sans budget : sa ligne garde la mise (u) affichée avec le message, pas la mise indicative d'un combiné à vérifier
+        funded = c.get("cur") or c.get("stake") == 0 or (is_custom(c) and c.get("stake") is not None)
+        return Target(c, c["min_odds"], c["stake"] if funded else CB.fair_stake(c["min_odds"]),
                       f"{what} du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows),
                       "cote 1xBet" if is_real(c) else "cote mini")
     return None
+
+
+def is_custom(c):
+    """Ligne de fair_combos.json d'un combiné sur mesure (« combi 20 ») que l'utilisateur joue : « ✅ Je le joue », voir kelly/custom.py."""
+    return bool(c.get("custom"))
+
+
+def custom_name(c):
+    """« Combi sur mesure (cote 20) » : le nom d'un combiné sur mesure suivi (la cote demandée avec « combi 20 », pas la cote totale)."""
+    return f"Combi sur mesure (cote {fmt.trim(c.get('target') or c['min_odds'], 1)})"
 
 
 def is_real(c):
@@ -170,8 +186,8 @@ def command(args, day, now=None):
         return "Exemple : /joue sur 5,40 (combiné Sûr joué à 5,40 chez 1xBet). /joue seul : ce qui reste à noter."
     t = find(args[0], day)
     if t is None:
-        return (f"« {args[0]} » inconnu. Choix : {', '.join(tier_words())}, pari (pari du jour), v5 / v12 / v25 (combinés à vérifier). "
-                "Exemple : /joue sur 5,40")
+        return (f"« {args[0]} » inconnu. Choix : {', '.join(tier_words())}, pari (pari du jour), v5 / v12 / v25 (combinés à vérifier), "
+                "vm1 (combi sur mesure). Exemple : /joue sur 5,40")
     if isinstance(t, str):
         return t
     odds, given, err = parse_odds_stake(args[1:])
@@ -222,7 +238,8 @@ def todo(day):
     lines, rows = [], []
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
-    items_ += [(_fair_name(c["tier"], is_real(c)), c, c["min_odds"], f"v{c['tier']}") for c in fair.load_combos() if c["date"] == day]
+    items_ += [(custom_name(c) if is_custom(c) else _fair_name(c["tier"], is_real(c)), c, c["min_odds"], f"v{c['tier']}")
+               for c in fair.load_combos() if c["date"] == day]
     if not items_:
         return f"Rien à noter aujourd'hui : les paris du jour arrivent à {C.DAY_END_HOUR:02d}h00."
     if any(x.get("cur") for _, x, _, _ in items_):

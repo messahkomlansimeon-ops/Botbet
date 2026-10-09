@@ -456,7 +456,7 @@ def summary(rows, days=None, today=None):
 
 COMBOS_FILE = "fair_combos.json"
 LEG_FIELDS = ROW + ("pick", "min_odds", "start", "league")        # une jambe de combiné garde de quoi être réglée seule
-SENT_FIELDS = LEG_FIELDS + ("odds", "xref")        # + de quoi refaire le combiné et son code coupon (dernière version envoyée)
+SENT_FIELDS = LEG_FIELDS + ("odds", "xref", "xgid")        # + de quoi refaire le combiné, son code coupon et relire le match chez 1xBet
 
 
 def load_combos():
@@ -527,3 +527,17 @@ def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
     store.save(COMBOS_FILE, [r for r in rows if r["date"] >= cut])
     return n
+
+
+def record_custom(row, day):
+    """Combiné sur mesure que l'utilisateur joue (« ✅ Je le joue », kelly/custom.py) : sa ligne `row` (combo_row + marque « custom ») est
+    ajoutée au suivi, comme un combiné du matin ; un seul par jour et par identifiant « m<n> » (jamais deux fois). Garde C.FAIR_COMBO_KEEP_DAYS
+    jours. -> vrai s'il vient d'être ajouté."""
+    from datetime import date, timedelta
+    rows = load_combos()
+    new = not any(r["date"] == row["date"] and str(r["tier"]) == str(row["tier"]) for r in rows)
+    if new:
+        rows.append(row)
+    cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
+    store.save(COMBOS_FILE, [r for r in rows if r["date"] >= cut])
+    return new

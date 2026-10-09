@@ -364,7 +364,7 @@ def bilan(bets, days=None, rows=None, detail=False):
         cutoff = str((datetime.now(timezone.utc) - timedelta(days=days)).date())
         picks = [b for b in picks if b["date"] >= cutoff]
         combos = [c for c in combos if c["date"] >= cutoff]
-    if not picks and not combos and not fair_combo_line(fair.load_combos(), days):
+    if not picks and not combos and not fair_combo_line(fair.load_combos(), days) and not _custom_done(fair.load_combos(), days):
         return "📊 BILAN\nAucun pari réglé pour l'instant." if detail else fmt.Html(
             "📊 <b>Bilan</b>\n\nAucun pari réglé pour l'instant : les paris du jour sont réglés le lendemain matin.")
     return _bilan_detail(bets, days, rows, picks, combos) if detail else _bilan_simple(days, rows, picks, combos)
@@ -386,8 +386,9 @@ def fair_line(rows, days=None, today=None):
 
 def fair_combo_line(rows, days=None, today=None):
     """Combinés à cote juste réglés : « Combinés à vérifier : 2 gagnés sur 5 (sans mise : à comparer aux cotes de 1xBet) » ; '' si
-    rien de réglé."""
-    done = [r for r in rows if r.get("result") in ("win", "loss")]
+    rien de réglé. Les combinés sur mesure que l'utilisateur joue (« ✅ Je le joue », marque « custom ») n'y sont pas : il les choisit lui-même,
+    ils ne mesurent pas les combinés du matin de Kelly (ils sont dans le bilan en argent et celui des paris joués)."""
+    done = [r for r in rows if r.get("result") in ("win", "loss") and not r.get("custom")]
     if days:
         cut = str((datetime.fromisoformat(str(today)) if today else datetime.now(timezone.utc)).date() - timedelta(days=days))
         done = [r for r in done if r["date"] >= cut]
@@ -395,6 +396,17 @@ def fair_combo_line(rows, days=None, today=None):
         return ""
     w = sum(1 for r in done if r["result"] == "win")
     return f"Combinés à vérifier chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} (sans mise, hors bankroll)."
+
+
+def _custom_done(rows, days=None):
+    """Combinés sur mesure joués (misés sur le budget ou notés avec /joue, pas retirés par « ❌ Pas joué ») et réglés : ils comptent dans le
+    bilan en argent et celui des paris joués, pas dans fair_combo_line."""
+    done = [r for r in rows if r.get("custom") and r.get("result") in ("win", "loss") and not r.get("skipped")
+            and (r.get("played") or r.get("cur"))]
+    if days:
+        cut = str((datetime.now(timezone.utc) - timedelta(days=days)).date())
+        done = [r for r in done if r["date"] >= cut]
+    return done
 
 
 def _gain(c):

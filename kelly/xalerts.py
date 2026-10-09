@@ -3,11 +3,13 @@
   💰 1xBet est en retard : le MARCHÉ (clôture The Odds API, passage horaire run_track) bouge fort sur un pari envoyé, mais 1xBet paie encore
      un prix qui a de la valeur face à la nouvelle probabilité du marché (proba x cote - 1 >= C.XALERT_LAG_EDGE) -> « joue maintenant »,
      avec une mise et un code coupon du pari seul. 1xBet relu en direct pour les seuls matchs concernés (C.XALERT_LIVE_MAX par passage).
-  ⚠️ Mes paris en danger : à chaque relevé 1xBet (15:00, mise à jour manuelle), un combiné réel ou le pari du jour dont un pari a quitté
-     1xBet ou ne paie plus assez pour avoir sa place -> « n'est plus jouable tel quel » et le bouton « 🎟️ Vérifier ce combiné ».
+  ⚠️ Mes paris en danger : à chaque relevé 1xBet (15:00, mise à jour manuelle), un combiné réel, un combiné sur mesure suivi (« ✅ Je le joue »,
+     kelly/custom.py) ou le pari du jour dont un pari a quitté 1xBet ou ne paie plus assez pour avoir sa place -> « n'est plus jouable tel
+     quel » et le bouton « 🎟️ Vérifier ce combiné ».
   📈 Mieux payé qu'au matin : un pari 💎 (ou un pari réel montré) dont la cote 1xBet a monté de C.XALERT_RISE depuis le matin (xodds0) et a
      toujours de la valeur -> « c'est le moment », avec un code coupon.
-  ✅ Bonne nouvelle : un pari que tu as joué dont le marché a baissé de C.ALERT_ODDS_DROP depuis le matin (tu as pris une meilleure cote).
+  ✅ Bonne nouvelle : un pari que tu as joué (ou un combiné sur mesure que tu joues) dont le marché a baissé de C.ALERT_ODDS_DROP depuis le
+     matin (tu as pris une meilleure cote).
 
 Un seul message par passage (💰 d'abord, puis ⚠️, 📈, ✅), C.XALERT_MAX_ITEMS alertes au plus ; data/alerts_sent.json retient la dernière cote
 alertée de chaque pari (pas deux fois la même alerte sans nouveau mouvement). Les relectures 1xBet sont plafonnées et ne lèvent jamais.
@@ -16,7 +18,7 @@ import math
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import bankroll, chat, combos as CB, config as C, fmt, money, played, store, telegram, track, xprice
+from . import bankroll, chat, combos as CB, config as C, fair, fmt, money, played, store, telegram, track, xprice
 from .sources import state, xbet
 from .telegram import Html
 
@@ -124,9 +126,17 @@ def _took(x):
     return not x.get("skipped") and (bool(x.get("played")) or (bool(x.get("cur")) and (x.get("stake") or 0) > 0))
 
 
+def _custom_rows(day):
+    """Combinés sur mesure suivis du jour `day` pas encore réglés ni retirés (fair_combos.json, marque « custom », voir kelly/custom.py)."""
+    return [x for x in fair.load_combos() if played.is_custom(x) and x.get("date") == day and x.get("result") is None
+            and not x.get("skipped") and not x.get("dead") and x.get("legs")]
+
+
 def took_bets(rows, combos, day):
     """({clé du pari: cote prise chez 1xBet ou None}, {clés notées explicitement avec /joue}) des paris du jour comptés joués : pari du
-    jour (ligne envoyée de tracked.json) et jambes des combinés réels (bets.json). Cote prise d'un combiné : celle de la jambe."""
+    jour (ligne envoyée de tracked.json), jambes des combinés réels (bets.json) et jambes des combinés sur mesure suivis. Cote prise d'un
+    combiné : celle de la jambe. Un combiné sur mesure est joué dès l'appui sur « ✅ Je le joue » : ses paris sont aussi « notés » (ni
+    « joue maintenant » ni « mieux payé » pour un pari que tu as déjà pris)."""
     took, noted = {}, set()
     for r in played.single_rows(rows, combos):
         if r.get("date") == day and r.get("result") is None and _took(r):
@@ -140,6 +150,10 @@ def took_bets(rows, combos, day):
                 took.setdefault(k, legs.get(k))
                 if x.get("played"):
                     noted.add(k)
+    for x in _custom_rows(day):
+        for l in x["legs"]:
+            took.setdefault(l["key"], l.get("xodds"))
+            noted.add(l["key"])
     return took, noted
 
 
@@ -219,8 +233,9 @@ def lag_items(alerts, today, reader, now, noted=(), skip=()):
 
 def real_targets(today, rows, combos, day, now):
     """Paris réels du jour encore jouables (ni réglés, ni retirés par « ❌ Pas joué », aucun match commencé ni imminent), aux cotes 1xBet du
-    matin : [(nom, nom court du bouton « Vérifier », mot du pari pour ce bouton, ligne de suivi, jambes de today.json)] : le pari du jour et les
-    combinés de bets.json."""
+    matin : [(nom, nom court du bouton « Vérifier », mot du pari pour ce bouton, ligne de suivi, jambes de today.json)] : le pari du jour, les
+    combinés de bets.json et les combinés sur mesure suivis (leurs jambes : celles de leur dernière version suivie, avec les champs du pari de
+    today.json quand c'est un pari réel)."""
     by_key = {c["key"]: c for c in today.get("picks") or []}
     singles = [("Le pari du jour", "pari du jour", "pari", r, [r["key"]]) for r in played.single_rows(rows, combos) if r.get("xodds")]
     combos_ = [(f"Le combiné {fmt.tier_word(x['tier'])}", fmt.tier_word(x["tier"]), played.norm(fmt.tier_word(x["tier"])), x, x["keys"])
@@ -231,12 +246,24 @@ def real_targets(today, rows, combos, day, now):
         if (x.get("date") == day and x.get("result") is None and not x.get("skipped") and all(legs)
                 and all(l.get("xodds") and _open(l, now) for l in legs)):
             out.append((name, short, what, x, legs))
+    for x in _custom_rows(day):
+        legs = [(by_key.get(l["key"]) or {}) | {k: v for k, v in l.items() if v is not None and k != "result"} for l in x["legs"]]
+        if all(l.get("xodds") and _open(l, now) for l in legs):
+            out.append((f"Le {played.custom_name(x).lower()}", played.custom_name(x), f"v{x['tier']}", x, legs))
     return out
 
 
+def _worth(c, price):
+    """Le pari `c` payé `price` chez 1xBet a-t-il encore sa raison d'être ? Pari réel : un avantage clair (CB.leg_reason) ; pronostic 💎 d'un
+    combiné sur mesure (il a une cote mini) : au moins sa cote mini, celle de la proba de Kelly."""
+    if c.get("min_odds"):
+        return price >= c["min_odds"]
+    return bool(CB.leg_reason(_at(c, price)))
+
+
 def danger_items(targets, prices, day):
-    """⚠️ Combinés réels et pari du jour dont un pari n'est plus chez 1xBet, ou paie moins qu'à son choix au point de perdre sa raison d'être
-    (CB.leg_reason : plus d'avantage clair). Un pari dont la cote a baissé mais garde son avantage ne déclenche rien."""
+    """⚠️ Combinés réels, combinés sur mesure suivis et pari du jour dont un pari n'est plus chez 1xBet, ou paie moins qu'à son choix au point
+    de perdre sa raison d'être (_worth). Un pari dont la cote a baissé mais garde son avantage ne déclenche rien."""
     out = []
     for name, short, what, x, legs in targets:
         lines, cur, gone = [], [], False
@@ -248,7 +275,7 @@ def danger_items(targets, prices, day):
             if st and st[0] == "gone":
                 lines.append(f"❌ Plus chez 1xBet : {label}")
                 gone = True
-            elif st and now_odds < c["xodds"] and not CB.leg_reason(_at(c, now_odds)):
+            elif st and now_odds < c["xodds"] and not _worth(c, now_odds):
                 lines.append(f"📉 Moins bien payé : {label} : {fmt.odds_txt(c['xodds'])} ➜ {fmt.b(fmt.odds_txt(now_odds))} chez 1xBet "
                              f"(plus d'avantage clair, lu à {st[3]})")
         if lines:
@@ -271,7 +298,7 @@ def rise_items(pronos, got, at, targets, prices, noted=()):
     out, seen = [], set()
     for c in CB.best_per_match(pronos):
         old, new = c.get("xodds0"), c.get("xodds")
-        if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0:
+        if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0 and c["key"] not in noted:
             seen.add(c["key"])
             out.append(_item("rise", c["key"], new, _rise_text(c, old, new, c["xev"], at), rank=new / old,
                              coupon={"xref": c["xref"], "xodds": new} if c.get("xref") else None))
