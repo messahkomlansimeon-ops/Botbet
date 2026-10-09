@@ -11,11 +11,21 @@ trop faible (proba sous C.VIABLE_MIN_P ou sous un match moyen) : même chose, co
 Match trouvé mais pari absent chez 1xBet (pas de tirs en Ligue 2...) : c["xnone"], injouable, plus viable. Match non trouvé ou pas
 relevé : le pronostic reste « à vérifier » (cote mini) dans la liste, mais n'entre plus dans un combiné (combos.fair_legs).
 Les paris RÉELS de The Odds API (combinés du matin, pari du jour) passent aussi à la cote 1xBet : price_picks.
+
+Chemin « ensemble » (kelly/ensemble.py), SEULEMENT si C.ENSEMBLE_ENABLED (défaut : faux, rien ne change) : choose / price / apply remplacent la
+proba du modèle par la proba retenue p_ens (combinaison en log-cotes de la proba sharp, de la proba 1xBet sans marge et de la proba du modèle,
+poids appris par famille). Un pari est « de la valeur » ssi cote 1xBet x p_ens >= 1 + C.ENSEMBLE_MARGIN et sans veto (écart modèle-marché
+trop grand quand le marché pèse beaucoup). Le pronostic prix porte alors :
+  c["prob"]     = p_ens (c["p_ens"] : la même, nommée) : TOUT le reste de Kelly (viable, combinés, mises, bilan) lit cette proba ;
+  c["p_model"]  = la proba du modèle de Kelly de la ligne choisie (ex-c["prob"], calibrée) ; c["p0"] reste la proba brute (calib.add la lit) ;
+  c["p_x"]      = proba 1xBet sans marge (c["xp"] la reprend) ; c["p_sharp"] = proba sharp (si le match est couvert) ; c["ew"] = poids du modèle ;
+  c["min_odds"] = (1 + marge) / p_ens ; un pari écarté (veto, prix, ligne faible) a c["min_odds"] > c["xodds"] (combos.viable le refuse) et, pour
+  un veto, c["xveto"] = 1 (c["xwhy"] : raison).
 """
 import sys
 import time
 
-from . import calib, config as C, odds
+from . import calib, config as C, odds, store
 from .sources import xbet
 
 
@@ -37,9 +47,48 @@ def _wanted(pronos):
     return out
 
 
+def _alts(c):
+    return c.get("alts") or [[c["name"], c["point"], c.get("p0", c.get("p_model", c["prob"])), None]]
+
+
+def _ens_line(c, px, name, point, p0, base, price, data):
+    """Décision de l'ensemble sur une ligne du pronostic `c` à la cote `price` -> (décision ensemble.value_of, proba du modèle corrigée, référence
+    corrigée ou None). La proba 1xBet sans marge vient des cotes `px` du match, la proba sharp de c["psh"] (ensemble.attach)."""
+    from datetime import datetime, timezone
+    from . import ensemble
+    pm = calib.calibrate(c["market"], p0, sport_key=c.get("sport_key"))
+    b = None if base is None else calib.calibrate(c["market"], base, sport_key=c.get("sport_key"))
+    v = ensemble.value_of(c["market"], pm, ensemble.x_fair(px, c["market"], name, point, c.get("home"), c.get("away")),
+                          ensemble.sharp_for(c, name, point, datetime.now(timezone.utc)), price, data=data)
+    return v, pm, b
+
+
+def _choose_ens(c, px):
+    """choose() de l'ensemble : (tuple de choose, décision) ou None. Une ligne est retenue si le modèle la voit au moins aussi bonne qu'un match moyen
+    (référence), si la proba retenue p_ens atteint C.VIABLE_MIN_P et si ensemble.value_of la valide (valeur et pas de veto) ; entre deux lignes,
+    mêmes priorités que le chemin d'origine mais avec p_ens (jambe de combiné possible, puis valeur x proba)."""
+    from . import ensemble
+    data = ensemble.load()
+    best, key = None, None
+    for name, point, p0, base in _alts(c):
+        price = xbet.lookup(px, c["market"], name, point)
+        if not price:
+            continue
+        v, pm, b = _ens_line(c, px, name, point, p0, base, price, data)
+        if (b is not None and pm < b) or not v["ok"] or v["p"] < C.VIABLE_MIN_P:
+            continue
+        rank = (v["p"] >= C.FAIR_COMBO_MIN_P, v["ev"] * v["p"])
+        if key is None or rank > key:
+            best, key = ((name, point, v["p"], p0, b, price, v["ev"]), v), rank
+    return best
+
+
 def choose(c, px):
     """Meilleure ligne du pronostic `c` à la cote 1xBet (`px` : xbet.prices du match) -> (côté, ligne, proba, proba brute,
-    référence corrigée, cote, valeur) ou None."""
+    référence corrigée, cote, valeur) ou None. Avec C.ENSEMBLE_ENABLED, la proba est p_ens (voir _choose_ens)."""
+    if C.ENSEMBLE_ENABLED:
+        got = _choose_ens(c, px)
+        return got[0] if got else None
     best, key = None, None
     for name, point, p0, base in c.get("alts") or [[c["name"], c["point"], c.get("p0", c["prob"]), None]]:
         price = xbet.lookup(px, c["market"], name, point)
@@ -72,7 +121,9 @@ def price(c, px, refs=None):
     """Met le pronostic `c` à la cote 1xBet (en place). -> "value" (ligne jouable chez 1xBet), "low" (1xBet paie trop peu), "weak" (ligne trop faible) ou None.
     `refs` (si fourni) : {(marché, côté, ligne): [GameId, Type, Param]} (xbet.prices) -> c["xref"], la référence du pari chez
     1xBet, pour enregistrer un ticket (un code coupon) au moment du message. "weak" : la ligne du pronostic est proposée mais elle
-    n'est plus assez probable (pas un problème de prix)."""
+    n'est plus assez probable (pas un problème de prix). Avec C.ENSEMBLE_ENABLED : voir _price_ens (c["prob"] = p_ens, c["p_model"]...)."""
+    if C.ENSEMBLE_ENABLED:
+        return _price_ens(c, px, refs)
     pick = choose(c, px)
     if pick:
         name, point, p, p0, b, odd, ev = pick
@@ -101,13 +152,78 @@ def price(c, px, refs=None):
     return None
 
 
-def apply(pronos, fetch=None):
+def _ens_fields(c, v, pm, p0, odd, price_ok):
+    """Champs de l'ensemble posés sur le pronostic `c` pour la décision `v` (ensemble.value_of) à la cote `odd` : la proba retenue devient c["prob"],
+    celle du modèle c["p_model"]. `price_ok` faux (pari écarté) : c["min_odds"] reste au-dessus de la cote 1xBet, pour que combos.viable, qui ne
+    connaît que « cote 1xBet < cote mini », le refuse aussi."""
+    from . import ensemble
+    parts = v["parts"]
+    p = v["p"]
+    min_odds = round(ensemble.min_price(p), 2)
+    c.update(prob=round(p, 4), p_ens=round(p, 4), p_model=round(pm, 4), p0=round(p0, 4), fair=round(1 / p, 2),
+             min_odds=min_odds if price_ok else max(min_odds, round(odd + 0.01, 2)), xodds=odd, xev=round(v["ev"], 4),
+             xp=None if parts["p_x"] is None else round(parts["p_x"], 4), ew=round(parts["wm"], 4), esrc=parts["src"])
+    for k, val in (("p_x", parts["p_x"]), ("p_sharp", parts["p_sharp"])):
+        if val is None:
+            c.pop(k, None)
+        else:
+            c[k] = round(val, 4)
+    c.pop("xveto", None)
+    c.pop("xwhy", None)
+    if not price_ok:
+        c["xwhy"] = v["why"]
+        if v["why"] in ("veto", "no_market"):
+            c["xveto"] = 1
+
+
+def _price_ens(c, px, refs=None):
+    """price() de l'ensemble (C.ENSEMBLE_ENABLED) : même contrat que le chemin d'origine ("value", "low", "weak" ou None), avec la proba retenue
+    p_ens. "low" : 1xBet paie trop peu OU l'ensemble écarte le pari (veto : c["xveto"], raison dans c["xwhy"]) ; "weak" : ligne trop faible
+    (p_ens sous C.VIABLE_MIN_P, ou modèle sous un match moyen)."""
+    from . import ensemble
+    got = _choose_ens(c, px)
+    if got:
+        (name, point, p, p0, b, odd, ev), v = got
+        moved = (name, point) != (c["name"], c["point"])
+        if moved:
+            c.update(name=name, point=point, key=f'{c["id"]}|{c["market"]}||{point if point is not None else ""}|{name}',
+                     pick=odds.label(c["market"], name, point, c.get("who"), "soccer"))
+            if b is not None:
+                c["base"] = round(b, 4)
+        _ens_fields(c, v, v["parts"]["p_model"], p0, odd, True)
+        if moved or c.get("xodds0") is None:        # cote du matin (alerte « mieux payé ») : la première lue, ou celle de la nouvelle ligne
+            c["xodds0"] = odd
+        ref = (refs or {}).get((c["market"], name, None if point is None else float(point)))
+        if ref:
+            c["xref"] = ref
+        return "value"
+    odd = xbet.lookup(px, c["market"], c["name"], c["point"])
+    if odd:
+        cur = next((a for a in c.get("alts") or [] if (a[0], a[1]) == (c["name"], c["point"])), None) \
+            or [c["name"], c["point"], c.get("p0", c.get("p_model", c["prob"])), None]            # ligne hors c["alts"] : sa proba brute, sans référence
+        v, pm, b = _ens_line(c, px, c["name"], c["point"], cur[2], cur[3], odd, ensemble.load())
+        _ens_fields(c, v, pm, cur[2], odd, False)
+        ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+        if ref:
+            c["xref"] = ref
+        return "weak" if (v["p"] is not None and v["p"] < C.VIABLE_MIN_P) or (b is not None and pm < b) else "low"
+    return None
+
+
+def apply(pronos, fetch=None, picks=None):
     """Cotes 1xBet des pronostics du jour (en place, dans la limite de C.XBET_SECONDS et C.XBET_MAX_MATCHES). Ne lève jamais.
     -> {"matches": matchs trouvés chez 1xBet, "value": pronostics jouables, "low": pronostics trop mal payés, "weak":
-    pronostics à ligne trop faible, "none": absents de 1xBet}."""
+    pronostics à ligne trop faible, "none": absents de 1xBet}.
+    Avec C.ENSEMBLE_ENABLED : `picks` (paris réels du jour, The Odds API) donne leur proba sharp aux pronostics des mêmes paris (ensemble.attach),
+    et le résultat compte en plus "veto" (pronostics écartés par le désaccord modèle-marché ; déjà inclus dans "low")."""
     out = {"matches": 0, "value": 0, "low": 0, "weak": 0, "none": 0}
     if not C.XBET_ENABLED or not pronos:
         return out
+    if C.ENSEMBLE_ENABLED:
+        from . import ensemble
+        out["veto"] = 0
+        if picks:                                   # sans paris réels (relevé de l'après-midi) : les probas sharp du matin déjà posées restent
+            ensemble.attach(pronos, picks, history=store.load("odds_history.json", {}))
     try:
         found = (fetch or xbet.fetch_day)(_events(pronos), deadline=time.monotonic() + C.XBET_SECONDS, wanted=_wanted(pronos))
     except Exception as e:                          # noqa: BLE001 - une source en panne ne casse pas le matin
@@ -117,7 +233,7 @@ def apply(pronos, fetch=None):
     for c in pronos:
         m = found.get(c["id"])
         if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
-            for k in ("xodds", "xev", "xp", "xnone", "xref"):
+            for k in ("xodds", "xev", "xp", "xnone", "xref") + (("p_x", "xveto", "xwhy") if C.ENSEMBLE_ENABLED else ()):
                 c.pop(k, None)
             c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
             if m.get("cid"):
@@ -125,11 +241,14 @@ def apply(pronos, fetch=None):
         r = price(c, m["px"], m.get("refs")) if m else None
         if r:
             out[r] += 1
+            if C.ENSEMBLE_ENABLED and c.get("xveto"):
+                out["veto"] += 1
         elif m:                                     # match trouvé, mais 1xBet ne propose pas ce pari : injouable
             c["xnone"] = 1
             out["none"] += 1
     print(f"[1xbet] {out['matches']} match(s) trouvé(s) chez 1xBet : {out['value']} pronostic(s) jouable(s) à la cote 1xBet, "
-          f"{out['low']} trop mal payé(s), {out['weak']} trop faible(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
+          f"{out['low']} trop mal payé(s)" + (f" (dont {out['veto']} écarté(s) par l'ensemble)" if C.ENSEMBLE_ENABLED else "")
+          + f", {out['weak']} trop faible(s), {out['none']} absent(s) de 1xBet.", file=sys.stderr)
     return out
 
 
@@ -161,6 +280,14 @@ def _pick_price(c, px, refs, model=None):
         c["xref"] = ref
     else:
         c.pop("xref", None)
+    if C.ENSEMBLE_ENABLED:                           # avis de ce pari réel pour l'ensemble et le journal d'apprentissage (ensemble.record)
+        from . import ensemble
+        for k, val in (("p_x", ensemble.x_fair(px, c["market"], c["name"], c["point"], c.get("home"), c.get("away"))),
+                       ("p_sharp", (ensemble.sharp_of(c) or (None,))[0])):
+            if val is None:
+                c.pop(k, None)
+            else:
+                c[k] = round(val, 4)
     return True
 
 

@@ -444,3 +444,40 @@ FIXTURES_RETRY_HOURS = _float("FIXTURES_RETRY_HOURS", 6)
 FIXTURES_STALE_DAYS = _int("FIXTURES_STALE_DAYS", 3)
 STATS_NO_DATA_DAYS = _int("STATS_NO_DATA_DAYS", 3)       # match terminé sans statistiques : on ne le redemande pas avant
 STATS_NEG_MINUTES = _float("STATS_NEG_MINUTES", 20)
+
+
+# ======================= LOT K : ensemble adaptatif (kelly/ensemble.py) et écarts « sharp » (kelly/sharpgap.py) =======================
+# Les probas de Kelly (modèle de force + profils) perdent face au marché sur les buts et le 1N2 (audit : log-loss modèle > marché ; mêler
+# le modèle n'améliore jamais, poids optimal 0 ; les paris où le modèle s'écarte le plus du marché perdent 9 à 16 %). La proba retenue est donc une
+# COMBINAISON, en log-cotes, des avis disponibles : marché « sharp » (The Odds API, Pinnacle), marché 1xBet (sa cote sans marge), modèle de Kelly.
+# Désactivé par défaut : rien ne change en production tant que ENSEMBLE_ENABLED n'est pas posé (intégration en phase 2).
+ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", False)
+ENSEMBLE_MARGIN = _float("ENSEMBLE_MARGIN", 0.03)             # valeur : cote 1xBet x proba retenue >= 1 + marge
+ENSEMBLE_REQUIRE_MARKET = _bool("ENSEMBLE_REQUIRE_MARKET", True)  # vrai : pas de valeur sans AU MOINS un avis de marché (sharp ou 1xBet sans marge), dans toutes les familles
+ENSEMBLE_MAX_DISAGREE = _float("ENSEMBLE_MAX_DISAGREE", 0.12)  # veto : |proba du modèle - proba du marché| au-delà (familles où le marché pèse beaucoup)
+ENSEMBLE_VETO_WEIGHT = _float("ENSEMBLE_VETO_WEIGHT", 0.7)    # le veto vaut quand le poids du marché est >= à ce seuil
+# Poids a priori du MODÈLE face au marché, par famille (calib.family) : buts / 1N2 / les 2 marquent / double chance : le marché pèse 85 à 90 % ;
+# corners, cartons, tirs, fautes, touches, hors-jeu : aucune mesure fiable, moitié-moitié avec la cote 1xBet. « ENSEMBLE_PRIOR_MODEL=goals=0.1,... »
+ENSEMBLE_PRIOR_MODEL = {k: min(1.0, v) for k, v in _shares("ENSEMBLE_PRIOR_MODEL", {"goals": 0.12, "btts": 0.12, "dc": 0.12, "h2h": 0.12}).items()}
+ENSEMBLE_PRIOR_OTHER = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_OTHER", 0.5)))   # famille sans a priori propre
+ENSEMBLE_PRIOR_SHARP = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_SHARP", 0.75)))  # part du « sharp » dans l'avis du marché quand sharp ET 1xBet existent
+ENSEMBLE_SHARP_MAX_AGE_MIN = _int("ENSEMBLE_SHARP_MAX_AGE_MIN", 180)   # une proba sharp plus vieille (min) n'entre plus dans l'ensemble ; âge inconnu : acceptée
+ENSEMBLE_X_MARGIN = _float("ENSEMBLE_X_MARGIN", 0.05)         # marge supposée de 1xBet quand sa cote sans marge n'est pas calculable (double chance sans les 3 cotes)
+# Apprentissage (par famille) : posterior bayésien sur une grille de poids, a priori Beta centré sur le poids a priori et d'écart-type
+# ENSEMBLE_PRIOR_SD (petit = rappel fort : buts / 1N2 / 2 marquent / double chance, où l'audit a mesuré ; grand : familles non mesurées). Rien ne
+# bouge avant ENSEMBLE_MIN_N pronostics réglés (avec les deux avis) ; le passage est progressif sur ENSEMBLE_MIN_N de plus.
+ENSEMBLE_PRIOR_SD = {k: max(0.01, v) for k, v in _shares("ENSEMBLE_PRIOR_SD", {"goals": 0.07, "btts": 0.07, "dc": 0.07, "h2h": 0.07}).items()}
+ENSEMBLE_PRIOR_SD_OTHER = max(0.01, _float("ENSEMBLE_PRIOR_SD_OTHER", 0.20))   # écart-type a priori du poids du modèle ailleurs
+ENSEMBLE_PRIOR_SD_SHARP = max(0.01, _float("ENSEMBLE_PRIOR_SD_SHARP", 0.15))   # écart-type a priori de la part du sharp (ws)
+ENSEMBLE_MIN_N = _float("ENSEMBLE_MIN_N", 100)
+ENSEMBLE_HALF_LIFE = _float("ENSEMBLE_HALF_LIFE", 2000)       # oubli exponentiel : un résultat compte moitié moins après autant de résultats
+ENSEMBLE_TEMP = _float("ENSEMBLE_TEMP", 0.5)                  # vraisemblance atténuée : lignes d'un même match corrélées, choix non aléatoire
+ENSEMBLE_LOG_DAYS = _int("ENSEMBLE_LOG_DAYS", 10)             # jours gardés dans data/ensemble_log.json (avis en attente de règlement)
+# Écarts « sharp » (kelly/sharpgap.py) : cote 1xBet payée au-dessus de la cote juste des books de référence.
+SHARPGAP_EDGE = _float("SHARPGAP_EDGE", 0.03)                 # écart minimal : cote 1xBet x proba sharp - 1
+SHARPGAP_MAX_EDGE = _float("SHARPGAP_MAX_EDGE", 0.25)         # au-delà : donnée suspecte (cote en retard, mauvais pari), écartée
+SHARPGAP_MAX_AGE_MIN = _int("SHARPGAP_MAX_AGE_MIN", 120)      # âge maximal du relevé sharp (min) ; âge inconnu = refusé
+SHARPGAP_MAX_X_AGE_MIN = _int("SHARPGAP_MAX_X_AGE_MIN", 240)  # âge maximal du relevé 1xBet (min) ; inconnu = accepté (re-vérifié en direct avant envoi)
+SHARPGAP_SOON_MIN = _int("SHARPGAP_SOON_MIN", 20)             # match qui commence dans moins de N min : trop tard pour jouer
+SHARPGAP_MIN_SHARP = _int("SHARPGAP_MIN_SHARP", 2)            # books de référence au moins, sauf si Pinnacle en fait partie
+# ===================================================================================================================================
