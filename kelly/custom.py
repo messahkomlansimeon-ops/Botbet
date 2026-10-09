@@ -94,7 +94,7 @@ def track(cid, day, message_id=None):
             _buttons(message_id, what, day)
         name = played.custom_name(row)
         if row.get("skipped"):
-            return f"{name} est dans « 🧾 Mes paris » mais tu l'as retiré (« ❌ Pas joué ») : « ↩️ Finalement joué » le remet."
+            return f"{name} est dans « 🧾 Mes paris » mais il est retiré de ton bilan : touche « finalement joué » dans « 🧾 Mes paris » pour le remettre."
         if row.get("played"):
             return f"✅ {name} est déjà dans « 🧾 Mes paris » (joué à {fmt.odds_txt(row['played']['odds'])})."
         return f"✅ {name} est déjà dans « 🧾 Mes paris » : pas encore noté.\n" + chat.on_callback(f"joue|{what}|{day}", message_id)       # la question est reposée

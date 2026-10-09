@@ -207,10 +207,10 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     """Règle les paris suivis passés (envoyés d'abord). Le foot se règle gratuitement : API-Football d'abord,
     puis les CSV football-data en cache (buts, corners, cartons, quand API-Football est absent ou son quota
     épuisé) ; /scores de The Odds API (2 crédits par ligue, budgétés) ne sert que de dernier repli pour les
-    marchés de buts, sans STATS_API_KEY, ou pour un sport hors foot. Un pari sans score est annulé (« void ») après
-    WAIT_DAYS jours (buts), WAIT_DAYS_STATS pour corners et cartons (football-data se met à jour ~2 fois par
-    semaine) ; un pari dont le match a un score mais dont les stats restent introuvables devient « unknown » (non
-    vérifiable : jamais compté gagné ni perdu, et un combiné qui le contient devient « unknown » sans toucher la bankroll). `scores_by_sport` / `stats_for` : injectables (tests)."""
+    marchés de buts, sans STATS_API_KEY, ou pour un sport hors foot. Un pari sans score après WAIT_DAYS jours (buts),
+    WAIT_DAYS_STATS pour corners et cartons (football-data se met à jour ~2 fois par semaine), ou dont le match a un score mais dont les stats
+    restent introuvables, devient « unknown » (non vérifiable : jamais compté gagné ni perdu, jamais « annulé », et un combiné qui le contient
+    devient « unknown » sans toucher la bankroll). `scores_by_sport` / `stats_for` : injectables (tests)."""
     now = now or datetime.now(timezone.utc)
     rows = track.load()
     bets = store.load("bets.json", {"picks": [], "combos": []})
@@ -238,7 +238,8 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
             ev = next((e for e in scores_by_sport[b["sport_key"]] if e["id"] == b["id"] and e.get("completed")), None)
         if not ev:
             if old:
-                b["result"] = "void"               # annulé / reporté / jamais de score
+                b["result"] = UNKNOWN              # jamais de score après WAIT_DAYS : non vérifiable (comme settle_fair_combos), JAMAIS « void » qui
+                settled.append(b)                  # rendrait un combiné « gagné » à une cote recalculée sans cette jambe
             continue
         fst = match_stats(b, fdata, stats_for)
         b["result"] = settle_pick(b, ev, fst)
@@ -259,10 +260,12 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
             combo["result"] = UNKNOWN              # une jambe jouée mais invérifiable : on ne sait pas si le combiné a passé
         elif all(r in ("win", "push", "void") for r in results):
             combo["result"] = "win"
-            combo["odds_final"] = 1.0              # jambes annulées : cote recalculée
+            combo["odds_final"] = 1.0              # jambes annulées / remboursées : cote recalculée, sur la MÊME base de prix que la cote du combiné
+            xl = {l.get("key"): l.get("xodds") for l in combo.get("xlegs") or []}           # combiné aux cotes 1xBet : celles de l'envoi
             for k in combo["keys"]:
                 if by_key[k]["result"] == "win":
-                    combo["odds_final"] *= by_key[k].get("xodds") or by_key[k]["odds"]      # cote 1xBet de la jambe quand elle en a une
+                    # sinon la cote de référence de la jambe (row["odds"]) : la ligne de suivi peut avoir pris une cote 1xBet depuis (_upgrade_single)
+                    combo["odds_final"] *= (xl.get(k) if xl else None) or by_key[k]["odds"]
             if combo["odds_final"] == 1.0:
                 combo["result"] = "void"
     track.save(rows)
@@ -395,7 +398,8 @@ def fair_combo_line(rows, days=None, today=None):
     if not done:
         return ""
     w = sum(1 for r in done if r["result"] == "win")
-    return f"Combinés à vérifier chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} (sans mise, hors bankroll)."
+    return (f"Combinés à vérifier chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} "
+            "(le résultat en argent ne compte que ceux que tu as notés).")
 
 
 def _custom_done(rows, days=None):

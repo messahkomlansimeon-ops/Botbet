@@ -341,14 +341,14 @@ def test_buttons():
     money.set_daily(5000)
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 1000, FCFA)]})
     todo = played.todo(DAY)
-    assert texts(todo)[0] == "✅ Sûr · Je l'ai joué — 1 000 FCFA" and buttons(todo) == [f"joue|sur|{DAY}"], texts(todo)
+    assert texts(todo)[0] == "✅ Sûr · Je l'ai joué — 1 000 FCFA" and buttons(todo) == [f"joue|sur|{DAY}|l0"], texts(todo)       # les boutons de la liste portent son numéro de page
     assert "mise conseillée 1 000 FCFA" in todo and "Seuls les paris que tu notes comptent" in todo, todo
     with Fakes() as f:
         chat.on_callback(f"joue|sur|{DAY}", 31)
         assert "ta mise sera de 1 000 FCFA" in chat.on_callback(f"joue|sur|{DAY}", 31)      # la question annonce la mise conseillée
         chat.route("5,40")
     todo = played.todo(DAY)
-    assert "✅ Sûr : joué à 5,40, mise 1 000 FCFA" in todo and buttons(todo) == [f"joue|sur|{DAY}", f"annule|sur|{DAY}"], todo
+    assert "✅ Sûr : joué à 5,40, mise 1 000 FCFA" in todo and buttons(todo) == [f"joue|sur|{DAY}|l0", f"annule|sur|{DAY}|l0"], todo
     assert texts(todo) == ["✏️ Autre cote : Sûr", "↩️ Annuler : Sûr"], texts(todo)
     assert f.edits[-1][0] == 31 and f.last_texts() == ["✅ Joué à 5,40 · 1 000 FCFA", "✏️ Autre cote", "↩️ Annuler"]
     # ↩️ Annuler = /joue <quoi> 0 : la note tombe, « ✅ Je l'ai joué — 1 000 FCFA » revient (la mise conseillée reste)
@@ -871,7 +871,7 @@ def test_unnoted_morning_bets_stay_tracked():
     assert "✅ SÛR gagné" in res and "✅ Pari du jour" in res and "Hier : 1 combiné gagné sur 1" in res and "FCFA" not in res, res
     rep = str(msgs2[0])
     assert "✅ Combiné aux cotes 1xBet (cote 5,77) gagné</b>" in rep, rep
-    assert "FCFA" not in rep and "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (sans mise, hors bankroll)." in rep, rep
+    assert "FCFA" not in rep and "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (le résultat en argent ne compte que ceux que tu as notés)." in rep, rep
     # bilan : les statistiques gagné / perdu comptent ces paris ; le résultat en argent (FCFA) NON
     simple = str(settle.bilan(bets))
     assert "🎯 <b>Combinés</b> : 1 gagné sur 1" in simple and "SÛR : 1 sur 1" in simple, simple

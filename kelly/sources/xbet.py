@@ -153,9 +153,41 @@ def _words(name):
     return {w for w in names.norm(name).split() if len(w) >= 4 and w not in stats.GENERIC}
 
 
+_MARK_WOMEN = {"w", "women", "womens", "woman", "ladies", "feminin", "feminine", "femenino", "femminile", "frauen", "dames", "fem"}
+_MARK_RESERVE = {"b", "ii", "iii", "res", "reserve", "reserves", "castilla", "jong"}
+_LAST_ONLY = {"w", "b", "ii", "iii"}              # lettres et chiffres romains : un marqueur seulement en fin de nom (« Getafe B », « Arsenal W »)
+
+
+def marks(name):
+    """Marqueurs d'un nom d'équipe : femmes (« Women », « W », « Féminin »), réserve (« B », « II », « Castilla », « Jong », « Next Gen »), jeunes
+    (« U19 », « U-21 », « Youth ») -> frozenset. Deux noms qui ne portent pas les mêmes marqueurs ne désignent jamais la même équipe (« Real Madrid » et
+    « Real Madrid Castilla » ne sont pas le même club)."""
+    toks = names.norm(name).split()
+    out = set()
+    for i, t in enumerate(toks):
+        if t in _LAST_ONLY and i != len(toks) - 1:
+            continue
+        if t in _MARK_WOMEN:
+            out.add("w")
+        elif t in _MARK_RESERVE:
+            out.add("b")
+        elif t == "youth":
+            out.add("y")
+        elif re.fullmatch(r"u\d{2}", t):
+            out.add(t)
+        elif t == "u" and i + 1 < len(toks) and re.fullmatch(r"\d{2}", toks[i + 1]):
+            out.add("u" + toks[i + 1])
+        elif t == "next" and i + 1 < len(toks) and toks[i + 1] == "gen":
+            out.add("b")
+    return frozenset(out)
+
+
 def loose(a, b):
     """Deux noms qui partagent un mot distinctif : l'un dans l'autre (« aldosivi » / « caaldosivi ») ou mêmes 5 premières lettres
-    (« seinajoki » / « seinajoen ») ; les mots génériques (club, atletico, united...) ne comptent pas."""
+    (« seinajoki » / « seinajoen ») ; les mots génériques (club, atletico, united...) ne comptent pas. Jamais deux équipes de marqueurs différents
+    (marks : « Brazil » / « Brazil U20 », « Real Madrid » / « Real Madrid Castilla »)."""
+    if marks(a) != marks(b):
+        return False
     return any(x in y or y in x or (len(x) >= 5 and len(y) >= 5 and x[:5] == y[:5]) for x in _words(a) for y in _words(b))
 
 
@@ -163,18 +195,25 @@ def find(ev, cands):
     """Match 1xBet d'un événement Kelly (home_team, away_team, commence_time), parmi les matchs du MÊME championnat :
     coup d'envoi à 3 h près et les deux équipes reconnues ; ou même coup d'envoi (10 min) avec une équipe sûre, ou les deux noms qui
     se recoupent (« CAAldosivi » / « Aldosivi Mar del Plata »), à condition qu'un seul match du championnat convienne à cette heure
-    (une équipe ne joue jamais deux matchs en même temps)."""
+    (une équipe ne joue jamais deux matchs en même temps). Garde-fous : les marqueurs femmes / réserve / jeunes (marks) doivent être les mêmes de
+    chaque côté ; un match rangé à l'envers chez 1xBet (l'extérieur de Kelly en premier) n'est jamais accepté — les cotes « domicile / extérieur »
+    seraient inversées — et, quand les deux sens se ressemblent, le bon sens l'emporte."""
     t = _ts(ev["commence_time"])
     best, score, near = None, 0.0, []
     for g in cands:
         dt = abs(g["ts"] - t)
         if dt > 3 * 3600:
             continue
+        if marks(ev["home_team"]) != marks(g["home"]) or marks(ev["away_team"]) != marks(g["away"]):
+            continue
         sh, sa = stats.team_sim(ev["home_team"], g["home"]), stats.team_sim(ev["away_team"], g["away"])
+        rh, ra = stats.team_sim(ev["home_team"], g["away"]), stats.team_sim(ev["away_team"], g["home"])      # le même match, à l'envers
+        if min(rh, ra) >= 0.8 and (min(sh, sa) < 0.8 or rh + ra > sh + sa):       # le même match, mais à l'envers (ou l'envers lui ressemble davantage)
+            continue
         if min(sh, sa) >= 0.8 and sh + sa > score:
             best, score = g, sh + sa
-        elif dt <= 600 and (max(sh, sa) >= 0.85 or ((sh >= 0.6 or loose(ev["home_team"], g["home"]))
-                                                    and (sa >= 0.6 or loose(ev["away_team"], g["away"])))):
+        elif dt <= 600 and rh + ra <= sh + sa and (max(sh, sa) >= 0.85 or ((sh >= 0.6 or loose(ev["home_team"], g["home"]))
+                                                                            and (sa >= 0.6 or loose(ev["away_team"], g["away"])))):
             near.append(g)
     if best:
         return best
@@ -184,9 +223,9 @@ def find(ev, cands):
 def _cells(groups):
     """Cellules jouables d'un gameEvents. Une cellule « blocked » (sous-match listé avant d'être ouvert, marché suspendu) a une cote
     affichée mais n'est pas jouable dans l'appli : jamais un prix pour Kelly (pas de pari, pas de jambe de combiné, pas de coupon)."""
-    for eg in groups or []:
-        for ev in eg.get("events") or []:
-            for c in ev or []:
+    for eg in groups if isinstance(groups, list) else []:
+        for ev in (eg.get("events") if isinstance(eg, dict) else None) or []:
+            for c in ev if isinstance(ev, list) else []:
                 if isinstance(c, dict) and c.get("cf") and not c.get("blocked"):
                     yield c
 
@@ -227,7 +266,7 @@ def parse_main(data, home, away, refs=None, gid=0):
     _ladder(groups, "totals", None, None, out, refs, gid)
     subs = {}
     for s in data.get("subGamesForMainGame") or []:
-        if s.get("gameTypeId") in SUBGAMES and not s.get("period") and s.get("id"):
+        if isinstance(s, dict) and s.get("gameTypeId") in SUBGAMES and not s.get("period") and s.get("id"):
             subs.setdefault(s["gameTypeId"], s["id"])
     return out, subs
 
@@ -286,7 +325,11 @@ def cached_cell(ref):
 def _events(gid):
     # marketType=2 (« Populaires ») : 1X2, double chance, toute l'échelle des buts, les 2 marquent, sous-matchs typés, et pour un
     # sous-match statistique tout son plus/moins (match et équipes) ; 7 Ko compressés au lieu de 48 Ko pour « tous les marchés »
-    return _get_json(_events_url(gid), _ODDS_TTL[0])
+    data = _get_json(_events_url(gid), _ODDS_TTL[0])
+    if not isinstance(data, dict):                  # [] / null : 1xBet n'a rien (plus) pour ce match ; pas gardé en cache
+        http.invalidate(_events_url(gid), JSON_H)
+        raise XbetError("réponse inattendue (pas un objet JSON)")
+    return data
 
 
 def prices(game, markets, home, away):
@@ -299,7 +342,10 @@ def prices(game, markets, home, away):
     out, subs = parse_main(data, home, away, refs := {}, game["gid"])
     for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}):
         if t in subs:
-            _ladder((_events(subs[t]) or {}).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t])
+            try:
+                _ladder(_events(subs[t]).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t])
+            except XbetError as e:                  # un sous-match (corners, tirs...) en erreur ne fait pas perdre le marché principal déjà lu
+                game.setdefault("errors", []).append(f"{home} - {away} (sous-match {SUBGAMES[t][0]}) : {e}")
     game["refs"] = refs
     return out
 
@@ -367,8 +413,12 @@ def proxy():
     return None
 
 
-PROXY_FAIL = ("ProxyError", "ConnectTimeout", "ReadTimeout", "SSLError", "ConnectionError")
+HARD_FAIL = ("ProxyError", "ConnectTimeout")                    # le proxy lui-même ne répond pas : une autre session Webshare peut aider
+SOFT_FAIL = ("ReadTimeout", "SSLError", "ConnectionError")     # peut aussi venir de 1xBet (coupure de son côté) : au plus UNE autre session par relevé
+PROXY_FAIL = HARD_FAIL + SOFT_FAIL
 MAX_SWITCH = 5                  # sessions Webshare essayées au plus par relevé quand le proxy lui-même est en panne
+MAX_SESSION_SPAN = 50           # numéros de session Webshare utilisés au plus à partir de celui de XBET_PROXY (au-delà : on repart du numéro de base)
+BREAKER = 3                     # matchs de suite en échec (proxy / réseau / réponse inutilisable) avant d'interrompre le relevé
 
 
 def with_session(url, n):
@@ -412,19 +462,24 @@ def usage_line(u=None):
 class _Session:
     """Un relevé 1xBet : proxy (proxy() ; introuvable = rien, sauf C.XBET_DIRECT ; dernière session Webshare qui marchait), compteur
     de données du mois et plafond C.XBET_MONTH_MB. `call(fn, *a)` : proxy en panne (502 du fournisseur, délai) -> session Webshare
-    suivante, MAX_SWITCH fois au plus ; jamais pour un refus de 1xBet (403/429 : source coupée 24 h par http.fetch)."""
+    suivante, MAX_SWITCH fois au plus (une seule fois pour une coupure qui peut venir de 1xBet lui-même : SOFT_FAIL) ; jamais pour un refus de
+    1xBet (403/429 : source coupée 24 h par http.fetch). Le numéro de session ne sort jamais de [base, base + MAX_SESSION_SPAN[ et n'est retenu
+    (data/xbet_usage.json) que si la nouvelle session a VRAIMENT répondu."""
 
     def __init__(self):
-        self.u, self.cap, self.switches, self.why = usage(), C.XBET_MONTH_MB * 1e6, 0, None
+        self.u, self.cap, self.switches, self.soft, self.why = usage(), C.XBET_MONTH_MB * 1e6, 0, 0, None
         self.url = proxy()
+        self.base, self.trying = session_no(self.url), None
         if state.is_blocked(SOURCE):
             self.why = state.health(SOURCE)["last_error"] or "source bloquée"
         elif not self.url and not C.XBET_DIRECT:
             self.why = f"proxy introuvable (XBET_PROXY ou {C.XBET_PROXY_FILE}) : aucun relevé, jamais en direct"
         elif self.u["bytes"] >= self.cap:
             self.why = f"plafond mensuel atteint ({usage_line(self.u)}) : relevé sauté"
-        if self.url and self.u.get("session") and with_session(self.url, self.u["session"]):
-            self.url = with_session(self.url, self.u["session"])
+        saved = self.u.get("session")
+        if (self.url and self.base is not None and isinstance(saved, int) and self.base <= saved < self.base + MAX_SESSION_SPAN
+                and with_session(self.url, saved)):
+            self.url = with_session(self.url, saved)
         if self.url:
             http.PROXIES[DOMAIN] = self.url
         else:
@@ -435,18 +490,33 @@ class _Session:
         """Plafond du mois atteint (avec ce relevé) ou source bloquée en cours de route."""
         return self.u["bytes"] + _spent(self.start)[0] >= self.cap or state.is_blocked(SOURCE)
 
+    def _next(self):
+        """URL du proxy avec le numéro de session suivant (revient au numéro de base après MAX_SESSION_SPAN) ; None sans numéro."""
+        cur = http.PROXIES.get(DOMAIN)
+        n = (session_no(cur) or 0) + 1
+        if self.base is not None and n >= self.base + MAX_SESSION_SPAN:
+            n = self.base
+        return with_session(cur, n)
+
     def call(self, fn, *a, **kw):
         while True:
             try:
-                return fn(*a, **kw)
+                out = fn(*a, **kw)
+                if self.trying is not None:         # la session essayée a répondu : elle devient celle des prochains relevés
+                    self.u["session"], self.trying = self.trying, None
+                return out
             except XbetError as e:
-                nxt = with_session(http.PROXIES.get(DOMAIN), (session_no(http.PROXIES.get(DOMAIN)) or 0) + 1)
-                if not nxt or self.switches >= MAX_SWITCH or not any(k in str(e) for k in PROXY_FAIL):
+                msg = str(e)
+                hard = any(k in msg for k in HARD_FAIL)
+                nxt = self._next()
+                if (not nxt or self.switches >= MAX_SWITCH or not (hard or any(k in msg for k in SOFT_FAIL))
+                        or (not hard and self.soft >= 1)):
                     raise
                 self.switches += 1
+                self.soft += 0 if hard else 1
                 http.PROXIES[DOMAIN] = nxt
-                self.u["session"] = session_no(nxt)
-                print(f"[1xbet] proxy en panne ({e}) : session Webshare n° {self.u['session']}", file=sys.stderr)
+                self.trying = session_no(nxt)
+                print(f"[1xbet] proxy en panne ({e}) : essai de la session Webshare n° {self.trying}", file=sys.stderr)
 
     def close(self, what):
         b, n = _save_usage(self.u, self.start)
@@ -496,35 +566,44 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
     if ses.why:
         state.record_run(SOURCE, 0, [ses.why])
         return out
-    for key, ev in events:
-        if len(out) >= max_matches or (deadline and time.monotonic() > deadline) or ses.full():
-            break
-        if ev.get("xgid"):
-            g = {"gid": ev["xgid"], "home": ev["home_team"], "away": ev["away_team"]}
-        else:
-            if key not in LEAGUES or (cat is None and menu_down):
-                continue
-            if key not in leagues:
-                try:
-                    cat = cat if cat is not None else ses.call(menu)
-                    leagues[key] = ses.call(games, key, cat)
-                except XbetError as e:
-                    errors.append(f"{key} : {e}")
-                    leagues[key] = []
-                    menu_down = cat is None         # menu illisible : inutile d'insister, mais les matchs à id 1xBet connu restent lus
-                    if menu_down:
-                        continue
-            g = find(ev, leagues[key])
-            if not g:
-                continue
-        try:
-            px = ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])
-            out[ev["id"]] = {"gid": g["gid"], "px": px, "refs": g.get("refs"), "cid": g.get("cid"),
-                             "home": g["home"], "away": g["away"]}
-        except XbetError as e:
-            errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")
-    ses.close(f"cotes de {len(out)} match(s)")
-    state.record_run(SOURCE, len(out), errors)
+    fails = 0
+    try:                                            # la session est TOUJOURS fermée : les données du proxy sont comptées même si un match fait lever
+        for key, ev in events:
+            if len(out) >= max_matches or (deadline and time.monotonic() > deadline) or ses.full():
+                break
+            if ev.get("xgid"):
+                g = {"gid": ev["xgid"], "home": ev["home_team"], "away": ev["away_team"]}
+            else:
+                if key not in LEAGUES or (cat is None and menu_down):
+                    continue
+                if key not in leagues:
+                    try:
+                        cat = cat if cat is not None else ses.call(menu)
+                        leagues[key] = ses.call(games, key, cat)
+                    except XbetError as e:
+                        errors.append(f"{key} : {e}")
+                        leagues[key] = []
+                        menu_down = cat is None         # menu illisible : inutile d'insister, mais les matchs à id 1xBet connu restent lus
+                        if menu_down:
+                            continue
+                g = find(ev, leagues[key])
+                if not g:
+                    continue
+            try:
+                px = ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])
+                out[ev["id"]] = {"gid": g["gid"], "px": px, "refs": g.get("refs"), "cid": g.get("cid"),
+                                 "home": g["home"], "away": g["away"]}
+                errors += g.get("errors") or []
+                fails = 0
+            except Exception as e:                  # noqa: BLE001 - un match en échec (réseau, réponse inutilisable) ne fait perdre ni les autres ni le compte des données
+                errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")
+                fails += 1
+                if fails >= BREAKER:                # proxy ou réseau en panne : inutile d'attendre le délai de chaque match restant
+                    errors.append(f"relevé interrompu : {BREAKER} matchs de suite en échec (proxy ou réseau)")
+                    break
+    finally:
+        ses.close(f"cotes de {len(out)} match(s)")
+        state.record_run(SOURCE, len(out), errors)
     return out
 
 
@@ -535,27 +614,31 @@ def save_coupon(legs):
     if not legs:
         return None
     events = []
-    for c in legs:
-        if isinstance(c, dict) and "GameId" in c:
-            events.append(c)
-        elif isinstance(c, dict) and c.get("xref") and c.get("xodds"):
-            gid, t, p = c["xref"]
-            events.append({
-                "GameId": gid,
-                "Type": int(t),
-                "Coef": float(c["xodds"]),
-                "Param": 0.0 if p is None else float(p),
-                "PV": None,
-                "PlayerId": 0,
-                "Kind": 3,
-                "InstrumentId": 0,
-                "Seconds": 0,
-                "Price": 0,
-                "Expired": 0,
-                "PlayersDuel": None,
-            })
-        else:
-            return None
+    try:                                            # une référence mal formée (xref / xodds illisibles) ne lève jamais : pas de code
+        for c in legs:
+            if isinstance(c, dict) and "GameId" in c:
+                events.append(c)
+            elif isinstance(c, dict) and c.get("xref") and c.get("xodds"):
+                gid, t, p = c["xref"]
+                events.append({
+                    "GameId": gid,
+                    "Type": int(t),
+                    "Coef": float(c["xodds"]),
+                    "Param": 0.0 if p is None else float(p),
+                    "PV": None,
+                    "PlayerId": 0,
+                    "Kind": 3,
+                    "InstrumentId": 0,
+                    "Seconds": 0,
+                    "Price": 0,
+                    "Expired": 0,
+                    "PlayersDuel": None,
+                })
+            else:
+                return None
+    except Exception as e:                          # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
+        _coupon_fail(f"pari illisible ({type(e).__name__}: {e})", legs)
+        return None
     if not events:
         return None
     body = {
@@ -665,8 +748,11 @@ _notice.sent = False
 
 def _coupon_fail(why, legs):
     """Journal d'un code coupon refusé par 1xBet : la raison donnée (sans identifiants du proxy) et les paris envoyés (match, type,
-    ligne, cote), pour comprendre « pas de code » sans recréer de ticket."""
+    ligne, cote), pour comprendre « pas de code » sans recréer de ticket. Ne lève jamais (références mal formées comprises)."""
     why = re.sub(r"://[^@\s]*@", "://***@", str(why))[:400]
-    refs = ", ".join(f"{(c.get('xref') or ['?'])[0]}/{(c.get('xref') or [0, '?'])[1]}/{(c.get('xref') or [0, 0, '?'])[2]}@{c.get('xodds')}"
-                     for c in legs if isinstance(c, dict))
+    try:
+        refs = ", ".join(f"{(c.get('xref') or ['?'])[0]}/{(c.get('xref') or [0, '?'])[1]}/{(c.get('xref') or [0, 0, '?'])[2]}@{c.get('xodds')}"
+                         for c in legs if isinstance(c, dict))
+    except Exception:                               # noqa: BLE001 - xref qui n'est pas une liste de trois éléments
+        refs = "références illisibles"
     print(f"[1xbet] coupon refusé : {why} — paris : {refs[:600]}", file=sys.stderr)

@@ -21,7 +21,8 @@ from . import fmt, store
 FILE = "mybudget.json"
 CUR = "FCFA"
 MAX_AMOUNT = 1e9                      # au-delà : montant absurde (refusé)
-CUR_RE = re.compile(r"(?i)(?!(?:inf|infinity|nan)$)[^\W\d_]{1,8}|[€$£¥]")                     # une devise : « FCFA », « € »
+CUR_RE = re.compile(r"(?i)(?!(?:inf|infinity|nan)$)[^\W\d_]{1,8}|[€$£¥]")                     # un mot d'unité après un montant : « FCFA », « k », « € »
+FCFA_WORDS = {"fcfa", "cfa", "xof", "f", "fr", "frs", "franc", "francs"}                   # les écritures du FCFA ; « k » = fois mille ; tout autre mot est refusé
 SHARE = {"pari": 0.25, "🛡️": 0.30, "⚖️": 0.18, "🎯": 0.15, "🔥": 0.08, "💀": 0.04}   # part max du budget par palier
 FAIR_SHARE = ((8, 0.12), (20, 0.08), (math.inf, 0.05))                            # combinés à vérifier, selon la cote mini
 CONF_FULL, CONF_MIN = 0.10, 0.3       # espérance de +10 % ou plus : part entière ; jamais moins de 30 % de la part
@@ -56,11 +57,13 @@ def safe_cur(c):
 
 
 def cur():
-    return safe_cur(load().get("cur"))
+    """La devise de Kelly : toujours le FCFA (verrouillé : « budget 5k » = 5 000 FCFA, jamais une devise « K » ; voir FCFA_WORDS)."""
+    return CUR
 
 
 def set_daily(amount, currency=None):
-    store.save(FILE, {"daily": round(float(amount), 2), "cur": safe_cur(currency) if currency else cur()})
+    """Fixe le budget du jour en FCFA (`currency` est ignoré : tout est en FCFA)."""
+    store.save(FILE, {"daily": round(float(amount), 2), "cur": CUR})
 
 
 def round_step(budget):
@@ -218,14 +221,32 @@ def take_amount(tokens):
     return (v, n) if v is not None else (None, 0)
 
 
+def strip_unit(tokens):
+    """Retire l'unité écrite après un montant -> (mots sans l'unité, multiplicateur, mot étranger | None) : « k » vaut ×1000 (« 5k » = 5 000,
+    « 2k » = 2 000), les écritures du FCFA (FCFA_WORDS) sont ignorées, tout autre mot (« € », « euros »...) est rendu en 3e position : Kelly
+    ne compte qu'en FCFA. Un montant seul (un seul mot) n'a pas d'unité."""
+    if len(tokens) > 1 and CUR_RE.fullmatch(tokens[-1]):
+        word = tokens[-1].casefold()
+        if word == "k":
+            return tokens[:-1], 1000, None
+        if word in FCFA_WORDS:
+            return tokens[:-1], 1, None
+        return tokens[:-1], 1, tokens[-1]
+    return tokens, 1, None
+
+
 def parse_amount(args):
-    """« 5 000 », « 5.000 », « 5,5 », « 50 € » -> (montant, devise | None) ; (None, None) si illisible ou absurde. La devise est un
-    mot (ou un symbole) après le montant."""
+    """« 5 000 », « 5.000 », « 5,5 », « 5k », « 50 € » -> (montant, devise | None) ; (None, None) si illisible ou absurde. L'unité est un mot (ou
+    un symbole) après le montant : « k » multiplie par 1000 (pas une devise), « FCFA » est rendu en capitales, un autre mot est rendu tel quel
+    (la commande « budget » le refuse : tout est en FCFA)."""
     tokens = split_tokens(args)
     v, n = take_amount(tokens)
     rest = tokens[n:]
     if v is None or len(rest) > 1 or (rest and not CUR_RE.fullmatch(rest[0])):
         return None, None
+    if rest and rest[0].casefold() == "k":
+        v *= 1000
+        return (int(v) if float(v).is_integer() else v, None) if v <= MAX_AMOUNT else (None, None)
     return v, (rest[0].upper() if rest else None)
 
 
@@ -238,7 +259,7 @@ EXPLAIN = ("C'est le montant que tu es prêt à miser AUJOURD'HUI : Kelly s'en s
 
 
 def command(args):
-    """« budget » : le budget actuel et des boutons pour le changer ; « budget 7500 » (ou « budget 50 € ») : le fixe ;
+    """« budget » : le budget actuel et des boutons pour le changer ; « budget 7500 » (ou « budget 7,5k ») : le fixe, en FCFA ;
     « budget 0 » : le supprime (plus de mise conseillée)."""
     from . import telegram
     if not args:
@@ -249,6 +270,9 @@ def command(args):
     amount, currency = parse_amount(args)
     if amount is None:
         return "Montant invalide. Exemple : budget 5000"
+    if currency and currency.casefold() not in FCFA_WORDS:
+        return ("Kelly compte tout en FCFA : écris ton budget en FCFA, par exemple budget 5000 (ou budget 5k pour 5 000 FCFA). "
+                f"La devise « {currency} » n'est pas gérée.")
     if amount <= 0:
         store.save(FILE, {})
         return "Budget du jour supprimé : Kelly ne donne plus de mise conseillée (tes paris notés restent comptés dans tes résultats)."

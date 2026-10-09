@@ -701,7 +701,7 @@ def test_settle_football_data():
             row("c_9d", "alternate_totals_corners", "Over", 8.5, 9, "Chelsea", "Liverpool", "m2"),
             row("k_9d", "alternate_totals_cards", "Over", 3.5, 9, "Chelsea", "Liverpool", "m2")]
     expect = {"c_over": "win", "c_under": "loss", "k_over": "win", "k_under": "win", "goal": "win", "shots": None,
-              "c_5d": None, "k_5d": None, "c_9d": "void", "k_9d": "void"}
+              "c_5d": None, "k_5d": None, "c_9d": "unknown", "k_9d": "unknown"}          # aucun score après WAIT_DAYS : non vérifiable (jamais « annulé »)
     shots_5d = row("s_5d", "player_shots", "Over", 1.5, 5, "Chelsea", "Liverpool", "m2", who="Cole Palmer")
     with Sandbox() as sb:
         fake = sb.serve(FakeOdds(500, {}))
@@ -710,15 +710,15 @@ def test_settle_football_data():
         with contextlib.redirect_stderr(io.StringIO()):
             _, settled = settle.settle_pending(now)
         res = {r["key"]: r["result"] for r in track.load()}
-        assert res == expect | {"s_5d": "void"}, res
-        assert len(settled) == 5 and fake.paid() == []          # aucun crédit : /scores ne sert qu'aux marchés de buts
-        # un pari de buts introuvable : repli payant /scores (2 crédits, une fois), puis annulé après 3 jours seulement
+        assert res == expect | {"s_5d": "unknown"}, res
+        assert len(settled) == 8 and fake.paid() == []          # 5 réglés + 3 non vérifiables ; aucun crédit : /scores ne sert qu'aux marchés de buts
+        # un pari de buts introuvable : repli payant /scores (2 crédits, une fois), puis non vérifiable après 3 jours seulement
         goal5 = row("g_5d", "h2h", "Chelsea", None, 5, "Chelsea", "Liverpool", "m2")
         goal2 = row("g_2d", "h2h", "Chelsea", None, 2, "Chelsea", "Liverpool", "m2")
         track.save([goal5, goal2])
         with contextlib.redirect_stderr(io.StringIO()):
             settle.settle_pending(now)
-        assert {r["key"]: r["result"] for r in track.load()} == {"g_5d": "void", "g_2d": None}
+        assert {r["key"]: r["result"] for r in track.load()} == {"g_5d": "unknown", "g_2d": None}
         assert [c[0] for c in fake.paid()] == ["/sports/soccer_epl/scores"]
         # API-Football configuré mais quota du jour épuisé : même règlement, sans aucune requête api-sports
         os.environ["STATS_API_KEY"] = "k"
@@ -2252,7 +2252,7 @@ def test_run_daily_world():
         rows = store.load("fair_combos.json", [])
         assert all(r["result"] in ("win", "loss", None) for r in rows) and any(r["result"] for r in rows), rows
         assert msgs and msgs[0].startswith("<b>🎲 Combinés à vérifier chez 1xBet — résultats</b>")
-        assert "Combiné à cote mini" in msgs[0] and ("✅" in msgs[0] or "❌" in msgs[0]) and "sans mise, hors bankroll" in msgs[0], msgs[0]
+        assert "Combiné à cote mini" in msgs[0] and ("✅" in msgs[0] or "❌" in msgs[0]) and "le résultat en argent ne compte que ceux que tu as notés" in msgs[0], msgs[0]
         assert all(r.get("reported") for r in rows if r["result"] in ("win", "loss")) and app.fair_combos_report(datetime(2026, 10, 9, 9, tzinfo=UTC)) == []
         bil = app.handle_command("/bilan")
         assert "Combinés à vérifier chez 1xBet : " in bil and " sur " in bil, bil
@@ -2507,7 +2507,7 @@ def test_buttons_and_free_text():
         assert "mode d'emploi" in aide and [[b["text"] for b in row] for row in aide.markup["keyboard"]] == chat.MENU
         assert app.handle_command("bilan").markup["inline_keyboard"][0][0]["callback_data"] == "bilan|detail"
         todo = app.handle_command("🧾 À noter")
-        assert todo.markup["inline_keyboard"][0][0]["callback_data"] == f"joue|sur|{day}" and "Sûr" in todo
+        assert todo.markup["inline_keyboard"][0][0]["callback_data"] == f"joue|sur|{day}|l0" and "Sûr" in todo      # la liste porte son numéro de page (|l0)
         # --- bouton « ✅ Je l'ai joué » puis la cote, par le vrai circuit Telegram (poll)
         os.environ.update(TELEGRAM_TOKEN="t", TELEGRAM_CHAT_ID="42")
         fake = FakeTelegram([{"update_id": 1, "callback_query": {"id": "cb1", "data": f"joue|sur|{day}",

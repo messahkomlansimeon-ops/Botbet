@@ -56,9 +56,11 @@ def test_amount_parsing():
     assert "5 000 FCFA" in app.handle_command("budget 5.000") and money.daily() == 5000
     assert "5 000 FCFA" in app.handle_command("budget 5,000") and money.daily() == 5000
     assert "5,5" in app.handle_command("/budget 5,5") and money.daily() == 5.5
-    assert "50 €" in app.handle_command("budget 50 €") and money.daily() == 50 and money.cur() == "€"
+    # tout est en FCFA (lot I) : une autre devise est refusée (le budget ne change pas), « 5k » = 5 000 FCFA
+    assert "Kelly compte tout en FCFA" in app.handle_command("budget 50 €") and money.daily() == 5.5 and money.cur() == "FCFA"        # budget inchangé
     app.handle_command("budget 5 000 fcfa")
     assert money.daily() == 5000 and money.cur() == "FCFA"
+    assert "5 000 FCFA" in app.handle_command("budget 5k") and money.daily() == 5000 and money.cur() == "FCFA"
     for bad in ("budget inf", "budget nan", "budget -5", "budget 1e300", "budget 99999999999", "budget abc"):
         assert "invalide" in app.handle_command(bad), bad
         assert money.daily() == 5000, bad                       # un montant refusé ne touche pas au budget
@@ -205,7 +207,7 @@ def test_zero_stake_has_no_buttons():
     assert chat.on_callback(f"joue|costaud|{DAY}").startswith("À quelle cote et avec quelle mise en FCFA ?")
     assert not bankroll.load().get("real") and chat.get_pending()["what"] == "costaud"
     todo = app.handle_command("🧾 Mes paris")                                    # la liste offre le bouton du Costaud, sans mise dans le libellé
-    cost_btn = next(b["text"] for row in todo.markup["inline_keyboard"] for b in row if b["callback_data"] == f"joue|costaud|{DAY}")
+    cost_btn = next(b["text"] for row in todo.markup["inline_keyboard"] for b in row if b["callback_data"] == f"joue|costaud|{DAY}|l0")
     assert cost_btn.startswith("✅ Costaud · Je l'ai joué") and "FCFA" not in cost_btn, cost_btn
     # sans budget : les boutons ✅ restent
     store.save(money.FILE, {})
@@ -238,8 +240,10 @@ def test_free_text_routing():
     store.save("today.json", {"day": DAY, "picks": [leg(1, 1.9, 0.6, 0.08) | {"home": "Paris FC", "away": "Rennes", "event": "Paris FC - Rennes"},
                                                     leg(2, 1.9, 0.6, 0.08) | {"home": "Atlético Madrid", "away": "Getafe",
                                                                               "event": "Atlético Madrid - Getafe"}], "pronos": []})
-    for txt in ("Paris", "paris", "Paris du jour", "paris du jour", "mes paris", "Mes paris", "paris:"):
+    for txt in ("Paris", "paris", "Paris du jour", "paris du jour", "paris:"):
         assert chat.route(txt) == ("/top", None), txt
+    for txt in ("mes paris", "Mes paris"):                  # lot I : « mes paris » est la liste (bouton « 🧾 Mes paris »), pas /top
+        assert chat.route(txt) == ("/joue", None), txt
     assert chat.route("Paris FC") == ("/analyse Paris FC", None)
     cmd, reply = chat.route("Paris Saint-Germain")
     assert cmd != "/top Saint-Germain" and not (cmd or "").startswith("/top"), (cmd, reply)

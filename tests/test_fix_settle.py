@@ -64,12 +64,13 @@ def test_unknown_leg_pending():
             combo("T-novoid", ["v1"], 2.0)]})
         bets, settled = settle.settle_pending(NOW, scores_by_sport={"soccer_epl": [scores()]}, stats_for=lambda b: {})
         res = {r["key"]: r["result"] for r in track.load()}
-        assert res == {"a1": "win", "a2": "win", "a3": "unknown", "b1": "loss", "v1": "void"}, res   # score absent : annulé, pas invérifiable
+        assert res == {"a1": "win", "a2": "win", "a3": "unknown", "b1": "loss", "v1": "unknown"}, res   # score absent après WAIT_DAYS : non vérifiable (lot I), jamais « annulé »
         got = {c["tier"]: c for c in bets["combos"]}
         assert got["T-unknown"]["result"] == "unknown" and "odds_final" not in got["T-unknown"], got["T-unknown"]
         assert got["T-loss"]["result"] == "loss"                                       # une jambe perdue l'emporte
-        assert got["T-void"]["result"] == "win" and got["T-void"]["odds_final"] == 1.5  # jambe annulée = vraie annulation
-        assert got["T-novoid"]["result"] == "void"
+        # lot I : une jambe sans score trouvé n'est plus « annulée » (le combiné ne devient pas « gagné » à une cote recalculée sans elle) : il est non vérifiable
+        assert got["T-void"]["result"] == "unknown" and "odds_final" not in got["T-void"], got["T-void"]
+        assert got["T-novoid"]["result"] == "unknown"
     finally:
         restore(saved)
 

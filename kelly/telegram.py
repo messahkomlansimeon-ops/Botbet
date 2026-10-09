@@ -73,11 +73,15 @@ def plain(text):
 
 
 def _chunks(text, size=4000):
-    """Morceaux de `size` caractères au plus, coupés de préférence entre deux lignes (jamais au milieu d'une balise)."""
+    """Morceaux de `size` caractères au plus, coupés de préférence entre deux lignes (jamais au milieu d'une balise). Une coupe qui laisserait un
+    morceau minuscule (un simple en-tête avant une longue liste) n'est pas retenue : on coupe plutôt à la dernière fin de ligne."""
     out = []
     while len(text) > size:
         cut = text.rfind("\n\n", 0, size)
-        cut = cut if cut > 0 else (text.rfind("\n", 0, size) if text.rfind("\n", 0, size) > 0 else size)
+        if cut < size // 2:                                    # un bloc trop court avant la coupe : couper à la fin de ligne la plus proche
+            line = text.rfind("\n", 0, size)
+            cut = line if line > cut else cut
+        cut = cut if cut > 0 else size
         out.append(text[:cut])
         text = text[cut:].lstrip("\n")
     return out + [text]
@@ -171,8 +175,8 @@ def _enqueue(parts, is_html, markup, chat_id):
     print(f"[telegram] {len(parts)} message(s) mis en attente ({len(box)} dans la file) : renvoi dès que le réseau revient", file=sys.stderr)
 
 
-def send(text, chat_id=None, queue=True):
-    """Envoie `text` (découpé). `Html` : parse_mode HTML, avec repli en texte brut si Telegram rejette le HTML. Les boutons du
+def _send_one(text, chat_id=None, queue=True):
+    """Envoie `text` (découpé), sans ses pages suivantes (voir send). `Html` : parse_mode HTML, avec repli en texte brut si Telegram rejette le HTML. Les boutons du
     message (attribut `markup`, with_buttons) vont sur le dernier morceau. Sans identifiants : affiche. Ne lève jamais : renvoie
     l'id du dernier message envoyé (True sans identifiants), ou False et note l'erreur (stderr + LAST_ERROR) si Telegram refuse.
     Panne passagère (réseau, 429, 5xx) : le message est mis en attente (data/outbox.json, voir flush_outbox) derrière ceux qui
@@ -203,6 +207,14 @@ def send(text, chat_id=None, queue=True):
                 _enqueue(parts[i:], is_html, markup, explicit)
             return False
     return (sent or {}).get("message_id", True) if isinstance(sent, dict) else True
+
+
+def send(text, chat_id=None, queue=True):
+    """Envoie `text` (voir _send_one) puis, dans l'ordre, ses pages suivantes (attribut `more` : une longue liste « Mes paris » a une page par message,
+    chacune avec ses boutons). -> l'id du dernier message envoyé, ou False si l'un d'eux n'est pas parti (il est alors en attente, comme les suivants :
+    l'ordre est gardé)."""
+    results = [_send_one(m, chat_id, queue) for m in [text, *getattr(text, "more", ())]]
+    return results[-1] if all(results) else False
 
 
 def flush_outbox():
@@ -265,6 +277,28 @@ def edit_buttons(message_id, markup, chat_id=None):
         return False
 
 
+def edit_message(message_id, text, markup=None, chat_id=None):
+    """Remplace le texte ET les boutons d'un message déjà envoyé (la liste « Mes paris » après une note : ses lignes disent « joué à … »). Texte trop
+    long pour un message (plus de 4096 caractères) ou refusé par Telegram : seuls les boutons sont remplacés. Ne lève jamais."""
+    token, chat = creds()
+    if not (token and (chat_id or chat) and message_id):
+        return edit_buttons(message_id, markup or {"inline_keyboard": []}, chat_id)      # hors ligne : au moins les boutons passent par edit_buttons
+    if len(str(text)) <= 4096:
+        payload = dict(chat_id=chat_id or chat, message_id=message_id, text=str(text), disable_web_page_preview=True)
+        if isinstance(text, Html):
+            payload["parse_mode"] = "HTML"
+        if markup:
+            payload["reply_markup"] = markup
+        try:
+            api("editMessageText", **payload)
+            return True
+        except TelegramError as e:
+            if "not modified" in str(e).lower():               # texte et boutons identiques : rien à faire
+                return True
+            print(f"[telegram] texte non modifié : {e}", file=sys.stderr)
+    return edit_buttons(message_id, markup or {"inline_keyboard": []}, chat_id)
+
+
 def _handle(lock, fn, *args):
     """Exécute fn(*args) et envoie sa réponse (« Erreur : ... » si elle plante). Avec `lock` (appelable qui prend `on_busy` et renvoie un
     gestionnaire de contexte, ex. store.data_lock) : le tout sous le verrou des données ; verrou déjà pris -> BUSY tout de suite, puis
@@ -291,6 +325,7 @@ def poll(handler, timeout=0, on_callback=None, lock=None):
     `lock` : voir _handle (le serveur y met store.data_lock, pour ne pas écrire les données pendant le matin ou le relevé horaire)."""
     _, chat = creds()
     state = store.load("telegram.json", {"offset": 0})
+    start = state["offset"]
     try:
         # attente Telegram `timeout` s ; une connexion coupée en silence est détectée 5 s après (sinon 40 s de silence pour l'utilisateur)
         updates = api("getUpdates", http_timeout=timeout + 5, offset=state["offset"], timeout=timeout,
@@ -316,5 +351,6 @@ def poll(handler, timeout=0, on_callback=None, lock=None):
             continue
         _handle(lock, handler, text)
         store.save("telegram.json", state)          # offset sauvé à chaque commande : jamais traitée deux fois
-    store.save("telegram.json", state)
+    if state["offset"] != start:                    # rien de nouveau (la plupart des passages du serveur) : pas d'écriture inutile
+        store.save("telegram.json", state)
     return len(updates)

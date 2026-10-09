@@ -242,13 +242,14 @@ def test_tap_with_budget():
     assert "✅ Combi sur mesure (cote 20) : joué à 21,49, mise 250 FCFA" in text and "Code coupon 1xBet : <code>K7Q2X</code>" in text, text
     assert "À vérifier" not in text and "Aux cotes 1xBet" not in text, text
     cb = buttons(todo)
-    assert f"annule|vm1|{DAY}" in cb and f"joue|vm1|{DAY}" in cb and f"xmaj|m1|{DAY}" in cb and not any(b.startswith(("skip", "unskip")) for b in cb), cb
+    assert f"annule|vm1|{DAY}|l0" in cb and f"joue|vm1|{DAY}|l0" in cb and f"xmaj|m1|{DAY}" in cb and not any(b.startswith(("skip", "unskip")) for b in cb), cb   # la liste porte son numéro de page
     assert "🎟️ Vérifier ce combiné : Combi sur mesure (cote 20)" in json.dumps(todo.markup, ensure_ascii=False)
     # deuxième appui : aucun doublon, boutons remis
     with Fakes() as f2:
         again = chat.on_callback(f"cjoue|m1|{DAY}", 77)
     assert "déjà dans « 🧾 Mes paris »" in again and "joué à 21,49" in again and len(fair.load_combos()) == 1 and f2.last_buttons()[0] == "noop", again
-    # le sélecteur « Autre cote » connaît le combi sur mesure (et garde la mise notée si seule la cote change)
+    # le sélecteur « Autre cote » connaît le combi sur mesure (et garde la mise notée si seule la cote change) ; touché après lecture (pas un double appui)
+    chat.forget_taps()
     assert "À quelle cote as-tu finalement joué le combi sur mesure (cote 20)" in chat.on_callback(f"joue|vm1|{DAY}", 77)
     assert "Note annulée" in chat.on_callback(f"annule|vm1|{DAY}", 77) and "played" not in fair.load_combos()[0]
     print("ok  2 appui avec budget : noté tout de suite (cote du combiné, mise conseillée), ligne de suivi (devise, code, heure), « Autre cote » / « Annuler » + vérifier, « Mes paris », pas de doublon")
@@ -271,7 +272,7 @@ def test_tap_without_budget():
     assert f.last_buttons() == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"], "« ✅ Je l'ai joué » + vérifier"
     todo = played.todo(DAY)
     assert "Combi sur mesure (cote 5) — cote 1xBet 5,77" in str(todo) and "pas noté — /joue vm1 &lt;cote&gt;" in str(todo), str(todo)
-    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in str(todo) and f"joue|vm1|{DAY}" in buttons(todo), str(todo)
+    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in str(todo) and f"joue|vm1|{DAY}|l0" in buttons(todo), str(todo)
     assert "Code coupon 1xBet : <code>K7Q2X</code>" in str(todo)
     # un montant seul est la mise (« 2 000 » n'est PAS ambigu ici : ce n'est pas une cote) ; la cote notée est celle de 1xBet
     for txt, stake in (("1000", 1000), ("1 000", 1000), ("2 000", 2000), ("2000 FCFA", 2000), ("1.500", 1500)):
@@ -404,7 +405,7 @@ def test_skip():
     assert "retiré de ton bilan" in reply and "combi sur mesure (cote 5)" in reply and row["skipped"] is True, reply
     assert [x for x in played.items({"combos": []}, [], fair.load_combos())] == [] and money.gain(row | {"result": "win"}) is None
     assert "❌ Combi sur mesure (cote 5) : pas joué" in str(played.todo(DAY))
-    assert f"unskip|vm1|{DAY}|l" in buttons(played.todo(DAY))
+    assert f"unskip|vm1|{DAY}|l0" in buttons(played.todo(DAY))
     assert "compté comme joué" in money.skip("vm1", DAY, undo=True) and "skipped" not in fair.load_combos()[0]
     print("ok  2 ancien « ❌ Pas joué » / « ↩️ Finalement joué » sur un combi sur mesure noté")
 
@@ -450,8 +451,8 @@ def test_settle_and_bilan():
     text = str(msgs[0])
     assert "✅ Combi sur mesure (cote 5) gagné</b> · +2 386 FCFA" in text and "✅ Combiné aux cotes 1xBet (cote 5,77) gagné</b>" in text, text
     assert "(cote 5,77) gagné</b> ·" not in text, "le combiné du matin n'est pas noté : aucun montant"
-    assert "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (sans mise, hors bankroll)." in text, text
-    summary = "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (sans mise, hors bankroll)."
+    assert "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (le résultat en argent ne compte que ceux que tu as notés)." in text, text
+    summary = "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (le résultat en argent ne compte que ceux que tu as notés)."
     assert settle.fair_combo_line(rows) == summary and settle.fair_combo_line([mine]) == ""
     assert settle.fair_combo_line([mine | {"result": "loss"}, rows[1]]) == summary, "perdu ou gagné : le combi sur mesure est hors de cette ligne"
     # le bilan compte le combi sur mesure (argent) même quand il est le seul réglé

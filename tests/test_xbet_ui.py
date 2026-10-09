@@ -263,7 +263,7 @@ def test_mes_paris():
     assert "Pari du jour — cote 1xBet 1,50 (09:30)" in text and "Sûr — cote 1xBet 5,06 (09:30)" in text, text
     assert "Code coupon 1xBet : <code>CODE1</code>" in text and "Code coupon 1xBet : <code>CODE2</code>" in text, text
     cb = [b["callback_data"] for row in todo.markup["inline_keyboard"] for b in row]
-    assert f"xmajr|pari|{DAY}" in cb and f"xmajr|sur|{DAY}" in cb and f"joue|sur|{DAY}" in cb, cb
+    assert f"xmajr|pari|{DAY}" in cb and f"xmajr|sur|{DAY}" in cb and f"joue|sur|{DAY}|l0" in cb, cb
     # « Autre cote » : l'exemple est le prix 1xBet (pas la cote typique 1,60)
     ask = chat.on_callback(f"joue|pari|{DAY}", 5)
     assert "1,50" in ask and "1,60" not in ask, ask
@@ -403,12 +403,18 @@ def test_resend_played_and_labels():
     fair.update_combo(row, (legs, 1.55 ** 4, 0.72 ** 4), "13:00")
     assert row.get("played"), "mêmes paris, même cote : la note reste"
     new = legs[:3] + [prono(5)]
+    # lot I : un combiné du matin NOTÉ (le ticket est placé) n'est jamais remplacé : la ligne est rendue telle quelle
+    snap = dict(row)
+    fair.update_combo(row, (new, 1.55 ** 4, 0.72 ** 4), "14:00", "NEW")
+    assert row == snap and row["played"] and "coupon" not in row, "autres paris : un combiné noté reste le ticket joué"
+    # combiné sur mesure noté (son bouton « Vérifier » est une action explicite) : la note tombe avec la nouvelle version
+    row = fair.combo_row(5, (legs, 1.55 ** 4, 0.72 ** 4), DAY) | {"custom": True, "played": {"odds": 5.5, "stake": 1}}
     fair.update_combo(row, (new, 1.55 ** 4, 0.72 ** 4), "14:00", "NEW")
     assert "played" not in row and row["coupon"] == "NEW" and row["at"] == "14:00", "autres paris : l'utilisateur note la nouvelle version"
     row["played"] = {"odds": 5.5, "stake": 1}
     fair.update_combo(row, (new, 1.55 ** 4 * 1.2, 0.72 ** 4), "15:00")
     assert "played" not in row and "coupon" not in row, "cote totale changée : la note tombe, l'ancien code aussi"
-    # le renvoi du matin le dit
+    # le relevé du matin ne remplace pas un combiné noté : il prévient (un seul message ⚠️), la note et les paris restent
     reset()
     fair.record_combos([(5, (legs, 1.55 ** 4, 0.72 ** 4))], DAY)
     rows = fair.load_combos()
@@ -419,8 +425,8 @@ def test_resend_played_and_labels():
         app.run_xbet_refresh(now=at(13), announce=False, fetch=lambda ev, deadline=None, wanted=None, live=False, fresh_min=None: {
             e["id"]: {"gid": 900 + int(e["id"][1:]), "px": {} if e["id"] == "m1" else {("totals", "Under", 3.5): 1.55},
                       "refs": {} if e["id"] == "m1" else {("totals", "Under", 3.5): [900 + int(e["id"][1:]), 10, 3.5]}} for _, e in ev})
-    assert "Ta note « joué à … » de l'ancienne version est retirée" in str(f.sent[0]), f.sent
-    assert "played" not in fair.load_combos()[0]
+    assert "ton ticket" in str(f.sent[0]) and "retirée" not in str(f.sent[0]) and "COMBINÉ À JOUR" not in str(f.sent[0]), f.sent
+    assert fair.load_combos()[0]["played"] == {"odds": 5.5, "stake": 1} and fair.load_combos()[0]["keys"] == [c["key"] for c in legs]
     # E8 : « cote 1xBet » pour un combiné réel, « cote mini » sinon (rapport du matin et bilan)
     real = fair_row(results=("win", "win", "win"), played={"odds": 7.0, "stake": 1}) | {"cur": None, "stake": 1}
     mini = fair_row(xodds=None, results=("win", "win", "win"), played={"odds": 4.0, "stake": 1}) | {"cur": None, "stake": 1}

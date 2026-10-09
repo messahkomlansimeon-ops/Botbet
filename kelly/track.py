@@ -36,13 +36,14 @@ def _archive(old):
 
 def prune(rows):
     """-> (lignes gardées, lignes à archiver) : réglées (result non nul) ET plus vieilles que C.TRACK_KEEP_DAYS jours avant la
-    dernière date suivie. Les lignes sans date lisible restent."""
+    dernière date suivie. Les lignes sans date lisible restent, et une ligne NOTÉE (r["played"]) aussi : l'argent (money.result,
+    « depuis le début ») lit tracked.json, pas l'archive."""
     try:
         last = max(date.fromisoformat(str(r["date"])[:10]) for r in rows if r.get("date"))
     except (ValueError, KeyError):
         return rows, []
     cut = str(last - timedelta(days=C.TRACK_KEEP_DAYS))
-    old = [r for r in rows if r.get("result") is not None and str(r.get("date") or "9999") < cut]
+    old = [r for r in rows if r.get("result") is not None and str(r.get("date") or "9999") < cut and not r.get("played")]
     if not old:
         return rows, []
     gone = {id(r) for r in old}

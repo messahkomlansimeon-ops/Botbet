@@ -21,6 +21,21 @@ from .telegram import Html
 
 MAX_ODDS = 1000000.0           # « combi 10000 » peut monter à 12 500 (fourchette de /combi)
 NEED_STAKE = "Avec quelle mise en FCFA ?"          # début de la réponse quand la mise manque (chat._answer garde alors la question ouverte)
+CONFIRM = "⚠️ Cote très éloignée"                  # début de la réponse quand la cote écrite est absurde : elle n'est notée qu'après un « oui » (chat.route)
+
+
+class Confirm(str):
+    """Réponse de command() qui demande confirmation d'une cote très éloignée de celle du pari ; `.confirm` = {"odds", "stake"} à noter si
+    l'utilisateur répond « oui » (chat.set_pending)."""
+
+
+def far_from_ref(odds, t):
+    """La cote `odds` saisie est-elle absurdement loin de la cote de référence du pari (Target `t`) ? Plus de 3 fois ou moins du tiers de la cote
+    1xBet / typique / mini, ou (pour un pari simple, pas un combiné) plus de 1000. Un gros combiné (« combi 10000 ») reste libre dans cette
+    fourchette."""
+    ref = t.ref
+    simple = "keys" not in t.item and "legs" not in t.item
+    return bool(ref) and (odds > 3 * ref or odds < ref / 3 or (simple and odds > 1000))
 
 
 def norm(s):
@@ -42,12 +57,18 @@ def _num(s):
 
 
 def parse_odds_stake(args, strict=False):
-    """« 5,40 », « 5,40 2 000 », « 5.40 2.000 FCFA » -> (cote, mise | None, erreur | None). La cote est le premier mot ; la mise lit les
-    milliers (voir money.take_amount). `strict` (message libre sans commande) : « 2 000 » ou « 2 500 » seuls peuvent être une cote
-    entière et une mise, ou une mise sans cote : erreur « ambigu », jamais de devinette."""
-    tokens = M.split_tokens(args)
-    if tokens and M.CUR_RE.fullmatch(tokens[-1]) and len(tokens) > 1:       # devise en fin de message : ignorée
-        tokens = tokens[:-1]
+    """« 5,40 », « 5,40 2 000 », « 5.40 2.000 FCFA », « 5,40 2k » -> (cote, mise | None, erreur | None). La cote est le premier mot ; la mise lit les
+    milliers (voir money.take_amount), « k » = ×1000 (« 2k » = 2 000 FCFA), les écritures du FCFA sont ignorées ; une autre devise : erreur
+    « devise » (tout est en FCFA). Une cote entière écrite avec une espace des milliers et des décimales (« 11 061,90 ») est UNE cote (11061,9), jamais
+    la cote 11 et la mise 61,9. `strict` (message libre sans commande) : « 2 000 » ou « 2 500 » seuls peuvent être une cote entière et une mise,
+    ou une mise sans cote : erreur « ambigu », jamais de devinette."""
+    tokens, mult, foreign = M.strip_unit(M.split_tokens(args))
+    if foreign:
+        return None, None, "devise"
+    if len(tokens) >= 2 and re.fullmatch(r"\d{1,3}", tokens[0]) and re.fullmatch(r"\d{3}[.,]\d+", tokens[1]):
+        whole, n = M.take_amount(tokens[:2])
+        if whole is not None and n == 2:
+            tokens = [str(whole)] + tokens[2:]
     odds = _num(tokens[0]) if tokens else None
     if odds is None:
         return None, None, "invalide"
@@ -55,11 +76,11 @@ def parse_odds_stake(args, strict=False):
     if strict and len(tokens) == 2 and re.fullmatch(r"\d{1,3}", tokens[0]) and re.fullmatch(r"\d{3}(?:[.,]\d+)?", rest[0]):
         return odds, None, "ambigu"
     if not rest:
-        return odds, None, None
+        return (odds, None, None) if mult == 1 else (None, None, "invalide")        # « 2k » seul : une mise sans cote
     stake, n = M.take_amount(rest)
     if stake is None or n != len(rest):
         return odds, None, "invalide"
-    return odds, stake, None
+    return odds, stake * mult, None
 
 
 def _pick(items, day):
@@ -185,9 +206,10 @@ def _gap(odds, ref):
     return odds / ref - 1
 
 
-def command(args, day, now=None):
+def command(args, day, now=None, confirmed=False):
     """/joue <quoi> <cote> [mise] ; sans argument : ce qui est à noter aujourd'hui. La mise est en FCFA ; sans mise, celle conseillée par le
-    budget du jour, et sans mise conseillée Kelly la demande (NEED_STAKE : jamais une mise en unités inventée)."""
+    budget du jour, et sans mise conseillée Kelly la demande (NEED_STAKE : jamais une mise en unités inventée). Une cote absurdement loin de celle
+    du pari (far_from_ref) n'est pas notée : réponse Confirm (CONFIRM), notée seulement avec `confirmed` (le « oui » de l'utilisateur)."""
     day = str(day)[:10]
     if not args:
         return todo(day)
@@ -200,6 +222,8 @@ def command(args, day, now=None):
     if isinstance(t, str):
         return t
     odds, given, err = parse_odds_stake(args[1:])
+    if err == "devise":
+        return "Les mises sont en FCFA (pas d'autre devise). Exemple : /joue sur 5,40 1000 (cote 5,40, mise 1 000 FCFA)."
     if odds is None or err or (given is not None and given < 0):
         return "Cote ou mise invalide. Exemple : /joue sur 5,40 1000 (cote 5,40, mise 1 000 FCFA)."
     if t.item.get("result") is not None:
@@ -211,6 +235,11 @@ def command(args, day, now=None):
         return f"Note annulée : {t.label}."
     if not 1.0 < odds <= MAX_ODDS:
         return "La cote doit être supérieure à 1. Exemple : /joue sur 5,40 1000"
+    if not confirmed and far_from_ref(odds, t):
+        msg = Confirm(f"{CONFIRM} : tu as écrit {fmt.odds_txt(odds)}, alors que la {t.ref_word} du {t.label} est {fmt.odds_txt(t.ref)}. Faute de frappe ? "
+                      f"Réponds « oui » pour le noter à {fmt.odds_txt(odds)}, ou renvoie la bonne cote (par exemple {fmt.num(t.ref)}).")
+        msg.confirm = {"odds": odds, "stake": given}
+        return msg
     stake = given if given is not None else ((t.item.get("played") or {}).get("stake") or t.stake)      # nouvelle cote d'un pari noté : même mise
     if given is None and not stake > 0:             # pas de mise conseillée (pas de budget du jour, ou trop petite) : jamais d'unités
         return f"{NEED_STAKE} Réponds ta mise, par exemple 1 000 (cote {fmt.num(odds)} retenue)."
@@ -243,10 +272,15 @@ def note(t, odds, stake, now=None):
     return "\n".join(lines)
 
 
-def todo(day):
+PAGE = 12            # paris par page de « Mes paris » : une longue liste part en plusieurs messages, chacun avec son en-tête, son pied et ses boutons
+
+
+def todo(day, page=None):
     """« 🧾 Mes paris » : les paris du jour, notés ou non, avec leur mise conseillée, leur code coupon (en <code>, un appui le copie) et un
     bouton par pari — « ✅ Je l'ai joué » (avec la mise conseillée) pour un pari pas noté, « ✏️ Autre cote » et « ↩️ Annuler » pour un pari noté.
-    Message HTML : tout le texte est échappé (fmt.esc)."""
+    Message HTML : tout le texte est échappé (fmt.esc). PAGE paris au plus par message : une longue liste a plusieurs pages (« (2/3) »), la 1re
+    est rendue et les suivantes sont dans son attribut `more` (telegram.send les envoie à la suite) ; `page` : seulement cette page (la liste
+    d'un message déjà envoyé, rafraîchie après une note : chat.on_callback). Les boutons d'une page portent son numéro (« joue|sur|jour|l1 »)."""
     bets = store.load("bets.json", {"picks": [], "combos": []})
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
@@ -254,24 +288,49 @@ def todo(day):
                for c in fair.load_combos() if c["date"] == day]
     if not items_:
         return f"Rien à noter aujourd'hui : les paris du jour arrivent à {C.DAY_END_HOUR:02d}h00."
-    lines, rows, left = [], [], False
+    pages = [items_[i:i + PAGE] for i in range(0, len(items_), PAGE)]
+    if page is not None:
+        k = min(max(int(page), 0), len(pages) - 1)
+        return _todo_page(pages[k], k, len(pages), day)
+    first = _todo_page(pages[0], 0, len(pages), day)
+    if len(pages) > 1:
+        first.more = [_todo_page(pg, k, len(pages), day) for k, pg in enumerate(pages) if k]
+    return first
+
+
+def _todo_page(items_, k, total, day):
+    """Une page de « Mes paris » : ses lignes, ses boutons (callbacks marqués « l<k> »), son pied."""
+    lines, rows, left, needs_odds, auto = [], [], False, False, False
     for name, x, ref, what in items_:
         px = price_info(what, x)
         if x.get("skipped") and x.get("result") is None:         # retiré avec l'ancien « ❌ Pas joué » (ancien message) : on peut le remettre
             lines.append(fmt.esc(f"❌ {name} : pas joué"))
-            rows.append([(f"↩️ {name} : finalement joué", f"unskip|{what}|{day}|l")])
+            rows.append([(f"↩️ {name} : finalement joué", f"unskip|{what}|{day}|l{k}")])
             continue
         stake = M.suggested(x) if not x.get("played") and x.get("result") is None else 0
         lines.append(fmt.esc(_todo_line(name, x, px["label"], f"/joue {what} <cote>", stake)) + _coupon_line(px))
         if x.get("result") is None:
             if x.get("played"):
-                rows.append([(f"✏️ Autre cote : {name}", f"joue|{what}|{day}"), (f"↩️ Annuler : {name}", f"annule|{what}|{day}")])
+                rows.append([(f"✏️ Autre cote : {name}", f"joue|{what}|{day}|l{k}"), (f"↩️ Annuler : {name}", f"annule|{what}|{day}|l{k}")])
             else:
                 left = True
-                rows.append([(f"✅ {name} · Je l'ai joué" + (f" — {M.money(stake)}" if stake else ""), f"joue|{what}|{day}")])
+                if _known(px):
+                    auto = True
+                else:
+                    needs_odds = True
+                rows.append([(f"✅ {name} · Je l'ai joué" + (f" — {M.money(stake)}" if stake else ""), f"joue|{what}|{day}|l{k}")])
             rows += _verify_row(what, x, day, name)
-    foot = "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet." if left else "Tout est noté 👍"
-    head = ["🧾 Tes paris du jour", "Seuls les paris que tu notes comptent dans tes résultats.", ""]
+    if not left:
+        foot = "Tout est noté 👍"
+    elif needs_odds and not auto:
+        foot = "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet."
+    elif auto and not needs_odds:
+        foot = ("Appuie sur le pari que tu as joué : il est noté à la cote 1xBet lue par Kelly (avec la mise conseillée, sinon Kelly te demande ta mise). "
+                "« ✏️ Autre cote » la corrige.")
+    else:
+        foot = ("Appuie sur le pari que tu as joué : noté tout de suite à la cote 1xBet quand Kelly l'a lue, sinon envoie la cote obtenue chez 1xBet.")
+    title = "🧾 Tes paris du jour" + (f" ({k + 1}/{total})" if total > 1 else "")
+    head = [title, "Seuls les paris que tu notes comptent dans tes résultats.", ""]
     hint = ["", fmt.esc("💡 Mise conseillée : " + M.NO_BUDGET)] if left and not M.active() else []
     text = Html("\n".join([fmt.esc(h) for h in head] + lines + hint + ["", fmt.esc(foot)]))
     return telegram.with_buttons(text, telegram.inline(rows)) if rows else text

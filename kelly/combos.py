@@ -181,6 +181,8 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None):
     la vraie cote : jamais de combiné hors fourchette."""
     max_legs = max_legs or C.MAX_LEGS
     max_odds = max_odds or min_odds * 2
+    if not 0 < min_odds <= max_odds or max_odds <= 1.0:      # un combiné d'au moins 2 jambes (cote > 1 chacune) ne tient jamais sous 1 : pas de calcul
+        return None
     legs = [c for c in legs if c["odds"] > 1.0 and 0 < c["prob"] <= 1]
     if len(legs) < 2:
         return None
@@ -351,13 +353,14 @@ def _carried(l, by_key):
     return l | {"odds": l.get("odds") or l.get("xodds") or l.get("min_odds")} | ({"xref": ref} if ref else {})
 
 
-def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None):
+def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None, usage=None):
     """Combiné `legs` remis aux cotes du moment : `pool` = pronostics à jour (xprice.live_check). Une jambe dont le match a été relu
     reste si ce match a encore un pari viable du même marché à sa cote 1xBet (la ligne a pu changer : « changées ») ; sinon elle sort.
     Une jambe dont le match n'a PAS été relu (`fresh_ids` : matchs relus à l'instant seulement) n'est jamais retirée : reprise telle
     quelle. Cote totale encore >= `lo` : on garde les survivants (même au-dessus de `hi` : les cotes ont monté) ; sinon ils sont
     complétés par le meilleur combiné des remplaçants (`prefix` : marchés permis, combinés spécial tirs) pour revenir dans [lo, hi],
-    sans jamais dépasser `hi`.
+    sans jamais dépasser `hi`. `usage` (Usage des AUTRES combinés du jour) : un remplaçant déjà pris ailleurs n'est repris que si les règles de
+    réutilisation le permettent (jambe sûre, jamais une jambe risquée prise deux fois) ; les survivants ne sont pas concernés.
     -> (jambes, cote, proba, retirées, ajoutées, changées [(ancienne, nouvelle)]) ou None si impossible."""
     fresh = {}
     for c in fair_legs(pool):
@@ -384,7 +387,7 @@ def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None):
     added = []
     if not keep or total < lo:
         used = {c["id"] for c in keep}
-        spares = [c for c in fresh.values() if c["id"] not in used]
+        spares = [c for c in fresh.values() if c["id"] not in used and (usage is None or usage.allowed(c))]
         rlo, rhi = max(lo / total, 1.01), hi / total
         if rhi < rlo:
             return None
@@ -417,13 +420,18 @@ def fair_plan(pronos, tiers=None, usage=None):
     return out
 
 
-def fair_shots_plan(pronos, tiers=None):
+def fair_shots_plan(pronos, tiers=None, usage=None):
     """Combinés « spécial tirs » à vérifier chez 1xBet (C.FAIR_SHOTS_TIERS) : l'un sur les tirs cadrés, l'autre sur les tirs vers le
-    but, un pari par match, mêmes jambes solides que les autres combinés à cote juste : [(palier, combiné | None)]."""
+    but, un pari par match, mêmes jambes solides que les autres combinés à cote juste : [(palier, combiné | None)]. `usage` : celui de fair_plan
+    (les mêmes règles de réutilisation d'un match dans tous les combinés du matin : une jambe risquée n'est dans qu'un seul), complété ici."""
+    usage = usage if usage is not None else Usage()
     out = []
     for target, prefix, _, lo, hi in (tiers if tiers is not None else C.FAIR_SHOTS_TIERS):
-        legs = [c for c in fair_legs(pronos) if c["market"].startswith(prefix)]
-        out.append((target, _fair_best(legs, lo, hi)))
+        legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(prefix)]
+        combo = _fair_best(legs, lo, hi)
+        if combo:
+            usage.add(combo[0])
+        out.append((target, combo))
     return out
 
 

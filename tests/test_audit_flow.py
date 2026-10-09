@@ -165,13 +165,15 @@ def test_tracking_follows_the_sent_version():
     assert len(f.sent) == 1 and "ne le joue pas" in f.sent[0], f.sent
     row = fair.load_combos()[0]
     assert row["dead"] and "skipped" not in row and row["result"] == "void", "pas noté : rien à retirer du bilan"
-    # noté joué avant d'être déclaré injouable : sa note sort aussi du bilan
+    # noté joué (le ticket est placé) : JAMAIS déclaré injouable ni annulé ni sorti du bilan — Kelly prévient seulement (lot I : _watch_ticket)
     setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)
     assert "✅ Noté" in played.command(["v5", "5,40"], DAY)
-    with Fakes():
+    with Fakes() as f:
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
     row = fair.load_combos()[0]
-    assert row["dead"] and row["skipped"] and row["auto_skipped"] and row["result"] == "void" and played.items({"combos": []}, [], [row]) == []
+    assert "dead" not in row and "skipped" not in row and "auto_skipped" not in row and row["result"] is None, row
+    assert row["played"]["odds"] == 5.4 and len(played.items({"combos": []}, [], [row])) == 1
+    assert len(f.sent) == 1 and "ton ticket" in f.sent[0] and "ne le joue pas" not in f.sent[0], f.sent
     setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)
     with Fakes():
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
@@ -301,7 +303,8 @@ def test_buttons_keep_verify_row():
         assert chat.on_callback(f"joue|v5|{DAY}", 42).startswith("✅ Noté") and chat.get_pending() is None
         assert flat(edits[-1][1]) == ["noop", f"joue|v5|{DAY}", f"annule|v5|{DAY}", verify]
         assert edits[-1][1]["inline_keyboard"][0][0]["text"].startswith("✅ Joué à 5,77")
-        # « ✏️ Autre cote » demande la cote (c'est son rôle)
+        # « ✏️ Autre cote » demande la cote (c'est son rôle) ; l'utilisateur la touche après avoir lu le message (le même appui 2 fois de suite = double appui)
+        chat.forget_taps()
         assert "À quelle cote as-tu finalement joué" in chat.on_callback(f"joue|v5|{DAY}", 42)
         assert "Noté" in chat.route("5,40")[1]
         assert flat(edits[-1][1]) == ["noop", f"joue|v5|{DAY}", f"annule|v5|{DAY}", verify]

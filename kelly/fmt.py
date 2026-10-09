@@ -278,17 +278,23 @@ def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None
 def pronos(items, limit=10, title=None, intro=None, when=None):
     """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale (ou sa cote
     1xBet, 💎). `title` / `intro` : autre titre et autre phrase d'introduction (relevé 1xBet de l'après-midi). `when` : heure « HH:MM »
-    du relevé des cotes 1xBet, rappelée dans l'introduction (sinon « aujourd'hui »)."""
+    du relevé des cotes 1xBet, rappelée dans l'introduction (sinon « aujourd'hui »). Chaque pronostic peut porter l'heure de SA lecture (c["xat"]) :
+    quand elles diffèrent (relevé partiel : seuls certains matchs ont été relus), l'introduction le dit et chaque ligne donne son heure."""
     shown = items[:limit]
     if not shown:
         return Html(b("🎲 Pronostics Kelly") + "\n" + i("Aucun pronostic assez solide : Kelly ne montre que des pronostics "
                                                                  "viables (assez de chances et de données)."))
     priced = any(c.get("xodds") for c in shown)
     unpriced = not all(c.get("xodds") for c in shown)
-    stamp = f" Cotes 1xBet de {when}." if when and priced else ""
+    stamps = {c.get("xat") or when for c in shown if c.get("xodds")} - {None}
+    partial = len(stamps) > 1                          # des cotes lues à des heures différentes : l'heure du dernier relevé ne vaut pas pour toutes
+    if len(stamps) == 1:
+        when = next(iter(stamps))                      # toutes lues à la même heure : c'est elle, même si un relevé plus récent a eu lieu ailleurs
+    stamp = f" Cotes 1xBet de {when}." if when and priced and not partial else ""
     lines = [b(title or "🎲 Pronostics Kelly"),
              i(esc(intro) + esc(stamp) if intro else "Le meilleur pronostic de chaque match, s'il est solide. "
-               + ("💎 = cote 1xBet relevée par Kelly " + (f"à {esc(when)}" if when else "aujourd'hui")
+               + ("💎 = cote 1xBet relevée par Kelly " + ("(relevé partiel : l'heure de lecture est indiquée pour chaque pari)" if partial else
+                                                          f"à {esc(when)}" if when else "aujourd'hui")
                   + " et assez haute pour jouer (vérifie qu'elle n'a pas baissé). " if priced else "")
                + ("« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée." if unpriced else ""))]
     by = {}
@@ -301,7 +307,8 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
             q = c.get("conf")
             data = "" if q is None else (" · données solides" if q >= 0.4 else " · données correctes")
             if c.get("xodds"):
-                lines.append(f"💎 {esc(c['pick'])} — cote 1xBet {b(num(c['xodds']))}")
+                at = f" (lue à {esc(c.get('xat') or when)})" if partial and (c.get("xat") or when) else ""
+                lines.append(f"💎 {esc(c['pick'])} — cote 1xBet {b(num(c['xodds']))}{at}")
                 lines.append(i(f"   {pct(c['prob'])} de chances{data} · valeur {c['xev'] * 100:+.0f} %"))
             else:
                 lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")

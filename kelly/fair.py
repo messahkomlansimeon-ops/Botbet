@@ -479,14 +479,27 @@ def combo_row(target, combo, day, stake=None, cur=None, coupon=None, at=None):
         | ({"coupon": coupon} if coupon else {}) | ({"at": at} if at else {})                 # mise 0 : pari sans mise
 
 
+ODDS_TOLERANCE = 0.011        # écart de cote totale toléré avant de parler d'une autre version : la cote est arrondie à 3 puis 2 décimales (custom.remember, combo_row)
+
+
+def is_ticket(row):
+    """Combiné du matin que l'utilisateur a NOTÉ joué (« ✅ Je l'ai joué », /joue) et pas retiré : le ticket est placé chez 1xBet, ses paris, sa note
+    et son règlement ne changent plus jamais (Kelly relit et prévient, voir app._watch_ticket). Les combinés sur mesure (« custom ») ne sont pas
+    concernés : ils ont leur propre bouton « Vérifier »."""
+    return bool(row.get("played")) and not row.get("skipped") and not row.get("custom")
+
+
 def update_combo(row, combo, hhmm, coupon=None):
     """Combiné du matin renvoyé à jour : la ligne de suivi prend la nouvelle version (jambes, clés, cote, proba, code coupon `coupon`) ; la
     mise et la devise restent, les clés du matin sont gardées une fois (« orig_keys »), « updated » note l'heure. Un combiné déclaré mort qui revit
-    redevient un combiné normal. Si les paris ou la cote totale changent, la note « joué à … » (/joue) de l'ancienne version tombe : c'est
-    un autre ticket, l'utilisateur note la nouvelle version."""
+    redevient un combiné normal. Si les paris changent, ou si la cote totale change de plus que l'arrondi (ODDS_TOLERANCE), la note « joué à … »
+    (/joue) de l'ancienne version tombe : c'est un autre ticket, l'utilisateur note la nouvelle version. Un combiné NOTÉ du matin (is_ticket)
+    n'est JAMAIS remplacé : la ligne est rendue telle quelle."""
+    if is_ticket(row):
+        return row
     legs, min_total, prob = combo
     if (set(row.get("keys") or []) != {c["key"] for c in legs}
-            or abs((row.get("min_odds") or 0) - round(min_total, 2)) > 1e-9):
+            or abs((row.get("min_odds") or 0) - min_total) > ODDS_TOLERANCE):
         row.pop("played", None)
     row.setdefault("orig_keys", list(row.get("keys") or []))
     row.update(min_odds=round(min_total, 2), prob=round(prob, 5), keys=[c["key"] for c in legs], updated=hhmm,
@@ -504,7 +517,10 @@ def update_combo(row, combo, hhmm, coupon=None):
 
 def kill_combo(row):
     """Combiné du matin déclaré injouable (« ne le joue pas ») : plus rien à suivre. Réglé « annulé » avec la marque « dead » (hors
-    des résultats, du bilan et de l'argent) ; si tu l'avais noté joué, sa note sort aussi du bilan (marque « skipped »)."""
+    des résultats, du bilan et de l'argent) ; si tu l'avais noté joué, sa note sort aussi du bilan (marque « skipped »). Un combiné NOTÉ du matin
+    (is_ticket) n'est jamais déclaré mort ni annulé : le ticket est placé, il se règle comme joué."""
+    if is_ticket(row):
+        return row
     row["dead"] = True
     row["result"] = "void"
     if row.get("played") and not row.get("skipped"):
@@ -512,9 +528,26 @@ def kill_combo(row):
     return row
 
 
+SLIM_LEG = ("key", "result", "xodds", "odds", "min_odds")        # ce que l'argent relit d'une jambe (bankroll.won_odds, real_legs)
+
+
+def _keep(rows, cut):
+    """Lignes à garder dans fair_combos.json : celles de moins de C.FAIR_COMBO_KEEP_DAYS jours (date >= `cut`) et TOUTES celles que l'utilisateur a
+    NOTÉES (le bilan « depuis le début » en a besoin). Un combiné noté et réglé plus ancien perd le détail de ses jambes (SLIM_LEG, marque « slim »)
+    pour que le fichier ne grossisse pas : date, palier, cote, note, résultat et devise suffisent à l'argent et aux bilans."""
+    out = []
+    for r in rows:
+        if r["date"] >= cut:
+            out.append(r)
+        elif r.get("played"):
+            out.append(r if r.get("result") is None or r.get("slim") else
+                       r | {"legs": [{k: l[k] for k in SLIM_LEG if l.get(k) is not None} for l in r.get("legs") or []], "slim": True})
+    return out
+
+
 def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
     """Enregistre les combinés à cote juste envoyés [(palier, combiné)], un seul par palier et par jour (le premier, comme
-    settle.record_combos), garde C.FAIR_COMBO_KEEP_DAYS jours.
+    settle.record_combos), garde C.FAIR_COMBO_KEEP_DAYS jours (sauf un combiné NOTÉ : il reste, le bilan « depuis le début » en a besoin).
     `stakes` : {palier: mise sur le budget du jour}, `coupons` : {palier: code coupon envoyé}, `at` : heure « HH:MM » du relevé 1xBet. -> nombre ajouté. Fichier à part de bets.json (pas de bankroll)."""
     from datetime import date, timedelta
     rows = load_combos()
@@ -525,7 +558,7 @@ def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
             rows.append(row)
             n += 1
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
-    store.save(COMBOS_FILE, [r for r in rows if r["date"] >= cut])
+    store.save(COMBOS_FILE, _keep(rows, cut))      # un combiné noté reste : « depuis le début » (money.result) le compte
     return n
 
 
@@ -539,5 +572,5 @@ def record_custom(row, day):
     if new:
         rows.append(row)
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
-    store.save(COMBOS_FILE, [r for r in rows if r["date"] >= cut])
+    store.save(COMBOS_FILE, _keep(rows, cut))      # un combiné noté reste : « depuis le début » (money.result) le compte
     return new
