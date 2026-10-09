@@ -74,14 +74,15 @@ def _scrub(text):
     return str(text).replace(token, "***") if token else str(text)
 
 
-def api(method, **payload):
-    """Appel Bot API -> `result`. Lève TelegramError avec la description de l'API (sans le token)."""
+def api(method, http_timeout=40, **payload):
+    """Appel Bot API -> `result`. Lève TelegramError avec la description de l'API (sans le token). `http_timeout` : attente maximale
+    de la réponse (une connexion coupée en silence n'est détectée qu'au bout de ce délai)."""
     token, _ = creds()
     if not token:
         raise TelegramError("TELEGRAM_TOKEN absent")
     for attempt in (0, 1):
         try:
-            r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=payload, timeout=40)
+            r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=payload, timeout=http_timeout)
         except requests.RequestException as e:
             raise TelegramError(f"réseau : {_scrub(e)}") from None
         try:
@@ -248,12 +249,13 @@ def poll(handler, timeout=0, on_callback=None, lock=None):
     _, chat = creds()
     state = store.load("telegram.json", {"offset": 0})
     try:
-        updates = api("getUpdates", offset=state["offset"], timeout=timeout,
+        # attente Telegram `timeout` s ; une connexion coupée en silence est détectée 5 s après (sinon 40 s de silence pour l'utilisateur)
+        updates = api("getUpdates", http_timeout=timeout + 5, offset=state["offset"], timeout=timeout,
                       allowed_updates=["message", "callback_query"]) or []
     except TelegramError as e:
         print(f"[telegram] lecture des commandes échouée : {e}", file=sys.stderr)
         if timeout:
-            time.sleep(5)                           # mode serveur : évite de boucler à vide
+            time.sleep(2)                           # mode serveur : courte pause, puis on se reconnecte
         return 0
     for u in updates:
         state["offset"] = u["update_id"] + 1

@@ -1031,10 +1031,10 @@ def run_commands(serve=False):
                 if time.monotonic() - last_flush >= 60:
                     last_flush = time.monotonic()
                     _flush_outbox_locked()
-                telegram.poll(handle_command, timeout=30, on_callback=chat.on_callback, lock=lock)
+                telegram.poll(handle_command, timeout=10, on_callback=chat.on_callback, lock=lock)   # court : réponse rapide après une coupure
             except Exception as e:                  # noqa: BLE001 - le serveur ne s'arrête pas sur une erreur
                 print(f"[serve] {e}", file=sys.stderr)
-                time.sleep(5)
+                time.sleep(2)
     else:
         n = telegram.poll(handle_command, on_callback=chat.on_callback)
         print(f"{n} message(s) traité(s).")
