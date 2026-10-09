@@ -85,7 +85,10 @@ def _not_sent(e):
     (comme sources.http._not_sent)."""
     if isinstance(e, (requests.ConnectTimeout, requests.exceptions.ProxyError)):
         return True
-    return isinstance(e, requests.ConnectionError) and not isinstance(e, requests.Timeout) and "NewConnectionError" in repr(e)
+    # connexion gardée que Telegram a fermée pendant l'attente (« Connection aborted », RemoteDisconnected) : fermée AVANT de lire la
+    # requête, le cas le plus courant ; la rejouer tout de suite évite de mettre la réponse en attente une minute
+    return (isinstance(e, requests.ConnectionError) and not isinstance(e, requests.Timeout)
+            and any(k in repr(e) for k in ("NewConnectionError", "RemoteDisconnected", "Connection aborted")))
 
 
 def api(method, http_timeout=40, **payload):

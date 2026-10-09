@@ -377,7 +377,10 @@ def test_telegram_retry():
             return self.then
     ok = type("R", (), {"ok": True, "status_code": 200, "json": lambda self: {"ok": True, "result": {"message_id": 7}}})()
     try:
-        for exc, method, n in ((requests.ConnectionError("Connection aborted, RemoteDisconnected"), "sendMessage", 1),
+        # connexion gardée fermée par Telegram AVANT de lire la requête (RemoteDisconnected) : rejouée tout de suite ;
+        # coupure au milieu de la réponse : jamais rejouée (Telegram a pu recevoir le message)
+        for exc, method, n in ((requests.ConnectionError("Connection aborted, RemoteDisconnected"), "sendMessage", 2),
+                               (requests.ConnectionError("Connection broken: IncompleteRead(0 bytes read)"), "sendMessage", 1),
                                (requests.ReadTimeout("lent"), "sendMessage", 1),
                                (requests.ConnectTimeout("injoignable"), "sendMessage", 2),
                                (requests.exceptions.ProxyError("502"), "sendMessage", 2),
