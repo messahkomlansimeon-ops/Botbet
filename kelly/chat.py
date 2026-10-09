@@ -11,11 +11,11 @@ from . import fmt, played, store, telegram
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 Mes paris"], ["💰 Mon budget", "🔄 Actualiser les cotes"],
+MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 Mes paris"], ["💰 Mon budget", "🔄 Mettre à jour tous les paris"],
         ["❓ Aide"]]
 BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
            "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide",      # « À noter » : ancien libellé
-           "🔄 Actualiser les cotes": "/cotes"}
+           "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes"}     # 2e : ancien libellé du menu
 COMBI_TARGETS = (3, 5, 10, 20, 50)
 NUM = re.compile(r"^\s*\d[\d\s.,]*(?:\s*(?:[^\W\d_]{1,8}|[€$£¥]))?\s*$")       # « 5,40 », « 5,40 2 000 », « 5,40 2.000 FCFA »
 TOP_TEXTS = ("paris", "paris du jour", "mes paris")                               # exactement : « Paris FC » est une équipe
@@ -23,7 +23,8 @@ WORDS = {"bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "top": 
          "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide", "bonjour": "/aide", "salut": "/aide",
          "joue": "/joue", "jouer": "/joue", "noter": "/joue", "bank": "/bank", "bankroll": "/bank", "monde": "/monde",
          "ligues": "/ligues", "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi",
-         "budget": "/budget", "actualiser": "/cotes", "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes"}
+         "budget": "/budget", "actualiser": "/cotes", "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes",
+         "maj": "/cotes"}
 
 
 def _now():
@@ -49,10 +50,10 @@ def played_button(what, day, funded=True):
 
 def with_played_button(text, what, day, funded=True, refresh=None):
     """Le message `text` avec ses boutons de pari ; sans bouton (texte seul) quand il n'y a rien à jouer. `refresh` : palier d'un
-    combiné aux cotes 1xBet -> bouton « 🔄 Cotes à jour » (cotes relues en direct, paris retirés remplacés, nouveau code)."""
+    combiné aux cotes 1xBet -> bouton « 🎟️ Vérifier ce combiné » (cotes relues en direct, paris retirés remplacés, nouveau code)."""
     markup = played_button(what, day, funded)
     if refresh is not None:
-        row = telegram.inline([[("🔄 Cotes à jour", f"xmaj|{refresh}|{str(day)[:10]}")]])["inline_keyboard"]
+        row = telegram.inline([[("🎟️ Vérifier ce combiné", f"xmaj|{refresh}|{str(day)[:10]}")]])["inline_keyboard"]
         markup = {"inline_keyboard": (markup or {"inline_keyboard": []})["inline_keyboard"] + row}
     return telegram.with_buttons(text, markup) if markup else text
 
@@ -142,6 +143,8 @@ def route(text):
     head, rest = played.norm(words[0]).rstrip(" :"), words[1:]
     if played.norm(" ".join(words)).rstrip(" :") in TOP_TEXTS:
         return "/top", None
+    if played.norm(" ".join(words)).startswith("mettre a jour"):          # « mettre à jour (tous les paris) »
+        return "/cotes", None
     if head in ("combi", "combine") and not rest:
         return None, combi_picker()
     if head in ("bilan", "resultats", "resultat") and any(played.norm(w).startswith("detail") for w in rest):

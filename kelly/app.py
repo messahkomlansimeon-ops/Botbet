@@ -568,7 +568,7 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False):
 
 
 def manual_refresh(now=None, fetch=None):
-    """« 🔄 Actualiser les cotes » : le relevé 1xBet complet du jour, tout de suite et en direct (pronostics, 💎 nouveaux, combinés du
+    """« 🔄 Mettre à jour tous les paris » : le relevé 1xBet complet du jour, tout de suite et en direct (pronostics, 💎 nouveaux, combinés du
     matin à jour), au plus une fois toutes les C.XBET_MANUAL_GAP minutes (données du proxy). -> réponse."""
     now = now or now_utc()
     today = store.load("today.json", {})
@@ -624,7 +624,7 @@ def _update_combos(day, pronos, now, refreshed):
         msg = _fair_reply((legs, total, prob), f"🔄 Un combiné du matin a changé chez 1xBet : le voici aux cotes de {hhmm} "
                                                "(l'ancien code est remplacé).", fmt.combo_changes(removed, added),
                           title=f"🔄 COMBINÉ À JOUR {hhmm}")
-        telegram.send(telegram.with_buttons(msg, telegram.inline([[("🔄 Cotes à jour", f"xmaj|{tier}|{day}")]])))
+        telegram.send(telegram.with_buttons(msg, telegram.inline([[("🎟️ Vérifier ce combiné", f"xmaj|{tier}|{day}")]])))
         sent["tiers"][tier] = {"keys": keys, "total": round(total, 3)}
         n += 1
     store.save(COMBO_UPDATES, sent)
@@ -774,7 +774,8 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 📊 <b>Mes résultats</b> : gagnés, perdus, ta bankroll
 🧾 <b>Mes paris</b> : les paris du jour et leur mise
 💰 <b>Mon budget</b> : voir ou changer ton budget du jour
-🔄 <b>Actualiser les cotes</b> : Kelly relit tout de suite les cotes 1xBet du jour (sinon : 04:00 et 15:00)
+🔄 <b>Mettre à jour tous les paris</b> : Kelly relit tout de suite les cotes 1xBet de tous les paris du jour, t'envoie les nouveaux paris 💎 et les combinés du matin qui ont changé (sinon : 04:00 et 15:00)
+🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 
 <b>Ton budget du jour</b>
 Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>) : chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la mise de chacun. Les jours pauvres, elle en garde une partie. Change-le quand tu veux.
@@ -1157,7 +1158,7 @@ def _tier_range(tier):
 
 
 def refresh_combo(tier, day, now=None, check=None):
-    """Bouton « 🔄 Cotes à jour » sous un combiné du matin : ses paris relus en direct chez 1xBet, ceux retirés ou devenus mal payés
+    """Bouton « 🎟️ Vérifier ce combiné » sous un combiné du matin : ses paris relus en direct chez 1xBet, ceux retirés ou devenus mal payés
     remplacés (même fourchette de cote que le palier), nouveau code coupon. Le suivi garde le combiné du matin."""
     row = next((r for r in fair.load_combos() if r["date"] == str(day) and str(r["tier"]) == str(tier)), None)
     rng = _tier_range(tier)

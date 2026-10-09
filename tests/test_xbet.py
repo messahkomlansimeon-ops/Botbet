@@ -517,7 +517,7 @@ def test_combi_live():
 
 
 def test_refresh_button_and_updates():
-    """Bouton « 🔄 Cotes à jour » et relevés de 2 h : combiné du matin remis aux cotes du moment, renvoyé seulement s'il change ;
+    """Bouton « 🎟️ Vérifier ce combiné » et relevés de 2 h : combiné du matin remis aux cotes du moment, renvoyé seulement s'il change ;
     liste des 💎 nouveaux seulement à 15:00."""
     from datetime import datetime, timezone
     from kelly import app, chat
@@ -529,7 +529,7 @@ def test_refresh_button_and_updates():
     msg, _, coupons = with_fakes(lambda: app.refresh_combo("5", DAY2, now=now), drop=("m2",))
     assert "🔄 COMBINÉ À JOUR 13:00" in msg and "❌ Retiré : H2 – A2" in msg and "K7Q2X" in msg, msg[:300]
     assert len(fair.load_combos()) == 1, "le suivi garde le combiné du matin"
-    assert seen_fresh == [None], "bouton « 🔄 Cotes à jour » : la règle des 5 min (XBET_FRESH_MIN), pas celle du combi"
+    assert seen_fresh == [None], "bouton « 🎟️ Vérifier ce combiné » : la règle des 5 min (XBET_FRESH_MIN), pas celle du combi"
     btn = chat.with_played_button("x", "v5", DAY2, funded=False, refresh=5)
     assert any(b["callback_data"] == f"xmaj|5|{DAY2}" for row in btn.markup["inline_keyboard"] for b in row)
     # relevé de 13:00 : un pari retiré -> combiné renvoyé à jour ; 2e relevé identique -> rien ; pas de liste 💎 avant 15:00
@@ -550,9 +550,10 @@ def test_refresh_button_and_updates():
     finally:
         telegram.send = old
     assert not again, "rien n'a changé depuis la dernière version envoyée : pas de message"
-    # relevé manuel « 🔄 Actualiser les cotes » : bilan, puis refus s'il est redemandé moins de 10 min après
+    # relevé manuel « 🔄 Mettre à jour tous les paris » : bilan, puis refus s'il est redemandé moins de 10 min après
     from kelly import chat
-    assert chat.route("🔄 Actualiser les cotes") == ("/cotes", None) and chat.route("actualiser") == ("/cotes", None)
+    assert chat.route("🔄 Mettre à jour tous les paris") == ("/cotes", None) and chat.route("actualiser") == ("/cotes", None)
+    assert chat.route("🔄 Actualiser les cotes") == ("/cotes", None) and chat.route("mettre à jour") == ("/cotes", None)
     store.save(app.COMBO_UPDATES, {})
     fetch = lambda ev, deadline=None, wanted=None: {k: v for k, v in fake_px(("m3",)).items() if k in {e["id"] for _, e in ev}}  # noqa: E731
     reply, sent, _ = with_fakes(lambda: app.manual_refresh(now=now.replace(hour=16), fetch=fetch))
@@ -560,7 +561,7 @@ def test_refresh_button_and_updates():
     assert sent[0].startswith("⏳") and any("COMBINÉ À JOUR" in m for m in sent), sent
     again = app.manual_refresh(now=now.replace(hour=16, minute=5), fetch=fetch)
     assert again.startswith("Cotes déjà actualisées à 16:00"), again
-    print("ok  bouton « Cotes à jour » et combinés du matin renvoyés seulement s'ils changent")
+    print("ok  bouton « Vérifier ce combiné » et combinés du matin renvoyés seulement s'ils changent")
 
 
 def main():

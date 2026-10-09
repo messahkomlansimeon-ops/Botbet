@@ -236,7 +236,7 @@ _ODDS_TTL = [TTL_ODDS]           # C.XBET_FRESH_MIN min pendant live_mode : cote
 def live_mode(fresh_min=None):
     """Vérification en direct (combi N, boutons « 🔄 ») : cotes relues même pendant une commande Telegram (hors ligne par ailleurs :
     seul 1xBet est relu), C.XBET_LIVE_DELAY s entre deux requêtes ; celles lues il y a moins de C.XBET_FRESH_MIN min (relevé,
-    « Actualiser les cotes » ou combi juste avant) sont reprises du cache : pas de proxy pour rien. Tout est rétabli à la sortie."""
+    « Mettre à jour tous les paris » ou combi juste avant) sont reprises du cache : pas de proxy pour rien. Tout est rétabli à la sortie."""
     from .. import cache as kcache
     old = (kcache.OFFLINE, _ODDS_TTL[0], http.DELAY_OVERRIDE.get(DOMAIN))
     fresh = C.XBET_FRESH_MIN if fresh_min is None else fresh_min           # « combi N » : C.XBET_COMBI_FRESH_MIN

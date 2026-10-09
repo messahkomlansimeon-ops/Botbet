@@ -246,13 +246,13 @@ XBET_DIRECT = _bool("XBET_DIRECT", False)
 # rattaché) ; le site 1xbet.ci (286) relit aussi ces codes. Un code créé pour 286 répond « code incorrect » dans l'appli.
 XBET_COUPON_PARTNER = _int("XBET_COUPON_PARTNER", 1)
 XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)
-# Vérification EN DIRECT (combi N, bouton « 🔄 Cotes à jour », relevés de 2 h) : cotes relues à l'instant, sans cache
+# Vérification EN DIRECT (combi N, bouton « 🎟️ Vérifier ce combiné », relevés de 2 h) : cotes relues à l'instant, sans cache
 XBET_FRESH_MIN = _int("XBET_FRESH_MIN", 5)          # en direct : cotes lues il y a moins de N min reprises telles quelles (pas de proxy)
 XBET_COMBI_FRESH_MIN = _int("XBET_COMBI_FRESH_MIN", 180)   # « combi N » : cotes de moins de 3 h reprises (relevé de 15:00, actualisation)
 XBET_LIVE_DELAY = _float("XBET_LIVE_DELAY", 1.0)    # secondes entre deux requêtes 1xBet en direct (3 s pour les relevés)
 XBET_LIVE_SPARES = _int("XBET_LIVE_SPARES", 8)      # matchs remplaçants relus avec ceux du combiné
 XBET_SOON_MIN = _int("XBET_SOON_MIN", 10)           # match qui commence dans moins de N min : retiré par 1xBet, jamais repris
-XBET_MANUAL_GAP = _int("XBET_MANUAL_GAP", 10)      # minutes au moins entre deux relevés manuels (« 🔄 Actualiser les cotes »)
+XBET_MANUAL_GAP = _int("XBET_MANUAL_GAP", 10)      # minutes au moins entre deux relevés manuels (« 🔄 Mettre à jour tous les paris »)
 XBET_UPDATE_MOVE = _float("XBET_UPDATE_MOVE", 0.05)  # combiné du matin renvoyé si sa cote totale a bougé de plus de 5 %        # plafond mensuel de données 1xBet via le proxy (forfait 1 Go partagé avec SofaScore)
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
 FAIR_COMBO_KEEP_DAYS = 14
