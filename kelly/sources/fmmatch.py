@@ -8,7 +8,8 @@ les passages horaires (fill, FM_PAGES_PER_RUN pages au plus), jamais sur celui d
 
 Fichier data/fm_matches.json (compact) :
   teams  {id FotMob: {nm, sk: [clés de ligue], d: mise à jour, m: [[jour AAMMJJ, domicile 1/0, puis (pour, contre) pour chaque stat de
-         KEYS]]}} : FM_KEEP_MATCHES derniers matchs par équipe ; None quand la page n'a pas la stat (ligue mal couverte).
+         KEYS]]}} : FM_KEEP_MATCHES derniers matchs par équipe ; None quand la page n'a pas la stat (ligue mal couverte). Les clés
+         ajoutées plus tard (xg, npxg) sont À LA FIN de KEYS : une ligne ancienne, plus courte, se lit avec None aux colonnes manquantes.
   seen   {id du match: jour} : jamais lu deux fois.
   recent {id du match: {d, sk, h, a, s: {stat: [domicile, extérieur]}}} : matchs des FM_RECENT_DAYS derniers jours, pour le règlement
          des paris sur touches, hors-jeu et fautes (match_stats).
@@ -24,9 +25,11 @@ from .. import config as C, store
 from . import fotmob, http, names, state
 
 FILE = "fm_matches.json"
-KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides")
+KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides", "xg", "npxg")      # nouvelles clés : toujours à la fin
 STAT_KEYS = {"total_shots": "shots", "ShotsOnTarget": "sot", "corners": "corners", "fouls": "fouls", "player_throws": "throws",
-             "Offsides": "offsides", "yellow_cards": "yc", "red_cards": "rc"}
+             "Offsides": "offsides", "yellow_cards": "yc", "red_cards": "rc", "expected_goals": "xg",
+             "expected_goals_non_penalty": "npxg"}
+FLOAT_KEYS = ("xg", "npxg")                  # valeurs décimales (« 1.62 »), arrondies à 2 décimales
 NEVER_ZERO = ("throws", "shots")             # 0-0 sur ces stats = non suivie par FotMob pour ce match, pas un vrai zéro
 R_DAY, R_HOME, R_STATS = 0, 1, 2
 SOON_DAYS = 3                                # une équipe qui rejoue dans ce délai passe avant les autres
@@ -50,6 +53,14 @@ def _int(v):
         return int(str(v).split(" ")[0])
     except (TypeError, ValueError):
         return None
+
+
+def _float(v):
+    try:
+        x = float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+    return round(x, 2) if 0 <= x < 20 else None         # nan, négatif ou absurde -> manquant
 
 
 def _next_data(html):
@@ -79,12 +90,15 @@ def parse_match(html):
         for s in grp.get("stats") or []:
             k, v = STAT_KEYS.get(s.get("key")), s.get("stats")
             if k and k not in raw and isinstance(v, list) and len(v) == 2:
-                pair = [_int(v[0]), _int(v[1])]
+                pair = [_float(v[0]), _float(v[1])] if k in FLOAT_KEYS else [_int(v[0]), _int(v[1])]
                 if None not in pair:
                     raw[k] = pair
     st = {"goals": [_int(teams[0]["score"]), _int(teams[1]["score"])]}
     for k in ("shots", "sot", "corners", "fouls", "throws", "offsides"):
         if k in raw and not (k in NEVER_ZERO and raw[k] == [0, 0]):
+            st[k] = raw[k]
+    for k in FLOAT_KEYS:                             # xG 0.00-0.00 alors qu'il y a des buts : stat non suivie, pas un vrai zéro
+        if k in raw and not (raw[k] == [0, 0] and sum(st["goals"]) > 0):
             st[k] = raw[k]
     evs = ((((pp.get("content") or {}).get("matchFacts") or {}).get("events") or {}).get("events")) or []
     if evs:                                          # cartons comptés sur le fil du match : la stat vaut parfois 0-0 à tort (Brésil)
@@ -165,9 +179,15 @@ def record(d, m, sport_key):
 
 def _views(rows):
     from . import footballdata as fd
-    recs = [{k: (r[R_STATS + 2 * i], r[R_STATS + 2 * i + 1]) for i, k in enumerate(KEYS)} for r in rows]
+    cell = lambda r, j: r[j] if j < len(r) else None          # noqa: E731 - ligne ancienne plus courte : colonne manquante = None
+    recs = [{k: (cell(r, R_STATS + 2 * i), cell(r, R_STATS + 2 * i + 1)) for i, k in enumerate(KEYS)} for r in rows]
     n = C.APISTATS_LAST
-    view = lambda rs: fd._avg_view(rs, keys=KEYS, min_count=min(C.APISTATS_MIN_N, len(rs)))      # noqa: E731
+
+    def view(rs):
+        v = fd._avg_view(rs, keys=KEYS, min_count=min(C.APISTATS_MIN_N, len(rs)))
+        v["xg_n"] = sum(1 for r in rs if r["xg"][0] is not None and r["xg"][1] is not None)      # matchs qui portent un xG
+        return v
+
     return {"all": view(recs[-n:]), "home": view([x for x, r in zip(recs, rows) if r[R_HOME]][-n:]),
             "away": view([x for x, r in zip(recs, rows) if not r[R_HOME]][-n:])}
 
@@ -317,7 +337,8 @@ def match_stats(b):
     if not r:
         return None
     s = r["s"]
-    out = {k: s[k][0] + s[k][1] for k in s if k != "goals"}
-    out["side"] = {side: {k: s[k][i] for k in s if k != "goals"} for i, side in ((0, "home"), (1, "away"))}
+    ks = [k for k in s if k != "goals" and k not in FLOAT_KEYS]       # le xG ne sert à régler aucun pari
+    out = {k: s[k][0] + s[k][1] for k in ks}
+    out["side"] = {side: {k: s[k][i] for k in ks} for i, side in ((0, "home"), (1, "away"))}
     out["players"] = {}
     return out

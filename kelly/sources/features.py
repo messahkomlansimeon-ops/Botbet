@@ -108,6 +108,7 @@ def _understat(out, home, away, sport_key):
     eh, ea = _mix(hv.get("xg"), av.get("xga")), _mix(av.get("xg"), hv.get("xga"))
     if eh is not None and ea is not None:
         out["exp_xg_home"], out["exp_xg_away"], out["exp_xg_total"] = _r(eh), _r(ea), _r(eh + ea)
+        out["xg_src"] = "understat"
 
 
 def _fotmob(out, home, away, sport_key):
@@ -131,6 +132,8 @@ def _fotmob(out, home, away, sport_key):
         return
     out.update(new)
     out["sources"].append("FotMob")
+    if "exp_xg_home" in new:
+        out["xg_src"] = "fotmob-classement"           # totaux de saison : _fmmatch les remplace par les xG des matchs récents s'il en a
 
 
 def _fbref(out, home, away, sport_key):
@@ -237,9 +240,47 @@ def _fm_candidates(prof, sport_key):
     return {n: p for n, p in prof.items() if sport_key in p.get("sk", [])}
 
 
+XG_KEYS = ("exp_xg_home", "exp_xg_away", "exp_xg_total")
+
+
+def _xg_view(team, venue):
+    """Vue (domicile / extérieur, sinon toutes) d'un profil fmmatch qui compte au moins XG_MIN_MATCHES matchs avec xG (et dont les
+    moyennes xg_for / xg_against sont servies : min_count des profils) ; None sinon."""
+    for v in (team.get(venue) or {}, team.get("all") or {}):
+        if v.get("xg_n", 0) >= C.XG_MIN_MATCHES and v.get("xg_for") is not None and v.get("xg_against") is not None:
+            return v
+    return None
+
+
+def _xg_part(v, side, goals_side):
+    """xG moyen d'une vue (`side` : « for » / « against »), ramené vers les buts quand l'échantillon est court : poids du xG
+    = min(1, matchs avec xG / XG_FULL_N), le reste en buts (4 matchs sur XG_FULL_N=6 : 2/3 xG + 1/3 buts)."""
+    xg = v.get("xg_" + side)
+    if xg is None:
+        return None
+    g = v.get(f"{goals_side}_{side}")
+    w = min(1.0, v["xg_n"] / C.XG_FULL_N) if C.XG_FULL_N > 0 else 1.0
+    return xg if g is None else w * xg + (1 - w) * g
+
+
+def _fm_xg(ht, at):
+    """{exp_xg_home, exp_xg_away, exp_xg_total} d'après les xG par match des deux équipes (mêmes mélanges que _expect : l'attaque de l'une
+    et la défense de l'autre, à domicile / à l'extérieur) ; {} si l'une des deux a moins de XG_MIN_MATCHES matchs avec xG."""
+    h, a = _xg_view(ht, "home"), _xg_view(at, "away")
+    if not h or not a:
+        return {}
+    eh = _mix(_xg_part(h, "for", "goals"), _xg_part(a, "against", "goals"))
+    ea = _mix(_xg_part(a, "for", "goals"), _xg_part(h, "against", "goals"))
+    if eh is None or ea is None:
+        return {}
+    return dict(zip(XG_KEYS, (_r(eh), _r(ea), _r(eh + ea))))
+
+
 def _fmmatch(out, home, away, sport_key):
     """Stats de match FotMob accumulées (fmmatch) : complètent ce que les sources précédentes n'ont pas, et sont seules à donner
-    touches et hors-jeu. Comme les profils API-Football, leurs clés vont dans aps_keys (qualité selon le nombre de matchs)."""
+    touches et hors-jeu. Comme les profils API-Football, leurs clés vont dans aps_keys (qualité selon le nombre de matchs).
+    Exception : les xG par match (exp_xg_*) remplacent ceux du classement de saison de _fotmob (xg_src « fotmob-classement », plus
+    grossier) ; ils ne touchent pas à Understat. out["xg_src"] dit d'où vient exp_xg_* : « fotmob-matchs » ici."""
     prof = _fm_candidates(_p("fmm", fmmatch).get("teams") or {}, sport_key)
     h, a = names.best_team(home, prof), names.best_team(away, prof)
     if not h or not a or prof[h] is prof[a]:
@@ -250,6 +291,12 @@ def _fmmatch(out, home, away, sport_key):
         hv, av = _expect(ht, at, stat)
         _put_pair(tmp, stat, stat, hv, av, total=True)
     new = {k: v for k, v in tmp.items() if k not in out}
+    xg = _fm_xg(ht, at)
+    if xg and (not any(k in out for k in XG_KEYS) or out.get("xg_src") == "fotmob-classement"):
+        new |= xg
+        if out.get("xg_src") == "fotmob-classement" and "FotMob" in out["sources"]:
+            out["sources"].remove("FotMob")              # le classement n'a plus rien fourni
+        out["xg_src"] = "fotmob-matchs"
     if not new:
         return
     out.update(new)

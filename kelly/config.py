@@ -160,6 +160,9 @@ FM_KEEP_MATCHES = 12                              # derniers matchs gardés par 
 FM_KEEP_DAYS = 150                                # matchs plus anciens ignorés ; équipe oubliée sans mise à jour depuis
 FM_RECENT_DAYS = 10                               # matchs gardés en entier pour le règlement des paris
 FM_SETTLE_PAGES = 15                              # pages lues au plus par passage pour régler un pari (match pas encore accumulé)
+# xG par match (fmmatch -> features._fmmatch) : meilleur prédicteur des buts futurs que les buts ou le total de saison du classement FotMob
+XG_MIN_MATCHES = _int("XG_MIN_MATCHES", 4)        # matchs portant un xG, par équipe, pour que exp_xg_* vienne des matchs (sinon classement de saison)
+XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir de là ; en dessous, régression vers les buts : n/XG_FULL_N xG + le reste en buts
 # ---- Combinés à cote juste (kelly/combos.py) : bâtis sur les pronostics sans cote, jamais mélangés aux combinés réels ----
 FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
