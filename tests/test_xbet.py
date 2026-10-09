@@ -188,12 +188,58 @@ def test_apply_and_messages():
     print("ok  relevé du matin, messages 💎 et combinés aux cotes 1xBet")
 
 
+def test_afternoon_refresh():
+    """15:00 : match commencé ignoré, 💎 du matin pas renvoyé, nouveau 💎 envoyé et suivi, match non retrouvé : cotes du matin gardées."""
+    from datetime import datetime, timezone
+    from kelly import app, fair, telegram
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    store.save("fair.json", [])
+    px = {}
+    xbet._ladder(CORNERS["eventGroups"], *xbet.SUBGAMES[2], px)
+    started = prono("alternate_totals_corners", "Over", 9.5, 0.60, alts=[["Over", 9.5, 0.60, None]]) | {
+        "id": "s", "commence": "2026-10-09T14:00:00Z"}
+    kept = prono("alternate_totals_corners", "Over", 9.5, 0.60, alts=[["Over", 9.5, 0.60, None]]) | {
+        "id": "k", "xodds": 1.99, "xev": 0.194, "xp": 0.47}
+    fresh = prono("alternate_totals_corners", "Over", 8.5, 0.68, alts=[["Over", 8.5, 0.68, None]]) | {"id": "f"}
+    gone = prono("team_fouls_total", "Over", 22.5, 0.66) | {"id": "g", "xodds": 1.9, "xev": 0.25}
+    store.save("today.json", {"day": "2026-10-09", "picks": [], "pronos": [started, kept, fresh, gone]})
+    asked, sent = {}, []
+
+    def fetch(events, deadline=None, wanted=None):
+        asked["ids"] = sorted(e["id"] for _, e in events)
+        return {"k": {"gid": 1, "px": px}, "f": {"gid": 2, "px": px}}          # « g » non retrouvé cet après-midi
+    old = telegram.send
+    telegram.send = lambda text, *a, **k: sent.append(text)
+    try:
+        n = app.run_xbet_refresh(now=datetime(2026, 10, 9, 15, 0, tzinfo=timezone.utc), fetch=fetch)
+    finally:
+        telegram.send = old
+    assert asked["ids"] == ["f", "g", "k"], asked                               # le match commencé n'est pas relu
+    assert n == 1 and len(sent) == 1 and "Nouvelles cotes 1xBet" in sent[0] and "8,5 corners — cote 1xBet <b>1,59</b>" in sent[0]
+    assert "9,5" not in sent[0], "le 💎 du matin n'est pas renvoyé"
+    saved = {c["id"]: c for c in store.load("today.json", {})["pronos"]}
+    assert saved["f"]["xodds"] == 1.59 and saved["g"]["xodds"] == 1.9 and "xodds" not in saved["s"]
+    assert [r["id"] for r in fair.load()] == ["f"] and fair.load()[0]["xodds"] == 1.59
+    # rien de nouveau : aucun message
+    sent.clear()
+    telegram.send = lambda text, *a, **k: sent.append(text)
+    try:
+        assert app.run_xbet_refresh(now=datetime(2026, 10, 9, 16, 0, tzinfo=timezone.utc), fetch=fetch) == 0 and not sent
+        # pas de pronostics du jour Kelly (matin pas encore passé) : rien
+        assert app.run_xbet_refresh(now=datetime(2026, 10, 10, 15, 0, tzinfo=timezone.utc), fetch=fetch) == 0 and not sent
+    finally:
+        telegram.send = old
+    print("ok  relevé 1xBet de l'après-midi")
+
+
 def main():
     test_parse_and_url()
     test_find_match()
     test_fetch_day_requests()
     test_choose_line_and_viability()
     test_apply_and_messages()
+    test_afternoon_refresh()
     print("tests 1xBet : OK")
 
 

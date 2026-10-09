@@ -507,6 +507,34 @@ def plan_closing(due, combos, bulk=True):
     return sorted(calls, key=lambda c: (c["rank"], c["cost"]))
 
 
+def run_xbet_refresh(now=None, fetch=None):
+    """Second relevé 1xBet de la journée (15:00, kelly-xbet.timer) : les pronostics du matin (data/today.json) dont
+    le match n'a pas commencé sont remis aux cotes 1xBet du moment (les marchés tirs, fautes... ouvrent souvent le jour même) ;
+    /top et /combi les relisent. Message seulement s'il y a de NOUVEAUX paris 💎 (jouables à la cote 1xBet), suivis comme ceux du
+    matin. `fetch` : injectable pour les tests (voir xprice.apply). -> nombre de nouveaux 💎."""
+    now = now or now_utc()
+    today = store.load("today.json", {})
+    kday = now.date() if now.hour >= C.DAY_END_HOUR else now.date() - timedelta(days=1)
+    if today.get("day") != str(kday) or not today.get("pronos"):
+        print(f"[1xbet] pas de pronostics du jour Kelly {kday} : relevé de l'après-midi sauté", file=sys.stderr)
+        return 0
+    telegram.flush_outbox()
+    pronos = today["pronos"]
+    soon = now + timedelta(minutes=10)
+    upcoming = [c for c in pronos if datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
+    before = {c["key"] for c in CB.best_per_match(upcoming) if c.get("xodds")}
+    xprice.apply(upcoming, fetch=fetch)
+    store.save("today.json", today)                 # mêmes objets : les pronostics à venir portent les nouvelles cotes
+    new = [c for c in CB.best_per_match(upcoming) if c.get("xodds") and c["key"] not in before]
+    if new:
+        fair.record(new, today["day"], shown=new)
+        telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet de l'après-midi",
+                                 intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
+                                       "depuis ce matin). Vérifie la cote avant de valider."))
+    print(f"[1xbet] relevé de l'après-midi : {len(upcoming)} pronostic(s) à venir, {len(new)} nouveau(x) 💎", file=sys.stderr)
+    return len(new)
+
+
 def run_track(events_for=None, now=None):
     """Passage horaire : cote de clôture des paris ENVOYÉS dont le match démarre bientôt (bulk par ligue
     quand c'est moins cher, sinon un appel par match, seulement les marchés suivis) + alertes de cote.

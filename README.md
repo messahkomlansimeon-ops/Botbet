@@ -97,7 +97,8 @@ Chaque matin, juste après le calcul des pronostics, Kelly lit chez 1xBet (1xbet
 - **Combinés** : jambes aux cotes 1xBet quand elles sont connues ; toutes connues = « 💎 COMBINÉ AUX COTES 1XBET » avec la cote réelle.
 - **Cartons** : 1xBet ne compte que les jaunes, Kelly jaunes + rouges : pas comparés.
 - **Accès poli** : adresses publiques seulement (robots.txt respecté, identité KellyBot, 3 s entre requêtes, cache 2 h), aucun jeton, proxy ni faux navigateur ; 403/429 ou page anti-robot = source coupée 24 h. Au plus `XBET_MAX_MATCHES` (60) matchs en `XBET_SECONDS` (480 s), les mieux classés d'abord ; `XBET_ENABLED=0` coupe tout. Piège de l'API : les paramètres de l'adresse doivent être dans l'ordre alphabétique (sinon HTTP 400).
-- Les cotes sont celles de 04:00 : vérifie qu'elles n'ont pas baissé avant de valider.
+- **Deux relevés par jour** : 04:00 (passage du matin) et 15:00 (`python bot.py --xbet`, timer `kelly-xbet.timer`). À 15:00, les pronostics du matin dont le match n'a pas commencé sont remis aux cotes 1xBet du moment (les marchés tirs, fautes... ouvrent souvent le jour même) ; `/top` et `/combi` les relisent, et un message « 💎 Nouvelles cotes 1xBet de l'après-midi » part seulement s'il y a de nouveaux paris jouables. Un match non retrouvé garde ses cotes du matin.
+- Vérifie toujours que la cote n'a pas baissé avant de valider.
 
 ## Touches, hors-jeu, fautes, tirs cadrés : stats de match FotMob
 Les pages de match de FotMob (HTML autorisé par robots.txt ; seul `/api/*` est interdit et n'est jamais appelé) donnent pour chaque équipe les **touches, hors-jeu, fautes, tirs, tirs cadrés, corners et cartons** (les cartons sont comptés sur le fil du match : la stat vaut parfois 0-0 à tort). La page d'une ligue liste tous les matchs de la saison avec leur lien : Kelly peut donc remonter l'historique d'une équipe, ce que le forfait gratuit d'API-Football interdit. `kelly/sources/fmmatch.py` :

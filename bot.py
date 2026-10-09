@@ -11,6 +11,7 @@
   python bot.py --tune       réglage sur l'historique football-data en cache (demi-vie par ligue, poids des buts) -> data/tuning.json ;
                              budget TUNE_SECONDS (1800 s), reprend où il s'est arrêté ; --force refait tout. À planifier chaque semaine.
                              Mode séparé : ne touche ni aux paris ni à Telegram, ne plante jamais le run du matin.
+  python bot.py --xbet       second relevé des cotes 1xBet (15:00) : pronostics du matin remis aux cotes du moment, message si nouveaux 💎
   python bot.py --export     copie lisible de la base (data/kelly.db) en JSON dans data/sauvegarde/ (la sauvegarde de 23:00 la commite)
   python bot.py --import [dossier]  restaure la base depuis une copie JSON (data/sauvegarde/ par défaut) ; sous le verrou des données
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
@@ -44,6 +45,8 @@ def main(argv):
     elif "--track" in argv:
         app.run_track()
         app.fill_match_stats()
+    elif "--xbet" in argv:
+        app.run_xbet_refresh()
     elif "--alert" in argv:
         app.run_alert(sample)
     elif "--serve" in argv:

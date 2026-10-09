@@ -232,16 +232,17 @@ def single(c, reason=None, title="⭐ PARI DU JOUR", hint=None, stake_txt=None):
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + played_hint(hint))
 
 
-def pronos(items, limit=10):
-    """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale."""
+def pronos(items, limit=10, title=None, intro=None):
+    """Pronostics sans cote de bookmaker, regroupés par match : le match, puis un pari par ligne avec sa cote minimale (ou sa cote
+    1xBet, 💎). `title` / `intro` : autre titre et autre phrase d'introduction (relevé 1xBet de l'après-midi)."""
     shown = items[:limit]
     if not shown:
         return Html(b("🎲 Pronostics Kelly") + "\n" + i("Aucun pronostic assez solide : Kelly ne montre que des pronostics "
                                                                  "viables (assez de chances et de données)."))
     priced = any(c.get("xodds") for c in shown)
-    lines = [b("🎲 Pronostics Kelly"),
-             i("Le meilleur pronostic de chaque match, s'il est solide. "
-               + ("💎 = cote 1xBet relevée par Kelly ce matin et assez haute pour jouer (vérifie qu'elle n'a pas baissé). "
+    lines = [b(title or "🎲 Pronostics Kelly"),
+             i(intro) if intro else i("Le meilleur pronostic de chaque match, s'il est solide. "
+               + ("💎 = cote 1xBet relevée par Kelly aujourd'hui et assez haute pour jouer (vérifie qu'elle n'a pas baissé). "
                   if priced else "") + "« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée.")]
     by = {}
     for c in shown:

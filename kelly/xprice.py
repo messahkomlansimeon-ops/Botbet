@@ -86,6 +86,9 @@ def apply(pronos, fetch=None):
     out["matches"] = len(found)
     for c in pronos:
         m = found.get(c["id"])
+        if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
+            for k in ("xodds", "xev", "xp"):
+                c.pop(k, None)
         r = price(c, m["px"]) if m else None
         if r:
             out[r] += 1
