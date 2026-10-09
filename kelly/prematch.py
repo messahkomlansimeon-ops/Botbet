@@ -12,6 +12,8 @@ Cartons = jaunes + rouges (convention d'API-Football et de football-data) ; à v
 Modèle approfondi (kelly/strength.py) : quand f["deep"] existe, la proba vient de la matrice de scores de Dixon-Coles
 (buts, 2 équipes marquent) ou d'une binomiale négative (corners, cartons), le poids du modèle est celui de config
 multiplié par (0,5 + 0,5 x qualité des données) et le « pourquoi » cite les 2-3 moteurs (c["pm"]["q"] = qualité).
+Le poids des buts de ce modèle est celui mesuré sur l'historique pour la ligue du pari (data/tuning.json, voir kelly/tune.py)
+quand il existe ; sinon config.MODEL_WEIGHT["goals"]. Corners et cartons gardent le poids de config (pas de cotes historiques).
 """
 import math
 
@@ -117,6 +119,14 @@ def deep_p(d, lh, la, market, point, name):
     return over_p(name, strength.p_over(strength.goal_pmf(m), point))
 
 
+def goal_weight(c):
+    """Poids du modèle de buts pour ce pari : celui mesuré sur l'historique pour sa ligue (data/tuning.json, kelly/tune.py),
+    sinon config.MODEL_WEIGHT["goals"]."""
+    from .sources import footballdata as fd
+    w = strength.goal_weight(fd.SPORT_TO_DIV.get(c.get("sport_key")))
+    return C.MODEL_WEIGHT["goals"] if w is None else w
+
+
 def deep_assess(c, f, d):
     """Évaluation par le modèle approfondi (f["deep"]) pour corners, cartons, buts, 2 équipes marquent, 1N2 ; None sinon."""
     m, point = c["market"], c.get("point")
@@ -142,11 +152,11 @@ def deep_assess(c, f, d):
     if m == "totals" and point is not None:
         exp = lh + la
         tag = strength.shorten(f"{label} : {exp:.1f} buts attendus vs ligne {point}" + (f" ; {why['goals']}" if why.get("goals") else ""), 200)
-        return {"kind": "goals", "exp": exp, "p": deep_p(d, lh, la, m, point, c["name"]), "w": C.MODEL_WEIGHT["goals"] * qscale(q),
+        return {"kind": "goals", "exp": exp, "p": deep_p(d, lh, la, m, point, c["name"]), "w": goal_weight(c) * qscale(q),
                 "tag": tag, "flag": C.PM_FLAG * 1.25, "q": q}
     if m == "btts":
         tag = strength.shorten(f"{label} : {lh:.1f}-{la:.1f} buts attendus (les 2 marquent)" + (f" ; {why['goals']}" if why.get("goals") else ""), 200)
-        return {"kind": "btts", "p": deep_p(d, lh, la, m, None, c["name"]), "w": C.MODEL_WEIGHT["goals"] * qscale(q),
+        return {"kind": "btts", "p": deep_p(d, lh, la, m, None, c["name"]), "w": goal_weight(c) * qscale(q),
                 "tag": tag, "flag": C.PM_FLAG * 1.25, "q": q}
     if m == "h2h":
         who = "draw" if c["name"] == "Draw" else ("home" if c["name"] == c["home"] else "away")

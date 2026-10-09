@@ -8,6 +8,9 @@
   python bot.py --commands   traite les commandes Telegram reçues (une passe)
   python bot.py --serve      écoute les commandes en continu (serveur)
   python bot.py --check      diagnostic des clés + budget de crédits (aucun crédit dépensé) + message de test
+  python bot.py --tune       réglage sur l'historique football-data en cache (demi-vie par ligue, poids des buts) -> data/tuning.json ;
+                             budget TUNE_SECONDS (1800 s), reprend où il s'est arrêté ; --force refait tout. À planifier chaque semaine.
+                             Mode séparé : ne touche ni aux paris ni à Telegram, ne plante jamais le run du matin.
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
 """
 import os
@@ -31,6 +34,9 @@ def main(argv):
     sample = "--sample" in argv
     if "--check" in argv:
         sys.exit(0 if app.run_check() else 1)
+    elif "--tune" in argv:
+        from kelly import tune
+        sys.exit(tune.main(argv))
     elif "--snapshot" in argv:
         app.run_snapshot()
     elif "--track" in argv:

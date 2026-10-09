@@ -61,8 +61,54 @@ _names = {}
 
 
 def reload():
-    """Oublie les modèles en mémoire (après une actualisation des sources)."""
-    _memo.clear(), _names.clear(), _stamp_memo.clear()
+    """Oublie les modèles et les réglages mesurés en mémoire (après une actualisation des sources)."""
+    _memo.clear(), _names.clear(), _stamp_memo.clear(), _tuned.clear()
+
+
+# ---------- réglages mesurés (data/tuning.json, écrit par kelly/tune.py) ----------
+
+TUNING_FILE = "tuning.json"
+HL_RANGE = (20, 1000)            # demi-vie acceptée dans tuning.json (jours) ; hors bornes = ignorée
+GW_RANGE = (0.0, 0.8)            # poids du modèle (buts) accepté dans tuning.json
+_tuned = {}                      # chemin -> (signature du fichier, contenu)
+
+
+def tuning():
+    """Contenu de data/tuning.json ({} si absent ou illisible), gardé en mémoire et relu dès que le fichier change
+    (le bot qui tourne en continu voit donc un réglage fraîchement mesuré sans redémarrer). Ne lève jamais."""
+    p = store.path(TUNING_FILE)
+    try:
+        st = os.stat(p)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        _tuned.pop(p, None)
+        return {}
+    hit = _tuned.get(p)
+    if hit and hit[0] == sig:
+        return hit[1]
+    data = store.load(TUNING_FILE, {})
+    data = data if isinstance(data, dict) else {}
+    _tuned[p] = (sig, data)
+    return data
+
+
+def _tuned_num(section, div, lo, hi):
+    v = (tuning().get(section) or {}).get(div)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or not lo <= v <= hi:
+        return None
+    return v
+
+
+def hl_for(div):
+    """Demi-vie (jours) à utiliser pour la ligue `div` : valeur mesurée (data/tuning.json) sinon HALF_LIFE."""
+    v = _tuned_num("half_life", div, *HL_RANGE) if div else None
+    return HALF_LIFE if v is None else v
+
+
+def goal_weight(div):
+    """Poids mesuré du modèle de buts face aux books pour la ligue `div` (0 à 0,8), ou None si non mesuré : l'appelant
+    garde alors config.MODEL_WEIGHT["goals"]."""
+    return _tuned_num("goal_weight", div, *GW_RANGE) if div else None
 
 
 def today():
@@ -589,13 +635,14 @@ def get(div, on=None, loader=None):
         hit = _memo.get(div)
         if hit and hit[0] == on.isoformat():
             return hit[1]
-        key = f"{on.isoformat()}|{_stamp()}"
+        hl = hl_for(div)
+        key = f"{on.isoformat()}|{_stamp()}" + ("" if hl == HALF_LIFE else f"|hl{hl}")        # demi-vie mesurée : cache du jour refait une fois
         disk = store.load(_file(div), None)
         disk = disk if isinstance(disk, dict) and disk.get("v") == VERSION else None
         if disk and disk.get("key") == key:
             _memo[div] = (key.split("|")[0], disk)
             return disk
-        model = build((loader or load_matches)(div), on, div=div)
+        model = build((loader or load_matches)(div), on, hl, div=div)
         if model:
             model["key"] = key
             _save(div, model)
@@ -613,7 +660,7 @@ def get(div, on=None, loader=None):
 def find_team(model, name):
     from .sources import names
     ts = model["stats"]["goals"]["t"]
-    key = (model.get("div"), model.get("on"), name)
+    key = (model.get("div"), model.get("on"), model.get("hl"), len(ts), name)     # demi-vie : même date, autres équipes retenues
     if key not in _names:
         _names[key] = names.best_team(name, ts)
     return _names[key]
@@ -1158,16 +1205,34 @@ def _br(p, k):
     return sum((p[i] - (1.0 if i == k else 0.0)) ** 2 for i in range(len(p)))
 
 
-def backtest(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None):
+def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None):
     """Évaluation pas à pas (walk-forward) : avant chaque lot de matchs (tous les `step_days` jours) le modèle est
-    réajusté sur le passé seulement, puis prédit le lot. Compare au modèle naïf (fréquences de la ligue avant
+    réajusté sur le passé seulement, puis prédit le lot. Produit (match, p1x2 [H, D, A], P(plus de 2,5)) pour chaque
+    match de [test_from, test_to[ ; (match, None, None) quand le modèle ne peut pas le prédire. Générateur : l'appelant
+    peut s'arrêter (budget de temps) entre deux matchs."""
+    tf = str(test_from)
+    te = str(test_to) if test_to else "9999"
+    batch_start, model = None, None
+    for m in sorted((m for m in matches if tf <= m["date"] < te), key=lambda m: m["date"]):
+        d = date.fromisoformat(m["date"])
+        if batch_start is None or d >= batch_start + timedelta(days=step_days):
+            batch_start = d
+            model = build(matches, d, hl, stats, div)
+        pred = predict(model, m["home"], m["away"], d, m.get("referee"), ctx) if model else None
+        if not pred:
+            yield m, None, None
+            continue
+        gr = grid(pred)
+        yield m, [gr["1x2"]["H"], gr["1x2"]["D"], gr["1x2"]["A"]], gr["totals"]["2.5"]["over"]
+
+
+def backtest(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None):
+    """Évaluation pas à pas (walk-forward, voir walk). Compare au modèle naïf (fréquences de la ligue avant
     `test_from`) et aux cotes de clôture sans marge, sur les mêmes matchs. -> dict {n, n_mkt, model, market, naive, ...} :
     log-loss et Brier du 1N2 (somme des 3 carrés) et du plus de 2,5 buts, plus la calibration du plus de 2,5 buts."""
     tf = str(test_from)
-    te = str(test_to) if test_to else "9999"
     past = [m for m in matches if m["date"] < tf]
-    test = sorted((m for m in matches if tf <= m["date"] < te), key=lambda m: m["date"])
-    if not past or not test:
+    if not past or not any(tf <= m["date"] < (str(test_to) if test_to else "9999") for m in matches):
         return None
     cnt = [sum(1 for m in past if m["ftr"] == k) for k in "HDA"]
     naive3 = [c / len(past) for c in cnt]
@@ -1175,22 +1240,13 @@ def backtest(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=Tr
     acc = {k: {"ll3": 0.0, "br3": 0.0, "llo": 0.0, "bro": 0.0, "n3": 0, "no": 0} for k in ("model", "market", "naive", "model_m")}
     calib = [[0.0, 0.0, 0] for _ in range(5)]
     n = skipped = 0
-    batch_start, model = None, None
-    for m in test:
-        d = date.fromisoformat(m["date"])
-        if batch_start is None or d >= batch_start + timedelta(days=step_days):
-            batch_start = d
-            model = build(matches, d, hl, stats, div)
-        pred = predict(model, m["home"], m["away"], d, m.get("referee"), ctx) if model else None
-        if not pred:
+    for m, p3, po in walk(matches, test_from, test_to, hl, step_days, ctx, stats, div):
+        if p3 is None:
             skipped += 1
             continue
         n += 1
         k3 = "HDA".index(m["ftr"])
         over = 1 if m["hg"] + m["ag"] > 2.5 else 0
-        gr = grid(pred)
-        p3 = [gr["1x2"]["H"], gr["1x2"]["D"], gr["1x2"]["A"]]
-        po = gr["totals"]["2.5"]["over"]
         mk3, mko = market_probs(m)
         rows = [("model", p3, po), ("naive", naive3, naive_o)]
         if mk3 and mko is not None:
