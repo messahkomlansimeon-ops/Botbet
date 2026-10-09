@@ -577,17 +577,31 @@ def save_coupon(legs):
     try:
         r = ses.call(post)
         if not r or not r.ok or not r.content:
+            _coupon_fail(f"HTTP {getattr(r, 'status', '?')} {getattr(r, 'error', '') or 'réponse vide'}", legs)
             return None
         data = json.loads(r.content)
         if not data.get("Success"):
+            _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
+                                    ensure_ascii=False), legs)
             return None
         val = data.get("Value")
         if isinstance(val, str) and val.strip():
             return val.strip()
         if isinstance(val, dict) and val.get("Guid"):
             return str(val["Guid"]).strip()
+        _coupon_fail("réponse sans code : " + str(val)[:200], legs)
         return None
-    except Exception:
+    except Exception as e:                          # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
+        _coupon_fail(f"{type(e).__name__}: {e}", legs)
         return None
     finally:
         ses.close("enregistrement du coupon")
+
+
+def _coupon_fail(why, legs):
+    """Journal d'un code coupon refusé par 1xBet : la raison donnée (sans identifiants du proxy) et les paris envoyés (match, type,
+    ligne, cote), pour comprendre « pas de code » sans recréer de ticket."""
+    why = re.sub(r"://[^@\s]*@", "://***@", str(why))[:400]
+    refs = ", ".join(f"{(c.get('xref') or ['?'])[0]}/{(c.get('xref') or [0, '?'])[1]}/{(c.get('xref') or [0, 0, '?'])[2]}@{c.get('xodds')}"
+                     for c in legs if isinstance(c, dict))
+    print(f"[1xbet] coupon refusé : {why} — paris : {refs[:600]}", file=sys.stderr)
