@@ -200,11 +200,14 @@ def leagues():
 
 
 def candidates(d, today=None):
-    """Matchs terminés à lire, du plus utile au moins utile : équipes qui rejouent bientôt, puis équipes les moins fournies, puis les plus
-    récents. Seuls les FM_KEEP_MATCHES derniers matchs de chaque équipe comptent, dans la fenêtre FM_KEEP_DAYS."""
+    """Matchs terminés à lire, du plus utile au moins utile : équipes qui rejouent bientôt ; parmi elles, d'abord celles qui n'ont pas
+    encore APISTATS_MIN_N matchs (le minimum d'un pronostic), dans l'ordre de priorité du catalogue (5 grands championnats, puis le
+    reste de l'Europe, les Amériques...) ; puis les moins fournies, puis les matchs les plus récents. Seuls les FM_KEEP_MATCHES
+    derniers matchs de chaque équipe comptent, dans la fenêtre FM_KEEP_DAYS."""
     today = today or _today()
     oldest, soon_end = str(today - timedelta(days=C.FM_KEEP_DAYS)), str(today + timedelta(days=SOON_DAYS))
     out, ids = [], set()
+    rank = {k: i for i, k in enumerate(C.LEAGUE_KEYS)}             # ordre du catalogue : la priorité des ligues
     for sk in leagues():
         ms = league_matches(sk)
         soon = {t for m in ms if not m["done"] and str(today) <= m["d"] <= soon_end for t in (m["hid"], m["aid"])}
@@ -219,7 +222,8 @@ def candidates(d, today=None):
             if not fresh:
                 continue
             have = min(n_matches(d["teams"].get(t)) for t in (m["hid"], m["aid"]))
-            pri = (0 if any(t in soon for t in (m["hid"], m["aid"])) else 1, min(have, C.APISTATS_GOOD_N), -_d2i(m["d"]))
+            pri = (0 if any(t in soon for t in (m["hid"], m["aid"])) else 1, 0 if have < C.APISTATS_MIN_N else 1, rank.get(sk, len(rank)),
+                   min(have, C.APISTATS_GOOD_N), -_d2i(m["d"]))
             ids.add(m["id"])
             out.append((pri, sk, m))
     return [(sk, m) for _, sk, m in sorted(out, key=lambda x: x[0])]
