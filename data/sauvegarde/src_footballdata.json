@@ -19173,85 +19173,17 @@
 }
 },
 "leagues": {
-"SWE": {
-"n": 240,
-"goals": 2.98
-},
-"T1": {
+"E2": {
 "n": 300,
-"goals": 2.76,
-"shots": 26.18,
-"corners": 9.42,
-"fouls": 26.87,
-"cards": 4.69
-},
-"NOR": {
-"n": 250,
-"goals": 3.24
+"goals": 2.81,
+"shots": 25.21,
+"corners": 10.39,
+"fouls": 23.35,
+"cards": 3.83
 },
 "MEX": {
 "n": 300,
 "goals": 2.83
-},
-"AUT": {
-"n": 205,
-"goals": 2.77
-},
-"P1": {
-"n": 300,
-"goals": 2.72,
-"shots": 24.11,
-"corners": 9.33,
-"fouls": 26.73,
-"cards": 4.97
-},
-"G1": {
-"n": 271,
-"goals": 2.56,
-"shots": 23.87,
-"corners": 8.7,
-"fouls": 29.37,
-"cards": 5.34
-},
-"JPN": {
-"n": 178,
-"goals": 2.62
-},
-"E3": {
-"n": 300,
-"goals": 2.53,
-"shots": 24.65,
-"corners": 9.97,
-"fouls": 22.78,
-"cards": 3.75
-},
-"I1": {
-"n": 300,
-"goals": 2.55,
-"shots": 25.36,
-"corners": 8.89,
-"fouls": 24.26,
-"cards": 3.72
-},
-"IRL": {
-"n": 197,
-"goals": 2.69
-},
-"SP1": {
-"n": 300,
-"goals": 2.83,
-"shots": 25.38,
-"corners": 9.6,
-"fouls": 24.99,
-"cards": 4.64
-},
-"F2": {
-"n": 300,
-"goals": 2.56,
-"shots": 23.17,
-"corners": 9.11,
-"fouls": 28.2,
-"cards": 4.2
 },
 "D1": {
 "n": 300,
@@ -19261,25 +19193,65 @@
 "fouls": 20.73,
 "cards": 3.82
 },
-"CHN": {
-"n": 265,
-"goals": 3.17
+"SC0": {
+"n": 270,
+"goals": 2.74,
+"shots": 25.77,
+"corners": 10.3,
+"fouls": 24.24,
+"cards": 4.07
 },
-"D2": {
+"F2": {
 "n": 300,
-"goals": 3.06,
-"shots": 27.44,
-"corners": 10.19,
-"fouls": 24.07,
-"cards": 4.59
+"goals": 2.56,
+"shots": 23.17,
+"corners": 9.11,
+"fouls": 28.2,
+"cards": 4.2
 },
-"DNK": {
-"n": 204,
-"goals": 3.0
+"IRL": {
+"n": 197,
+"goals": 2.69
+},
+"NOR": {
+"n": 250,
+"goals": 3.24
 },
 "POL": {
 "n": 300,
 "goals": 2.76
+},
+"CHN": {
+"n": 265,
+"goals": 3.17
+},
+"SP2": {
+"n": 300,
+"goals": 2.7,
+"shots": 25.56,
+"corners": 9.29,
+"fouls": 26.34,
+"cards": 5.44
+},
+"USA": {
+"n": 300,
+"goals": 3.26
+},
+"SP1": {
+"n": 300,
+"goals": 2.83,
+"shots": 25.38,
+"corners": 9.6,
+"fouls": 24.99,
+"cards": 4.64
+},
+"F1": {
+"n": 300,
+"goals": 2.8,
+"shots": 25.28,
+"corners": 9.56,
+"fouls": 23.97,
+"cards": 3.84
 },
 "B1": {
 "n": 300,
@@ -19297,49 +19269,49 @@
 "fouls": 28.99,
 "cards": 4.6
 },
-"E2": {
+"T1": {
 "n": 300,
-"goals": 2.81,
-"shots": 25.21,
-"corners": 10.39,
-"fouls": 23.35,
-"cards": 3.83
-},
-"ARG": {
-"n": 300,
-"goals": 2.21
-},
-"E0": {
-"n": 300,
-"goals": 2.75,
-"shots": 25.96,
-"corners": 9.94,
-"fouls": 21.64,
-"cards": 3.88
-},
-"SWZ": {
-"n": 254,
-"goals": 3.41
+"goals": 2.76,
+"shots": 26.18,
+"corners": 9.42,
+"fouls": 26.87,
+"cards": 4.69
 },
 "BRA": {
 "n": 300,
 "goals": 2.7
 },
-"SC0": {
-"n": 270,
-"goals": 2.74,
-"shots": 25.77,
-"corners": 10.3,
-"fouls": 24.24,
-"cards": 4.07
+"JPN": {
+"n": 178,
+"goals": 2.62
 },
-"E1": {
+"SWZ": {
+"n": 254,
+"goals": 3.41
+},
+"E3": {
 "n": 300,
-"goals": 2.71,
-"shots": 25.73,
-"corners": 10.52,
-"fouls": 21.89,
-"cards": 3.94
+"goals": 2.53,
+"shots": 24.65,
+"corners": 9.97,
+"fouls": 22.78,
+"cards": 3.75
+},
+"SWE": {
+"n": 240,
+"goals": 2.98
+},
+"D2": {
+"n": 300,
+"goals": 3.06,
+"shots": 27.44,
+"corners": 10.19,
+"fouls": 24.07,
+"cards": 4.59
+},
+"FIN": {
+"n": 195,
+"goals": 2.7
 },
 "N1": {
 "n": 300,
@@ -19349,31 +19321,59 @@
 "fouls": 21.38,
 "cards": 3.14
 },
-"F1": {
-"n": 300,
-"goals": 2.8,
-"shots": 25.28,
-"corners": 9.56,
-"fouls": 23.97,
-"cards": 3.84
+"G1": {
+"n": 271,
+"goals": 2.56,
+"shots": 23.87,
+"corners": 8.7,
+"fouls": 29.37,
+"cards": 5.34
 },
-"FIN": {
-"n": 195,
-"goals": 2.7
-},
-"SP2": {
+"I1": {
 "n": 300,
-"goals": 2.7,
-"shots": 25.56,
-"corners": 9.29,
-"fouls": 26.34,
-"cards": 5.44
+"goals": 2.55,
+"shots": 25.36,
+"corners": 8.89,
+"fouls": 24.26,
+"cards": 3.72
 },
-"USA": {
+"ARG": {
 "n": 300,
-"goals": 3.26
+"goals": 2.21
+},
+"E1": {
+"n": 300,
+"goals": 2.71,
+"shots": 25.73,
+"corners": 10.52,
+"fouls": 21.89,
+"cards": 3.94
+},
+"AUT": {
+"n": 205,
+"goals": 2.77
+},
+"E0": {
+"n": 300,
+"goals": 2.75,
+"shots": 25.96,
+"corners": 9.94,
+"fouls": 21.64,
+"cards": 3.88
+},
+"DNK": {
+"n": 204,
+"goals": 3.0
+},
+"P1": {
+"n": 300,
+"goals": 2.72,
+"shots": 24.11,
+"corners": 9.33,
+"fouls": 26.73,
+"cards": 4.97
 }
 },
-"updated": "2026-10-08T14:02+00:00",
+"updated": "2026-10-09T05:33+00:00",
 "matches": 11887
 }

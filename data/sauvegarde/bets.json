@@ -12,7 +12,9 @@
 "prob": 0.18594,
 "stake": 0.2,
 "date": "2026-10-08",
-"result": null
+"result": "loss",
+"counted": true,
+"reported": true
 },
 {
 "tier": "⚖️ COSTAUD (cote 12 à 20)",
@@ -25,7 +27,9 @@
 "prob": 0.08717,
 "stake": 0.2,
 "date": "2026-10-08",
-"result": null
+"result": "loss",
+"counted": true,
+"reported": true
 },
 {
 "tier": "🔥 MÉCHANT (cote 40 à 80)",
@@ -39,7 +43,9 @@
 "prob": 0.02629,
 "stake": 0.2,
 "date": "2026-10-08",
-"result": null
+"result": "loss",
+"counted": true,
+"reported": true
 },
 {
 "tier": "💀 MONSTRE (cote 150+)",
@@ -54,7 +60,9 @@
 "prob": 0.00691,
 "stake": 0.2,
 "date": "2026-10-08",
-"result": null
+"result": "loss",
+"counted": true,
+"reported": true
 }
 ]
 }

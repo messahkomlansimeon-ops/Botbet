@@ -414,7 +414,8 @@
 "hg": 2.0,
 "ag": 0.0
 }
-]
+],
+"id": 268
 },
 "africa_egypt_premier_league": {
 "teams": {
@@ -830,7 +831,8 @@
 "hg": 1.0,
 "ag": 2.0
 }
-]
+],
+"id": 519
 },
 "africa_morocco_botola_pro": {
 "teams": {
@@ -1074,7 +1076,8 @@
 "hg": 0.0,
 "ag": 0.0
 }
-]
+],
+"id": 530
 },
 "soccer_african_nations_championship": {
 "teams": {
@@ -1423,7 +1426,8 @@
 "hg": 2.0,
 "ag": 3.0
 }
-]
+],
+"id": 9428
 },
 "soccer_caf_champions_league": {
 "teams": {
@@ -1751,7 +1755,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 526
 },
 "soccer_can_qualification": {
 "teams": {
@@ -2303,7 +2308,8 @@
 "hg": 3.0,
 "ag": 1.0
 }
-]
+],
+"id": 10608
 },
 "soccer_world_cup_qualifiers_caf": {
 "teams": {
@@ -2890,7 +2896,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 10196
 },
 "soccer_argentina_primera_division": {
 "teams": {
@@ -3316,7 +3323,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 112
 },
 "soccer_australia_aleague": {
 "teams": {
@@ -3441,7 +3449,8 @@
 "xpts": 0.0
 }
 },
-"matches": []
+"matches": [],
+"id": 113
 },
 "soccer_austria_bundesliga": {
 "teams": {
@@ -3777,7 +3786,8 @@
 "hg": 3.0,
 "ag": 0.0
 }
-]
+],
+"id": 38
 },
 "soccer_belgium_first_div": {
 "teams": {
@@ -4173,7 +4183,8 @@
 "hg": 1.0,
 "ag": 0.0
 }
-]
+],
+"id": 40
 },
 "soccer_brazil_serie_b": {
 "teams": {
@@ -4589,7 +4600,8 @@
 "hg": 0.0,
 "ag": 0.0
 }
-]
+],
+"id": 8814
 },
 "soccer_chile_campeonato": {
 "teams": {
@@ -4917,7 +4929,8 @@
 "hg": 0.0,
 "ag": 2.0
 }
-]
+],
+"id": 273
 },
 "soccer_china_superleague": {
 "teams": {
@@ -5245,7 +5258,8 @@
 "hg": 4.0,
 "ag": 1.0
 }
-]
+],
+"id": 120
 },
 "soccer_conmebol_copa_libertadores": {
 "teams": {
@@ -5685,7 +5699,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 45
 },
 "soccer_conmebol_copa_sudamericana": {
 "teams": {
@@ -6125,7 +6140,8 @@
 "hg": 3.0,
 "ag": 0.0
 }
-]
+],
+"id": 299
 },
 "soccer_denmark_superliga": {
 "teams": {
@@ -6461,293 +6477,8 @@
 "hg": 4.0,
 "ag": 1.0
 }
-]
-},
-"soccer_efl_champ": {
-"teams": {
-"Stenhousemuir": {
-"n": 8.0,
-"gf": 12.0,
-"ga": 2.0,
-"w": 7.0,
-"pts": 22.0
-},
-"Raith Rovers": {
-"n": 9.0,
-"gf": 13.0,
-"ga": 6.0,
-"w": 5.0,
-"pts": 17.0
-},
-"Partick Thistle": {
-"n": 8.0,
-"gf": 8.0,
-"ga": 2.0,
-"w": 4.0,
-"pts": 15.0
-},
-"Livingston": {
-"n": 9.0,
-"gf": 13.0,
-"ga": 9.0,
-"w": 4.0,
-"pts": 13.0
-},
-"Dunfermline Athletic": {
-"n": 7.0,
-"gf": 6.0,
-"ga": 4.0,
-"w": 3.0,
-"pts": 12.0
-},
-"Ayr United": {
-"n": 9.0,
-"gf": 9.0,
-"ga": 10.0,
-"w": 3.0,
-"pts": 11.0
-},
-"Arbroath": {
-"n": 9.0,
-"gf": 6.0,
-"ga": 13.0,
-"w": 3.0,
-"pts": 11.0
-},
-"Inverness Caledonian Thistle": {
-"n": 8.0,
-"gf": 9.0,
-"ga": 9.0,
-"w": 2.0,
-"pts": 10.0
-},
-"Queen's Park": {
-"n": 8.0,
-"gf": 4.0,
-"ga": 13.0,
-"w": 1.0,
-"pts": 4.0
-},
-"Greenock Morton": {
-"n": 9.0,
-"gf": 5.0,
-"ga": 17.0,
-"w": 0.0,
-"pts": 1.0
-}
-},
-"matches": [
-{
-"d": "2026-08-22",
-"home": "Livingston",
-"away": "Dunfermline Athletic",
-"hg": 2.0,
-"ag": 0.0
-},
-{
-"d": "2026-08-22",
-"home": "Queen's Park",
-"away": "Stenhousemuir",
-"hg": 0.0,
-"ag": 2.0
-},
-{
-"d": "2026-08-22",
-"home": "Raith Rovers",
-"away": "Ayr United",
-"hg": 2.0,
-"ag": 0.0
-},
-{
-"d": "2026-08-28",
-"home": "Dunfermline Athletic",
-"away": "Raith Rovers",
-"hg": 1.0,
-"ag": 0.0
-},
-{
-"d": "2026-08-29",
-"home": "Arbroath",
-"away": "Livingston",
-"hg": 1.0,
-"ag": 0.0
-},
-{
-"d": "2026-08-29",
-"home": "Ayr United",
-"away": "Greenock Morton",
-"hg": 1.0,
-"ag": 1.0
-},
-{
-"d": "2026-08-29",
-"home": "Partick Thistle",
-"away": "Queen's Park",
-"hg": 0.0,
-"ag": 0.0
-},
-{
-"d": "2026-08-29",
-"home": "Stenhousemuir",
-"away": "Inverness Caledonian Thistle",
-"hg": 3.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-04",
-"home": "Livingston",
-"away": "Stenhousemuir",
-"hg": 0.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-05",
-"home": "Arbroath",
-"away": "Dunfermline Athletic",
-"hg": 1.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-05",
-"home": "Inverness Caledonian Thistle",
-"away": "Raith Rovers",
-"hg": 0.0,
-"ag": 2.0
-},
-{
-"d": "2026-09-05",
-"home": "Partick Thistle",
-"away": "Ayr United",
-"hg": 1.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-05",
-"home": "Queen's Park",
-"away": "Greenock Morton",
-"hg": 2.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-11",
-"home": "Greenock Morton",
-"away": "Livingston",
-"hg": 1.0,
-"ag": 4.0
-},
-{
-"d": "2026-09-12",
-"home": "Ayr United",
-"away": "Inverness Caledonian Thistle",
-"hg": 1.0,
-"ag": 3.0
-},
-{
-"d": "2026-09-12",
-"home": "Dunfermline Athletic",
-"away": "Queen's Park",
-"hg": 2.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-12",
-"home": "Raith Rovers",
-"away": "Arbroath",
-"hg": 4.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-15",
-"home": "Stenhousemuir",
-"away": "Partick Thistle",
-"hg": 1.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-18",
-"home": "Queen's Park",
-"away": "Ayr United",
-"hg": 0.0,
-"ag": 2.0
-},
-{
-"d": "2026-09-19",
-"home": "Greenock Morton",
-"away": "Dunfermline Athletic",
-"hg": 0.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-19",
-"home": "Livingston",
-"away": "Inverness Caledonian Thistle",
-"hg": 2.0,
-"ag": 2.0
-},
-{
-"d": "2026-09-19",
-"home": "Partick Thistle",
-"away": "Raith Rovers",
-"hg": 0.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-19",
-"home": "Stenhousemuir",
-"away": "Arbroath",
-"hg": 1.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-25",
-"home": "Arbroath",
-"away": "Queen's Park",
-"hg": 2.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-25",
-"home": "Ayr United",
-"away": "Stenhousemuir",
-"hg": 0.0,
-"ag": 1.0
-},
-{
-"d": "2026-09-25",
-"home": "Inverness Caledonian Thistle",
-"away": "Greenock Morton",
-"hg": 2.0,
-"ag": 0.0
-},
-{
-"d": "2026-09-25",
-"home": "Raith Rovers",
-"away": "Livingston",
-"hg": 0.0,
-"ag": 2.0
-},
-{
-"d": "2026-10-03",
-"home": "Greenock Morton",
-"away": "Raith Rovers",
-"hg": 1.0,
-"ag": 2.0
-},
-{
-"d": "2026-10-03",
-"home": "Livingston",
-"away": "Ayr United",
-"hg": 1.0,
-"ag": 2.0
-},
-{
-"d": "2026-10-03",
-"home": "Partick Thistle",
-"away": "Arbroath",
-"hg": 3.0,
-"ag": 0.0
-}
-]
+],
+"id": 46
 },
 "soccer_england_league1": {
 "teams": {
@@ -7203,7 +6934,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 108
 },
 "soccer_england_league2": {
 "teams": {
@@ -7659,7 +7391,8 @@
 "hg": 1.0,
 "ag": 0.0
 }
-]
+],
+"id": 109
 },
 "soccer_epl": {
 "teams": {
@@ -8075,7 +7808,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 47
 },
 "soccer_fifa_world_cup_qualifiers_afc": {
 "teams": {
@@ -8543,7 +8277,8 @@
 "hg": 2.0,
 "ag": 1.0
 }
-]
+],
+"id": 10197
 },
 "soccer_fifa_world_cup_qualifiers_concacaf": {
 "teams": {
@@ -9005,7 +8740,8 @@
 "hg": 2.0,
 "ag": 2.0
 }
-]
+],
+"id": 10198
 },
 "soccer_fifa_world_cup_qualifiers_europe": {
 "teams": {
@@ -9761,7 +9497,8 @@
 "hg": 3.0,
 "ag": 2.0
 }
-]
+],
+"id": 10195
 },
 "soccer_fifa_world_cup_qualifiers_south_america": {
 "teams": {
@@ -10047,7 +9784,8 @@
 "hg": 3.0,
 "ag": 6.0
 }
-]
+],
+"id": 10199
 },
 "soccer_finland_veikkausliiga": {
 "teams": {
@@ -10347,7 +10085,8 @@
 "hg": 0.0,
 "ag": 1.0
 }
-]
+],
+"id": 51
 },
 "soccer_france_ligue_one": {
 "teams": {
@@ -10743,7 +10482,8 @@
 "hg": 1.0,
 "ag": 2.0
 }
-]
+],
+"id": 53
 },
 "soccer_germany_bundesliga": {
 "teams": {
@@ -11139,7 +10879,8 @@
 "hg": 3.0,
 "ag": 1.0
 }
-]
+],
+"id": 54
 },
 "soccer_greece_super_league": {
 "teams": {
@@ -11495,7 +11236,8 @@
 "hg": 1.0,
 "ag": 3.0
 }
-]
+],
+"id": 135
 },
 "soccer_italy_serie_a": {
 "teams": {
@@ -11911,7 +11653,8 @@
 "hg": 3.0,
 "ag": 0.0
 }
-]
+],
+"id": 55
 },
 "soccer_japan_j_league": {
 "teams": {
@@ -12327,7 +12070,8 @@
 "hg": 2.0,
 "ag": 4.0
 }
-]
+],
+"id": 223
 },
 "soccer_korea_kleague1": {
 "teams": {
@@ -12663,7 +12407,8 @@
 "hg": 0.0,
 "ag": 0.0
 }
-]
+],
+"id": 9080
 },
 "soccer_league_of_ireland": {
 "teams": {
@@ -12979,7 +12724,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 126
 },
 "soccer_mexico_ligamx": {
 "teams": {
@@ -13375,7 +13121,8 @@
 "hg": 2.0,
 "ag": 4.0
 }
-]
+],
+"id": 230
 },
 "soccer_netherlands_eredivisie": {
 "teams": {
@@ -13771,7 +13518,8 @@
 "hg": 1.0,
 "ag": 1.0
 }
-]
+],
+"id": 57
 },
 "soccer_norway_eliteserien": {
 "teams": {
@@ -14147,7 +13895,8 @@
 "hg": 2.0,
 "ag": 1.0
 }
-]
+],
+"id": 59
 },
 "soccer_poland_ekstraklasa": {
 "teams": {
@@ -14543,7 +14292,8 @@
 "hg": 5.0,
 "ag": 1.0
 }
-]
+],
+"id": 196
 },
 "soccer_spain_la_liga": {
 "teams": {
@@ -14959,7 +14709,8 @@
 "hg": 2.0,
 "ag": 3.0
 }
-]
+],
+"id": 87
 },
 "soccer_sweden_allsvenskan": {
 "teams": {
@@ -15335,7 +15086,8 @@
 "hg": 0.0,
 "ag": 3.0
 }
-]
+],
+"id": 67
 },
 "soccer_turkey_super_league": {
 "teams": {
@@ -15731,7 +15483,8 @@
 "hg": 2.0,
 "ag": 2.0
 }
-]
+],
+"id": 71
 },
 "soccer_uefa_champs_league": {
 "teams": {
@@ -16223,7 +15976,8 @@
 "hg": 2.0,
 "ag": 3.0
 }
-]
+],
+"id": 42
 },
 "soccer_uefa_europa_conference_league": {
 "teams": {
@@ -16480,7 +16234,8 @@
 "pts": 0.0
 }
 },
-"matches": []
+"matches": [],
+"id": 10216
 },
 "soccer_uefa_europa_league": {
 "teams": {
@@ -16972,7 +16727,8 @@
 "hg": 0.0,
 "ag": 3.0
 }
-]
+],
+"id": 73
 },
 "soccer_usa_mls": {
 "teams": {
@@ -17488,8 +17244,3185 @@
 "hg": 3.0,
 "ag": 1.0
 }
-]
+],
+"id": 130
+},
+"soccer_efl_champ": {
+"teams": {
+"Swansea City": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 6.0,
+"w": 5.0,
+"pts": 17.0,
+"xg": 12.4071,
+"xga": 9.6249,
+"xpts": 12.362602204667764
+},
+"West Ham United": {
+"n": 8.0,
+"gf": 22.0,
+"ga": 11.0,
+"w": 4.0,
+"pts": 15.0,
+"xg": 17.951800000000002,
+"xga": 10.0351,
+"xpts": 15.129210712258656
+},
+"Middlesbrough": {
+"n": 8.0,
+"gf": 16.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 15.0,
+"xg": 15.7557,
+"xga": 9.1841,
+"xpts": 15.679639439450735
+},
+"Wolverhampton Wanderers": {
+"n": 7.0,
+"gf": 15.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 14.0,
+"xg": 13.1168,
+"xga": 6.6036,
+"xpts": 14.45695191982297
+},
+"West Bromwich Albion": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 14.0,
+"xg": 8.4268,
+"xga": 12.2026,
+"xpts": 8.418681450050292
+},
+"Queens Park Rangers": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 13.0,
+"xg": 13.273899999999998,
+"xga": 9.5907,
+"xpts": 13.661610189762087
+},
+"Stoke City": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 8.394,
+"xga": 11.998099999999999,
+"xpts": 9.275795539362337
+},
+"Bristol City": {
+"n": 8.0,
+"gf": 11.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 10.7381,
+"xga": 11.2577,
+"xpts": 11.615032683065348
+},
+"Charlton Athletic": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 3.0,
+"pts": 12.0,
+"xg": 5.8873,
+"xga": 12.000700000000002,
+"xpts": 6.786282054094231
+},
+"Birmingham City": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 11.0,
+"xg": 12.7503,
+"xga": 10.9224,
+"xpts": 12.321731401424888
+},
+"Millwall": {
+"n": 8.0,
+"gf": 15.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 16.3472,
+"xga": 11.7986,
+"xpts": 13.786622301557458
+},
+"Lincoln City": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 10.8965,
+"xga": 9.269,
+"xpts": 12.353605115560255
+},
+"Southampton": {
+"n": 8.0,
+"gf": 19.0,
+"ga": 10.0,
+"w": 4.0,
+"pts": 10.0,
+"xg": 14.5595,
+"xga": 10.5698,
+"xpts": 13.60143400400952
+},
+"Wrexham": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 10.0,
+"xg": 8.5775,
+"xga": 10.495699999999998,
+"xpts": 10.335155143478298
+},
+"Bolton Wanderers": {
+"n": 8.0,
+"gf": 11.0,
+"ga": 15.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 9.391399999999999,
+"xga": 13.825600000000001,
+"xpts": 8.02353889312137
+},
+"Blackburn Rovers": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 9.0,
+"xg": 7.419700000000001,
+"xga": 12.283600000000002,
+"xpts": 7.276358275899568
+},
+"Norwich City": {
+"n": 8.0,
+"gf": 16.0,
+"ga": 17.0,
+"w": 3.0,
+"pts": 9.0,
+"xg": 14.223300000000002,
+"xga": 12.4052,
+"xpts": 12.174216594248144
+},
+"Sheffield United": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 9.0,
+"xg": 7.671,
+"xga": 12.3491,
+"xpts": 7.615889514607207
+},
+"Portsmouth": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 9.6624,
+"xga": 8.390600000000001,
+"xpts": 10.604510138527734
+},
+"Watford": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 7.588100000000001,
+"xga": 13.8212,
+"xpts": 6.638772292894452
+},
+"Cardiff City": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 7.0,
+"xg": 15.311700000000002,
+"xga": 12.1647,
+"xpts": 13.207293158645673
+},
+"Derby County": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 14.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 8.2997,
+"xga": 14.8705,
+"xpts": 8.424017675627901
+},
+"Preston North End": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 15.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 11.6876,
+"xga": 10.921800000000001,
+"xpts": 11.475292411944874
+},
+"Burnley": {
+"n": 8.0,
+"gf": 9.0,
+"ga": 17.0,
+"w": 0.0,
+"pts": 4.0,
+"xg": 9.273,
+"xga": 13.0251,
+"xpts": 8.029323656825634
 }
 },
-"updated": "2026-10-08T22:16+00:00"
+"matches": [
+{
+"d": "2026-09-08",
+"home": "Bolton Wanderers",
+"away": "West Ham United",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-09",
+"home": "Derby County",
+"away": "West Bromwich Albion",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-09",
+"home": "Norwich City",
+"away": "Birmingham City",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-09",
+"home": "Charlton Athletic",
+"away": "Queens Park Rangers",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "West Ham United",
+"away": "Wrexham",
+"hg": 6.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Bolton Wanderers",
+"away": "Cardiff City",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Derby County",
+"away": "Birmingham City",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "West Bromwich Albion",
+"away": "Queens Park Rangers",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Blackburn Rovers",
+"away": "Millwall",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Charlton Athletic",
+"away": "Portsmouth",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Middlesbrough",
+"away": "Norwich City",
+"hg": 4.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Preston North End",
+"away": "Lincoln City",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Southampton",
+"away": "Bristol City",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Swansea City",
+"away": "Burnley",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Watford",
+"away": "Stoke City",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Sheffield United",
+"away": "Wolverhampton Wanderers",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Bristol City",
+"away": "Lincoln City",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Middlesbrough",
+"away": "Millwall",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Bristol City",
+"away": "Watford",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Cardiff City",
+"away": "Charlton Athletic",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Millwall",
+"away": "West Ham United",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Stoke City",
+"away": "Sheffield United",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Birmingham City",
+"away": "Middlesbrough",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Burnley",
+"away": "Derby County",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Lincoln City",
+"away": "Swansea City",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Portsmouth",
+"away": "Blackburn Rovers",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Queens Park Rangers",
+"away": "Preston North End",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Wrexham",
+"away": "Southampton",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Wolverhampton Wanderers",
+"away": "West Bromwich Albion",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Norwich City",
+"away": "Bolton Wanderers",
+"hg": 3.0,
+"ag": 4.0
+}
+],
+"id": 48
+},
+"soccer_france_ligue_two": {
+"teams": {
+"Saint-Étienne": {
+"n": 7.0,
+"gf": 19.0,
+"ga": 8.0,
+"w": 5.0,
+"pts": 16.0,
+"xg": 15.296700060367584,
+"xga": 5.448400065302849,
+"xpts": 16.40553139408054
+},
+"Red Star": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 4.0,
+"pts": 14.0,
+"xg": 13.863499999046326,
+"xga": 7.730599880218506,
+"xpts": 13.660141998627715
+},
+"Reims": {
+"n": 7.0,
+"gf": 15.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 13.0,
+"xg": 11.456299841403961,
+"xga": 10.769700050354004,
+"xpts": 10.551384434135057
+},
+"Montpellier": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 5.0,
+"w": 3.0,
+"pts": 12.0,
+"xg": 9.446699887514114,
+"xga": 8.227800011634827,
+"xpts": 10.387396528407491
+},
+"Metz": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 2.0,
+"pts": 10.0,
+"xg": 9.066400170326233,
+"xga": 10.95380014181137,
+"xpts": 8.162834616573944
+},
+"Nancy": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 10.898000210523605,
+"xga": 6.410799980163574,
+"xpts": 12.2536979338929
+},
+"Annecy FC": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 10.010299980640411,
+"xga": 11.843800067901611,
+"xpts": 8.967689376890414
+},
+"Sochaux": {
+"n": 7.0,
+"gf": 4.0,
+"ga": 5.0,
+"w": 2.0,
+"pts": 10.0,
+"xg": 7.757099866867065,
+"xga": 12.7496999502182,
+"xpts": 6.20653455860135
+},
+"Dijon": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 9.0,
+"xg": 11.311300218105316,
+"xga": 15.126500129699707,
+"xpts": 7.499057799481921
+},
+"Pau": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 11.689599752426147,
+"xga": 6.921899974346161,
+"xpts": 12.907672357007996
+},
+"Guingamp": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 14.114699959754944,
+"xga": 10.94510006904602,
+"xpts": 11.588228647957123
+},
+"Dunkerque": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 7.9266000390052795,
+"xga": 11.686900079250336,
+"xpts": 7.465112091180411
+},
+"Grenoble": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 4.881699964404106,
+"xga": 9.85019987821579,
+"xpts": 6.071424404991774
+},
+"Rodez": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 16.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 10.283500134944916,
+"xga": 14.186899989843369,
+"xpts": 7.556999107704737
+},
+"Nantes": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 9.114599883556366,
+"xga": 7.455599993467331,
+"xpts": 10.853061607377402
+},
+"Clermont Foot": {
+"n": 7.0,
+"gf": 4.0,
+"ga": 6.0,
+"w": 0.0,
+"pts": 6.0,
+"xg": 5.17849999666214,
+"xga": 8.725599944591522,
+"xpts": 7.22954082155723
+},
+"Boulogne": {
+"n": 7.0,
+"gf": 3.0,
+"ga": 5.0,
+"w": 0.0,
+"pts": 5.0,
+"xg": 7.864000082015991,
+"xga": 9.373899936676025,
+"xpts": 8.014449038406273
+},
+"Laval": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 14.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 9.608500063419342,
+"xga": 11.360799968242645,
+"xpts": 8.881630404254086
+}
+},
+"matches": [
+{
+"d": "2026-08-29",
+"home": "Red Star",
+"away": "Reims",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-08-29",
+"home": "Guingamp",
+"away": "Nantes",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-08-31",
+"home": "Dijon",
+"away": "Saint-Étienne",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-04",
+"home": "Boulogne",
+"away": "Dijon",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Dunkerque",
+"away": "Clermont Foot",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-04",
+"home": "Grenoble",
+"away": "Annecy FC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Laval",
+"away": "Red Star",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Pau",
+"away": "Sochaux",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Metz",
+"away": "Rodez",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Reims",
+"away": "Guingamp",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Saint-Étienne",
+"away": "Montpellier",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Nantes",
+"away": "Nancy",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Clermont Foot",
+"away": "Boulogne",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Dijon",
+"away": "Laval",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Montpellier",
+"away": "Pau",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-11",
+"home": "Nancy",
+"away": "Reims",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-11",
+"home": "Rodez",
+"away": "Grenoble",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Guingamp",
+"away": "Annecy FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Sochaux",
+"away": "Nantes",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Dunkerque",
+"away": "Saint-Étienne",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Red Star",
+"away": "Metz",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Annecy FC",
+"away": "Dijon",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-18",
+"home": "Grenoble",
+"away": "Clermont Foot",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Laval",
+"away": "Sochaux",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Pau",
+"away": "Dunkerque",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Reims",
+"away": "Montpellier",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Rodez",
+"away": "Nancy",
+"hg": 3.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-19",
+"home": "Boulogne",
+"away": "Nantes",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Guingamp",
+"away": "Red Star",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Metz",
+"away": "Saint-Étienne",
+"hg": 2.0,
+"ag": 2.0
+}
+],
+"id": 110
+},
+"soccer_germany_bundesliga2": {
+"teams": {
+"Hertha BSC": {
+"n": 6.0,
+"gf": 17.0,
+"ga": 7.0,
+"w": 6.0,
+"pts": 18.0,
+"xg": 14.571099996566772,
+"xga": 9.038900017738342,
+"xpts": 11.761579236943781
+},
+"1. FC Nürnberg": {
+"n": 6.0,
+"gf": 16.0,
+"ga": 6.0,
+"w": 5.0,
+"pts": 16.0,
+"xg": 10.391900062561035,
+"xga": 8.590800017118454,
+"xpts": 9.820185052966515
+},
+"FC Heidenheim": {
+"n": 6.0,
+"gf": 14.0,
+"ga": 12.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 15.196400165557861,
+"xga": 8.178100109100342,
+"xpts": 12.497814588432824
+},
+"Wolfsburg": {
+"n": 6.0,
+"gf": 15.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 13.189799964427948,
+"xga": 9.514999985694885,
+"xpts": 10.725352643137526
+},
+"Kaiserslautern": {
+"n": 6.0,
+"gf": 6.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 8.369799792766571,
+"xga": 7.967600107192993,
+"xpts": 8.359586375123197
+},
+"Magdeburg": {
+"n": 6.0,
+"gf": 11.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 7.146799981594086,
+"xga": 10.494299948215485,
+"xpts": 6.146391390273639
+},
+"Energie Cottbus": {
+"n": 6.0,
+"gf": 14.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 10.429100066423416,
+"xga": 15.13540005683899,
+"xpts": 6.436099349991682
+},
+"St. Pauli": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 8.0,
+"w": 1.0,
+"pts": 7.0,
+"xg": 8.791500091552734,
+"xga": 7.502699971199036,
+"xpts": 9.10213191311827
+},
+"Bochum": {
+"n": 6.0,
+"gf": 5.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 8.760900020599365,
+"xga": 7.463100075721741,
+"xpts": 9.31474223323839
+},
+"Hannover 96": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 9.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 11.882800102233887,
+"xga": 10.223199963569641,
+"xpts": 9.348860382054989
+},
+"VfL Osnabrück": {
+"n": 6.0,
+"gf": 9.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 10.839699983596802,
+"xga": 13.510800123214722,
+"xpts": 6.448549032171774
+},
+"Greuther Fürth": {
+"n": 6.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 1.0,
+"pts": 6.0,
+"xg": 10.022100269794464,
+"xga": 9.00080019235611,
+"xpts": 8.84959552025828
+},
+"Arminia Bielefeld": {
+"n": 6.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 9.500699877738953,
+"xga": 9.091000229120255,
+"xpts": 7.994090738058145
+},
+"Karlsruher SC": {
+"n": 6.0,
+"gf": 6.0,
+"ga": 12.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 8.14400002360344,
+"xga": 10.87309992313385,
+"xpts": 6.2827302490713866
+},
+"Eintracht Braunschweig": {
+"n": 6.0,
+"gf": 12.0,
+"ga": 13.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 11.745700120925903,
+"xga": 11.964499950408936,
+"xpts": 7.989981771995997
+},
+"Holstein Kiel": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 0.0,
+"pts": 4.0,
+"xg": 9.809800028800964,
+"xga": 11.255300104618073,
+"xpts": 7.694251577731098
+},
+"Dynamo Dresden": {
+"n": 6.0,
+"gf": 8.0,
+"ga": 14.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 7.463200092315674,
+"xga": 12.146999955177307,
+"xpts": 5.717231884086888
+},
+"Darmstadt": {
+"n": 6.0,
+"gf": 5.0,
+"ga": 13.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 6.253100097179413,
+"xga": 10.55680000782013,
+"xpts": 5.14794045514543
+}
+},
+"matches": [
+{
+"d": "2026-08-30",
+"home": "Darmstadt",
+"away": "Hannover 96",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Magdeburg",
+"away": "Holstein Kiel",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-08-30",
+"home": "St. Pauli",
+"away": "Kaiserslautern",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Arminia Bielefeld",
+"away": "St. Pauli",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-04",
+"home": "Hannover 96",
+"away": "Karlsruher SC",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Holstein Kiel",
+"away": "1. FC Nürnberg",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Kaiserslautern",
+"away": "Darmstadt",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Wolfsburg",
+"away": "Energie Cottbus",
+"hg": 4.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-05",
+"home": "Dynamo Dresden",
+"away": "Bochum",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Greuther Fürth",
+"away": "FC Heidenheim",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Hertha BSC",
+"away": "Magdeburg",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "VfL Osnabrück",
+"away": "Eintracht Braunschweig",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Darmstadt",
+"away": "Arminia Bielefeld",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "1. FC Nürnberg",
+"away": "Hannover 96",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Bochum",
+"away": "Greuther Fürth",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Magdeburg",
+"away": "Kaiserslautern",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Eintracht Braunschweig",
+"away": "Dynamo Dresden",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "St. Pauli",
+"away": "Wolfsburg",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Heidenheim",
+"away": "Holstein Kiel",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-13",
+"home": "Karlsruher SC",
+"away": "Energie Cottbus",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-13",
+"home": "VfL Osnabrück",
+"away": "Hertha BSC",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-18",
+"home": "Greuther Fürth",
+"away": "Magdeburg",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-18",
+"home": "Wolfsburg",
+"away": "Darmstadt",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Holstein Kiel",
+"away": "VfL Osnabrück",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Kaiserslautern",
+"away": "Eintracht Braunschweig",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Karlsruher SC",
+"away": "1. FC Nürnberg",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Dynamo Dresden",
+"away": "Hertha BSC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Arminia Bielefeld",
+"away": "FC Heidenheim",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Energie Cottbus",
+"away": "St. Pauli",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Hannover 96",
+"away": "Bochum",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 146
+},
+"soccer_italy_serie_b": {
+"teams": {
+"Palermo": {
+"n": 5.0,
+"gf": 10.0,
+"ga": 5.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 8.070300161838531,
+"xga": 7.085600018501282,
+"xpts": 7.561940910202747
+},
+"Südtirol": {
+"n": 5.0,
+"gf": 9.0,
+"ga": 3.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 4.202300041913986,
+"xga": 6.064299941062927,
+"xpts": 5.37017670984103
+},
+"Mantova": {
+"n": 5.0,
+"gf": 10.0,
+"ga": 5.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 5.918700098991394,
+"xga": 6.894400089979172,
+"xpts": 6.235112890376476
+},
+"Modena": {
+"n": 5.0,
+"gf": 8.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 7.555200040340424,
+"xga": 3.532799929380417,
+"xpts": 10.02999293036525
+},
+"Ascoli": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 4.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 8.167900025844574,
+"xga": 6.776699990034103,
+"xpts": 7.968762503066453
+},
+"Hellas Verona": {
+"n": 5.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 10.290999948978424,
+"xga": 4.252000004053116,
+"xpts": 10.651905056321182
+},
+"Avellino": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 5.429400026798248,
+"xga": 6.173200011253357,
+"xpts": 6.301768695216245
+},
+"Cesena": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 7.0,
+"xg": 5.956000030040741,
+"xga": 5.232699930667877,
+"xpts": 7.285377712583192
+},
+"Benevento": {
+"n": 5.0,
+"gf": 6.0,
+"ga": 5.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 6.0181998908519745,
+"xga": 7.6283000111579895,
+"xpts": 6.025157164532504
+},
+"Pisa": {
+"n": 5.0,
+"gf": 8.0,
+"ga": 8.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 8.563400208950043,
+"xga": 6.84060001373291,
+"xpts": 8.19975858432075
+},
+"Padova": {
+"n": 5.0,
+"gf": 5.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 5.542800068855286,
+"xga": 10.080999851226807,
+"xpts": 3.712098778254571
+},
+"Empoli": {
+"n": 5.0,
+"gf": 4.0,
+"ga": 6.0,
+"w": 2.0,
+"pts": 6.0,
+"xg": 3.952599972486496,
+"xga": 5.8682000041008,
+"xpts": 5.212281107873824
+},
+"Arezzo": {
+"n": 5.0,
+"gf": 6.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 6.0,
+"xg": 5.739299923181534,
+"xga": 8.475200176239014,
+"xpts": 5.725477497800974
+},
+"Virtus Entella": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 6.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 5.742299973964691,
+"xga": 4.696799993515015,
+"xpts": 7.484045132392639
+},
+"Cremonese": {
+"n": 5.0,
+"gf": 5.0,
+"ga": 7.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 5.940699905157089,
+"xga": 5.748900055885315,
+"xpts": 6.698221916165727
+},
+"LR Vicenza": {
+"n": 5.0,
+"gf": 7.0,
+"ga": 10.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 6.127800107002258,
+"xga": 7.148400008678436,
+"xpts": 5.978864897914646
+},
+"Sampdoria": {
+"n": 5.0,
+"gf": 5.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 8.99020004272461,
+"xga": 6.916700065135956,
+"xpts": 8.300202646955068
+},
+"Catanzaro": {
+"n": 5.0,
+"gf": 5.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 3.0,
+"xg": 7.535900056362152,
+"xga": 8.207300156354904,
+"xpts": 6.491407626097248
+},
+"Juve Stabia": {
+"n": 5.0,
+"gf": 4.0,
+"ga": 7.0,
+"w": 1.0,
+"pts": 1.0,
+"xg": 6.064899981021881,
+"xga": 6.08050012588501,
+"xpts": 6.830010332882173
+},
+"Carrarese": {
+"n": 5.0,
+"gf": 2.0,
+"ga": 6.0,
+"w": 0.0,
+"pts": 1.0,
+"xg": 5.134700000286102,
+"xga": 7.240000128746033,
+"xpts": 5.4325596949593535
+}
+},
+"matches": [
+{
+"d": "2026-09-05",
+"home": "Südtirol",
+"away": "Catanzaro",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Ascoli",
+"away": "Benevento",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Carrarese",
+"away": "Empoli",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Cesena",
+"away": "Mantova",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Juve Stabia",
+"away": "Pisa",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Modena",
+"away": "Avellino",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "Virtus Entella",
+"away": "LR Vicenza",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Hellas Verona",
+"away": "Arezzo",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Cremonese",
+"away": "Padova",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Palermo",
+"away": "Sampdoria",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Empoli",
+"away": "Arezzo",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Benevento",
+"away": "Hellas Verona",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-11",
+"home": "Pisa",
+"away": "Virtus Entella",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-12",
+"home": "Padova",
+"away": "Ascoli",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "LR Vicenza",
+"away": "Juve Stabia",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Südtirol",
+"away": "Modena",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Catanzaro",
+"away": "Carrarese",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-12",
+"home": "Cesena",
+"away": "Cremonese",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Avellino",
+"away": "Palermo",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Mantova",
+"away": "Sampdoria",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-18",
+"home": "Juve Stabia",
+"away": "Cesena",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Carrarese",
+"away": "Benevento",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Cremonese",
+"away": "Virtus Entella",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Palermo",
+"away": "Padova",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Sampdoria",
+"away": "Catanzaro",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Ascoli",
+"away": "Avellino",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Hellas Verona",
+"away": "LR Vicenza",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Arezzo",
+"away": "Südtirol",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-20",
+"home": "Mantova",
+"away": "Pisa",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Modena",
+"away": "Empoli",
+"hg": 2.0,
+"ag": 1.0
+}
+],
+"id": 86
+},
+"soccer_portugal_primeira_liga": {
+"teams": {
+"FC Porto": {
+"n": 7.0,
+"gf": 18.0,
+"ga": 3.0,
+"w": 7.0,
+"pts": 21.0,
+"xg": 16.551700115203857,
+"xga": 6.8796000480651855,
+"xpts": 16.020082296836428
+},
+"Benfica": {
+"n": 7.0,
+"gf": 22.0,
+"ga": 7.0,
+"w": 5.0,
+"pts": 16.0,
+"xg": 16.962500154972076,
+"xga": 5.1787001341581345,
+"xpts": 16.57486265999155
+},
+"Sporting CP": {
+"n": 7.0,
+"gf": 17.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 15.0,
+"xg": 14.495399951934814,
+"xga": 5.713400021195412,
+"xpts": 15.233832857478998
+},
+"Santa Clara": {
+"n": 7.0,
+"gf": 11.0,
+"ga": 4.0,
+"w": 4.0,
+"pts": 15.0,
+"xg": 11.112099885940552,
+"xga": 5.4891999661922455,
+"xpts": 13.911390362443607
+},
+"Arouca": {
+"n": 7.0,
+"gf": 10.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 8.959200143814087,
+"xga": 10.45429989695549,
+"xpts": 9.201627154245177
+},
+"Braga": {
+"n": 6.0,
+"gf": 7.0,
+"ga": 5.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 7.76950004696846,
+"xga": 4.393300026655197,
+"xpts": 10.705047955773715
+},
+"Académico Viseu": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 8.878799945116043,
+"xga": 12.559699892997742,
+"xpts": 7.290824747982528
+},
+"Estrela da Amadora": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 10.0,
+"xg": 9.009100049734116,
+"xga": 11.734499841928482,
+"xpts": 7.8768201263795525
+},
+"Gil Vicente": {
+"n": 6.0,
+"gf": 5.0,
+"ga": 5.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 8.1318998336792,
+"xga": 5.768700033426285,
+"xpts": 10.4377161619595
+},
+"Alverca": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 9.945399940013885,
+"xga": 12.81300014257431,
+"xpts": 7.374531823254687
+},
+"Marítimo": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 12.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 7.2576000690460205,
+"xga": 9.154500126838684,
+"xpts": 8.1332246122125
+},
+"Moreirense": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 5.122200131416321,
+"xga": 13.110400140285492,
+"xpts": 4.849740492398035
+},
+"Famalicão": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 1.0,
+"pts": 7.0,
+"xg": 7.029000103473663,
+"xga": 9.109900057315826,
+"xpts": 8.10716440495126
+},
+"Vitória de Guimarães": {
+"n": 7.0,
+"gf": 5.0,
+"ga": 8.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 12.650399774312973,
+"xga": 5.477699935436249,
+"xpts": 14.206929278721379
+},
+"Nacional": {
+"n": 7.0,
+"gf": 7.0,
+"ga": 15.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 8.512500062584877,
+"xga": 13.294399917125702,
+"xpts": 7.635172479667019
+},
+"Rio Ave": {
+"n": 7.0,
+"gf": 5.0,
+"ga": 15.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 3.8691999912261963,
+"xga": 13.597500085830688,
+"xpts": 3.423037678473611
+},
+"Casa Pia AC": {
+"n": 7.0,
+"gf": 3.0,
+"ga": 16.0,
+"w": 1.0,
+"pts": 4.0,
+"xg": 6.749900117516518,
+"xga": 12.628899931907654,
+"xpts": 6.308946303568454
+},
+"Estoril": {
+"n": 7.0,
+"gf": 3.0,
+"ga": 10.0,
+"w": 0.0,
+"pts": 2.0,
+"xg": 6.0322999358177185,
+"xga": 11.681000053882599,
+"xpts": 5.658128646252089
+}
+},
+"matches": [
+{
+"d": "2026-08-31",
+"home": "Braga",
+"away": "Vitória de Guimarães",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-04",
+"home": "FC Porto",
+"away": "Moreirense",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Estrela da Amadora",
+"away": "Famalicão",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Alverca",
+"away": "Braga",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-05",
+"home": "Marítimo",
+"away": "Benfica",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-05",
+"home": "Sporting CP",
+"away": "Nacional",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Santa Clara",
+"away": "Rio Ave",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Vitória de Guimarães",
+"away": "Casa Pia AC",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-06",
+"home": "Gil Vicente",
+"away": "Académico Viseu",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-07",
+"home": "Estoril",
+"away": "Arouca",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-09",
+"home": "Moreirense",
+"away": "Benfica",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-10",
+"home": "Estrela da Amadora",
+"away": "Braga",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Nacional",
+"away": "Alverca",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Casa Pia AC",
+"away": "FC Porto",
+"hg": 1.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-12",
+"home": "Académico Viseu",
+"away": "Vitória de Guimarães",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Arouca",
+"away": "Santa Clara",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "Benfica",
+"away": "Gil Vicente",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Famalicão",
+"away": "Sporting CP",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Rio Ave",
+"away": "Estrela da Amadora",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-14",
+"home": "Moreirense",
+"away": "Marítimo",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-14",
+"home": "Braga",
+"away": "Estoril",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Gil Vicente",
+"away": "Marítimo",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Nacional",
+"away": "Famalicão",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-19",
+"home": "Alverca",
+"away": "Rio Ave",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Sporting CP",
+"away": "Arouca",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Estrela da Amadora",
+"away": "Académico Viseu",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Vitória de Guimarães",
+"away": "Moreirense",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Estoril",
+"away": "Casa Pia AC",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Santa Clara",
+"away": "Braga",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "FC Porto",
+"away": "Benfica",
+"hg": 3.0,
+"ag": 1.0
+}
+],
+"id": 61
+},
+"soccer_spain_segunda_division": {
+"teams": {
+"Eibar": {
+"n": 8.0,
+"gf": 18.0,
+"ga": 7.0,
+"w": 7.0,
+"pts": 21.0,
+"xg": 10.734199941158295,
+"xga": 8.918599933385849,
+"xpts": 11.908287660556265
+},
+"Castellón": {
+"n": 8.0,
+"gf": 15.0,
+"ga": 3.0,
+"w": 6.0,
+"pts": 20.0,
+"xg": 16.187999933958054,
+"xga": 8.298999905586243,
+"xpts": 15.44054206128273
+},
+"Almería": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 5.0,
+"w": 6.0,
+"pts": 18.0,
+"xg": 12.62690007686615,
+"xga": 9.482599914073944,
+"xpts": 12.902864490363353
+},
+"Girona": {
+"n": 8.0,
+"gf": 14.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 14.0,
+"xg": 11.082300126552582,
+"xga": 11.949999868869781,
+"xpts": 10.829538045394806
+},
+"Mallorca": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 3.0,
+"w": 4.0,
+"pts": 14.0,
+"xg": 10.091300010681152,
+"xga": 7.661100074648857,
+"xpts": 12.352523031256991
+},
+"Burgos CF": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 9.0,
+"w": 4.0,
+"pts": 14.0,
+"xg": 10.867859914898872,
+"xga": 10.643799990415573,
+"xpts": 10.911495053791358
+},
+"Sabadell": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 6.0,
+"w": 3.0,
+"pts": 13.0,
+"xg": 13.358499825000763,
+"xga": 7.875399947166443,
+"xpts": 15.307583269382778
+},
+"Sporting Gijón": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 8.652700155973434,
+"xga": 9.239399954676628,
+"xpts": 10.628374572689824
+},
+"Granada": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 13.378400266170502,
+"xga": 10.999100089073181,
+"xpts": 12.38296238628594
+},
+"Real Oviedo": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 8.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 9.925099968910217,
+"xga": 10.744459927082062,
+"xpts": 10.475571416795812
+},
+"Las Palmas": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 8.21909986436367,
+"xga": 13.136799991130829,
+"xpts": 7.964659998303752
+},
+"Tenerife": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 12.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 7.079799950122833,
+"xga": 10.67470008134842,
+"xpts": 8.49545850069169
+},
+"Leganés": {
+"n": 8.0,
+"gf": 6.0,
+"ga": 11.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 9.999700009822845,
+"xga": 13.341999903321266,
+"xpts": 9.070585788528506
+},
+"Real Valladolid": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 9.0,
+"xg": 11.165200114250183,
+"xga": 8.762999951839447,
+"xpts": 12.149759534901397
+},
+"Córdoba": {
+"n": 8.0,
+"gf": 13.0,
+"ga": 18.0,
+"w": 3.0,
+"pts": 9.0,
+"xg": 13.446100354194641,
+"xga": 14.839099705219269,
+"xpts": 10.910006192070583
+},
+"Real Sociedad B": {
+"n": 8.0,
+"gf": 11.0,
+"ga": 13.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 10.275199949741364,
+"xga": 13.285400092601776,
+"xpts": 8.935090269167015
+},
+"Eldense": {
+"n": 8.0,
+"gf": 8.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 9.264899969100952,
+"xga": 9.870000094175339,
+"xpts": 10.585302107244633
+},
+"Celta Fortuna": {
+"n": 8.0,
+"gf": 10.0,
+"ga": 14.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 10.949099868535995,
+"xga": 13.103500008583069,
+"xpts": 9.375152663013832
+},
+"Cádiz": {
+"n": 8.0,
+"gf": 11.0,
+"ga": 10.0,
+"w": 1.0,
+"pts": 7.0,
+"xg": 10.59499990940094,
+"xga": 9.141100138425827,
+"xpts": 11.934417909819606
+},
+"FC Andorra": {
+"n": 8.0,
+"gf": 12.0,
+"ga": 15.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 13.285999715328217,
+"xga": 11.253800064325333,
+"xpts": 12.06287302914254
+},
+"AD Ceuta FC": {
+"n": 8.0,
+"gf": 7.0,
+"ga": 18.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 9.693199917674065,
+"xga": 14.601300030946732,
+"xpts": 8.4659234324021
+},
+"Albacete": {
+"n": 8.0,
+"gf": 5.0,
+"ga": 15.0,
+"w": 0.0,
+"pts": 1.0,
+"xg": 10.33889976143837,
+"xga": 13.39329993724823,
+"xpts": 9.886826294452966
+}
+},
+"matches": [
+{
+"d": "2026-09-19",
+"home": "Castellón",
+"away": "Tenerife",
+"hg": 5.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-19",
+"home": "Eldense",
+"away": "Eibar",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-19",
+"home": "Cádiz",
+"away": "Girona",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Sabadell",
+"away": "Real Oviedo",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "AD Ceuta FC",
+"away": "Real Valladolid",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Almería",
+"away": "Celta Fortuna",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-20",
+"home": "Las Palmas",
+"away": "Burgos CF",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Leganés",
+"away": "Granada",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-25",
+"home": "Girona",
+"away": "Albacete",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-26",
+"home": "AD Ceuta FC",
+"away": "Real Sociedad B",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Granada",
+"away": "FC Andorra",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-26",
+"home": "Celta Fortuna",
+"away": "Sabadell",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-26",
+"home": "Tenerife",
+"away": "Cádiz",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Real Valladolid",
+"away": "Córdoba",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Mallorca",
+"away": "Almería",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-27",
+"home": "Burgos CF",
+"away": "Eldense",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-27",
+"home": "Eibar",
+"away": "Las Palmas",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-27",
+"home": "Real Oviedo",
+"away": "Sporting Gijón",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-28",
+"home": "Leganés",
+"away": "Castellón",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-02",
+"home": "Eldense",
+"away": "Real Oviedo",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Albacete",
+"away": "Eibar",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-03",
+"home": "Almería",
+"away": "Burgos CF",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-03",
+"home": "Cádiz",
+"away": "Leganés",
+"hg": 4.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Real Sociedad B",
+"away": "Granada",
+"hg": 2.0,
+"ag": 3.0
+},
+{
+"d": "2026-10-04",
+"home": "Sporting Gijón",
+"away": "Celta Fortuna",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Castellón",
+"away": "AD Ceuta FC",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-10-04",
+"home": "Las Palmas",
+"away": "Real Valladolid",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-10-04",
+"home": "Girona",
+"away": "Mallorca",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-04",
+"home": "Sabadell",
+"away": "FC Andorra",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-10-05",
+"home": "Córdoba",
+"away": "Tenerife",
+"hg": 3.0,
+"ag": 2.0
+}
+],
+"id": 140
+},
+"soccer_spl": {
+"teams": {
+"Celtic": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 4.0,
+"w": 6.0,
+"pts": 18.0,
+"xg": 19.182199776172638,
+"xga": 7.102699905633926,
+"xpts": 15.965066483205199
+},
+"Rangers": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 4.0,
+"w": 5.0,
+"pts": 16.0,
+"xg": 15.825200080871582,
+"xga": 7.032000005245209,
+"xpts": 15.06197279351131
+},
+"Heart of Midlothian": {
+"n": 7.0,
+"gf": 14.0,
+"ga": 8.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 12.667500019073486,
+"xga": 8.878099858760834,
+"xpts": 12.47051447013628
+},
+"Dundee FC": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 7.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 8.58219987154007,
+"xga": 10.562399923801422,
+"xpts": 8.562563483698959
+},
+"St. Mirren": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 9.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 11.131399929523468,
+"xga": 11.81629991531372,
+"xpts": 9.473922639910269
+},
+"St. Johnstone": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 10.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 9.4961998462677,
+"xga": 11.436599850654602,
+"xpts": 8.181727851418472
+},
+"Aberdeen": {
+"n": 7.0,
+"gf": 7.0,
+"ga": 8.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 7.076900064945221,
+"xga": 11.788299977779388,
+"xpts": 6.454406411984038
+},
+"Motherwell": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 10.921000182628632,
+"xga": 12.129200145602226,
+"xpts": 9.877661303189486
+},
+"Dundee United": {
+"n": 7.0,
+"gf": 9.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 11.240300044417381,
+"xga": 10.740299999713898,
+"xpts": 10.03121903997582
+},
+"Hibernian": {
+"n": 7.0,
+"gf": 8.0,
+"ga": 11.0,
+"w": 2.0,
+"pts": 7.0,
+"xg": 11.896299839019775,
+"xga": 11.506100118160248,
+"xpts": 10.084779469263154
+},
+"Falkirk": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 9.0,
+"w": 1.0,
+"pts": 6.0,
+"xg": 7.265099823474884,
+"xga": 13.23639976978302,
+"xpts": 6.0107288317174685
+},
+"Kilmarnock": {
+"n": 7.0,
+"gf": 6.0,
+"ga": 15.0,
+"w": 1.0,
+"pts": 5.0,
+"xg": 7.138399928808212,
+"xga": 16.194299936294556,
+"xpts": 5.261714238547755
+}
+},
+"matches": [
+{
+"d": "2026-08-22",
+"home": "Dundee United",
+"away": "Dundee FC",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-29",
+"home": "Celtic",
+"away": "Falkirk",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Heart of Midlothian",
+"away": "St. Johnstone",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-29",
+"home": "Kilmarnock",
+"away": "Dundee United",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-08-30",
+"home": "Aberdeen",
+"away": "Rangers",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-08-30",
+"home": "Dundee FC",
+"away": "Hibernian",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "St. Mirren",
+"away": "Motherwell",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-02",
+"home": "Celtic",
+"away": "Aberdeen",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Dundee FC",
+"away": "St. Johnstone",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-02",
+"home": "Kilmarnock",
+"away": "St. Mirren",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-02",
+"home": "Motherwell",
+"away": "Dundee United",
+"hg": 3.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Falkirk",
+"away": "Rangers",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-03",
+"home": "Hibernian",
+"away": "Heart of Midlothian",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-05",
+"home": "Aberdeen",
+"away": "Kilmarnock",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "Dundee United",
+"away": "Falkirk",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Rangers",
+"away": "Motherwell",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "St. Mirren",
+"away": "Celtic",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Heart of Midlothian",
+"away": "Dundee FC",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-06",
+"home": "St. Johnstone",
+"away": "Hibernian",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-09",
+"home": "Rangers",
+"away": "St. Mirren",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-09",
+"home": "St. Johnstone",
+"away": "Celtic",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Falkirk",
+"away": "Heart of Midlothian",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Hibernian",
+"away": "Kilmarnock",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-15",
+"home": "Motherwell",
+"away": "Aberdeen",
+"hg": 0.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-19",
+"home": "Dundee FC",
+"away": "Motherwell",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Hibernian",
+"away": "Aberdeen",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "St. Johnstone",
+"away": "Falkirk",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "St. Mirren",
+"away": "Dundee United",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-19",
+"home": "Kilmarnock",
+"away": "Heart of Midlothian",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-20",
+"home": "Celtic",
+"away": "Rangers",
+"hg": 0.0,
+"ag": 1.0
+}
+],
+"id": 64
+},
+"soccer_switzerland_superleague": {
+"teams": {
+"Lugano": {
+"n": 9.0,
+"gf": 27.0,
+"ga": 7.0,
+"w": 8.0,
+"pts": 25.0,
+"xg": 15.48799991607666,
+"xga": 11.246699839830399,
+"xpts": 15.50720415559606
+},
+"Young Boys": {
+"n": 9.0,
+"gf": 31.0,
+"ga": 18.0,
+"w": 5.0,
+"pts": 19.0,
+"xg": 21.091399908065796,
+"xga": 14.944099843502045,
+"xpts": 16.326186802077572
+},
+"Sion": {
+"n": 9.0,
+"gf": 23.0,
+"ga": 14.0,
+"w": 6.0,
+"pts": 19.0,
+"xg": 21.284099817276,
+"xga": 13.781799852848053,
+"xpts": 17.47201215141249
+},
+"Basel": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 17.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 12.31450018286705,
+"xga": 14.087299913167953,
+"xpts": 11.38626310864762
+},
+"St. Gallen": {
+"n": 9.0,
+"gf": 16.0,
+"ga": 19.0,
+"w": 4.0,
+"pts": 13.0,
+"xg": 17.948300063610077,
+"xga": 14.101300179958344,
+"xpts": 14.991295532401827
+},
+"Luzern": {
+"n": 9.0,
+"gf": 17.0,
+"ga": 18.0,
+"w": 3.0,
+"pts": 12.0,
+"xg": 18.862800180912018,
+"xga": 18.267700046300888,
+"xpts": 12.937535095742978
+},
+"FC Zürich": {
+"n": 9.0,
+"gf": 14.0,
+"ga": 20.0,
+"w": 3.0,
+"pts": 11.0,
+"xg": 13.19819986820221,
+"xga": 17.630799889564514,
+"xpts": 10.29503324364955
+},
+"Servette": {
+"n": 9.0,
+"gf": 11.0,
+"ga": 13.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 13.090699970722198,
+"xga": 14.550600171089172,
+"xpts": 11.426805839865027
+},
+"Thun": {
+"n": 9.0,
+"gf": 15.0,
+"ga": 23.0,
+"w": 3.0,
+"pts": 10.0,
+"xg": 13.6628999710083,
+"xga": 20.889000058174133,
+"xpts": 8.231070186370937
+},
+"Grasshopper": {
+"n": 9.0,
+"gf": 13.0,
+"ga": 24.0,
+"w": 2.0,
+"pts": 8.0,
+"xg": 18.274699866771698,
+"xga": 19.86900007724762,
+"xpts": 11.737870640074119
+},
+"FC Vaduz": {
+"n": 9.0,
+"gf": 18.0,
+"ga": 21.0,
+"w": 2.0,
+"pts": 6.0,
+"xg": 16.95009994506836,
+"xga": 17.634199917316437,
+"xpts": 11.869042080343304
+},
+"Lausanne": {
+"n": 9.0,
+"gf": 7.0,
+"ga": 15.0,
+"w": 1.0,
+"pts": 6.0,
+"xg": 8.279699981212616,
+"xga": 13.442899882793427,
+"xpts": 8.466756236840133
+}
+},
+"matches": [
+{
+"d": "2026-08-30",
+"home": "Sion",
+"away": "Lugano",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "FC Vaduz",
+"away": "Grasshopper",
+"hg": 5.0,
+"ag": 2.0
+},
+{
+"d": "2026-08-30",
+"home": "St. Gallen",
+"away": "Thun",
+"hg": 3.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-01",
+"home": "FC Zürich",
+"away": "Young Boys",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-02",
+"home": "Grasshopper",
+"away": "St. Gallen",
+"hg": 2.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-02",
+"home": "Luzern",
+"away": "FC Vaduz",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-02",
+"home": "Thun",
+"away": "Lausanne",
+"hg": 0.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-03",
+"home": "Basel",
+"away": "Sion",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-03",
+"home": "Lugano",
+"away": "Servette",
+"hg": 1.0,
+"ag": 0.0
+},
+{
+"d": "2026-09-05",
+"home": "FC Vaduz",
+"away": "Lausanne",
+"hg": 3.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-05",
+"home": "Young Boys",
+"away": "Luzern",
+"hg": 3.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-05",
+"home": "Grasshopper",
+"away": "FC Zürich",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Servette",
+"away": "St. Gallen",
+"hg": 0.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-06",
+"home": "Basel",
+"away": "Lugano",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-06",
+"home": "Sion",
+"away": "Thun",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-12",
+"home": "St. Gallen",
+"away": "Sion",
+"hg": 0.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-12",
+"home": "Thun",
+"away": "Grasshopper",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-12",
+"home": "Lugano",
+"away": "Young Boys",
+"hg": 2.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-13",
+"home": "FC Zürich",
+"away": "FC Vaduz",
+"hg": 2.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Lausanne",
+"away": "Servette",
+"hg": 0.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-13",
+"home": "Luzern",
+"away": "Basel",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-15",
+"home": "Grasshopper",
+"away": "Sion",
+"hg": 2.0,
+"ag": 5.0
+},
+{
+"d": "2026-09-16",
+"home": "Lugano",
+"away": "St. Gallen",
+"hg": 4.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-16",
+"home": "Thun",
+"away": "Servette",
+"hg": 2.0,
+"ag": 4.0
+},
+{
+"d": "2026-09-19",
+"home": "Luzern",
+"away": "Grasshopper",
+"hg": 5.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Sion",
+"away": "FC Zürich",
+"hg": 1.0,
+"ag": 1.0
+},
+{
+"d": "2026-09-19",
+"home": "Young Boys",
+"away": "Servette",
+"hg": 3.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "FC Vaduz",
+"away": "Thun",
+"hg": 1.0,
+"ag": 2.0
+},
+{
+"d": "2026-09-20",
+"home": "Basel",
+"away": "St. Gallen",
+"hg": 1.0,
+"ag": 3.0
+},
+{
+"d": "2026-09-20",
+"home": "Lausanne",
+"away": "Lugano",
+"hg": 0.0,
+"ag": 4.0
+}
+],
+"id": 69
+}
+},
+"updated": "2026-10-09T05:33+00:00"
 }

@@ -1,0 +1,41 @@
+{
+"day": "2026-10-09",
+"sources": {
+"footballdata": {
+"hit": 0,
+"miss": 50,
+"saved": 0,
+"spent": 50
+},
+"fotmob": {
+"hit": 51,
+"miss": 2,
+"saved": 51,
+"spent": 2
+},
+"betexplorer": {
+"hit": 0,
+"miss": 37,
+"saved": 0,
+"spent": 37
+},
+"api-football": {
+"hit": 68,
+"miss": 17,
+"saved": 68,
+"spent": 17
+},
+"events": {
+"hit": 0,
+"miss": 47,
+"saved": 0,
+"spent": 47
+},
+"odds": {
+"hit": 0,
+"miss": 9,
+"saved": 0,
+"spent": 12
+}
+}
+}
