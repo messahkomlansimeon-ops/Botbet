@@ -16,6 +16,7 @@ Cartons : 1xBet ne compte que les jaunes (« Cartons jaunes ») alors que Kelly 
 """
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -259,6 +260,21 @@ def proxy():
     return None
 
 
+PROXY_FAIL = ("ProxyError", "ConnectTimeout", "ReadTimeout", "SSLError", "ConnectionError")
+MAX_SWITCH = 5                  # sessions Webshare essayées au plus par relevé quand le proxy lui-même est en panne
+
+
+def with_session(url, n):
+    """Même proxy Webshare, session collante n° `n` (« user-GB-20:mdp@... » -> « user-GB-21:mdp@... ») ; None si pas de numéro."""
+    m = re.match(r"^(.*-[A-Z]{2}-)(\d+)(:.*)$", url or "")
+    return f"{m.group(1)}{n}{m.group(3)}" if m else None
+
+
+def session_no(url):
+    m = re.match(r"^.*-[A-Z]{2}-(\d+):", url or "")
+    return int(m.group(1)) if m else None
+
+
 def usage(today=None):
     """Données 1xBet du mois en cours (dict USAGE remis à zéro au changement de mois)."""
     today = str(today or state.now().date())
@@ -300,11 +316,29 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
     if not px_url and not C.XBET_DIRECT:
         state.record_run(SOURCE, 0, [f"proxy introuvable (XBET_PROXY ou {C.XBET_PROXY_FILE}) : aucun relevé, jamais en direct"])
         return out
+    u, cap = usage(), C.XBET_MONTH_MB * 1e6
+    if px_url and u.get("session") and with_session(px_url, u["session"]):
+        px_url = with_session(px_url, u["session"])       # dernière session Webshare qui marchait
     if px_url:
         http.PROXIES[DOMAIN] = px_url
     else:
         http.PROXIES.pop(DOMAIN, None)
-    u, cap = usage(), C.XBET_MONTH_MB * 1e6
+    switches = [0]
+
+    def call(fn, *a):
+        """fn(*a) ; proxy en panne (502 du fournisseur, délai) : session Webshare suivante et nouvel essai, MAX_SWITCH fois au plus
+        par relevé. Jamais pour un refus de 1xBet (403/429 : source coupée 24 h par http.fetch)."""
+        while True:
+            try:
+                return fn(*a)
+            except XbetError as e:
+                nxt = with_session(http.PROXIES.get(DOMAIN), (session_no(http.PROXIES.get(DOMAIN)) or 0) + 1)
+                if not nxt or switches[0] >= MAX_SWITCH or not any(k in str(e) for k in PROXY_FAIL):
+                    raise
+                switches[0] += 1
+                http.PROXIES[DOMAIN] = nxt
+                u["session"] = session_no(nxt)
+                print(f"[1xbet] proxy en panne ({e}) : session Webshare n° {u['session']}", file=sys.stderr)
     start = dict(http.WIRE.get(DOMAIN, {"bytes": 0, "requests": 0}))
     if u["bytes"] >= cap:
         state.record_run(SOURCE, 0, [f"plafond mensuel atteint ({usage_line(u)}) : relevé sauté"])
@@ -320,8 +354,8 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
                 continue
             if key not in leagues:
                 try:
-                    cat = cat if cat is not None else menu()
-                    leagues[key] = games(key, cat)
+                    cat = cat if cat is not None else call(menu)
+                    leagues[key] = call(games, key, cat)
                 except XbetError as e:
                     errors.append(f"{key} : {e}")
                     leagues[key] = []
@@ -331,7 +365,7 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None):
             if not g:
                 continue
         try:
-            out[ev["id"]] = {"gid": g["gid"], "px": prices(g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])} | {
+            out[ev["id"]] = {"gid": g["gid"], "px": call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])} | {
                 "home": g["home"], "away": g["away"]}
         except XbetError as e:
             errors.append(f"{ev['home_team']} - {ev['away_team']} : {e}")

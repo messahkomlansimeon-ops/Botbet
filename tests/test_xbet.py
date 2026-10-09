@@ -169,6 +169,33 @@ def test_proxy_cap_and_reuse():
     assert "marketType=2" in calls[0] and http.PROXIES[xbet.DOMAIN] == saved
     u = xbet.usage()
     assert u["bytes"] == 7000 and u["requests"] == 1 and sum(u["days"].values()) == 7000
+    # proxy Webshare en panne (502 de la session 20) : session 21, retenue pour les relevés suivants ; un refus de 1xBet ne change rien
+    store.save(xbet.USAGE, {})
+    os.environ["XBET_PROXY"] = "http://user-GB-20:pw@proxy.test:80"
+
+    def flaky(net):
+        def fetch(url, *a, **k):
+            if "-GB-20:" in http.PROXIES[xbet.DOMAIN]:
+                return http.Result(url, None, error="réseau indisponible (ProxyError)")
+            return FakeNet.fetch(net, url, *a, **k)
+        old, http.fetch = http.fetch, fetch
+        try:
+            return xbet.fetch_day([("soccer_spain_la_liga", EV | {"xgid": 900})])
+        finally:
+            http.fetch = old
+    try:
+        got = with_net(flaky)
+        assert set(got) == {"e1"} and "-GB-21:" in http.PROXIES[xbet.DOMAIN] and xbet.usage()["session"] == 21
+        blocked = lambda net: xbet.fetch_day([("soccer_spain_la_liga", EV | {"xgid": 900})])      # noqa: E731
+        old = http.fetch
+        http.fetch = lambda url, *a, **k: http.Result(url, None, status=403, blocked=True, error="HTTP 403 : accès refusé")
+        try:
+            assert blocked(None) == {} and "-GB-21:" in http.PROXIES[xbet.DOMAIN], "refus de 1xBet : pas de changement d'IP"
+        finally:
+            http.fetch = old
+    finally:
+        os.environ["XBET_PROXY"] = saved
+    store.save(xbet.USAGE, u)
     # plafond du mois atteint : aucun relevé
     store.save(xbet.USAGE, u | {"bytes": int(C.XBET_MONTH_MB * 1e6)})
     assert with_net(lambda net: (xbet.fetch_day([("soccer_spain_la_liga", EV)]), net.calls)[1]) == []

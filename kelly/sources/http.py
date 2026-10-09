@@ -161,6 +161,9 @@ def _request(url, headers=None):
             _count(domain, r)
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
             r, err = None, f"réseau indisponible ({type(e).__name__})"
+            stale = _sessions.pop(domain, None)     # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
+            if stale:
+                stale.close()
         _last[domain] = state.clock()
         if r is not None and r.status_code < 500:
             return r, None
