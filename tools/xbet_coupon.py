@@ -127,21 +127,33 @@ def run_test():
         ses.close("test du coupon")
 
 
-def read_coupon(code):
-    """Relit un ticket déjà enregistré (GetCoupon, lecture seule : rien n'est créé) : 1xbet.ci le connaît-il, avec quels paris ?"""
+PARTNERS = (286, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)   # 286 = 1xbet.ci ; 1 = 1xbet.com
+
+
+def read_coupon(code, partners=PARTNERS):
+    """Relit un ticket déjà enregistré (GetCoupon, LECTURE SEULE : rien n'est créé) pour chaque numéro de partenaire : celui qui le
+    connaît est la version de 1xBet où le code a été créé (ex. l'appli de l'utilisateur). Affiche les paris trouvés."""
     from kelly.sources import http, xbet
     ses = xbet._Session()
     if ses.why:
         print(f"1xBet indisponible : {ses.why}")
         return
     try:
-        for body in ({"Guid": code, "CfView": 0, "Lng": "fr", "partner": xbet.COMMON["ref"]}, {"Guid": code, "Lng": "fr"}):
-            r = ses.call(http.post, GET_URL, body)
-            print(f"GetCoupon {sorted(body)} -> HTTP {r.status}")
+        for p in partners:
+            r = ses.call(http.post, GET_URL, {"Guid": code, "CfView": 0, "Lng": "fr", "partner": p})
             try:
-                print(json.dumps(json.loads(r.content or b"{}"), ensure_ascii=False, indent=1)[:2500])
+                data = json.loads(r.content or b"{}")
             except ValueError:
-                print((r.content or b"")[:500])
+                print(f"partenaire {p} : réponse illisible (HTTP {r.status})")
+                continue
+            evs = ((data.get("Value") or {}).get("Events") or []) if isinstance(data.get("Value"), dict) else []
+            if evs:
+                print(f"partenaire {p} : CODE RECONNU, {len(evs)} pari(s)")
+                for e in evs:
+                    print(f"   {e.get('Opp1')} - {e.get('Opp2')} : {e.get('FullName') or ''} {e.get('MarketName')} @ {e.get('Coef')}")
+                return
+            print(f"partenaire {p} : {data.get('Error') or 'inconnu'}")
+        print("aucun partenaire de la liste ne connaît ce code")
     finally:
         ses.close("relecture du coupon")
 
