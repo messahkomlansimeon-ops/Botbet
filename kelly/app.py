@@ -118,7 +118,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                             "stake": st} | ({"cur": cur} if money.active() and st else {}))
     for target, (legs, min_total, prob) in built_fair:
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                               stake_txt=mise(stakes.get(("fair", target)))),
+                                                               stake_txt=mise(stakes.get(("fair", target))), title=CB.shots_title(target)),
                                                 f"v{target}", day, funded=bool(stakes.get(("fair", target)))))
     if pronos:
         messages.append(fmt.pronos(pronos, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2)))
@@ -450,7 +450,7 @@ def run_daily(sample=False):
             why = "budget de cotes du jour épuisé" if why else None
     if pronos:
         try:
-            fair_combos = CB.fair_plan(pronos)
+            fair_combos = CB.fair_plan(pronos) + CB.fair_shots_plan(pronos)
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
     fair_stakes = {}

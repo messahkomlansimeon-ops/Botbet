@@ -301,7 +301,13 @@ def make(scan, picks=(), day=None, deadline=None, africa=()):
             else:
                 c["conf"] = round(simple_q(f, b[0]), 2)
             picks_.append(c)
-        out += sorted(picks_, key=lambda c: -c["score"])[:2]
+        best = sorted(picks_, key=lambda c: -c["score"])
+        keep = best[:2]
+        for prefix in ("team_shots_", "team_sot_"):          # tirs et tirs cadrés : toujours le meilleur de chaque, pour leurs combinés
+            shot = next((c for c in best if c["market"].startswith(prefix)), None)
+            if shot and shot not in keep:
+                keep.append(shot)
+        out += keep
     return _rank(out)
 
 
@@ -376,6 +382,7 @@ def record(pronos, day):
     known = {r["key"] for r in rows}
     n = 0
     extra = [c for c in pronos[C.FAIR_TRACK:] if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
+    extra += [c for c in pronos[C.FAIR_TRACK:] if c["market"].startswith(("team_shots_", "team_sot_"))][:C.FAIR_TRACK_SHOTS]
     for c in pronos[:C.FAIR_TRACK] + extra:
         if c["key"] not in known:
             known.add(c["key"])

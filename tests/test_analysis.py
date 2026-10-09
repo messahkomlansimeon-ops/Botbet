@@ -525,7 +525,8 @@ def test_prematch_and_fair_use_the_model():
             assert fair.options(dict(f, deep=dict(d, q=0.1)), "Arsenal", "Manchester City") != opts             # qualité trop faible : repli
             ev = {"id": "m1", "sport_key": "soccer_epl", "home_team": "Arsenal", "away_team": "Manchester City", "commence_time": "2025-12-01T19:00:00Z"}
             pronos = fair.make({"leagues": {"soccer_epl": [ev]}}, [], day)
-            assert 1 <= len(pronos) <= 2 and pronos == sorted(pronos, key=lambda c: -c["score"])
+            # 2 meilleurs par match, plus le meilleur « tirs » et le meilleur « tirs cadrés » (combinés spécial tirs)
+            assert 1 <= len(pronos) <= 4 and pronos == sorted(pronos, key=lambda c: -c["score"])
             assert S.shorten("a ; " + "b" * 60 + " ; " + "c" * 60 + " ; d", 100) == "a ; " + "b" * 60 and S.shorten("x" * 300, 50) == "x" * 300
             for c in pronos:
                 assert len(c["why"]) <= 160 and C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and "base" in c and 0 < c["conf"] <= 1

@@ -95,7 +95,8 @@ SINGULAR = {"tirs cadrés": "tir cadré", "tirs": "tir", "fautes": "faute", "poi
 
 
 TEAM_MARKET = re.compile(r"^team_(shots|sot|fouls|throws|offsides)_(total|home|away)$")
-TEAM_UNITS = {"shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu"}
+# mots de 1xBet (« Tirs vers le but », « Tirs cadrés ») : le pari se retrouve directement chez le bookmaker
+TEAM_UNITS = {"shots": "tirs vers le but", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu"}
 
 
 def label(market, name, point, who, group):
@@ -254,10 +255,10 @@ def fair_leg(n, c):
     return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"])
 
 
-def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None):
+def fair_combo(min_total, picks, prob, stake, hint=None, stake_txt=None, title=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », jamais de mise de bankroll
-    (mise indicative seulement), chaque jambe avec sa cote minimale."""
-    head = [b("🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET"),
+    (mise indicative seulement), chaque jambe avec sa cote minimale. `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »)."""
+    head = [b(f"{title} — À VÉRIFIER CHEZ 1XBET" if title else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET"),
             f"🎯 Cote mini {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
             (f"💰 Mise : {b(esc(stake_txt))} {i('(seulement si 1xBet paie la cote mini)')}" if stake_txt else
              f"💰 Mise indicative : {units(stake)} au plus {i('(pas calculée sur ta bankroll)')}")]

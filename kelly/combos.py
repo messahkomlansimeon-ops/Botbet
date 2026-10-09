@@ -312,6 +312,21 @@ def fair_plan(pronos, tiers=None, usage=None):
     return out
 
 
+def fair_shots_plan(pronos, tiers=None):
+    """Combinés « spécial tirs » à vérifier chez 1xBet (C.FAIR_SHOTS_TIERS) : l'un sur les tirs cadrés, l'autre sur les tirs vers le
+    but, un pari par match, mêmes jambes solides que les autres combinés à cote juste : [(palier, combiné | None)]."""
+    out = []
+    for target, prefix, _, lo, hi in (tiers if tiers is not None else C.FAIR_SHOTS_TIERS):
+        legs = [c for c in fair_legs(pronos) if c["market"].startswith(prefix)]
+        out.append((target, best_combo(legs, lo, hi)))
+    return out
+
+
+def shots_title(target):
+    """Titre d'un combiné « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »), None pour les autres combinés à cote juste."""
+    return next((t for k, _, t, _, _ in C.FAIR_SHOTS_TIERS if k == target), None)
+
+
 def fair_custom(pronos, target, usage=None):
     """/combi <cote> sans cotes réelles : combiné à cote juste dont la cote mini est au moins la cote visée (jusqu'à
     + C.CUSTOM_TOLERANCE) : on ne promet jamais moins que demandé, puisque c'est un minimum."""

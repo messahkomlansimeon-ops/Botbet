@@ -1963,10 +1963,10 @@ def test_fair_stat_markets():
     home, away, tot = picks["team_sot_home"], picks["team_shots_away"], picks["team_sot_total"]
     assert home["who"] == "Alpha" and away["who"] == "Bravo" and tot["who"] is None
     assert re.fullmatch(r"Alpha : (plus|moins) de \d,5 tirs cadrés", home["pick"]), home["pick"]
-    assert re.fullmatch(r"Bravo : (plus|moins) de \d+,5 tirs", away["pick"]) and re.fullmatch(r"(Plus|Moins) de \d,5 tirs cadrés au total", tot["pick"])
+    assert re.fullmatch(r"Bravo : (plus|moins) de \d+,5 tirs vers le but", away["pick"]) and re.fullmatch(r"(Plus|Moins) de \d,5 tirs cadrés au total", tot["pick"])
     assert home["key"].startswith("m1|team_sot_home||") and home["key"] != picks["team_sot_total"]["key"]
     assert fair.pick_label({"market": "team_sot_home", "name": "Over", "point": 4.5, "home": "Alpha", "away": "Bravo"}) == "Alpha : plus de 4,5 tirs cadrés"
-    assert fair.pick_label({"market": "team_shots_away", "name": "Under", "point": 11.5, "home": "Alpha", "away": "Bravo"}) == "Bravo : moins de 11,5 tirs"
+    assert fair.pick_label({"market": "team_shots_away", "name": "Under", "point": 11.5, "home": "Alpha", "away": "Bravo"}) == "Bravo : moins de 11,5 tirs vers le but"
     # confiance : celle du profil API-Football (court) pour ses chiffres ; le modèle simple monte avec le nombre de matchs
     assert tot["conf"] == 0.45 if "conf" in tot else True
     assert fair.simple_q({"n_home": 10, "n_away": 12}, "totals") > fair.simple_q({"n_home": 5, "n_away": 12}, "totals") == 0.4
@@ -1981,7 +1981,7 @@ def test_fair_stat_markets():
     assert settle.settle_pick(row("team_sot_away", "Over", 2.5), ev_, fst) is None                  # tirs cadrés null : on ne devine pas
     assert settle.settle_pick(row("team_sot_total", "Over", 7.5), ev_, fst) is None                 # le total dépend d'une valeur null
     assert settle.settle_pick(row("team_sot_home", "Over", 4.5), ev_, None) is None
-    assert settle.final_text(row("team_shots_home", "Over", 5.5), ev_, fst) == "14 tirs" and settle.final_text(row("team_sot_home", "Over", 5.5), ev_, fst) == "5 tirs cadrés"
+    assert settle.final_text(row("team_shots_home", "Over", 5.5), ev_, fst) == "14 tirs vers le but" and settle.final_text(row("team_sot_home", "Over", 5.5), ev_, fst) == "5 tirs cadrés"
     from kelly.sources import footballdata as fdm
     m = fdm.match_stats({"hs": 14, "as": 9, "hst": 5, "ast": 3, "hc": 4, "ac": 5})
     assert m["sot"] == 8 and m["side"] == {"home": {"shots": 14, "sot": 5}, "away": {"shots": 9, "sot": 3}}
@@ -2200,7 +2200,8 @@ def test_run_daily_world():
         header = next(m for m in sent if m.startswith("<b>🔥 Kelly"))
         assert "combiné" in header and "à vérifier chez 1xBet" in header, header
         rows = store.load("fair_combos.json", [])
-        assert rows and len(rows) == len(fair_msgs) and all(r["tier"] in (5, 12, 25) for r in rows)
+        shot_msgs = [m for m in sent if m.startswith("<b>🎯 COMBINÉ TIRS")]                       # combinés « spécial tirs »
+        assert rows and len(rows) == len(fair_msgs) + len(shot_msgs) and all(r["tier"] in (5, 12, 25, "tc5", "tv5") for r in rows)
         bets = store.load("bets.json", {"combos": []})
         assert all(c["tier"] in [t for t, _, _ in C.COMBOS] for c in bets["combos"])                  # jamais de combiné à cote juste ici
         today_ = store.load("today.json", {})

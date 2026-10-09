@@ -103,14 +103,21 @@ def find(word, day):
         st = r["stake"] if r.get("cur") or r.get("stake") == 0 else bankroll.stake(r["prob"], r["odds"], "⭐", bankroll.load()["bankroll"])
         return Target(r, r["odds"], st, f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
                       "cote typique")
-    if w.startswith("v") and w[1:].isdigit():
+    if w.startswith("v") and len(w) > 1:              # v5, v12, v25 ; vtc5 / vtv5 : combinés « spécial tirs »
         rows = fair.load_combos()
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
         if not c:
-            return f"Pas de combiné à vérifier « cote mini {w[1:]} » à noter (ni aujourd'hui ni en attente de résultat)."
+            return None if not (w[1:].isdigit() or CB.shots_title(w[1:])) else \
+                f"Pas de combiné à vérifier « {_fair_name(w[1:])} » à noter (ni aujourd'hui ni en attente de résultat)."
         return Target(c, c["min_odds"], c["stake"] if c.get("cur") or c.get("stake") == 0 else CB.fair_stake(c["min_odds"]), f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])}) "
                       f"du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows), "cote mini")
     return None
+
+
+def _fair_name(tier):
+    """« Tirs cadrés », « Tirs vers le but » pour les combinés « spécial tirs », sinon « À vérifier »."""
+    t = CB.shots_title(str(tier))
+    return t.replace("🎯 COMBINÉ ", "").capitalize() if t else "À vérifier"
 
 
 def _gap(odds, ref):
@@ -178,7 +185,7 @@ def todo(day):
     lines, rows = [], []
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(track.load(), bets["combos"]) if r["date"] == day]
-    items_ += [(f"À vérifier (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"v{c['tier']}")
+    items_ += [(f"{_fair_name(c['tier'])} (cote mini {fmt.odds_txt(c['min_odds'])})", c, c["min_odds"], f"v{c['tier']}")
                for c in fair.load_combos() if c["date"] == day]
     if not items_:
         return "Rien à noter aujourd'hui : les paris du jour arrivent à 08:00."

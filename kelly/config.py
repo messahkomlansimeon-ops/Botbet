@@ -167,6 +167,10 @@ XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir 
 FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
 FAIR_COMBO_TIERS = ((5, 5.0, 6.5), (12, 12.0, 15.0), (25, 25.0, 32.0))   # (cote mini visée, fourchette de la cote mini totale)
+# Combinés « spécial tirs » à vérifier chez 1xBet, chaque matin : (palier, préfixe des marchés, titre, fourchette de la cote mini)
+FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0),
+                    ("tv5", "team_shots_", "🎯 COMBINÉ TIRS VERS LE BUT", 5.0, 7.0))
+FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
 FAIR_COMBO_STAKE = ((8, 1.0), (20, 0.5), (1e9, 0.3))                      # mise INDICATIVE (u) selon la cote mini ; pas la bankroll
 FAIR_COMBO_KEEP_DAYS = 14
 FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis": "h2h,totals"}
@@ -274,7 +278,10 @@ LEG_REUSE_MAX = _int("LEG_REUSE_MAX", 3)
 
 # Priorité aux marchés mal pricés. 1N2/buts/points : efficaces, pénalisés.
 MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8, "btts": 1.0,
-                 "alternate_totals_corners": 1.6, "alternate_totals_cards": 1.6}
+                 "alternate_totals_corners": 1.6, "alternate_totals_cards": 1.6,
+                 # tirs et tirs cadrés (total ou une équipe) : marchés mal pricés, comme corners et cartons
+                 "team_shots_total": 1.6, "team_shots_home": 1.5, "team_shots_away": 1.5,
+                 "team_sot_total": 1.6, "team_sot_home": 1.5, "team_sot_away": 1.5}
 PLAYER_WEIGHT = 1.8
 
 UNITS = {
