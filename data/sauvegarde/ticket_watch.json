@@ -1,0 +1,1144 @@
+{
+"legs": {
+"vm18|lv760231838|totals||3.5|Under": {
+"state": "win",
+"score": "1-2",
+"gid": 4760416,
+"at": "2026-10-10T11:00+00:00"
+},
+"vm18|lv760248089|totals||3.5|Under": {
+"state": "win",
+"score": "2-0",
+"gid": 4777267,
+"at": "2026-10-10T12:00+00:00"
+},
+"vm18|lv760248080|double_chance|||Draw or Dangjin Citizen": {
+"state": "win",
+"score": "0-1",
+"gid": 4668016,
+"at": "2026-10-10T12:00+00:00"
+},
+"vm18|lv760248027|btts|||Yes": {
+"state": "loss",
+"score": "3-0",
+"gid": 4826931,
+"at": "2026-10-10T12:00+00:00"
+},
+"vm18|lv760248085|totals||3.5|Under": {
+"state": "win",
+"score": "1-2",
+"gid": 4748692,
+"at": "2026-10-10T12:00+00:00"
+},
+"vm18|lv760248087|totals||2.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4757957,
+"at": "2026-10-10T12:00+00:00"
+},
+"vm18|lv760248096|totals||1.5|Over": {
+"state": "loss",
+"score": "0-1",
+"gid": 4739623,
+"at": "2026-10-10T12:00+00:00"
+},
+"vm1|3c813baeb4f415e152409b8dafc46366|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-1",
+"gid": 4757662,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm2|3c813baeb4f415e152409b8dafc46366|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-1",
+"gid": 4757662,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm4|3c813baeb4f415e152409b8dafc46366|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-1",
+"gid": 4757662,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm8|3c813baeb4f415e152409b8dafc46366|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-1",
+"gid": 4757662,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm11|3c813baeb4f415e152409b8dafc46366|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-1",
+"gid": 4757662,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm13|3c813baeb4f415e152409b8dafc46366|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-1",
+"gid": 4757662,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm1|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_away||9.5|Under": {
+"state": "loss",
+"score": "0-1",
+"gid": 4742051,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm2|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_total||26.5|Under": {
+"state": "win",
+"score": "2-1",
+"gid": 4742051,
+"at": "2026-10-10T13:30+00:00"
+},
+"vm4|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_total||26.5|Under": {
+"state": "win",
+"score": "2-1",
+"gid": 4742051,
+"at": "2026-10-10T13:30+00:00"
+},
+"vm3|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_total||26.5|Under": {
+"state": "win",
+"score": "2-1",
+"gid": 4742051,
+"at": "2026-10-10T13:30+00:00"
+},
+"vm7|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_away||9.5|Under": {
+"state": "loss",
+"score": "0-1",
+"gid": 4742051,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm8|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_away||9.5|Under": {
+"state": "loss",
+"score": "0-1",
+"gid": 4742051,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm11|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_total||26.5|Under": {
+"state": "win",
+"score": "2-1",
+"gid": 4742051,
+"at": "2026-10-10T13:30+00:00"
+},
+"vm13|b870dcfba5e5920d3f1551a3aa1ea435|team_shots_total||26.5|Under": {
+"state": "win",
+"score": "2-1",
+"gid": 4742051,
+"at": "2026-10-10T13:30+00:00"
+},
+"vm31|lv760263936|h2h|||Ninh Binh": {
+"state": "loss",
+"score": "1-1",
+"gid": 4826930,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760263995|totals||3.5|Under": {
+"state": "win",
+"score": "0-2",
+"gid": 4734932,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760264000|totals||2.5|Over": {
+"state": "win",
+"score": "2-1",
+"gid": 4757662,
+"at": "2026-10-10T12:40+00:00"
+},
+"vm31|lv760263996|btts|||No": {
+"state": "win",
+"score": "3-0",
+"gid": 4757658,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm31|lv760273460|totals||4.5|Under": {
+"state": "live",
+"score": "1-2",
+"gid": 4865258,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760273457|h2h|||Wuxi Wugou": {
+"state": "live",
+"score": "0-2",
+"gid": 4680025,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760273465|totals||4.5|Under": {
+"state": "live",
+"score": "1-1",
+"gid": 4746755,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760273472|h2h|||Oxford United": {
+"state": "live",
+"score": "0-1",
+"gid": 4746756,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760271102|totals||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4746114,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm31|lv760270878|totals||1.5|Under": {
+"state": "loss",
+"score": "2-1",
+"gid": 4742051,
+"at": "2026-10-10T13:00+00:00"
+},
+"vm1|349c47668fdd909039a9408c14cad8bc|team_offsides_total||4.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm2|349c47668fdd909039a9408c14cad8bc|team_offsides_total||4.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm4|349c47668fdd909039a9408c14cad8bc|team_offsides_total||4.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm7|349c47668fdd909039a9408c14cad8bc|team_sot_home||3.5|Over": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm8|349c47668fdd909039a9408c14cad8bc|team_offsides_total||4.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T12:50+00:00"
+},
+"vm11|349c47668fdd909039a9408c14cad8bc|team_sot_home||3.5|Over": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm13|349c47668fdd909039a9408c14cad8bc|team_offsides_total||4.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4750833,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm14|7e624ab39c4b3406fdcf3bae75c18e0b|alternate_totals_corners||9.5|Under": {
+"state": "win",
+"score": "1-1",
+"gid": 4784364,
+"at": "2026-10-10T15:00+00:00"
+},
+"vm3|f03c08c0ae5fd66c2d2df2053115bb94|team_shots_away||11.5|Under": {
+"state": "loss",
+"score": "2-3",
+"gid": 4755387,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm30|9aade3e736c3d113dab19e641c43e272|team_totals_away||2.5|Under": {
+"state": "win",
+"score": "0-2",
+"gid": 4755381,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm30|f03c08c0ae5fd66c2d2df2053115bb94|double_chance|||TSG Hoffenheim or Hamburger SV": {
+"state": "win",
+"score": "2-3",
+"gid": 4755387,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm2|f03c08c0ae5fd66c2d2df2053115bb94|team_fouls_total||23.5|Over": {
+"state": "win",
+"score": "2-2",
+"gid": 4755387,
+"at": "2026-10-10T15:20+00:00"
+},
+"vm4|9aade3e736c3d113dab19e641c43e272|team_shots_total||28.5|Over": {
+"state": "win",
+"score": "0-1",
+"gid": 4755381,
+"at": "2026-10-10T15:00+00:00"
+},
+"vm4|f03c08c0ae5fd66c2d2df2053115bb94|team_fouls_total||23.5|Over": {
+"state": "win",
+"score": "2-2",
+"gid": 4755387,
+"at": "2026-10-10T15:20+00:00"
+},
+"vm11|9aade3e736c3d113dab19e641c43e272|team_shots_total||28.5|Over": {
+"state": "win",
+"score": "0-1",
+"gid": 4755381,
+"at": "2026-10-10T15:00+00:00"
+},
+"vm11|f03c08c0ae5fd66c2d2df2053115bb94|team_fouls_total||23.5|Over": {
+"state": "win",
+"score": "2-2",
+"gid": 4755387,
+"at": "2026-10-10T15:20+00:00"
+},
+"vm13|9aade3e736c3d113dab19e641c43e272|team_shots_total||28.5|Over": {
+"state": "win",
+"score": "0-1",
+"gid": 4755381,
+"at": "2026-10-10T15:00+00:00"
+},
+"vm13|f03c08c0ae5fd66c2d2df2053115bb94|team_fouls_total||23.5|Over": {
+"state": "win",
+"score": "2-2",
+"gid": 4755387,
+"at": "2026-10-10T15:20+00:00"
+},
+"vm14|418f8c26d46eaabd829f2e265673b855|team_fouls_away||11.5|Under": {
+"state": "win",
+"score": "3-4",
+"gid": 4755384,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm30|418f8c26d46eaabd829f2e265673b855|team_fouls_away||11.5|Under": {
+"state": "win",
+"score": "3-4",
+"gid": 4755384,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm30|46565a1cbc6f2e15ba0b2223a5a1fde8|double_chance|||Stockport County FC or Draw": {
+"state": "win",
+"score": "3-1",
+"gid": 4746753,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm4|1f9e31de12bb3b92a0deaaf9ee57af3d|alternate_totals_corners||10.5|Over": {
+"state": "loss",
+"score": "0-1",
+"gid": 4746119,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm4|9f2bb19d00e60d89a304ff8c8da85e2c|alternate_totals_corners||11.5|Under": {
+"state": "win",
+"score": "1-1",
+"gid": 4746121,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm3|288b4ff00c79daa712c911c564fe1be7|team_shots_total||25.5|Over": {
+"state": "live",
+"score": "0-1",
+"gid": 4742044,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm13|288b4ff00c79daa712c911c564fe1be7|team_shots_total||24.5|Over": {
+"state": "loss",
+"score": "2-1",
+"gid": 4742044,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm14|6e6ba2e883c5bda81a3f3c073e347e93|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "1-0",
+"gid": 4741648,
+"at": "2026-10-10T15:50+00:00"
+},
+"vm14|f24c5b5697db672cf073eee6ceff3148|alternate_totals_corners||10.5|Under": {
+"state": "win",
+"score": "1-4",
+"gid": 4747308,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm30|53fe5171e2c7a834388133b06b571727|double_chance|||Hearts or Draw": {
+"state": "win",
+"score": "5-0",
+"gid": 4741646,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm14|da9455392ae630109d4a778c371a47a0|alternate_totals_corners||9.5|Over": {
+"state": "win",
+"score": "0-0",
+"gid": 4746762,
+"at": "2026-10-10T15:20+00:00"
+},
+"vm30|xb758565929|alternate_totals_corners||8.5|Under": {
+"state": "win",
+"score": "1-0",
+"gid": 4745241,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm2|883135d737b3dce356ccd04a9e6d2124|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-2",
+"gid": 4734570,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm4|883135d737b3dce356ccd04a9e6d2124|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-2",
+"gid": 4734570,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm11|883135d737b3dce356ccd04a9e6d2124|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-2",
+"gid": 4734570,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm13|883135d737b3dce356ccd04a9e6d2124|alternate_totals_corners||10.5|Over": {
+"state": "win",
+"score": "3-2",
+"gid": 4734570,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm30|2c173b3bd3a1491f17fcad1012019c4f|team_totals_home||2.5|Under": {
+"state": "win",
+"score": "1-0",
+"gid": 4735251,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm36|2c173b3bd3a1491f17fcad1012019c4f|team_shots_away||11.5|Under": {
+"state": "loss",
+"score": "1-0",
+"gid": 4735251,
+"at": "2026-10-10T16:40+00:00"
+},
+"vm42|2c173b3bd3a1491f17fcad1012019c4f|team_totals_home||2.5|Under": {
+"state": "win",
+"score": "1-0",
+"gid": 4735251,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm41|lv760308227|h2h|||TSG 1899 Hoffenheim": {
+"state": "loss",
+"score": "2-3",
+"gid": 4755387,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760308763|totals||4.5|Under": {
+"state": "win",
+"score": "2-2",
+"gid": 4755385,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760308383|totals||1.5|Under": {
+"state": "loss",
+"score": "0-2",
+"gid": 4755381,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760320970|totals||3.5|Under": {
+"state": "loss",
+"score": "2-2",
+"gid": 4747313,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760321167|totals||1.5|Under": {
+"state": "live",
+"score": "1-0",
+"gid": 4747312,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760321155|double_chance|||Cheltenham Town or Draw": {
+"state": "live",
+"score": "0-0",
+"gid": 4747314,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760320864|totals||3.5|Under": {
+"state": "live",
+"score": "1-2",
+"gid": 4741085,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760317895|totals||5.5|Under": {
+"state": "live",
+"score": "3-0",
+"gid": 4741644,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760317898|double_chance|||Draw or Stoke City": {
+"state": "live",
+"score": "0-2",
+"gid": 4746123,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760317672|totals||5.5|Under": {
+"state": "live",
+"score": "0-3",
+"gid": 4746115,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760318005|h2h|||Derby County": {
+"state": "live",
+"score": "1-0",
+"gid": 4746121,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760320876|h2h|||Cercle Brugge": {
+"state": "live",
+"score": "1-0",
+"gid": 4740724,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm41|lv760324845|double_chance|||Deportivo Alaves or Draw": {
+"state": "live",
+"score": "1-1",
+"gid": 4750840,
+"at": "2026-10-10T15:30+00:00"
+},
+"vm47|lv760320860|double_chance|||Ayr United or Draw": {
+"state": "win",
+"score": "1-1",
+"gid": 4741087,
+"at": "2026-10-10T15:50+00:00"
+},
+"vm47|lv760317898|btts|||No": {
+"state": "loss",
+"score": "1-2",
+"gid": 4746123,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm47|lv760317796|h2h|||Blackburn Rovers": {
+"state": "win",
+"score": "2-1",
+"gid": 4746124,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm47|lv760317461|h2h|||Brighton & Hove Albion": {
+"state": "win",
+"score": "0-2",
+"gid": 4742040,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm47|lv760325456|double_chance|||Deportivo Alaves or Draw": {
+"state": "live",
+"score": "1-1",
+"gid": 4750840,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm13|1a01b0611dacd334e1558a5097e05023|team_sot_away||3.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4732686,
+"at": "2026-10-10T16:10+00:00"
+},
+"vm14|2cb29d5f31ac31942d30aa62b1cb0c86|alternate_totals_corners||9.5|Over": {
+"state": "loss",
+"score": "0-3",
+"gid": 4764310,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm30|1a01b0611dacd334e1558a5097e05023|h2h|||Inter Milan": {
+"state": "win",
+"score": "3-0",
+"gid": 4732686,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm36|1a01b0611dacd334e1558a5097e05023|team_shots_home||19.5|Over": {
+"state": "live",
+"score": "3-0",
+"gid": 4732686,
+"at": "2026-10-10T16:40+00:00"
+},
+"vm45|1a01b0611dacd334e1558a5097e05023|team_throws_away||15.5|Over": {
+"state": "win",
+"score": "3-0",
+"gid": 4732686,
+"at": "2026-10-10T17:30+00:00"
+},
+"vm14|9f4ec9268f60113db2c80d6ac41b8ca4|alternate_totals_corners||9.5|Under": {
+"state": "loss",
+"score": "1-0",
+"gid": 4776096,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm14|22c9b2c43cbe1334381269550dab78e6|team_shots_home||16.5|Over": {
+"state": "live",
+"score": "1-0",
+"gid": 4742041,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm30|9f4ec9268f60113db2c80d6ac41b8ca4|double_chance|||AEK Athens or OFI Crete": {
+"state": "win",
+"score": "3-0",
+"gid": 4776096,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm36|22c9b2c43cbe1334381269550dab78e6|team_shots_away||11.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4742041,
+"at": "2026-10-10T16:40+00:00"
+},
+"vm42|9f4ec9268f60113db2c80d6ac41b8ca4|alternate_totals_corners||9.5|Under": {
+"state": "loss",
+"score": "1-0",
+"gid": 4776096,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm42|22c9b2c43cbe1334381269550dab78e6|team_shots_away||11.5|Under": {
+"state": "live",
+"score": "1-0",
+"gid": 4742041,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm45|9f4ec9268f60113db2c80d6ac41b8ca4|double_chance|||AEK Athens or OFI Crete": {
+"state": "win",
+"score": "3-0",
+"gid": 4776096,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm11|edb80d633a1906e5865ab70cc9b540ea|team_shots_away||7.5|Under": {
+"state": "win",
+"score": "3-0",
+"gid": 4750837,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm30|01cb7a67c8ae71201ec27297455fc0e8|team_throws_home||19.5|Over": {
+"state": "loss",
+"score": "6-0",
+"gid": 4755388,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm30|edb80d633a1906e5865ab70cc9b540ea|h2h|||Barcelona": {
+"state": "win",
+"score": "3-0",
+"gid": 4750837,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm36|01cb7a67c8ae71201ec27297455fc0e8|team_shots_home||16.5|Over": {
+"state": "live",
+"score": "2-0",
+"gid": 4755388,
+"at": "2026-10-10T16:40+00:00"
+},
+"vm36|edb80d633a1906e5865ab70cc9b540ea|team_shots_away||7.5|Under": {
+"state": "live",
+"score": "1-0",
+"gid": 4750837,
+"at": "2026-10-10T16:40+00:00"
+},
+"vm42|01cb7a67c8ae71201ec27297455fc0e8|team_shots_home||16.5|Over": {
+"state": "live",
+"score": "5-0",
+"gid": 4755388,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm42|edb80d633a1906e5865ab70cc9b540ea|team_shots_away||7.5|Under": {
+"state": "live",
+"score": "2-0",
+"gid": 4750837,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm45|01cb7a67c8ae71201ec27297455fc0e8|team_throws_home||19.5|Over": {
+"state": "loss",
+"score": "6-0",
+"gid": 4755388,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm45|edb80d633a1906e5865ab70cc9b540ea|h2h|||Barcelona": {
+"state": "win",
+"score": "3-0",
+"gid": 4750837,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm42|a8273db43fe2d76ba5342e37a10f9e93|alternate_totals_corners||11.5|Under": {
+"state": "live",
+"score": "1-0",
+"gid": 4734571,
+"at": "2026-10-10T18:00+00:00"
+},
+"vm11|d9bfec13c112810701ee7e60f02bffa5|alternate_totals_corners||9.5|Under": {
+"state": "win",
+"score": "1-2",
+"gid": 4757173,
+"at": "2026-10-10T19:00+00:00"
+},
+"vm50|lv760357386|totals||2.5|Under": {
+"state": "loss",
+"score": "2-2",
+"gid": 4870173,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm50|lv760357389|totals||2.5|Under": {
+"state": "live",
+"score": "2-0",
+"gid": 4800077,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm50|lv760357407|totals||4.5|Under": {
+"state": "loss",
+"score": "1-4",
+"gid": 4736380,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm50|lv760366219|totals||3.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4766955,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm50|lv760373351|double_chance|||Hapoel Petah Tikva or Draw": {
+"state": "live",
+"score": "0-0",
+"gid": 4739319,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm50|lv760376060|totals||5.5|Under": {
+"state": "live",
+"score": "2-0",
+"gid": 4750837,
+"at": "2026-10-10T17:20+00:00"
+},
+"vm30|f5f8b64c3c4062dfaf01b6d09e4e15c1|double_chance|||Draw or FC Twente Enschede": {
+"state": "live",
+"score": "1-0",
+"gid": 4734568,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm30|xb758687604|alternate_totals_corners||8.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867339,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm45|f5f8b64c3c4062dfaf01b6d09e4e15c1|double_chance|||Draw or FC Twente Enschede": {
+"state": "live",
+"score": "1-0",
+"gid": 4734568,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm45|fcef931dd86b6c626a3bc0006639c22f|team_totals_away||0.5|Over": {
+"state": "live",
+"score": "1-0",
+"gid": 4735534,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm45|xb758687604|alternate_totals_corners||8.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867339,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm48|xb758687604|alternate_totals_corners||8.5|Under": {
+"state": "loss",
+"score": "1-3",
+"gid": 4867339,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm49|f5f8b64c3c4062dfaf01b6d09e4e15c1|double_chance|||Draw or FC Twente Enschede": {
+"state": "live",
+"score": "1-1",
+"gid": 4734568,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm49|fcef931dd86b6c626a3bc0006639c22f|team_totals_away||0.5|Over": {
+"state": "live",
+"score": "2-0",
+"gid": 4735534,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm49|xb758687604|alternate_totals_corners||8.5|Under": {
+"state": "loss",
+"score": "1-3",
+"gid": 4867339,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm30|fa82efb3794cb900a543d94b6ba07388|alternate_totals_corners||9.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4736378,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm45|fa82efb3794cb900a543d94b6ba07388|alternate_totals_corners||9.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4736378,
+"at": "2026-10-10T18:30+00:00"
+},
+"vm48|fa82efb3794cb900a543d94b6ba07388|alternate_totals_corners||9.5|Under": {
+"state": "live",
+"score": "1-2",
+"gid": 4736378,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm49|fa82efb3794cb900a543d94b6ba07388|alternate_totals_corners||9.5|Under": {
+"state": "live",
+"score": "1-2",
+"gid": 4736378,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm49|e1ea9930c10116a19a87a37cfb048757|team_totals_home||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4621321,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm2|007dc2ff845c33e3e18f2bd2bc126304|team_shots_home||14.5|Over": {
+"state": "win",
+"score": "5-1",
+"gid": 4735253,
+"at": "2026-10-10T20:20+00:00"
+},
+"vm2|3aa72885e0aa107c62843749f7930a9a|team_shots_away||12.5|Under": {
+"state": "loss",
+"score": "1-0",
+"gid": 4735250,
+"at": "2026-10-10T20:30+00:00"
+},
+"vm11|007dc2ff845c33e3e18f2bd2bc126304|team_shots_home||14.5|Over": {
+"state": "win",
+"score": "5-1",
+"gid": 4735253,
+"at": "2026-10-10T20:20+00:00"
+},
+"vm11|3aa72885e0aa107c62843749f7930a9a|team_shots_away||12.5|Under": {
+"state": "loss",
+"score": "1-0",
+"gid": 4735250,
+"at": "2026-10-10T20:30+00:00"
+},
+"vm48|007dc2ff845c33e3e18f2bd2bc126304|team_fouls_total||22.5|Over": {
+"state": "live",
+"score": "4-0",
+"gid": 4735253,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm48|3aa72885e0aa107c62843749f7930a9a|team_shots_away||11.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4735250,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm2|551f242223b1625f458d1a2ea212a0c3|team_sot_away||2.5|Over": {
+"state": "live",
+"score": "2-0",
+"gid": 4750832,
+"at": "2026-10-10T20:30+00:00"
+},
+"vm11|551f242223b1625f458d1a2ea212a0c3|team_throws_home||15.5|Under": {
+"state": "live",
+"score": "2-0",
+"gid": 4750832,
+"at": "2026-10-10T20:30+00:00"
+},
+"vm48|xb758724276|team_totals_home||1.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4855558,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm49|551f242223b1625f458d1a2ea212a0c3|double_chance|||Real Madrid or Villarreal": {
+"state": "live",
+"score": "0-0",
+"gid": 4750832,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|1a01b0611dacd334e1558a5097e05023|h2h|||Inter Milan": {
+"state": "win",
+"score": "3-0",
+"gid": 4732686,
+"at": "2026-10-10T19:10+00:00"
+},
+"vm46|4e3982f14172b814682bc1c3ad9e48db|double_chance|||RAAL La Louvière or Club Brugge": {
+"state": "win",
+"score": "1-4",
+"gid": 4740725,
+"at": "2026-10-10T19:10+00:00"
+},
+"vm46|01cb7a67c8ae71201ec27297455fc0e8|double_chance|||RB Leipzig or Draw": {
+"state": "win",
+"score": "6-0",
+"gid": 4755388,
+"at": "2026-10-10T19:10+00:00"
+},
+"vm46|9f4ec9268f60113db2c80d6ac41b8ca4|double_chance|||AEK Athens or OFI Crete": {
+"state": "win",
+"score": "3-0",
+"gid": 4776096,
+"at": "2026-10-10T19:10+00:00"
+},
+"vm46|edb80d633a1906e5865ab70cc9b540ea|h2h|||Barcelona": {
+"state": "win",
+"score": "3-0",
+"gid": 4750837,
+"at": "2026-10-10T19:10+00:00"
+},
+"vm46|f5f8b64c3c4062dfaf01b6d09e4e15c1|double_chance|||Draw or FC Twente Enschede": {
+"state": "live",
+"score": "1-1",
+"gid": 4734568,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|fcef931dd86b6c626a3bc0006639c22f|team_totals_away||0.5|Over": {
+"state": "live",
+"score": "2-0",
+"gid": 4735534,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|xb758687604|alternate_totals_corners||8.5|Under": {
+"state": "loss",
+"score": "1-3",
+"gid": 4867339,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|fa82efb3794cb900a543d94b6ba07388|alternate_totals_corners||9.5|Under": {
+"state": "live",
+"score": "1-2",
+"gid": 4736378,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|e1ea9930c10116a19a87a37cfb048757|team_totals_home||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4621321,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|298b9a7c4e3da71c8b4f8e5af71e80fb|double_chance|||Genk or KV Kortrijk": {
+"state": "live",
+"score": "2-0",
+"gid": 4740720,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm46|551f242223b1625f458d1a2ea212a0c3|double_chance|||Real Madrid or Villarreal": {
+"state": "live",
+"score": "0-0",
+"gid": 4750832,
+"at": "2026-10-10T19:50+00:00"
+},
+"vm53|xb758820503|team_totals_away||1.5|Under": {
+"state": "win",
+"score": "0-0",
+"gid": 4731958,
+"at": "2026-10-10T22:30+00:00"
+},
+"vm54|xb758820503|team_totals_away||1.5|Under": {
+"state": "win",
+"score": "0-0",
+"gid": 4731958,
+"at": "2026-10-10T22:30+00:00"
+},
+"vm55|6b4e8427b141ca8b5cdfc718a2ba9de3|double_chance|||Vasco da Gama or Remo": {
+"state": "live",
+"score": "0-0",
+"gid": 4632655,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm53|xb758660862|alternate_totals_corners||8.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm54|xb758660862|alternate_totals_corners||8.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm55|xb758660862|alternate_totals_corners||8.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm57|xb758660862|alternate_totals_corners||8.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm58|xb758660862|totals||1.5|Over": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm54|xb758990776|team_totals_away||1.5|Under": {
+"state": "loss",
+"score": "0-2",
+"gid": 4764205,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm55|xb758990776|team_totals_home||0.5|Over": {
+"state": "live",
+"score": "0-2",
+"gid": 4764205,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm57|xb758990776|team_totals_away||1.5|Under": {
+"state": "loss",
+"score": "0-2",
+"gid": 4764205,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm58|ae0467d02e1e53bb0ebaba185b5917aa|double_chance|||CA Tigre BA or Banfield": {
+"state": "live",
+"score": "1-1",
+"gid": 4633264,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm58|xb758990776|totals||1.5|Over": {
+"state": "win",
+"score": "0-2",
+"gid": 4764205,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm9|xb758990776|alternate_totals_corners||10.5|Over": {
+"state": "live",
+"score": "0-2",
+"gid": 4764205,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760438039|totals||5.5|Under": {
+"state": "win",
+"score": "3-2",
+"gid": 4871266,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760449817|totals||3.5|Under": {
+"state": "live",
+"score": "2-1",
+"gid": 4783826,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760449820|totals||2.5|Under": {
+"state": "live",
+"score": "1-1",
+"gid": 4734811,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760447985|totals||0.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4632655,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760455753|totals||3.5|Under": {
+"state": "live",
+"score": "0-2",
+"gid": 4856544,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760455749|totals||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760460876|totals||0.5|Over": {
+"state": "live",
+"score": "0-0",
+"gid": 4634036,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm60|lv760460874|totals||6.5|Under": {
+"state": "live",
+"score": "2-2",
+"gid": 4802362,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760449824|totals||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4710658,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760449819|totals||0.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4801371,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760447985|totals||0.5|Under": {
+"state": "live",
+"score": "0-0",
+"gid": 4632655,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760455747|totals||1.5|Over": {
+"state": "live",
+"score": "1-0",
+"gid": 4826249,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760455753|totals||3.5|Under": {
+"state": "live",
+"score": "0-2",
+"gid": 4856544,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760455749|totals||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4867338,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760460873|totals||4.5|Over": {
+"state": "live",
+"score": "1-2",
+"gid": 4826246,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760460877|totals||5.5|Under": {
+"state": "live",
+"score": "1-2",
+"gid": 4761312,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760460871|totals||2.5|Under": {
+"state": "live",
+"score": "0-1",
+"gid": 4869274,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760460876|totals||1.5|Over": {
+"state": "live",
+"score": "0-0",
+"gid": 4634036,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760460874|totals||6.5|Under": {
+"state": "live",
+"score": "2-2",
+"gid": 4802362,
+"at": "2026-10-10T22:50+00:00"
+},
+"vm61|lv760465211|double_chance|||Draw or Club Atletico Banfield": {
+"state": "live",
+"score": "1-1",
+"gid": 4633264,
+"at": "2026-10-10T22:50+00:00"
+}
+},
+"tickets": {
+"vm18": "lost",
+"vm1": "lost",
+"vm7": "lost",
+"vm8": "lost",
+"vm31": "lost",
+"vm3": "lost",
+"vm41": "lost",
+"vm4": "lost",
+"vm13": "lost",
+"vm47": "lost",
+"vm36": "lost",
+"vm50": "lost",
+"vm14": "lost",
+"vm42": "lost",
+"vm30": "lost",
+"vm45": "lost",
+"vm48": "lost",
+"vm49": "lost",
+"vm46": "lost",
+"vm2": "lost",
+"vm11": "lost",
+"vm54": "lost",
+"vm57": "lost"
+},
+"opp": {
+"day": "2026-10-10",
+"n": 3,
+"at": "2026-10-10T16:30+00:00"
+}
+}

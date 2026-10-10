@@ -63,6 +63,50 @@
 "result": "loss",
 "counted": true,
 "reported": true
+},
+{
+"tier": "🛡️ SÛR (cote 5 à 7)",
+"keys": [
+"b870dcfba5e5920d3f1551a3aa1ea435|totals||2.5|Under",
+"380b8f24ec5430fb545a7490c1017285|totals||2.5|Over",
+"22c9b2c43cbe1334381269550dab78e6|totals||3.5|Under"
+],
+"odds": 6.83,
+"prob": 0.15985,
+"stake": null,
+"xlegs": [
+{
+"key": "b870dcfba5e5920d3f1551a3aa1ea435|totals||2.5|Under",
+"xodds": 2.137,
+"xref": [
+752305232,
+10,
+2.5
+]
+},
+{
+"key": "380b8f24ec5430fb545a7490c1017285|totals||2.5|Over",
+"xodds": 1.867,
+"xref": [
+752312718,
+9,
+2.5
+]
+},
+{
+"key": "22c9b2c43cbe1334381269550dab78e6|totals||3.5|Under",
+"xodds": 1.712,
+"xref": [
+752311860,
+10,
+3.5
+]
+}
+],
+"coupon": "ZTNB3",
+"at": "05:17",
+"date": "2026-10-10",
+"result": null
 }
 ]
 }

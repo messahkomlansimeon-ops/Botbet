@@ -1,8 +1,8 @@
 {
 "dc": [
-1,
-1,
-0.6635
+20,
+15,
+13.6531
 ],
 "_lg": {
 "soccer_brazil_campeonato": {
@@ -16,11 +16,430 @@
 0,
 0.6733
 ]
-}
 },
+"soccer_portugal_primeira_liga": {
+"shots": [
+5,
+1,
+3.1851
+],
+"sot": [
+2,
+2,
+1.322
+],
+"offsides": [
+1,
+1,
+0.6376
+],
+"corners": [
+1,
+1,
+0.6331
+]
+},
+"soccer_netherlands_eredivisie": {
+"shots": [
+1,
+0,
+0.6704
+],
+"sot": [
+1,
+0,
+0.6114
+],
+"fouls": [
+1,
+0,
+0.6528
+]
+},
+"soccer_turkey_super_league": {
+"shots": [
+3,
+1,
+1.8812
+],
+"sot": [
+1,
+0,
+0.5712
+]
+},
+"soccer_italy_serie_b": {
+"shots": [
+1,
+1,
+0.643
+],
+"sot": [
+1,
+1,
+0.6705
+],
+"dc": [
+1,
+1,
+0.7498
+]
+},
+"soccer_france_ligue_one": {
+"corners": [
+1,
+1,
+0.6742
+]
+},
+"soccer_germany_bundesliga": {
+"corners": [
+2,
+0,
+1.2914
+]
+},
+"soccer_france_ligue_two": {
+"shots": [
+4,
+4,
+2.6684
+],
+"sot": [
+4,
+3,
+2.6151
+],
+"corners": [
+2,
+1,
+1.2085
+],
+"goals": [
+2,
+2,
+1.3777
+]
+},
+"soccer_germany_bundesliga2": {
+"cards": [
+1,
+1,
+0.6424
+],
+"sot": [
+3,
+1,
+2.0044
+],
+"shots": [
+2,
+1,
+1.3147
+],
+"goals": [
+2,
+2,
+1.3207
+]
+},
+"soccer_efl_champ": {
+"sot": [
+1,
+1,
+0.6979
+],
+"shots": [
+2,
+0,
+1.3632
+]
+},
+"soccer_belgium_first_div": {
+"sot": [
+2,
+1,
+1.362
+],
+"shots": [
+1,
+0,
+0.6608
+],
 "goals": [
 1,
 0,
-0.6733
+0.7555
+]
+},
+"soccer_argentina_primera_division": {
+"goals": [
+4,
+4,
+2.8342
+],
+"btts": [
+1,
+0,
+0.5753
+],
+"dc": [
+3,
+1,
+1.9627
+]
+},
+"soccer_spain_la_liga": {
+"cards": [
+1,
+1,
+0.6612
+]
+},
+"soccer_china_superleague": {
+"dc": [
+1,
+1,
+0.7058
+],
+"btts": [
+1,
+0,
+0.6322
+]
+},
+"soccer_poland_ekstraklasa": {
+"btts": [
+1,
+1,
+0.6571
+],
+"dc": [
+2,
+1,
+1.2631
+],
+"goals": [
+2,
+2,
+1.2979
+]
+},
+"soccer_norway_eliteserien": {
+"dc": [
+1,
+1,
+0.6675
+],
+"btts": [
+1,
+0,
+0.648
+]
+},
+"soccer_japan_j_league": {
+"dc": [
+2,
+2,
+1.3985
+],
+"goals": [
+1,
+0,
+0.6754
+],
+"btts": [
+1,
+0,
+0.5705
+]
+},
+"soccer_denmark_superliga": {
+"dc": [
+1,
+1,
+0.723
+],
+"goals": [
+1,
+1,
+0.6426
+]
+},
+"soccer_finland_veikkausliiga": {
+"dc": [
+1,
+1,
+0.6925
+],
+"goals": [
+2,
+1,
+1.2442
+]
+},
+"soccer_sweden_allsvenskan": {
+"btts": [
+1,
+0,
+0.6018
+],
+"dc": [
+1,
+0,
+0.5987
+]
+},
+"soccer_league_of_ireland": {
+"goals": [
+2,
+0,
+1.3356
+],
+"dc": [
+1,
+1,
+0.6615
+]
+},
+"soccer_mexico_ligamx": {
+"goals": [
+1,
+1,
+0.553
+],
+"dc": [
+1,
+1,
+0.6747
+]
+},
+"soccer_xb_switzerland_2": {
+"goals": [
+3,
+3,
+1.8727
+],
+"dc": [
+1,
+1,
+0.7794
+]
+},
+"soccer_xb_ukraine": {
+"goals": [
+1,
+0,
+0.6322
+]
+},
+"soccer_xb_qatar": {
+"goals": [
+2,
+2,
+1.3283
+]
+},
+"soccer_xb_iran": {
+"btts": [
+1,
+0,
+0.7415
+]
+},
+"soccer_xb_colombia": {
+"goals": [
+1,
+1,
+0.596
+]
+},
+"soccer_xb_netherlands_2": {
+"btts": [
+1,
+0,
+0.6762
+],
+"dc": [
+1,
+1,
+0.7377
+]
+},
+"soccer_xb_poland_2": {
+"dc": [
+1,
+0,
+0.5846
+]
+},
+"soccer_xb_croatia": {
+"goals": [
+1,
+1,
+0.6229
+]
+},
+"soccer_xb_bolivia": {
+"goals": [
+1,
+1,
+0.6547
+]
+},
+"soccer_xb_austria_2": {
+"dc": [
+1,
+1,
+0.7901
+]
+},
+"soccer_xb_romania": {
+"goals": [
+1,
+1,
+0.6153
+]
+}
+},
+"goals": [
+29,
+22,
+19.0322
+],
+"shots": [
+19,
+8,
+12.3868
+],
+"corners": [
+6,
+3,
+3.8072
+],
+"cards": [
+2,
+2,
+1.3036
+],
+"sot": [
+15,
+9,
+9.8545
+],
+"btts": [
+8,
+1,
+5.1026
+],
+"offsides": [
+1,
+1,
+0.6376
+],
+"fouls": [
+1,
+0,
+0.6528
 ]
 }
