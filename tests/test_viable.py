@@ -48,7 +48,7 @@ def test_one_best_per_match():
     best = CB.best_per_match(pronos)
     assert [(c["id"], c["market"]) for c in best] == [("a", "alternate_totals_corners"), ("b", "double_chance")], best
     text = fmt.pronos(best)
-    assert text.count("👉") == 2 and "66 % de chances · données solides" in text, text
+    assert text.count("👉") == 2 and "<i>   Kelly 66 %</i>" in text and "données moyennes" not in text, text      # données solides : aucune mise en garde
     assert "Aucun pronostic assez solide" in fmt.pronos([])
     # combinés à vérifier : seulement des jambes viables
     legs = CB.fair_legs(pronos)

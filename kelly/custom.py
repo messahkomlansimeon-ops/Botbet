@@ -19,6 +19,7 @@ FILE = "combi_sent.json"
 KEEP = 30                       # combinés gardés en mémoire par jour : les plus anciens sortent
 GONE = "Ce combiné n'est plus en mémoire (il date d'un autre jour)."
 LABEL = "✅ Je le joue"
+ANOTHER = "🔀 Un autre sans mes matchs"      # même cote, mêmes types, ni tes matchs joués du jour ni ceux de ce combi (app.another_combo)
 
 
 def _load(day):
@@ -29,11 +30,12 @@ def _load(day):
     return {"day": day, "n": 0, "items": {}}
 
 
-def remember(day, target, lo, hi, combo, stake=None, cur=None, coupon=None, at=None, src="pronos"):
+def remember(day, target, lo, hi, combo, stake=None, cur=None, coupon=None, at=None, src="pronos", kinds=None, nlegs=None):
     """Garde en mémoire le combiné sur mesure `combo` (jambes, cote, proba) qui vient d'être envoyé -> son identifiant « m<n> » (None sans
     jour : rien à suivre). `target` : la cote demandée, `lo` / `hi` : la fourchette de cote visée (reprise par « Vérifier ce combiné »),
     `stake` : la mise conseillée affichée dans le message (FCFA, devise `cur` ; None sans budget du jour), `coupon` : son code coupon 1xBet,
-    `at` : l'heure « HH:MM » de ses cotes, `src` : « pronos » (pronostics 💎 / à cote mini) ou « picks » (paris réels remis au prix 1xBet)."""
+    `at` : l'heure « HH:MM » de ses cotes, `src` : « pronos » (pronostics 💎 / à cote mini) ou « picks » (paris réels remis au prix 1xBet),
+    `kinds` : types de paris choisis (codes de combos.KINDS ; « Vérifier ce combiné » ne remplace un pari que par un du même type)."""
     day = str(day or "")[:10]
     if not day:
         return None
@@ -42,25 +44,27 @@ def remember(day, target, lo, hi, combo, stake=None, cur=None, coupon=None, at=N
     doc["n"] += 1
     cid = f"m{doc['n']}"
     doc["items"][cid] = {"legs": [fair.combo_leg(c) for c in legs], "total": round(total, 3), "prob": round(prob, 5), "target": target,
-                         "lo": round(lo, 3), "hi": round(hi, 3), "stake": stake, "cur": cur, "coupon": coupon, "at": at, "src": src}
+                         "lo": round(lo, 3), "hi": round(hi, 3), "stake": stake, "cur": cur, "coupon": coupon, "at": at, "src": src} \
+        | ({"kinds": list(kinds)} if kinds else {}) | ({"nmax": nlegs[0], "exact": bool(nlegs[1])} if nlegs and nlegs[0] else {})
     while len(doc["items"]) > KEEP:
         doc["items"].pop(next(iter(doc["items"])))
     store.save(FILE, doc)
     return cid
 
 
-def button(cid, day, code=None):
-    """Bouton « ✅ Je le joue » du combiné `cid` du jour `day` (64 octets au plus : « cjoue|m12|2026-10-09 »), et, avec un code coupon, la ligne
-    « 📋 Copier le code XXXX »."""
-    markup = telegram.inline([[(LABEL, f"cjoue|{cid}|{str(day)[:10]}")]])
+def button(cid, day, code=None, another=True):
+    """Bouton « ✅ Je le joue » du combiné `cid` du jour `day` (64 octets au plus : « cjoue|m12|2026-10-09 »), « 🔀 Un autre sans mes matchs »
+    (« cnew|m12|2026-10-09 ») et, avec un code coupon, la ligne « 📋 Copier le code XXXX »."""
+    rows = [[(LABEL, f"cjoue|{cid}|{str(day)[:10]}")]] + ([[(ANOTHER, f"cnew|{cid}|{str(day)[:10]}")]] if another else [])   # live : pas de « 🔀 »
+    markup = telegram.inline(rows)
     markup["inline_keyboard"] += telegram.copy_row(code)
     return markup
 
 
-def with_button(msg, cid, day, code=None):
+def with_button(msg, cid, day, code=None, another=True):
     """Le message `msg` d'un combiné sur mesure avec son bouton « ✅ Je le joue » (et « 📋 Copier le code » si `code`) ; inchangé sans
     identifiant (rien à suivre)."""
-    return telegram.with_buttons(msg, button(cid, day, code)) if cid else msg
+    return telegram.with_buttons(msg, button(cid, day, code, another)) if cid else msg
 
 
 def _row(cid, day, item):
@@ -70,7 +74,8 @@ def _row(cid, day, item):
                          item.get("coupon"), item.get("at"))
     if not item.get("cur"):
         row.pop("cur", None)
-    return row | {"custom": True, "target": item["target"], "lo": item["lo"], "hi": item["hi"], "src": item.get("src") or "pronos"}
+    return row | {"custom": True, "target": item["target"], "lo": item["lo"], "hi": item["hi"], "src": item.get("src") or "pronos"} \
+        | ({"kinds": item["kinds"]} if item.get("kinds") else {})
 
 
 def _buttons(message_id, what, day):

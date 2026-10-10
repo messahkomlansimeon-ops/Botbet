@@ -142,7 +142,7 @@ def test_stats_tier():
     finally:
         app.xbet.save_coupon = old_save
     titles = [m.split("\n")[0] for m in msgs]
-    assert "<b>🧮 COMBINÉ STATS — COTES 1XBET</b>" in titles and saved == [len(legs)], (titles, saved)
+    assert f"<b>🧮 COMBINÉ STATS — cote {fmt.odds_txt(total)}</b>" in titles and saved == [len(legs)], (titles, saved)     # aux cotes 1xBet : « cote », pas « cote mini »
     fair.record_combos([(t, c) for t, c in plan.items() if c], DAY)
     t = played.find("vts5", DAY)
     assert not isinstance(t, str) and t is not None and "Stats" in played.todo(DAY), t

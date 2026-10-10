@@ -146,14 +146,14 @@ def test_button():
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos()})
     with Fakes() as f:
         msg = app.custom_combo([], pronos(), 5.0, DAY)
-        assert buttons(msg) == [f"cjoue|m1|{DAY}"] and msg.markup["inline_keyboard"][0][0]["text"] == "✅ Je le joue", buttons(msg)
-        assert "Code coupon 1xBet : <code>K7Q2X</code>" in msg and isinstance(msg, telegram.Html)
+        assert buttons(msg) == [f"cjoue|m1|{DAY}", f"cnew|m1|{DAY}"] and msg.markup["inline_keyboard"][0][0]["text"] == "✅ Je le joue", buttons(msg)
+        assert "Code : <code>K7Q2X</code>" in msg and isinstance(msg, telegram.Html)
     item = store.load(custom.FILE, {})["items"]["m1"]
     assert store.load(custom.FILE, {})["day"] == DAY and len(item["legs"]) == 4 and item["src"] == "pronos", item
     assert item["total"] == round(1.55 ** 4, 3) and item["target"] == 5.0 and (item["lo"], item["hi"]) == (5.0, 6.25), item
     assert item["coupon"] == "K7Q2X" and re.fullmatch(r"\d\d:\d\d", item["at"]), item
     assert item["stake"] is None and item["cur"] is None, "sans budget : aucune mise conseillée (jamais d'unités)"
-    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg and "Mise indicative" not in msg and " u</b>" not in msg, msg
+    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg and "Mise indicative" not in msg and " u</b>" not in msg, msg
     need = {"key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "xodds", "pick", "start", "league", "odds",
             "xref", "xgid", "min_odds"}
     assert all(need <= set(l) for l in item["legs"]), item["legs"][0]       # de quoi régler seul, refaire le coupon, relire chez 1xBet
@@ -161,7 +161,7 @@ def test_button():
     assert len(f"cjoue|m30|{DAY}".encode()) <= 64
     # un deuxième combi : un autre identifiant, un autre message
     with Fakes():
-        assert buttons(app.custom_combo([], pronos(), 5.0, DAY)) == [f"cjoue|m2|{DAY}"]
+        assert buttons(app.custom_combo([], pronos(), 5.0, DAY)) == [f"cjoue|m2|{DAY}", f"cnew|m2|{DAY}"]
     # budget du jour : la mise (devise) du message est celle gardée
     money.set_daily(5000)
     with Fakes():
@@ -173,7 +173,7 @@ def test_button():
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos()})
     with Fakes(got=False):
         msg = app.custom_combo([], pronos(), 5.0, DAY)
-    assert buttons(msg) == [f"cjoue|m1|{DAY}"] and "1xBet ne répond pas" in msg and store.load(custom.FILE, {})["items"]["m1"]["coupon"] is None
+    assert buttons(msg) == [f"cjoue|m1|{DAY}", f"cnew|m1|{DAY}"] and "1xBet ne répond pas" in msg and store.load(custom.FILE, {})["items"]["m1"]["coupon"] is None
     print("ok  1 bouton « ✅ Je le joue » sous le combiné 1xBet (en direct ou du dernier relevé), mémoire du jour, rien de suivi sans appui")
 
 
@@ -192,12 +192,12 @@ def test_no_button():
         outs["imminent"] = app._live_reply((soon, 5.77, 0.27), 5.0, 6.25, now=at(13), keep={"day": DAY, "target": 5.0, "lo": 5.0, "hi": 6.25},
                                            check=lambda ids, now, fresh_min=None: ([], set(), "13:00"))
     assert "SUR MESURE" in str(outs["cotes de référence"]) and "cotes de référence (pas celles de 1xBet)" in outs["cotes de référence"]
-    assert "commencent dans moins de" in outs["imminent"] and "pas assez de pronostics solides pour un combiné à la cote 30" in outs["impossible"]
-    for name, o in outs.items():
-        assert not getattr(o, "markup", None) and not store.load(custom.FILE, {}).get("items"), (name, o)
+    assert "commencent dans moins de" in outs["imminent"] and outs["impossible"].startswith("❌ Pas de combiné à la cote 30.\n📉 ")
+    for name, o in outs.items():                    # une réponse « impossible » peut proposer une autre cote (cgo), jamais « ✅ Je le joue »
+        assert not any(d.startswith(("cjoue|", "cnew|")) for d in buttons(o)) and not store.load(custom.FILE, {}).get("items"), (name, o)
     with Fakes():
         out = app.custom_combo(typ, flat, 4.5, DAY)                                         # pronostics à cote mini : suivi possible
-    assert buttons(out) == [f"cjoue|m1|{DAY}"] and "À VÉRIFIER CHEZ 1XBET" in out, out                # cote mini : bouton aussi
+    assert buttons(out) == [f"cjoue|m1|{DAY}", f"cnew|m1|{DAY}"] and "À VÉRIFIER CHEZ 1XBET" in out, out                # cote mini : bouton aussi
     item = store.load(custom.FILE, {})["items"]["m1"]
     assert not any(l["xodds"] for l in item["legs"]) and item["coupon"] is None and item["at"] is None, item
     # paris réels : leur prix 1xBet -> bouton ; aucun prix 1xBet -> cotes de référence, pas de bouton
@@ -206,7 +206,7 @@ def test_no_button():
     xprice.price_picks(picks, fetch=fake_fetch(priced))
     with Fakes():
         msg = app.custom_combo(picks, [], 5.0, DAY, when="09:30")
-    assert buttons(msg) == [f"cjoue|m1|{DAY}"] and "Code coupon 1xBet : <code>K7Q2X</code>" in msg and "SUR MESURE" in msg, msg
+    assert buttons(msg) == [f"cjoue|m1|{DAY}", f"cnew|m1|{DAY}"] and "Code : <code>K7Q2X</code>" in msg and "SUR MESURE" in msg, msg
     item = store.load(custom.FILE, {})["items"]["m1"]
     assert item["src"] == "picks" and item["at"] == "09:30" and (item["lo"], item["hi"]) == (3.75, 6.25), item
     assert all(l["xodds"] == XB and l["xgid"] and l["xref"] for l in item["legs"]), item["legs"]
@@ -221,7 +221,7 @@ def test_tap_with_budget():
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos()})
     with Fakes() as f:
         msg = app.custom_combo([], pronos(), 20.0, DAY)
-        assert buttons(msg) == [f"cjoue|m1|{DAY}"], buttons(msg)
+        assert buttons(msg) == [f"cjoue|m1|{DAY}", f"cnew|m1|{DAY}"], buttons(msg)
         item = store.load(custom.FILE, {})["items"]["m1"]
         reply = chat.on_callback(f"cjoue|m1|{DAY}", 77)
     rows = fair.load_combos()
@@ -240,11 +240,11 @@ def test_tap_with_budget():
     # « Mes paris » : nom, cote et mise notées, code coupon, boutons
     todo = played.todo(DAY)
     text = str(todo)
-    assert "✅ Combi sur mesure (cote 20) : joué à 21,49, mise 250 FCFA" in text and "Code coupon 1xBet : <code>K7Q2X</code>" in text, text
+    assert "✅ Combi sur mesure (cote 20) · joué à 21,49 · 250 FCFA" in text and "🎟️ <code>K7Q2X</code>" in text, text
     assert "À vérifier" not in text and "Aux cotes 1xBet" not in text, text
     cb = buttons(todo)
     assert f"annule|vm1|{DAY}|l0" in cb and f"joue|vm1|{DAY}|l0" in cb and f"xmaj|m1|{DAY}" in cb and not any(b.startswith(("skip", "unskip")) for b in cb), cb   # la liste porte son numéro de page
-    assert "🎟️ Vérifier ce combiné : Combi sur mesure (cote 20)" in json.dumps(todo.markup, ensure_ascii=False)
+    assert "🎟️ Vérifier : Combi sur mesure (cote 20)" in json.dumps(todo.markup, ensure_ascii=False)
     # deuxième appui : aucun doublon, boutons remis
     with Fakes() as f2:
         again = chat.on_callback(f"cjoue|m1|{DAY}", 77)
@@ -272,9 +272,9 @@ def test_tap_without_budget():
     assert p["what"] == "vm1" and p["msg"] == 78 and p["day"] == DAY and p["odds"] == 5.77, p
     assert f.last_buttons() == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"], "« ✅ Je l'ai joué » + vérifier"
     todo = played.todo(DAY)
-    assert "Combi sur mesure (cote 5) — cote 1xBet 5,77" in str(todo) and "pas noté — /joue vm1 &lt;cote&gt;" in str(todo), str(todo)
-    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in str(todo) and f"joue|vm1|{DAY}|l0" in buttons(todo), str(todo)
-    assert "Code coupon 1xBet : <code>K7Q2X</code>" in str(todo)
+    assert "▫️ Combi sur mesure (cote 5) · cote 1xBet 5,77" in str(todo), str(todo)          # pas noté (son bouton « ✅ Je l'ai joué » : ci-dessous)
+    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in str(todo) and f"joue|vm1|{DAY}|l0" in buttons(todo), str(todo)
+    assert "🎟️ <code>K7Q2X</code>" in str(todo)
     # un montant seul est la mise (« 2 000 » n'est PAS ambigu ici : ce n'est pas une cote) ; la cote notée est celle de 1xBet
     for txt, stake in (("1000", 1000), ("1 000", 1000), ("2 000", 2000), ("2000 FCFA", 2000), ("1.500", 1500)):
         chat.set_pending("vm1", DAY, 78, odds=5.77)
@@ -345,7 +345,8 @@ def test_tap_unfunded_and_gone():
     assert row["stake"] == 0 and "cur" not in row and "played" not in row, row
     assert "Avec quelle mise en FCFA ?" in reply and "À quelle cote" not in reply, reply     # pas de mise conseillée : Kelly demande la mise (la cote 1xBet est connue)
     assert f.last_buttons() == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"] and f.edits[-1][1]["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
-    assert "pas de mise conseillée (trop petite pour ton budget)" in str(played.todo(DAY))
+    todo = str(played.todo(DAY))                     # mise trop petite pour le budget : aucune mise affichée (ni « règle ton budget » : il est réglé)
+    assert "▫️ Combi sur mesure (cote 5) · " in todo and " · mise " not in todo and "règle ton budget" not in todo, todo
     assert money.gain(row | {"result": "win"}) is None
     # identifiant d'un autre jour, inconnu ou mal formé
     reset()
@@ -389,9 +390,11 @@ def test_command_route():
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos()})
     with Fakes() as f:
         out = app.handle_command("/combi 5")
-        via_button = chat.on_callback("combi|5", 3)
+        picker = chat.on_callback("combi|5", 3)            # la cote, puis les types de paris à cocher (tests/test_combi_kinds.py)
+        via_button = chat.on_callback("cgo|5|", 3)          # « 🎯 Construire le combiné », rien de coché : tous les paris
         typed = chat.route("combi 5")
-    assert buttons(out) == [f"cjoue|m1|{DAY}"] and buttons(via_button) == [f"cjoue|m2|{DAY}"] and typed == ("/combi 5", None), (out, via_button)
+    assert buttons(picker)[-1] == "cgo|5||" and "quels paris" in picker, picker
+    assert buttons(out) == [f"cjoue|m1|{DAY}", f"cnew|m1|{DAY}"] and buttons(via_button) == [f"cjoue|m2|{DAY}", f"cnew|m2|{DAY}"] and typed == ("/combi 5", None), (out, via_button)
     print("ok  2 /combi 5 et le sélecteur de cote : le bouton « ✅ Je le joue » arrive jusqu'à Telegram")
 
 
@@ -545,7 +548,7 @@ def test_refresh_custom():
         out = app.refresh_combo("m1", DAY, now=at(13, 30))
     assert f.sent[0].startswith("⏳ Je vérifie ce combiné chez 1xBet"), f.sent
     assert "🔄 COMBI SUR MESURE À JOUR 13:30" in out and "Combi sur mesure remis aux cotes 1xBet de 13:30" in out, out
-    assert "Combiné du matin" not in out and "Code coupon 1xBet : <code>NEWC1</code>" in out and "❌ Retiré : H1 – A1" in out, out
+    assert "Combiné du matin" not in out and "Code : <code>NEWC1</code>" in out and "❌ Retiré : H1 – A1" in out, out
     row = fair.load_combos()[0]
     assert row["coupon"] == "NEWC1" and row["at"] == "13:30" and row["updated"] == "13:30" and "m1|totals||3.5|Under" not in row["keys"], row
     assert 5.0 <= row["min_odds"] <= 6.25 and row["custom"] and row["stake"] == 250 and row["cur"] == "FCFA" and row["target"] == 5.0, row
@@ -553,7 +556,7 @@ def test_refresh_custom():
     # un pari remplacé = un autre ticket : la note « joué à … » de l'ancienne version tombe, « ✅ Je l'ai joué » (mise conseillée) est remis
     assert "played" not in row and "Ta note « joué à … » de l'ancienne version est retirée" in out, (row, out)
     assert buttons(out) == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"] and out.markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué — 250 FCFA", buttons(out)
-    assert "250 FCFA" in out and "Code coupon 1xBet : <code>NEWC1</code>" in str(played.todo(DAY))
+    assert "250 FCFA" in out and "🎟️ <code>NEWC1</code>" in str(played.todo(DAY))
     # un match a commencé : plus touché
     with Fakes() as f:
         assert "en jeu" in app.refresh_combo("m1", DAY, now=at(19, 30)) and not f.sent
@@ -587,7 +590,7 @@ def test_refresh_real_picks():
     with Fakes(code="VERIF1") as f:
         out = app.refresh_combo("m1", DAY, now=at(13), fetch=fake_fetch(now, asked))
     assert f.sent[0].startswith("⏳") and {i for c in asked for i in c} == {"e1", "e2", "e3", "e4"}, (f.sent, asked)
-    assert "Moins bien payé" in out and "🔄 COMBI SUR MESURE À JOUR 13:00" in out and "Code coupon 1xBet : <code>VERIF1</code>" in out, out
+    assert "Moins bien payé" in out and "🔄 COMBI SUR MESURE À JOUR 13:00" in out and "Code : <code>VERIF1</code>" in out, out
     row = fair.load_combos()[0]
     assert row["keys"] == keys and row["coupon"] == "VERIF1" and row["at"] == "13:00" and row["stake"] == before["stake"], row
     assert abs(row["min_odds"] - 1.2 * 1.45 * XB * XB) < 0.006 and {l["id"]: l["xodds"] for l in row["legs"]} == {"e1": 1.2, "e2": 1.45, "e3": XB, "e4": XB}, row
@@ -616,7 +619,7 @@ def test_real_picks_without_budget():
         msg = app.custom_combo(picks, [], 5.0, DAY, when="09:30")
         item = store.load(custom.FILE, {})["items"]["m1"]
         assert item["cur"] is None and item["stake"] is None, item
-        assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg and " u</b>" not in msg and "mise conseillée :" not in msg, msg
+        assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg and " u</b>" not in msg and "mise conseillée :" not in msg, msg
         reply = chat.on_callback(f"cjoue|m1|{DAY}", 9)
         assert "stake" not in fair.load_combos()[0] and reply.count("Avec quelle mise en FCFA ?") == 1 and "À quelle cote" not in reply, (fair.load_combos()[0], reply)
         out = chat.route("1 000")[1]               # la cote 1xBet (5,06) est connue : un montant seul est la mise
@@ -630,7 +633,7 @@ def test_real_picks_without_budget():
     assert "joué à 5,10 chez 1xBet, mise 1 000 FCFA" in out and fair.load_combos()[0]["played"]["odds"] == 5.1, out
     with Fakes(code="VERIF2") as f:
         out = app.refresh_combo("m1", DAY, now=at(13), fetch=fake_fetch({f"e{i}": {("h2h", "HOME", None): XB} for i in range(1, 5)}))
-    assert "mise : <b>1 000 FCFA</b>" in out and " u</b>" not in out and "aucun changement" in out, out
+    assert "💰 Mise : <b>1 000 FCFA</b>" in out and " u</b>" not in out and "aucun changement" in out, out
     assert fair.load_combos()[0]["played"]["odds"] == 5.1, "mêmes paris, même cote : la note « joué à … » reste"
     print("ok  2 paris réels sans budget : aucune mise en unités, seule la mise est demandée (cote 1xBet connue), reprise par « Vérifier ce combiné » (mise notée)")
 

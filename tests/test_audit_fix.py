@@ -128,7 +128,7 @@ def test_noted_combo_never_replaced():
     row = fair.load_combos()[0]
     assert "dead" not in row and "skipped" not in row and "auto_skipped" not in row and row["result"] is None, row
     assert row["played"]["odds"] == 5.4 and any("⚠️" in str(m) and "ton ticket" in str(m) for m in f.sent), f.sent
-    assert "plus jouable chez 1xBet (Kelly a conseillé" not in str(played.todo(DAY))
+    assert ": plus jouable chez 1xBet" not in str(played.todo(DAY)) and "🚫" not in str(played.todo(DAY))
     # il se règle comme le ticket placé et compte dans l'argent
     rows = fair.load_combos()
     for l in rows[0]["legs"]:
@@ -543,7 +543,7 @@ def test_combi_and_bilan_inputs():
     world_known()
     seen = []
     old = app.custom_combo
-    app.custom_combo = lambda live, pronos_, target, day, started=False, when=None: (seen.append(target), "combi ok")[1]
+    app.custom_combo = lambda live, pronos_, target, day, **kw: (seen.append(target), "combi ok")[1]
     try:
         with Fakes():
             for t in ("/combi 0.01", "/combi 0,5", "/combi 0.99", "/combi 1", "/combi 1.0", "/combi 1,00"):
@@ -553,7 +553,7 @@ def test_combi_and_bilan_inputs():
                             ("combi 10000", 10000.0), ("/combi 10 000 000", 1e7)):
                 assert app.handle_command(t) == "combi ok" and seen[-1] == want, (t, seen[-1:])
             for t in ("/combi", "/combi abc", "/combi -5", "/combi inf", "/combi nan"):
-                assert app.handle_command(t) == "Exemple : /combi 30", t
+                assert app.handle_command(t) == "Exemple : /combi 30, ou /combi 20 tirs fautes", t
     finally:
         app.custom_combo = old
     # best_combo ne lève plus pour une fourchette sous 1
@@ -580,7 +580,7 @@ def test_list_keeps_whole_keyboard():
     assert reply.startswith("✅ Noté")
     mid, text, markup = f.rewrites[-1]
     d = datas(markup)
-    assert mid == 500 and "✅ Sûr : joué à 5,06" in text and "pas noté" in text, text
+    assert mid == 500 and "✅ Sûr · joué à 5,06" in text and "▫️ Pari du jour ·" in text, text
     assert f"annule|sur|{DAY}|l0" in d and f"joue|sur|{DAY}|l0" in d and f"joue|pari|{DAY}|l0" in d and f"joue|v5|{DAY}|l0" in d, d
     assert f"xmajr|pari|{DAY}" in d and f"xmaj|5|{DAY}" in d and not f.edits, (d, f.edits)
     with Fakes() as f:                                          # ↩️ Annuler depuis la liste
@@ -599,7 +599,7 @@ def test_list_keeps_whole_keyboard():
         assert chat.route("5,40")[1].startswith("✅ Noté")
     mid, text, markup = f.rewrites[-1]
     d = datas(markup)
-    assert mid == 600 and "✅ Sûr : joué à 5,40" in text and f"joue|costaud|{DAY}|l0" in d and f"annule|sur|{DAY}|l0" in d, (text, d)
+    assert mid == 600 and "✅ Sûr · joué à 5,40" in text and f"joue|costaud|{DAY}|l0" in d and f"annule|sur|{DAY}|l0" in d, (text, d)
     # le message d'un pari seul garde son clavier d'un pari
     N.reset()
     money.set_daily(5000)
@@ -696,7 +696,7 @@ def test_texts_and_currency():
     world_known()
     with Fakes():
         known = str(played.todo(DAY))
-    assert "envoie la cote obtenue" not in known and "Appuie sur le pari que tu as joué" in known, known
+    assert "envoie la cote obtenue" not in known and "Appuie sur ce que tu as joué (« ✏️ Autre cote » corrige la cote)" in known, known
     N.reset()
     money.set_daily(5000)
     store.save("bets.json", {"picks": [], "combos": [N.combo(N.SUR, 5.0, 1000, FCFA)]})
@@ -753,15 +753,16 @@ def test_long_list_pages():
         txt = str(page)
         assert len(txt) <= 3900 and len(telegram._chunks(txt)) == 1, (k, len(txt))
         assert "Tes paris du jour" in txt.splitlines()[0] and (k == 0 or f"{k + 1}/{len(pages)}" in txt.splitlines()[0]), txt.splitlines()[0]
-        for d in datas(page.markup):
+        for label, d in kb(page.markup):
             if d.startswith(("joue|", "annule|")):
                 what = d.split("|")[1]
                 assert d.endswith(f"|l{k}"), (k, d)
-                assert f"/joue {what} <" in txt.replace("&lt;", "<"), (k, what)
+                name = label.split(" · Je l'ai joué")[0].removeprefix("✅ ").removeprefix("✏️ Autre cote : ").removeprefix("↩️ Annuler : ")
+                assert any(ln.startswith(("▫️ ", "✅ ")) and f" {name} · " in ln for ln in txt.splitlines()), (k, what, name)   # le pari est listé sur la page de son bouton
                 names.append(what)
     assert len(set(names)) == 3 + 22, len(set(names))                       # chaque pari a son bouton, sur une seule page
     last = pages[-1]
-    assert "Appuie sur le pari que tu as joué" in str(last)
+    assert "Appuie sur ce que tu as joué" in str(last)
     # un appui sur la 2e page refait cette page-là, pas la liste entière
     what = next(d for d in datas(pages[1].markup) if d.startswith("joue|")).split("|")[1]
     with Fakes() as f:

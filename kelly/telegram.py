@@ -1,4 +1,5 @@
 """Envoi de messages et lecture des commandes Telegram."""
+import calendar
 import html as _html
 import os
 import re
@@ -13,6 +14,7 @@ LAST_ERROR = ""        # dernière erreur d'envoi (description renvoyée par l'A
 OUTBOX = "outbox.json"  # messages dont l'envoi a échoué (réseau / Telegram en panne), renvoyés dans l'ordre par flush_outbox
 LATE_NOTE = "📬 Message en retard (réseau indisponible à l'heure prévue)"
 BUSY = "⏳ Kelly est en plein travail (message du matin ou relevé horaire) : ton action sera faite dès qu'elle a fini."
+BUSY_MORNING = "⏳ Kelly est en plein travail{} : ton action sera faite dès qu'elle a fini. Écris « état » pour suivre."
 TIMEOUT = "⚠️ Kelly est restée trop longtemps occupée : ton action n'a pas pu être faite. Renvoie-la dans quelques minutes."
 _last_fail = [float("-inf")]     # instant (monotonic) du dernier échec réseau : pas de renvoi automatique avant 60 s
 # Connexion gardée ouverte entre deux appels (0,1 s au lieu de 0,3 s, et presque plus de connexions neuves). Connexion neuve bloquée
@@ -299,31 +301,100 @@ def edit_message(message_id, text, markup=None, chat_id=None):
     return edit_buttons(message_id, markup or {"inline_keyboard": []}, chat_id)
 
 
-def _handle(lock, fn, *args):
-    """Exécute fn(*args) et envoie sa réponse (« Erreur : ... » si elle plante). Avec `lock` (appelable qui prend `on_busy` et renvoie un
-    gestionnaire de contexte, ex. store.data_lock) : le tout sous le verrou des données ; verrou déjà pris -> BUSY tout de suite, puis
-    attente ; attente épuisée -> TIMEOUT. Le verrou est relâché entre deux mises à jour, jamais tenu pendant l'attente longue de Telegram."""
-    def run():
-        try:
-            reply = fn(*args)
-        except Exception as e:                      # noqa: BLE001 - on répond l'erreur
-            reply = f"Erreur : {e}"
-        if reply:
-            send(reply)
-    if lock is None:
-        return run()
+def _run(fn, *args):
+    """Exécute fn(*args) et envoie sa réponse (« Erreur : ... » si elle plante)."""
     try:
-        with lock(lambda: send(BUSY, queue=False)):
-            run()
+        reply = fn(*args)
+    except Exception as e:                          # noqa: BLE001 - on répond l'erreur
+        reply = f"Erreur : {e}"
+    if reply:
+        send(reply)
+
+
+def _handle(lock, fn, *args):
+    """_run(fn, *args). Avec `lock` (appelable qui prend `on_busy` et renvoie un gestionnaire de contexte, ex. store.data_lock) : le tout sous
+    le verrou des données ; verrou déjà pris -> BUSY tout de suite, puis attente ; attente épuisée -> TIMEOUT. Le verrou est relâché entre
+    deux mises à jour, jamais tenu pendant l'attente longue de Telegram."""
+    if lock is None:
+        return _run(fn, *args)
+    try:
+        with lock(lambda: send(_busy(), queue=False)):
+            _run(fn, *args)
     except store.LockTimeout:
         send(TIMEOUT, queue=False)
 
 
-def poll(handler, timeout=0, on_callback=None, lock=None):
+LATER = "telegram_later.json"       # serveur (poll defer=True) : messages et boutons reçus pendant un passage, traités dès que le verrou est libre
+LATER_MAX_MIN = 60                  # ... sauf s'ils attendent depuis plus de N min (redémarrage, très long passage) : jamais rejoués sur d'autres données
+
+
+def _run_later(handler, on_callback):
+    """File des messages mis de côté (verrou pris) : traités dans l'ordre, chacun sous le verrou des données pris SANS attendre ; s'arrête dès
+    qu'un passage le reprend. -> True si la file est vide."""
+    later = store.load(LATER, [])
+    while later:
+        item = later[0]
+        if _too_old(item):                          # trop vieux : le jour ou les paris ont pu changer, on ne le rejoue pas en silence
+            later.pop(0)
+            store.save(LATER, later)
+            what = f"ton message « {item['args'][0]} »" if not item.get("cb") else "ton appui sur un bouton"
+            send(f"⚠️ Kelly était occupée trop longtemps : {what} (à {str(item.get('at') or '')[11:16]}) n'a pas été fait. Renvoie-le si tu le veux "
+                 "encore.", queue=False)
+            continue
+        fn = on_callback if item.get("cb") else handler
+        try:
+            with store.data_lock(wait=0):
+                later.pop(0)
+                store.save(LATER, later)            # retiré avant d'être traité : jamais fait deux fois (un plantage le perd, comme avant)
+                if fn:
+                    _run(fn, *item["args"])
+        except store.LockTimeout:
+            break
+    return not later
+
+
+def _too_old(item):
+    """Message mis de côté depuis plus de LATER_MAX_MIN minutes (heure inconnue : trop vieux)."""
+    try:
+        at = calendar.timegm(time.strptime(item["at"], "%Y-%m-%dT%H:%M:%SZ"))
+    except (KeyError, TypeError, ValueError):
+        return True
+    return time.time() - at > LATER_MAX_MIN * 60
+
+
+def _later(fn, args, cb):
+    """Traite tout de suite sous le verrou s'il est libre et que rien n'attend avant ; sinon met de côté (ordre gardé) et répond BUSY : le
+    serveur continue de lire les messages suivants (« état » répond pendant le passage du matin)."""
+    later = store.load(LATER, [])
+    if not later:
+        try:
+            with store.data_lock(wait=0):
+                _run(fn, *args)
+            return
+        except store.LockTimeout:
+            pass
+    later.append({"cb": cb, "args": list(args), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    store.save(LATER, later)
+    send(_busy(), queue=False)
+
+
+def _busy():
+    """Message « Kelly est en plein travail », avec la progression du passage du matin s'il est en cours (progress.busy_suffix)."""
+    from . import progress
+    suffix = progress.busy_suffix()
+    return BUSY_MORNING.format(suffix) if suffix else BUSY
+
+
+def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=False):
     """Lit les nouveaux messages et appuis sur les boutons (une passe) et répond. Ne répond qu'au chat configuré : personne
     d'autre ne peut piloter le bot. `on_callback(donnée, id du message)` : réponse à un appui sur un bouton (None = rien à dire).
-    `lock` : voir _handle (le serveur y met store.data_lock, pour ne pas écrire les données pendant le matin ou le relevé horaire)."""
+    `lock` : voir _handle (le serveur y met store.data_lock, pour ne pas écrire les données pendant le matin ou le relevé horaire).
+    `quick(texte)` : réponse en lecture seule donnée SANS le verrou (« état » pendant le passage du matin), None pour le traitement normal.
+    `defer` (serveur, à la place de `lock`) : verrou pris -> le message est mis de côté (BUSY) au lieu d'attendre, et traité à une passe
+    suivante dès que le verrou est libre (_run_later) : un message en attente ne bloque plus les suivants."""
     _, chat = creds()
+    if defer:
+        _run_later(handler, on_callback)
     state = store.load("telegram.json", {"offset": 0})
     start = state["offset"]
     try:
@@ -342,14 +413,28 @@ def poll(handler, timeout=0, on_callback=None, lock=None):
             answer_callback(cq.get("id"))           # tout de suite, avant une éventuelle attente du verrou : pas de sablier
             cmsg = cq.get("message") or {}
             if on_callback and str(cmsg.get("chat", {}).get("id")) == str(chat):
-                _handle(lock, on_callback, cq.get("data") or "", cmsg.get("message_id"))
+                if defer:
+                    _later(on_callback, [cq.get("data") or "", cmsg.get("message_id")], True)
+                else:
+                    _handle(lock, on_callback, cq.get("data") or "", cmsg.get("message_id"))
             store.save("telegram.json", state)
             continue
         msg = u.get("message") or {}
         text = (msg.get("text") or "").strip()
         if not text or str(msg.get("chat", {}).get("id")) != str(chat):
             continue
-        _handle(lock, handler, text)
+        fast = None
+        if quick:
+            try:
+                fast = quick(text)
+            except Exception as e:                  # noqa: BLE001 - traitement normal à la place
+                print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+        if fast:
+            send(fast)
+        elif defer:
+            _later(handler, [text], False)
+        else:
+            _handle(lock, handler, text)
         store.save("telegram.json", state)          # offset sauvé à chaque commande : jamais traitée deux fois
     if state["offset"] != start:                    # rien de nouveau (la plupart des passages du serveur) : pas d'écriture inutile
         store.save("telegram.json", state)

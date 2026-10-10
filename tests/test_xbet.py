@@ -272,14 +272,14 @@ def test_apply_and_messages():
     assert xprice.apply(pronos, fetch=fetch) == {"matches": 1, "value": 1, "low": 0, "weak": 0, "none": 0}
     assert seen["events"] == ["e1", "e2"] and seen["wanted"]["e1"] == {"alternate_totals_corners"}
     text = fmt.pronos(CB.best_per_match(pronos))
-    assert "💎 Plus de 9,5 corners — cote 1xBet <b>1,99</b>" in text and "valeur +19 %" in text, text
+    assert "💎 Plus de 9,5 corners · <b>1,99</b>" in text and "valeur +19 %" in text, text
     assert "<a href" not in text, "pas de lien : la cote seulement"
-    assert "— mini <b>" not in text and "« mini »" not in text, "le pronostic sans cote 1xBet n'est pas montré"
+    assert "· mini <b>" not in text and "« mini »" not in text, "le pronostic sans cote 1xBet n'est pas montré"
     real = fmt.fair_combo(3.96, [pronos[0], pronos[0] | {"id": "x"}], 0.36, 0.5)
-    assert real.startswith("<b>💎 COMBINÉ AUX COTES 1XBET</b>") and "🎯 Cote <b>" in real and "✔️ Cote 1xBet <b>1,99</b>" in real
+    assert real.startswith("<b>💎 COMBINÉ — cote 3,96</b>\n🎯 2 paris · ") and real.count("   Plus de 9,5 corners · <b>1,99</b>") == 2, real
     assert "<a href" not in real
     mixed = fmt.fair_combo(3.0, [pronos[0], pronos[1]], 0.4, 0.5)
-    assert "À VÉRIFIER CHEZ 1XBET" in mixed and "Kelly n'a pas vu toutes les cotes" in mixed
+    assert "À VÉRIFIER CHEZ 1XBET — cote mini 3" in mixed and " · <b>1,99</b>" in mixed and " · joue si ≥ <b>" in mixed and "⚠️ Joue seulement si chaque pari atteint sa cote mini" in mixed, mixed
     old = C.XBET_ENABLED
     C.XBET_ENABLED = False
     try:
@@ -318,7 +318,7 @@ def test_afternoon_refresh():
     finally:
         telegram.send = old
     assert asked["ids"] == ["f", "g", "k"], asked                               # le match commencé n'est pas relu
-    assert n == 1 and len(sent) == 1 and "Nouvelles cotes 1xBet" in sent[0] and "8,5 corners — cote 1xBet <b>1,59</b>" in sent[0]
+    assert n == 1 and len(sent) == 1 and "Nouvelles cotes 1xBet" in sent[0] and "8,5 corners · <b>1,59</b>" in sent[0]
     assert "9,5" not in sent[0], "le 💎 du matin n'est pas renvoyé"
     saved = {c["id"]: c for c in store.load("today.json", {})["pronos"]}
     assert saved["f"]["xodds"] == 1.59 and saved["g"]["xodds"] == 1.9 and "xodds" not in saved["s"]
@@ -404,12 +404,12 @@ def test_save_coupon():
 
     # Format avec code coupon
     msg = fmt.fair_combo(2.28, legs, 0.45, 0.5, coupon=code)
-    assert f"🎟️ Code coupon 1xBet : <code>{code}</code>" in msg
+    assert f"🎟️ Code : <code>{code}</code>" in msg
     assert "<a href" not in msg
 
     # Format sans coupon
     msg_no = fmt.fair_combo(2.28, legs, 0.45, 0.5)
-    assert "🎟️ Code coupon" not in msg_no
+    assert "🎟️ Code" not in msg_no and "<code>" not in msg_no
 
     # Échec réseau -> None, ne lève jamais
     with patch("kelly.sources.http.post", return_value=Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", None, error="HTTP 500")):
@@ -548,12 +548,12 @@ def test_combi_live():
     fc = (live_pronos()[:4], 1.55 ** 4, 0.72 ** 4)
     msg, sent, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), drop=("m1",))
     assert sent and sent[0].startswith("⏳"), sent
-    assert msg.startswith("Voici un combiné aux cotes 1xBet de 13:00"), msg[:200]
+    assert "<b>💎 COMBINÉ — cote 5,77</b>" in msg and "🕒 Cotes 1xBet de 13:00 : vérifie-les avant de valider." in msg, msg
     assert seen_fresh == [C.XBET_COMBI_FRESH_MIN] == [180], "combi : cotes de moins de 3 h reprises"
-    assert "❌ Retiré : H1 – A1" in msg and "➕ Ajouté" in msg and "🎟️ Code coupon 1xBet : <code>K7Q2X</code>" in msg
+    assert "❌ Retiré : H1 – A1" in msg and "➕ Ajouté" in msg and "🎟️ Code : <code>K7Q2X</code>" in msg
     assert coupons and "m1" not in coupons[0], "le code est créé avec les paris encore jouables"
     msg, _, coupons = with_fakes(lambda: app._live_reply(fc, 5.0, 6.25, now=now), got=False)
-    assert "1xBet ne répond pas" in msg and "Code coupon" not in msg and not coupons
+    assert "1xBet ne répond pas" in msg and "🎟️ Code" not in msg and not coupons
     print("ok  combi N vérifié en direct (paris remplacés, code aux cotes de l'instant)")
 
 

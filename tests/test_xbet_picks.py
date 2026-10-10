@@ -132,7 +132,7 @@ def test_build_day_coupon():
     finally:
         xbet.save_coupon = old
     text = "\n".join(str(m) for m in msgs)
-    assert "Code coupon 1xBet : <code>CODE1</code>" in text and "Charger le coupon" in text, text
+    assert "Code : <code>CODE1</code>" in text and "Charger le coupon" in text, text
     assert asked[0] == [picks[3]["key"]] and len(asked) == 2, asked                    # pari du jour d'abord, puis le combiné
     assert "cote 1,50" in text and "1,60" not in text and "Coolbet" not in text, "cotes 1xBet affichées, jamais la cote typique"
     assert "Cotes 1xBet de 09:30" in text, "heure du relevé rappelée"
@@ -150,14 +150,14 @@ def test_build_day_coupon():
     finally:
         xbet.save_coupon = old
     t2 = "\n".join(str(m) for m in msgs2)
-    assert "Code coupon 1xBet" not in t2 and "Code coupon indisponible pour l'instant" in t2 and combos2[0]["coupon"] is None
+    assert "🎟️ Code : " not in t2 and "🎟️ Code indisponible pour l'instant" in t2 and combos2[0]["coupon"] is None
     plain, _ = world()                                                                    # sans cote 1xBet : aucun coupon, aucune nouvelle clé
     xbet.save_coupon = lambda legs: 1 / 0
     try:
         msgs3, _, combos3 = app.build_day(plain, DAY)
     finally:
         xbet.save_coupon = old
-    assert "Code coupon" not in "\n".join(str(m) for m in msgs3) and all("coupon" not in c and "xlegs" not in c for c in combos3)
+    assert "🎟️ Code" not in "\n".join(str(m) for m in msgs3) and all("coupon" not in c and "xlegs" not in c for c in combos3)
     print("ok  code coupon du combiné réel et du pari du jour")
 
 
@@ -194,7 +194,7 @@ def test_custom_combo():
         msg = str(app.custom_combo(picks, [], 5.0, DAY))
     finally:
         xbet.save_coupon = old
-    assert "Code coupon 1xBet : <code>CUSTOM9</code>" in msg and "Home5" not in msg and "Home6" not in msg, msg
+    assert "Code : <code>CUSTOM9</code>" in msg and "Home5" not in msg and "Home6" not in msg, msg
     print("ok  /combi sur mesure : seulement les paris aux cotes 1xBet, avec code")
 
 

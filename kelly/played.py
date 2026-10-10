@@ -194,8 +194,11 @@ def is_custom(c):
 
 
 def custom_name(c):
-    """« Combi sur mesure (cote 20) » : le nom d'un combiné sur mesure suivi (la cote demandée avec « combi 20 », pas la cote totale)."""
-    return f"Combi sur mesure (cote {fmt.trim(c.get('target') or c['min_odds'], 1)})"
+    """« Combi sur mesure (cote 20) » : le nom d'un combiné sur mesure suivi (la cote demandée avec « combi 20 », pas la cote totale), avec ses
+    types de paris s'ils ont été choisis : « Combi sur mesure tirs vers le but, fautes (cote 20) »."""
+    kinds = CB.kinds_label(c.get("kinds"))
+    kind = "Combi live" if c.get("src") == "live" else "Combi sur mesure"
+    return f"{kind}{' ' + kinds if kinds else ''} (cote {fmt.trim(c.get('target') or c['min_odds'], 1)})"
 
 
 def is_real(c):
@@ -288,7 +291,14 @@ def command(args, day, now=None, confirmed=False):
         return f"{NEED_STAKE} Réponds ta mise, par exemple 1 000 (cote {fmt.num(odds)} retenue)."
     if not stake > 0:
         return "La mise doit être supérieure à 0. Exemple : /joue sur 5,40 1000 (annuler : /joue sur 0)."
-    return note(t, odds, stake, now)
+    return note(t, odds, stake, now) + overlap_suffix(args[0], t.item.get("date") or day)
+
+
+def overlap_suffix(what, day):
+    """« ⚠️ Ce ticket a 4 matchs en commun avec 5 de tes tickets du jour… » (exposure.overlap_note), à la suite d'une note ; '' sinon."""
+    from . import exposure
+    w = exposure.overlap_note(day, norm(what))
+    return "\n" + w if w else ""
 
 
 def note(t, odds, stake, now=None):
@@ -368,15 +378,16 @@ def _todo_page(items_, k, total, day):
     if not left:
         foot = "Tout est noté 👍"
     elif needs_odds and not auto:
-        foot = "Appuie sur le pari que tu as joué, puis envoie la cote obtenue chez 1xBet."
-    elif auto and not needs_odds:
-        foot = ("Appuie sur le pari que tu as joué : il est noté à la cote 1xBet lue par Kelly (avec la mise conseillée, sinon Kelly te demande ta mise). "
-                "« ✏️ Autre cote » la corrige.")
+        foot = "👇 Appuie sur ce que tu as joué, puis envoie la cote obtenue chez 1xBet."
     else:
-        foot = ("Appuie sur le pari que tu as joué : noté tout de suite à la cote 1xBet quand Kelly l'a lue, sinon envoie la cote obtenue chez 1xBet.")
+        foot = "👇 Appuie sur ce que tu as joué (« ✏️ Autre cote » corrige la cote)."
     title = "🧾 Tes paris du jour" + (f" ({k + 1}/{total})" if total > 1 else "")
-    head = [title, "Seuls les paris que tu notes comptent dans tes résultats.", ""]
-    hint = ["", fmt.esc("💡 Mise conseillée : " + M.NO_BUDGET)] if left and not M.active() else []
+    head = [title, "Seuls les paris notés comptent dans tes résultats.", ""]
+    if k == 0:                                      # les matchs dont dépendent plusieurs tickets joués (exposure)
+        from . import exposure
+        shared = exposure.summary_lines(day)
+        head += shared + ([""] if shared else [])
+    hint = ["", fmt.esc("💰 Mise : " + M.NO_BUDGET)] if left and not M.active() else []
     text = Html("\n".join([fmt.esc(h) for h in head] + lines + hint + ["", fmt.esc(foot)]))
     return telegram.with_buttons(text, telegram.inline(rows)) if rows else text
 
@@ -386,18 +397,18 @@ def _todo_line(name, x, label, cmd, stake=0):
     `stake` : sa mise conseillée en FCFA (0 : aucune)."""
     p = x.get("played")
     if x.get("dead"):                                # déclaré injouable par Kelly (paris retirés de 1xBet, pas de remplaçant)
-        return f"🚫 {name} : plus jouable chez 1xBet (Kelly a conseillé de ne pas le jouer)"
+        return f"🚫 {name} : plus jouable chez 1xBet"
     if p:
-        return f"✅ {name} : joué à {fmt.odds_txt(p['odds'])}, mise {M.money(p['stake'], x.get('cur'))}"
+        return f"✅ {name} · joué à {fmt.odds_txt(p['odds'])} · {M.money(p['stake'], x.get('cur'))}"
     if x.get("result") is not None:
-        return f"⏹ {name} — {label} : déjà réglé, pas noté"
-    advice = (f" — mise conseillée {M.money(stake)}" if stake else " — pas de mise conseillée (trop petite pour ton budget)" if M.active() else "")
-    return f"▫️ {name} — {label} : pas noté{advice} — {cmd}"
+        return f"⏹ {name} · {label} · réglé, pas noté"
+    advice = f" · mise {M.money(stake)}" if stake else ""
+    return f"▫️ {name} · {label}{advice}"
 
 
 def _coupon_line(px):
     """Code coupon 1xBet de la version en cours, sous la ligne du pari, en <code> (un appui le copie ; rien sans code). HTML."""
-    return f"\n      🎟️ Code coupon 1xBet : {fmt.code(px['coupon'])}" if px.get("coupon") else ""
+    return f"\n   🎟️ {fmt.code(px['coupon'])}" if px.get("coupon") else ""
 
 
 def _verify_row(what, x, day, name):
@@ -405,7 +416,7 @@ def _verify_row(what, x, day, name):
     if x.get("result") is not None or x.get("skipped"):
         return []
     from . import chat
-    b = chat.refresh_button(what, day, f"🎟️ Vérifier ce combiné : {name}")
+    b = chat.refresh_button(what, day, f"🎟️ Vérifier : {name}")
     return [[b]] if b else []
 
 

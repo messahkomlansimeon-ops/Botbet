@@ -4,7 +4,8 @@
 les ferme ~30 minutes avant. Au relevé de 04:00 ils sont presque tous fermés : les pronostics stats du matin (fair.make) n'ont donc pas de cote 1xBet (c["xnone"]),
 et, dès que 1xBet a chiffré la journée, combos.fair_legs les écarte. Ce module les rattrape dans la journée, au passage horaire (`bot.py --track`, :05 de 05h à 23h) :
 
-  1. SÉLECTION  les matchs du jour Kelly qui commencent dans la fenêtre [C.STATS_WINDOW_MIN_MIN min ; C.STATS_WINDOW_MAX_H h] et dont un pronostic stats n'a pas de
+  1. SÉLECTION  les matchs du jour Kelly qui commencent dans la fenêtre [C.STATS_WINDOW_MIN_MIN min ; C.STATS_WINDOW_MAX_H h] (large : 1xBet ouvre ces paris à des
+                heures variables, d'un match à l'autre ; relus toutes les 3 h de loin, chaque heure dans les C.STATS_WINDOW_NEAR_H dernières heures) et dont un pronostic stats n'a pas de
                 cote 1xBet fraîche (c["xat"], C.STATS_WINDOW_FRESH_MIN min), connus de 1xBet (c["xgid"]), pas déjà jambe d'un combiné du jour (app._sent_keys),
                 dans la limite de C.STATS_WINDOW_MAX_MATCHES par passage, C.STATS_WINDOW_DAY_READS par jour et C.STATS_WINDOW_TRIES relectures par match ; ceux qui ont le
                 plus de pronostics stats d'abord. Jamais au-delà de C.STATS_WINDOW_MONTH_PCT % du plafond mensuel de données (le matin passe avant).
@@ -72,6 +73,16 @@ def in_window(c, now):
     return now + timedelta(minutes=C.STATS_WINDOW_MIN_MIN) <= ko <= now + timedelta(hours=C.STATS_WINDOW_MAX_H)
 
 
+def retry_min(c, now):
+    """Minutes au moins entre deux relectures du match de `c` : C.STATS_WINDOW_RETRY_MIN dans les C.STATS_WINDOW_NEAR_H dernières heures (chaque
+    passage horaire), C.STATS_WINDOW_FAR_RETRY_MIN plus loin (1xBet ouvre ces paris à des heures variables : on regarde, sans insister)."""
+    try:
+        near = _ko(c) <= now + timedelta(hours=C.STATS_WINDOW_NEAR_H)
+    except (KeyError, ValueError, AttributeError, TypeError):
+        near = True
+    return C.STATS_WINDOW_RETRY_MIN if near else C.STATS_WINDOW_FAR_RETRY_MIN
+
+
 def age_min(c, now):
     """Minutes écoulées depuis la lecture 1xBet du pronostic (c["xat"], « HH:MM » UTC) ; None si inconnue. Une heure « dans le futur » est celle de la veille."""
     try:
@@ -115,7 +126,8 @@ def select(pronos, now, doc, protected=frozenset()):
     """Pronostics stats à relire ce passage : [(id du match, [pronostics])], les matchs qui ont le plus de pronostics stats d'abord, puis le coup d'envoi le plus proche.
     Un match n'est pas relu s'il n'est pas connu de 1xBet (pas de c["xgid"]), s'il est hors fenêtre, si tous ses pronostics stats ont une cote fraîche ou sont jambes d'un
     combiné du jour (`protected` : clés), s'il a déjà été relu C.STATS_WINDOW_TRIES fois ou n'a pas répondu C.STATS_WINDOW_MISSES fois aujourd'hui, ou s'il a été relu il y a
-    moins de C.STATS_WINDOW_RETRY_MIN min. Au plus C.STATS_WINDOW_MAX_MATCHES matchs, et pas plus que ce qu'il reste de C.STATS_WINDOW_DAY_READS aujourd'hui."""
+    moins de retry_min (chaque heure près du match, toutes les 3 h plus loin). Au plus C.STATS_WINDOW_MAX_MATCHES matchs, et pas plus que ce qu'il reste de C.STATS_WINDOW_DAY_READS aujourd'hui ; les plus
+    proches du coup d'envoi d'abord (dernière chance avant que 1xBet ne ferme ces paris)."""
     by = {}
     for c in pronos:
         if is_stat(c) and c.get("xgid") and c.get("key") not in protected and in_window(c, now) and not fresh(c, now):
@@ -126,12 +138,13 @@ def select(pronos, now, doc, protected=frozenset()):
         if r.get("n", 0) >= C.STATS_WINDOW_TRIES or r.get("miss", 0) >= C.STATS_WINDOW_MISSES:
             continue
         try:
-            if r.get("at") and (now - datetime.fromisoformat(r["at"])).total_seconds() < C.STATS_WINDOW_RETRY_MIN * 60:
+            if r.get("at") and (now - datetime.fromisoformat(r["at"])).total_seconds() < retry_min(cs[0], now) * 60:
                 continue
         except ValueError:
             pass
         out.append((mid, cs))
-    out.sort(key=lambda it: (-len(it[1]), min(_ko(c) for c in it[1])))
+    # le coup d'envoi le plus proche d'abord : 1xBet ferme ces paris ~30 min avant, c'est la dernière chance de les chiffrer ; puis le plus de pronostics
+    out.sort(key=lambda it: (min(_ko(c) for c in it[1]), -len(it[1])))
     room = max(0, C.STATS_WINDOW_DAY_READS - used_reads(doc))
     return out[:max(0, min(C.STATS_WINDOW_MAX_MATCHES, room))]
 

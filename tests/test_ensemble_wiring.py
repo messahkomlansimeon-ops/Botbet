@@ -293,12 +293,13 @@ def test_display_lines_and_legend():
     bare = prono(market="team_fouls_total", name="Over", point=22.5, i=3, p0=0.66) | {"xodds": 1.8, "xev": 0.18}           # aucun avis de 1xBet
     sharp_only = prono(i=4, p0=0.70) | {"xodds": 1.6, "xev": 0.12, "p_sharp": 0.7, "p_model": 0.7}                            # pas de proba 1xBet : pas de ligne
     text = str(fmt.pronos([act, ina, bare, sharp_only], when="09:10"))
-    assert "<i>📊 1xBet : 49 % · Kelly : 71 % · retenu : 61 %</i>" in text, text
-    assert "<i>📊 1xBet : 41 % · Kelly : 71 %</i>" in text and text.count("📊") == 2, text
-    assert "retenu : 55 %" not in text, "corners : la proba retenue n'est qu'un avis fantôme, jamais montrée"
-    assert text.index("Plus de 2,5 buts") < text.index("📊 1xBet : 49 %") < text.index("corners")
-    assert ("Sur les buts et le résultat, Kelly suit surtout la cote 1xBet ; ailleurs, ses statistiques." in text
-            and text.count("<i>") == text.count("</i>")), text
+    # une ligne de chances sous chaque pari : Kelly (proba retenue) et 1xBet sans marge s'il a un avis ; plus de ligne « 📊 » à part ni de légende
+    assert "<i>   Kelly 61 % · 1xBet 49 % · valeur +19 %</i>" in text, text
+    assert "<i>   Kelly 71 % · 1xBet 41 % · valeur +36 %</i>" in text, text
+    assert "<i>   Kelly 66 % · valeur +18 %</i>" in text and "<i>   Kelly 70 % · valeur +12 %</i>" in text, text      # sans avis de 1xBet : Kelly seul
+    assert "📊" not in text and "retenu" not in text and "55 %" not in text, "corners : la proba retenue fantôme n'est jamais montrée"
+    assert text.index("Plus de 2,5 buts") < text.index("1xBet 49 %") < text.index("corners")
+    assert "Sur les buts et le résultat" not in text and text.count("<i>") == text.count("</i>"), text
     # 5 pronostics 💎 : le message reste court
     assert len(str(fmt.pronos([act | {"id": f"x{i}", "key": f"x{i}"} for i in range(10)]))) < 3500
     # sharp + 1xBet + modèle (avec « retenu ») ; ordre fixe : 1xBet, Sharp, Kelly
@@ -306,23 +307,23 @@ def test_display_lines_and_legend():
     assert E.explain_c(both) == "1xBet : 49 % · Sharp : 52 % · Kelly : 71 % · retenu : 61 %"
     # jambes d'un combiné à cote juste (💎) et d'un combiné réel, pari du jour, /top
     fl = fmt.fair_combo(3.0, [act, ina | {"id": "m9"}], 0.3, 0.5)
-    assert "<i>📊 1xBet : 49 % · Kelly : 71 % · retenu : 61 %</i>" in fl and "<i>📊 1xBet : 41 % · Kelly : 71 %</i>" in fl, fl
+    assert "   <i>Kelly 61 % · 1xBet 49 %</i>" in fl and "   <i>Kelly 71 % · 1xBet 41 %</i>" in fl and "📊" not in fl, fl
     real = {"key": "e1|h2h||Home1", "id": "e1", "sport_key": "soccer_epl", "group": "soccer", "event": "Home1 - Away1", "home": "Home1", "away": "Away1",
             "league": "EPL", "start": "19:00", "commence": KO, "market": "h2h", "who": None, "point": None, "name": "Home1", "pick": "Home1 gagne",
             "prob": 0.5, "prob_book": 0.5, "prob_src": "pinnacle", "n_sharp": 1, "odds": 2.1, "xodds": 2.1, "best_odds": 2.1, "book": "1xBet", "edge": 0.05,
             "spread": 0, "steam": 0, "weight": 1.0, "n_books": 10, "score": 0.1, "why": "", "p_x": 0.46, "p_sharp": 0.5}
-    assert "<i>📊 1xBet : 46 % · Sharp : 50 %</i>" in str(fmt.single(real, "value")) and "📊 1xBet : 46 %" in str(fmt.combo("🛡️ SÛR", [real, real | {"key": "k2", "id": "e2"}], 4.4, 0.25))
+    assert "<i>Kelly 50 % · 1xBet 46 %</i>" in str(fmt.single(real, "value")) and "<i>Kelly 50 % · 1xBet 46 %</i>" in str(fmt.combo("🛡️ SÛR", [real, real | {"key": "k2", "id": "e2"}], 4.4, 0.25))
     top = str(app.top_reply([real], [act | {"id": "m7"}, ina | {"id": "m8"}], "09:10", "09:10"))
-    assert top.count("📊") == 3, top
-    # éteint ou sans avis : aucune ligne, aucune légende ; fantôme seul : lignes, pas de légende
+    assert top.count(" · 1xBet ") == 3 and "📊" not in top, top
+    # l'affichage ne dépend plus de l'interrupteur de l'ensemble : jamais de « 📊 » ni de « retenu », mêmes lignes de chances
     C.ENSEMBLE_ENABLED = False
     off = str(fmt.pronos([act, ina], when="09:10"))
-    assert "📊" not in off and "Sur les buts" not in off and "retenu" not in off
+    assert "📊" not in off and "Sur les buts" not in off and "retenu" not in off and "Kelly 61 % · 1xBet 49 %" in off, off
     C.ENSEMBLE_ENABLED, C.ENSEMBLE_ACTIVE_FAMILIES = True, frozenset()
     ghost = str(fmt.pronos([act, ina], when="09:10"))
-    assert ghost.count("📊") == 2 and "Sur les buts" not in ghost and "retenu" not in ghost, ghost
+    assert ghost == off, ghost
     reset()
-    print("ok  affichage : ligne d'avis sous chaque pari (retenu seulement là où l'ensemble décide), rien sans avis de 1xBet, légende 💎, éteint = rien")
+    print("ok  affichage : ligne de chances sous chaque pari (Kelly, 1xBet s'il a un avis), plus de ligne 📊 ni de « retenu » ni de légende")
 
 
 
@@ -713,7 +714,7 @@ def test_morning_gap_edge_cases():
         msgs, _ = morning(picks, cands, rec)
         gmsg = next(m for m in msgs if "1xBet paie plus que le marché" in str(m))
         gm = fmt.plain(str(gmsg))
-        assert "💰 Mise conseillée" not in gm and gm.count("Mise conseillée : règle ton budget du jour") == 1 and all(st is None for _, _, st, _ in rec[1:])
+        assert "💰 Mise conseillée" not in gm and gm.count("Mise : règle ton budget du jour") == 1 and all(st is None for _, _, st, _ in rec[1:])
         assert all(" — " not in l for l in labels(gmsg)), "pas de mise dans le bouton"
         # au plus C.SHARPGAP_MAX_SHOWN, les plus gros écarts d'abord
         reset()
@@ -823,7 +824,7 @@ def test_notes_money_and_lists():
         # « 🧾 Mes paris » : l'écart avec son code coupon, son état et ses boutons ; jamais mélangé au pari du jour
         todo = played.todo(DAY)
         txt = fmt.plain(str(todo))
-        assert "1xBet en retard : Home2 gagne — cote 1xBet 2,18 (08:55) : pas noté" in txt and "✅ 1xBet en retard : Home3 gagne : joué à 2,10, mise 1 000 FCFA" in txt and "Code coupon 1xBet : CODE" in txt, txt
+        assert "▫️ 1xBet en retard : Home2 gagne · cote 1xBet 2,18 (08:55) · mise 1 500 FCFA" in txt and "✅ 1xBet en retard : Home3 gagne · joué à 2,10 · 1 000 FCFA" in txt and "🎟️ CODE" in txt, txt
         assert "Pari du jour" in txt and f"joue|g3|{DAY}|l0" in cbs(todo) and f"annule|g2|{DAY}|l0" in cbs(todo) and f"joue|g1|{DAY}|l0" in cbs(todo)
         assert txt.count("1xBet en retard : ") == 3
         # l'argent : seuls les écarts NOTÉS comptent, au résultat réglé

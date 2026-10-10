@@ -236,7 +236,7 @@ XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir 
 # Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
 S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
 S365_PROXY = _bool("S365_PROXY", True)            # 1 : par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct ; 0 : connexion directe
-S365_MONTH_MB = _float("S365_MONTH_MB", 60)       # plafond mensuel des données 365scores passées par le proxy (1xBet : XBET_MONTH_MB à part)
+S365_MONTH_MB = _float("S365_MONTH_MB", 200)      # plafond mensuel des données 365scores passées par le proxy (1xBet : XBET_MONTH_MB à part) ; 200 : équipes du live (10/10/2026)
 S365_GAMES_PER_RUN = _int("S365_GAMES_PER_RUN", 20)   # statistiques de match lues par passage horaire (0 = désactivé)
 S365_LISTS_PER_RUN = _int("S365_LISTS_PER_RUN", 4)    # listes de résultats (ou pages plus anciennes) lues par passage
 S365_SECONDS = _int("S365_SECONDS", 100)          # durée maximale du remplissage d'un passage (3 s entre deux requêtes)
@@ -286,7 +286,7 @@ XBET_DIRECT = _bool("XBET_DIRECT", False)
 # Partenaire des codes coupon : 1 = version internationale, celle de l'appli mobile 1xBet de l'utilisateur (son propre ticket y est
 # rattaché) ; le site 1xbet.ci (286) relit aussi ces codes. Un code créé pour 286 répond « code incorrect » dans l'appli.
 XBET_COUPON_PARTNER = _int("XBET_COUPON_PARTNER", 1)
-XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)        # plafond mensuel de données 1xBet via le proxy (forfait 1 Go partagé avec SofaScore)
+XBET_MONTH_MB = _float("XBET_MONTH_MB", 400)        # plafond mensuel de données 1xBet via le proxy (forfait Webshare de 3 Go partagé avec 365scores et SofaScore)
 # Vérification EN DIRECT (combi N, bouton « 🎟️ Vérifier ce combiné », relevés de 2 h) : cotes relues à l'instant, sans cache
 XBET_FRESH_MIN = _int("XBET_FRESH_MIN", 5)          # en direct : cotes lues il y a moins de N min reprises telles quelles (pas de proxy)
 XBET_COMBI_FRESH_MIN = _int("XBET_COMBI_FRESH_MIN", 180)   # « combi N » : cotes de moins de 3 h reprises (relevé de 15:00, actualisation)
@@ -361,6 +361,33 @@ COMBOS = [
     ("💀 MONSTRE (cote 150+)", 150.0, 300.0),     # plafond : sans lui la cote dériverait vers l'absurde
 ]
 CUSTOM_TOLERANCE = 0.25    # /combi <cote> : fourchette cote x (1 - 25 %) à cote x (1 + 25 %)
+COMBI_OPEN_MAX = _int("COMBI_OPEN_MAX", 10)        # « combi N tirs » : matchs relus en direct chez 1xBet au plus (stats pas encore chiffrées, fenêtre des stats ; ~1 s et ~13 Ko chacun)
+COMBI_BOLD_MIN_P = _float("COMBI_BOLD_MIN_P", 0.5)   # « 🎲 Aller plus loin quand même » : chances minimales d'un pari moins solide (Kelly le voit gagnant plus d'une fois sur deux)
+COMBI_BOLD_MIN_EV = _float("COMBI_BOLD_MIN_EV", -0.10)   # ... et espérance minimale à la cote 1xBet (un peu sous l'équilibre au plus : -10 %)
+COMBI_BOLD_FRESH_MIN = _int("COMBI_BOLD_FRESH_MIN", 30)   # ... cotes de ses paris lues il y a plus de N min : relues en direct avant de répondre
+# Combinés LIVE (kelly/live.py, « 🔴 Live ») : à la demande, matchs en cours dans la fenêtre de minutes, apprentissage à part par tranche
+LIVE_MIN_MINUTE = _int("LIVE_MIN_MINUTE", 30)       # avant : le match n'a encore rien montré
+LIVE_MAX_MINUTE = _int("LIVE_MAX_MINUTE", 88)       # après : 1xBet suspend presque sans arrêt, les cotes ne tiennent pas le temps de valider
+LIVE_TRANCHES = ((30, 45), (45, 60), (60, 75), (75, 999))   # tranches de minutes de l'apprentissage live (75-90+ : temps additionnel compris)
+LIVE_MIN_P = _float("LIVE_MIN_P", 0.60)             # chances minimales d'un pari live
+LIVE_MIN_EV = _float("LIVE_MIN_EV", -0.05)          # espérance minimale à la cote 1xBet (la marge live est plus forte : un peu sous l'équilibre admis)
+LIVE_MIN_ODDS = _float("LIVE_MIN_ODDS", 1.15)       # pas de pari déjà presque joué
+LIVE_MAX_GAP = _float("LIVE_MAX_GAP", 0.20)         # écart maximal avec la proba de 1xBet : au-delà, 1xBet sait quelque chose que le modèle ignore
+LIVE_COUNT = _int("LIVE_COUNT", 150)                # matchs demandés à 1xBet (une requête, ~3 Ko par match)
+LIVE_TTL = _int("LIVE_TTL", 30)                     # secondes pendant lesquelles la liste live lue est reprise du cache
+LIVE_W_PROFILES = _float("LIVE_W_PROFILES", 0.7)   # poids de l'avis de Kelly face à 1xBet avec les profils FotMob / API-Football (modèle de force : 1)
+LIVE_W_LIGHT = _float("LIVE_W_LIGHT", 0.5)         # ... avec les données légères (derniers résultats 365scores) : moitié Kelly, moitié marché
+LIVE_SMALL = _bool("LIVE_SMALL", False)            # 1 : jeunes (U19, U21...), réserves (II, B), amateurs et ligues régionales autorisés en live
+# Équipes inconnues de Kelly préparées à l'avance pour le live (kelly/livedata.py, passage horaire, 365scores via le proxy)
+LIVE_PREP = _bool("LIVE_PREP", True)                # 0 : pas de préparation (le live n'a que le modèle de force et les profils FotMob / API-Football)
+LIVE_PREP_TEAMS = _int("LIVE_PREP_TEAMS", 100)      # équipes préparées au plus par passage = 50 matchs (~4 Ko chacune ; un samedi : ~900 équipes hors jeunes / réserves)
+LIVE_PREP_SECONDS = _int("LIVE_PREP_SECONDS", 420)  # durée maximale de la préparation d'un passage (1,5 s entre requêtes : S365_BACKFILL_DELAY)
+LIVE_PREP_AHEAD_H = _float("LIVE_PREP_AHEAD_H", 4)  # matchs commencés depuis moins de 2 h ou qui commencent dans les N prochaines heures
+LIVE_PREP_LIST_H = _float("LIVE_PREP_LIST_H", 6)    # la liste des matchs du jour (~180 Ko) est relue au plus toutes les N heures
+LIVE_PREP_GAMES = _int("LIVE_PREP_GAMES", 10)       # derniers matchs d'une équipe utilisés pour ses buts attendus
+LIVE_PREP_HISTORY = _int("LIVE_PREP_HISTORY", 40)   # matchs gardés EN BASE par équipe (historique cumulé à chaque lecture, jamais effacé)
+LIVE_MATCH_MIN = _int("LIVE_MATCH_MIN", 20)         # un match 1xBet et un match 365scores sont le même si leurs coups d'envoi sont à N min près (et les noms plausibles)
+LIVE_PREP_KEEP_DAYS = _int("LIVE_PREP_KEEP_DAYS", 3)   # une équipe préparée n'est pas relue avant N jours (son historique reste en base)
 MAX_LEGS = _int("MAX_LEGS", 25)            # simple borne de sécurité, pas un réglage de jeu
 DP_BIN = 0.005             # pas de discrétisation du log des cotes pour l'optimiseur (kelly/combos.py)
 
@@ -546,11 +573,14 @@ SHARPGAP_PRESCREEN = _float("SHARPGAP_PRESCREEN", 0.02)       # relevés et aler
 # plafonds : STATS_WINDOW_MAX_MATCHES par passage, STATS_WINDOW_DAY_READS par jour, jamais au-delà de STATS_WINDOW_MONTH_PCT % du plafond mensuel.
 STATS_WINDOW_ENABLED = _bool("STATS_WINDOW_ENABLED", True)          # 0 : plus de relecture horaire des stats (comportement d'avant)
 STATS_WINDOW_MIN_MIN = _int("STATS_WINDOW_MIN_MIN", 45)             # un match qui commence dans moins de N min n'est plus relu : 1xBet ferme les sous-matchs stats ~30 min avant
-STATS_WINDOW_MAX_H = _float("STATS_WINDOW_MAX_H", 4)                # ... ni avant N heures : trop tôt, les sous-matchs stats ne sont pas encore ouverts
-STATS_WINDOW_SECONDS = _int("STATS_WINDOW_SECONDS", 120)            # durée maximale de la relecture d'un passage (1 s entre requêtes en direct)
-STATS_WINDOW_MAX_MATCHES = _int("STATS_WINDOW_MAX_MATCHES", 8)      # matchs relus au plus par passage (ceux qui ont le plus de pronostics stats d'abord)
-STATS_WINDOW_DAY_READS = _int("STATS_WINDOW_DAY_READS", 48)         # relectures de match au plus par jour (tous passages)
-STATS_WINDOW_TRIES = _int("STATS_WINDOW_TRIES", 4)                  # relectures réussies au plus d'un même match par jour (la fenêtre de 4 h compte 4 passages)
+STATS_WINDOW_MAX_H = _float("STATS_WINDOW_MAX_H", 24)               # ... ni avant N heures. 1xBet ouvre ces paris à des heures variables (13 h avant pour un match, fermés 11 h
+                                                                    # avant pour un autre du même championnat) : fenêtre large, relue plus souvent près du match (STATS_WINDOW_NEAR_H)
+STATS_WINDOW_NEAR_H = _float("STATS_WINDOW_NEAR_H", 4)              # dans les N dernières heures : relu à chaque passage horaire (STATS_WINDOW_RETRY_MIN)
+STATS_WINDOW_FAR_RETRY_MIN = _int("STATS_WINDOW_FAR_RETRY_MIN", 180)  # plus loin du match : relu au plus toutes les N minutes (un match encore fermé = 1 requête)
+STATS_WINDOW_SECONDS = _int("STATS_WINDOW_SECONDS", 240)            # durée maximale de la relecture d'un passage (1 s entre requêtes en direct ; le passage horaire a 20 min)
+STATS_WINDOW_MAX_MATCHES = _int("STATS_WINDOW_MAX_MATCHES", 16)     # matchs relus au plus par passage (les plus proches du coup d'envoi d'abord : leur dernière chance)
+STATS_WINDOW_DAY_READS = _int("STATS_WINDOW_DAY_READS", 200)        # relectures de match au plus par jour (tous passages ; 80 matchs à pronostics stats un samedi)
+STATS_WINDOW_TRIES = _int("STATS_WINDOW_TRIES", 9)                  # relectures réussies au plus d'un même match par jour (~5 de loin toutes les 3 h + 4 dans les 4 dernières heures)
 STATS_WINDOW_MISSES = _int("STATS_WINDOW_MISSES", 3)                # passages sans réponse de 1xBet pour un même match avant d'y renoncer pour la journée
 STATS_WINDOW_RETRY_MIN = _int("STATS_WINDOW_RETRY_MIN", 45)         # minutes au moins entre deux relectures d'un même match
 STATS_WINDOW_FRESH_MIN = _int("STATS_WINDOW_FRESH_MIN", 50)         # un pronostic stats à cote 1xBet lue il y a moins de N min n'est pas relu ; plus vieux, il ne sert pas dans un combiné

@@ -326,14 +326,14 @@ def test_buttons():
         assert buttons(m)[0].startswith("joue|") and "Pas joué" not in json.dumps(m.markup, ensure_ascii=False)
     sur = next(m for m in msgs if "SÛR" in m)
     stake = next(c for c in sent_combos if c["tier"] == SUR)["stake"]
-    assert texts(sur) == [f"✅ Je l'ai joué — {money.money(stake)}"] and f"💰 mise : <b>{money.money(stake)}</b>" in sur, (texts(sur), sur)
+    assert texts(sur) == [f"✅ Je l'ai joué — {money.money(stake)}"] and f"💰 Mise : <b>{money.money(stake)}</b>" in sur, (texts(sur), sur)
     # sans budget : le bouton sans montant, et une ligne (une par message) qui dit de régler le budget
     store.save(money.FILE, {})
     msgs, _, combos2 = app.build_day(legs, date(2030, 1, 1))
     for m in (m for m in msgs if getattr(m, "markup", None) and "inline_keyboard" in m.markup):
         assert texts(m) == ["✅ Je l'ai joué"], texts(m)
     sur = next(m for m in msgs if "SÛR" in m)
-    assert str(sur).count("Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »") == 1 and "💰 mise" not in sur, sur
+    assert str(sur).count("Mise : règle ton budget du jour avec « 💰 Mon budget »") == 1 and "💰 mise" not in sur, sur
     assert all(c["stake"] is None and "cur" not in c for c in combos2)
     for m in msgs:
         no_units(m, "message du matin sans budget")
@@ -343,13 +343,13 @@ def test_buttons():
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, 1000, FCFA)]})
     todo = played.todo(DAY)
     assert texts(todo)[0] == "✅ Sûr · Je l'ai joué — 1 000 FCFA" and buttons(todo) == [f"joue|sur|{DAY}|l0"], texts(todo)       # les boutons de la liste portent son numéro de page
-    assert "mise conseillée 1 000 FCFA" in todo and "Seuls les paris que tu notes comptent" in todo, todo
+    assert "▫️ Sûr · " in todo and " · mise 1 000 FCFA" in todo and "Seuls les paris notés comptent" in todo, todo
     with Fakes() as f:
         chat.on_callback(f"joue|sur|{DAY}", 31)
         assert "ta mise sera de 1 000 FCFA" in chat.on_callback(f"joue|sur|{DAY}", 31)      # la question annonce la mise conseillée
         chat.route("5,40")
     todo = played.todo(DAY)
-    assert "✅ Sûr : joué à 5,40, mise 1 000 FCFA" in todo and buttons(todo) == [f"joue|sur|{DAY}|l0", f"annule|sur|{DAY}|l0"], todo
+    assert "✅ Sûr · joué à 5,40 · 1 000 FCFA" in todo and buttons(todo) == [f"joue|sur|{DAY}|l0", f"annule|sur|{DAY}|l0"], todo
     assert texts(todo) == ["✏️ Autre cote : Sûr", "↩️ Annuler : Sûr"], texts(todo)
     assert f.edits[-1][0] == 31 and f.last_texts() == ["✅ Joué à 5,40 · 1 000 FCFA", "✏️ Autre cote", "↩️ Annuler"]
     # ↩️ Annuler = /joue <quoi> 0 : la note tombe, « ✅ Je l'ai joué — 1 000 FCFA » revient (la mise conseillée reste)
@@ -391,12 +391,12 @@ def test_custom_is_a_note():
     assert f.last_buttons() == ["noop", f"joue|vm1|{DAY}", f"annule|vm1|{DAY}", f"xmaj|m1|{DAY}"], f.last_buttons()
     assert f.last_texts()[1:3] == ["✏️ Autre cote", "↩️ Annuler"] and money_result()[0] == 0, "pas réglé : pas encore dans le résultat"
     text = str(played.todo(DAY))
-    assert f"✅ Combi sur mesure (cote 20) : joué à 21,49, mise {money.money(item['stake'])}" in text, text
+    assert f"✅ Combi sur mesure (cote 20) · joué à 21,49 · {money.money(item['stake'])}" in text, text
     no_units(text, "Mes paris")
     # sans mise conseillée (pas de budget) : suivi, puis SEULE la mise est demandée (la cote 1xBet du combiné est connue)
     msg, _ = custom_msg(budget=False)
     no_units(msg, "combi sur mesure sans budget")
-    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg and store.load(custom.FILE, {})["items"]["m1"]["stake"] is None
+    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg and store.load(custom.FILE, {})["items"]["m1"]["stake"] is None
     with Fakes() as f:
         reply = chat.on_callback(f"cjoue|m1|{DAY}", 78)
         row = fair.load_combos()[0]
@@ -467,8 +467,9 @@ def test_no_units_anywhere():
         for m in msgs:
             no_units(m, f"matin (budget {budget})")
         for m in (m for m in msgs if "COMBINÉ" in m):
-            assert (("💰 mise : <b>" in m or "💰 Mise : <b>" in m) and "FCFA" in m) if budget else \
-                (str(m).count("Mise conseillée : règle ton budget du jour") == 1 and "💰" not in fmt.plain(m).replace("💰 Mon budget", "")), m
+            assert ("💰 Mise : <b>" in m and "FCFA" in m) if budget else \
+                (str(m).count("💰 Mise : règle ton budget du jour") == 1
+                 and "💰" not in fmt.plain(m).replace("💰 Mise : règle", "").replace("💰 Mon budget", "")), m      # sans budget : aucune autre ligne de mise
     # /top, /match, /analyse, aide, budget, bank
     store.save("today.json", {"day": DAY, "picks": [pick(i) for i in range(1, 5)], "pronos": pronos(3)})
     for cmd in ("/top", "/match Home1", "/aide", "/budget", "/bank", "/bank 5000", "/joue", "budget", "bilan"):
@@ -587,13 +588,13 @@ def test_names_in_todo():
     store.save(fair.COMBOS_FILE, [mini, real | {"min_odds": 25.1}, shots])
     money.set_daily(5000)
     text = str(played.todo(DAY))
-    assert "✅ À vérifier (cote mini 25) : joué à 23,45, mise 100 FCFA" in text, text
-    assert "✅ Aux cotes 1xBet (cote 25,1) : joué à 24,00, mise 200 FCFA" in text, text
-    assert "▫️ Tirs cadrés — cote mini 5,60 : pas noté — mise conseillée 100 FCFA" in text, text
+    assert "✅ À vérifier (cote mini 25) · joué à 23,45 · 100 FCFA" in text, text
+    assert "✅ Aux cotes 1xBet (cote 25,1) · joué à 24,00 · 200 FCFA" in text, text
+    assert "▫️ Tirs cadrés · cote mini 5,60 · mise 100 FCFA" in text, text
     assert "À vérifier (cote mini 5)" not in text, "le palier d'un combiné « tirs » garde son nom"
     no_units(text, "Mes paris")
     assert played._fair_name("5") == "À vérifier (cote mini 5)" and played._fair_name("tc5") == "Tirs cadrés" and played._fair_name("tv5") == "Tirs vers le but"
-    print("ok  7 Mes paris : « ✅ À vérifier (cote mini 25) : joué à 23,45, mise 100 FCFA », « Aux cotes 1xBet (cote 25,1) », combinés tirs gardent leur nom")
+    print("ok  7 Mes paris : « ✅ À vérifier (cote mini 25) · joué à 23,45 · 100 FCFA », « Aux cotes 1xBet (cote 25,1) », combinés tirs gardent leur nom")
 
 
 # ---------- 8. partie B : combinés et pari du jour bâtis avant la lecture de 1xBet ----------
@@ -614,14 +615,14 @@ def test_upgrade_to_xbet_prices():
     row = fair.load_combos()[0]
     assert not played.is_real(row) and "coupon" not in row
     todo0 = str(played.todo(DAY))
-    assert "À vérifier (cote mini 5)" in todo0 and "Code coupon" not in todo0, todo0
+    assert "À vérifier (cote mini 5)" in todo0 and "🎟️" not in todo0 and "<code>" not in todo0, todo0
     got = {f"m{i}" for i in range(9)}
     with Fakes(code="UPG01") as f:
         n = app._update_combos(DAY, pronos(9), at(13), got)
     assert n == 1 and len(f.sent) == 1 and f.coupons == [["m0", "m1", "m2", "m3"]], (n, f.sent, f.coupons)
     msg = f.sent[0]
     assert "💎 Ton combiné du matin est maintenant aux cotes 1xBet de 13:00, avec son code coupon" in msg, msg
-    assert "Code coupon 1xBet : <code>UPG01</code>" in msg and "💎 COMBINÉ AUX COTES 1XBET" in msg and "Cotes 1xBet de 13:00" in msg, msg
+    assert "Code : <code>UPG01</code>" in msg and "<b>💎 COMBINÉ — cote 5,77</b>" in msg and "Cotes 1xBet de 13:00" in msg, msg
     assert buttons(msg) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"] and texts(msg)[0] == "✅ Je l'ai joué — 500 FCFA", buttons(msg)
     assert "💰 Mise : <b>500 FCFA</b>" in msg
     no_units(msg, "combiné passé aux cotes 1xBet")
@@ -630,7 +631,7 @@ def test_upgrade_to_xbet_prices():
     assert row["stake"] == 500 and row["cur"] == FCFA and row["min_odds"] == round(1.55 ** 4, 2)
     assert store.load(app.COMBO_UPDATES, {})["tiers"]["5"]["total"] == round(1.55 ** 4, 3)
     todo = str(played.todo(DAY))
-    assert "Aux cotes 1xBet (cote 5,8)" in todo and "cote 1xBet 5,77 (13:00)" in todo and "Code coupon 1xBet : <code>UPG01</code>" in todo, todo
+    assert "Aux cotes 1xBet (cote 5,8)" in todo and "cote 1xBet 5,77 (13:00)" in todo and "🎟️ <code>UPG01</code>" in todo, todo
     assert chat.refresh_button("v5", DAY) == ("🎟️ Vérifier ce combiné", f"xmaj|5|{DAY}")
     # relevé suivant, rien n'a bougé : pas de second message
     with Fakes() as f:
@@ -643,7 +644,7 @@ def test_upgrade_to_xbet_prices():
     cur = [prono(0), prono(1, xodds=None, xodds0=None, xev=None, xref=None, xnone=1)] + [prono(i) for i in range(2, 9)]
     with Fakes(code="UPG02") as f:
         n = app._update_combos(DAY, cur, at(13), got)
-    assert n == 1 and "❌ Retiré : H1 – A1" in f.sent[0] and "➕ Ajouté" in f.sent[0] and "Code coupon 1xBet : <code>UPG02</code>" in f.sent[0], f.sent
+    assert n == 1 and "❌ Retiré : H1 – A1" in f.sent[0] and "➕ Ajouté" in f.sent[0] and "Code : <code>UPG02</code>" in f.sent[0], f.sent
     row = fair.load_combos()[0]
     assert played.is_real(row) and "m1|totals||3.5|Under" not in row["keys"] and 5.0 <= row["min_odds"] <= 6.5, row
     # un match pas relu : sa jambe reste « à vérifier », le combiné n'est pas renvoyé (silence)
@@ -686,7 +687,7 @@ def test_upgrade_through_refresh():
     with Fakes(code="UPG03") as f:
         app.run_xbet_refresh(now=at(15), announce=False, fetch=fake_fetch(under_px()))
     ups = [m for m in f.sent if "est maintenant aux cotes 1xBet de 15:00" in str(m)]
-    assert len(ups) == 1 and "Code coupon 1xBet : <code>UPG03</code>" in ups[0], f.sent
+    assert len(ups) == 1 and "Code : <code>UPG03</code>" in ups[0], f.sent
     row = fair.load_combos()[0]
     assert played.is_real(row) and row["coupon"] == "UPG03"
     print("ok  8 relevé complet : le combiné « à vérifier » passe aux cotes 1xBet avec son code")
@@ -724,7 +725,7 @@ def test_single_priced_at_refresh():
     msgs = [m for m in f.sent if "Le pari du jour est maintenant aux cotes 1xBet de 13:00" in str(m)]
     assert len(msgs) == 1, f.sent
     msg = msgs[0]
-    assert "Code coupon 1xBet : <code>SGL01</code>" in msg and "cote 1,80" in msg and "Cotes 1xBet de 13:00" in msg and "⭐ PARI DU JOUR" in msg, msg
+    assert "Code : <code>SGL01</code>" in msg and "cote 1,80" in msg and "Cotes 1xBet de 13:00" in msg and "⭐ PARI DU JOUR" in msg, msg
     assert buttons(msg) == [f"joue|pari|{DAY}", f"xmajr|pari|{DAY}"] and texts(msg)[0] == "✅ Je l'ai joué", buttons(msg)
     assert f.coupons.count(["e1"]) == 1
     no_units(msg, "pari du jour aux cotes 1xBet")
@@ -733,7 +734,7 @@ def test_single_priced_at_refresh():
     today = store.load("today.json", {})
     assert today["picks"][0]["xodds"] == 1.8 and today["picks"][0]["book"] == "1xBet" and today["picks"][0]["typ_odds"] == TYP, today["picks"][0]
     todo = str(played.todo(DAY))
-    assert "Pari du jour — cote 1xBet 1,80 (13:00)" in todo and "Code coupon 1xBet : <code>SGL01</code>" in todo and "pas 1xBet" not in todo, todo
+    assert "Pari du jour · cote 1xBet 1,80 (13:00)" in todo and "🎟️ <code>SGL01</code>" in todo and "pas 1xBet" not in todo, todo
     assert chat.refresh_button("pari", DAY) == ("🎟️ Vérifier ce combiné", f"xmajr|pari|{DAY}")
     # relevé suivant : déjà aux cotes 1xBet, rien de plus
     with Fakes() as f:
@@ -838,8 +839,8 @@ def test_unnoted_morning_bets_stay_tracked():
     # « Mes paris » : les trois paris non notés, avec leur code coupon et leur bouton « Vérifier ce combiné »
     todo = played.todo(DAY)
     text = str(todo)
-    assert "Sûr — cote 1xBet 5,06 (09:30)" in text and "Pari du jour — cote 1xBet 1,50 (09:30)" in text and "Aux cotes 1xBet (cote 5,8)" in text, text
-    assert text.count("Code coupon 1xBet : <code>MORN1</code>") == 2 and "Code coupon 1xBet : <code>FAIRC</code>" in text, text
+    assert "Sûr · cote 1xBet 5,06 (09:30)" in text and "Pari du jour · cote 1xBet 1,50 (09:30)" in text and "Aux cotes 1xBet (cote 5,8)" in text, text
+    assert text.count("🎟️ <code>MORN1</code>") == 2 and "🎟️ <code>FAIRC</code>" in text, text
     assert {f"xmajr|sur|{DAY}", f"xmajr|pari|{DAY}", f"xmaj|5|{DAY}"} <= set(buttons(todo)), buttons(todo)
     assert all(not b.startswith("annule|") for b in buttons(todo)), "aucun n'est noté"
     # ⚠️ les alertes veillent sur ces paris, notés ou non (le pari du jour e4 et le combiné Sûr perdent un pari chez 1xBet)
@@ -857,7 +858,7 @@ def test_unnoted_morning_bets_stay_tracked():
     px = {f"m{i}": ({} if i == 1 else {("totals", "Under", 3.5): 1.55}) for i in range(7)}
     with Fakes(code="NEWC2") as f:
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fake_fetch({k: v for k, v in px.items()}))
-    assert any("COMBINÉ À JOUR 13:00" in str(m) and "Code coupon 1xBet : <code>NEWC2</code>" in str(m) for m in f.sent), f.sent
+    assert any("COMBINÉ À JOUR 13:00" in str(m) and "Code : <code>NEWC2</code>" in str(m) for m in f.sent), f.sent
     # règlement le lendemain : les paris du matin sont réglés (1-0 / 2-0 partout : l'équipe à domicile gagne)
     after = at(8, day=2)
     home_wins = {f"e{i}": {"scores": [{"name": f"Home{i}", "score": "2"}, {"name": f"Away{i}", "score": "0"}]} for i in range(1, 7)}
@@ -988,8 +989,8 @@ def copies(msg):
 
 def test_coupon_code_and_copy_button():
     # 1. <code> partout, échappé ; bouton copy_text sans toucher aux anciens appelants
-    assert fmt.coupon_block("AB<1>&") == "\n\n🎟️ Code coupon 1xBet : <code>AB&lt;1&gt;&amp;</code>\n<i>Dans l'appli 1xBet : ticket, « Charger le coupon »</i>"
-    assert "<b>" not in fmt.coupon_block("K7Q2X").split("\n")[2]                 # Telegram ne mélange pas gras et <code>
+    assert fmt.coupon_block("AB<1>&") == "\n\n🎟️ Code : <code>AB&lt;1&gt;&amp;</code> <i>(1xBet › Ticket › Charger le coupon)</i>"
+    assert "<b>" not in fmt.coupon_block("K7Q2X")                 # Telegram ne mélange pas gras et <code>
     assert telegram.inline([[("x", {"copy_text": "C1"}), ("y", "cb"), ("z", None)]]) == {"inline_keyboard": [[
         {"text": "x", "copy_text": {"text": "C1"}}, {"text": "y", "callback_data": "cb"}, {"text": "z", "callback_data": "noop"}]]}
     assert telegram.copy_row("K7Q2X") == [[{"text": "📋 Copier le code K7Q2X", "copy_text": {"text": "K7Q2X"}}]] and telegram.copy_row(None) == []
@@ -1005,12 +1006,12 @@ def test_coupon_code_and_copy_button():
         msgs, sent_picks, sent_combos = app.build_day(picks, DAY, odds_time="09:30", fair_combos=[(5, (legs, 1.55 ** 4, 0.72 ** 4))],
                                                       fair_coupons={})
     by = {code: next(m for m in msgs if f"<code>{code}</code>" in m) for code in ("CODE-PARI", "CODE-SUR", "CODE-FAIR")}
-    assert "PARI DU JOUR" in by["CODE-PARI"] and "SÛR" in by["CODE-SUR"] and "COMBINÉ AUX COTES 1XBET" in by["CODE-FAIR"]
+    assert "PARI DU JOUR" in by["CODE-PARI"] and "SÛR" in by["CODE-SUR"] and "<b>💎 COMBINÉ — cote " in by["CODE-FAIR"]
     for code, m in by.items():
         cp = copies(m)
         assert len(cp) == 1 and cp[0] == {"text": f"📋 Copier le code {code}", "copy_text": {"text": code}}, (code, cp)
         assert m.markup["inline_keyboard"][-1] == [cp[0]], "ligne à part, en dernier"
-        assert str(m).count("Code coupon 1xBet") == 1 and f"<b>{code}</b>" not in m
+        assert str(m).count("🎟️ Code : <code>") == 1 and f"<b>{code}</b>" not in m
     assert [b["callback_data"] for row in by["CODE-SUR"].markup["inline_keyboard"] for b in row if "callback_data" in b] == [f"joue|sur|{DAY}", f"xmajr|sur|{DAY}"]
     # sans code (combiné à cote mini, ou enregistrement du ticket en échec) : aucun bouton « copier », aucun <code>
     with Fakes(code=None):
@@ -1042,10 +1043,10 @@ def test_coupon_code_and_copy_button():
             assert len(copies(f.edits[-1][1])) == 1
     # 4. « Mes paris » : plusieurs codes -> <code> seulement (pas de bouton « copier »), message HTML correctement échappé
     todo = played.todo(DAY)
-    assert isinstance(todo, telegram.Html) and "&lt;cote&gt;" in todo and "<cote>" not in todo, todo
+    assert isinstance(todo, telegram.Html) and "<" not in re.sub(r"</?(b|i|code)>", "", str(todo)), todo      # texte échappé : seules les balises HTML voulues
     for code in ("CODE-PARI", "CODE-SUR", "CODE-FAIR"):
-        assert f"Code coupon 1xBet : <code>{code}</code>" in todo
-    assert not copies(todo) and fmt.plain(todo).count("Code coupon 1xBet : CODE-") == 3 and "<code>" not in fmt.plain(todo)
+        assert f"🎟️ <code>{code}</code>" in todo
+    assert not copies(todo) and fmt.plain(todo).count("🎟️ CODE-") == 3 and "<code>" not in fmt.plain(todo)
     print("ok  11 codes coupon en <code> (échappés), « 📋 Copier le code » sur les messages à un seul code, gardé après un changement de boutons, absent sans code ni dans Mes paris")
 
 
@@ -1063,7 +1064,7 @@ def test_copy_button_on_refresh_alerts_and_custom():
     now_px = {f"e{i}": {("h2h", "HOME", None): 1.45} for i in range(1, 5)}
     with Fakes(code="VER-SUR") as f:
         out = app.refresh_real("sur", DAY, now=at(13), fetch=fake_fetch(now_px))
-    assert "Code coupon 1xBet : <code>VER-SUR</code>" in out and copies(out) == [{"text": "📋 Copier le code VER-SUR", "copy_text": {"text": "VER-SUR"}}], out.markup
+    assert "Code : <code>VER-SUR</code>" in out and copies(out) == [{"text": "📋 Copier le code VER-SUR", "copy_text": {"text": "VER-SUR"}}], out.markup
     assert [b["callback_data"] for row in out.markup["inline_keyboard"] for b in row if "callback_data" in b] == [f"joue|sur|{DAY}", f"xmajr|sur|{DAY}"]
     with Fakes(code="VER-PARI") as f:
         out = app.refresh_real("pari", DAY, now=at(13, 5), fetch=fake_fetch({"e4": {("h2h", "HOME", None): 1.45}}))
@@ -1075,7 +1076,7 @@ def test_copy_button_on_refresh_alerts_and_custom():
     # code coupon en échec : message sans bouton « copier »
     with Fakes(code=None):
         out = app.refresh_real("sur", DAY, now=at(13, 15), fetch=fake_fetch(now_px))
-    assert not copies(out) and "<code>" not in out and "Code coupon indisponible" in out
+    assert not copies(out) and "<code>" not in out and "🎟️ Code indisponible pour l'instant" in out
     # combiné à cote juste renvoyé / vérifié
     reset()
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos(7)})
@@ -1111,7 +1112,7 @@ def test_copy_button_on_refresh_alerts_and_custom():
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos()})
     with Fakes(code="CU-1") as f:
         msg = app.custom_combo([], pronos(), 20.0, DAY)
-    assert "<code>CU-1</code>" in msg and [b["text"] for row in msg.markup["inline_keyboard"] for b in row] == ["✅ Je le joue", "📋 Copier le code CU-1"]
+    assert "<code>CU-1</code>" in msg and [b["text"] for row in msg.markup["inline_keyboard"] for b in row] == ["✅ Je le joue", "🔀 Un autre sans mes matchs", "📋 Copier le code CU-1"]
     with Fakes() as f:
         chat.on_callback(f"cjoue|m1|{DAY}", 60)
     assert f.edits[-1][0] == 60 and copies(f.edits[-1][1]) == [{"text": "📋 Copier le code CU-1", "copy_text": {"text": "CU-1"}}]

@@ -174,7 +174,7 @@ def test_lag():
     assert "Home1 gagne — 1xBet paie <b>1,80</b>" in msg and "(lu à 18:00)" in msg, msg
     assert "1,90 ➜ <b>1,55</b>" in msg and "52 % ➜ 65 % de chances" in msg and "valeur <b>+17 %</b>" in msg, msg
     assert "💡 Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg and " u</b>" not in msg, msg          # sans budget : jamais d'unités
-    assert "Code coupon 1xBet : <code>K7Q2X</code>" in msg, msg
+    assert "Code : <code>K7Q2X</code>" in msg, msg
     assert len(f.coupons) == 1 and f.coupons[0][0]["xodds"] == 1.80 and f.coupons[0][0]["xref"] == [9001, 1, 0], f.coupons
     assert calls == [["e1"]], f"un seul match relu en direct : {calls}"
     # même état au passage suivant (les clôtures sont relevées de nouveau) : la même alerte n'est pas renvoyée
@@ -343,7 +343,7 @@ def test_danger_and_rise():
         assert "H7 – A7" in msg and "1xBet payait 1,55 au premier relevé du jour, il paie maintenant <b>1,70</b> (+10 %, lu à 15:00)" in msg, msg
         assert "Home4 – Away4" in msg and "1xBet payait 1,50 au premier relevé du jour, il paie maintenant <b>1,95</b> (+30 %" in msg, msg
         assert "H8" not in msg and "H9" not in msg, "cote inchangée : pas d'alerte"
-        assert msg.count("Code coupon 1xBet : <code>K7Q2X</code>") == 2 and len(f.coupons) == 2, f.coupons
+        assert msg.count("Code : <code>K7Q2X</code>") == 2 and len(f.coupons) == 2, f.coupons
         assert sorted(c[0]["xodds"] for c in f.coupons) == [1.70, 1.95], f.coupons
         assert [c for c in calls if any(i.startswith("e") for i in c)] == [["e3"]], f"seul e3 relu en direct : {calls}"
         # dédoublonnage : même relevé, même état -> rien

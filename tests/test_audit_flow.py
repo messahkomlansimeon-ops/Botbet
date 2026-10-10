@@ -148,7 +148,7 @@ def test_tracking_follows_the_sent_version():
     assert row["min_odds"] == round(1.55 ** 4, 2) and row["result"] is None
     msg = f.sent[0]
     assert "💰 Mise : <b>500 FCFA</b>" in msg and "Mise indicative" not in msg and "seulement si 1xBet paie" not in msg, msg
-    assert "Cotes 1xBet de 13:00 : vérifie qu'elles n'ont pas baissé avant de valider." in msg and "ce matin" not in msg
+    assert "Cotes 1xBet de 13:00 : vérifie-les avant de valider." in msg and "ce matin" not in msg
     # plus de « ❌ Pas joué » : « ✅ Je l'ai joué » avec la mise conseillée, puis vérifier
     assert buttons(msg) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"], buttons(msg)
     assert msg.markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué — 500 FCFA", msg.markup
@@ -157,7 +157,7 @@ def test_tracking_follows_the_sent_version():
     with Fakes() as f:
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
     assert buttons(f.sent[0]) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"] and "Mise indicative" not in f.sent[0]
-    assert "Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in f.sent[0] and f.sent[0].markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
+    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in f.sent[0] and f.sent[0].markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
     assert "mise" not in fair.load_combos()[0] or fair.load_combos()[0].get("stake") is None
     # injouable : pas de remplaçant (seulement les 4 matchs du combiné), un pari retiré
     setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)
@@ -184,7 +184,7 @@ def test_tracking_follows_the_sent_version():
     assert not done and rows[0]["result"] == "void", "un combiné mort n'est jamais réglé"
     assert app.fair_combos_report(far) == [] and settle.fair_combo_line(rows) == ""
     assert money.result({"combos": []}, [], rows)[0] == 0 and money.gain(rows[0]) is None
-    assert "plus jouable chez 1xBet (Kelly a conseillé de ne pas le jouer)" in played.todo(DAY)
+    assert "🚫 Aux cotes 1xBet" in played.todo(DAY) and ": plus jouable chez 1xBet" in played.todo(DAY), played.todo(DAY)
     # sans budget : drapeau « dead » seul, mêmes exclusions
     setup(pronos=[prono(i) for i in range(4)])
     with Fakes():
@@ -245,11 +245,11 @@ def test_texts():
     calib._memo.clear()
     legs = [prono(i) for i in range(4)]
     real = fmt.fair_combo(5.77, legs, 0.27, 0.5, stake_txt="500 FCFA", when="15:00")
-    assert "Cotes 1xBet de 15:00 : vérifie qu'elles n'ont pas baissé avant de valider." in real and "ce matin" not in real
+    assert "Cotes 1xBet de 15:00 : vérifie-les avant de valider." in real and "ce matin" not in real
     assert "💰 Mise : <b>500 FCFA</b>" in real and "seulement si 1xBet paie la cote mini" not in real, real
-    assert "relevées chez 1xBet par Kelly : vérifie" in fmt.fair_combo(5.77, legs, 0.27, 0.5)
+    assert "🕒 Cotes 1xBet : vérifie-les avant de valider." in fmt.fair_combo(5.77, legs, 0.27, 0.5)
     mixed = fmt.fair_combo(5.0, legs[:3] + [prono(4, xodds=None, xref=None)], 0.27, 0.5, stake_txt="500 FCFA")
-    assert "(seulement si 1xBet paie la cote mini)" in mixed and "À VÉRIFIER" in mixed
+    assert "(si 1xBet paie la cote mini)" in mixed and "À VÉRIFIER" in mixed
     # en-tête du matin
     money.set_daily(5000)
     store.save("bets.json", {"picks": [], "combos": []})
@@ -259,7 +259,7 @@ def test_texts():
               "sport_key": "soccer_epl"} for i in range(8)]
     with Fakes():
         msgs, _, _ = app.build_day(picks, date(2030, 1, 1), fair_combos=[(5, (legs, 5.77, 0.27))], odds_time="04:12")
-        head, combo = msgs[0], next(m for m in msgs if "COMBINÉ AUX COTES 1XBET" in m)
+        head, combo = msgs[0], next(m for m in msgs if "<b>💎 COMBINÉ — cote 5,77</b>" in m)
         assert "💎 1 combiné aux cotes 1xBet" in head and "code coupon" in head and "cotes de Kelly, pas du bookmaker" not in head, head
         assert "Cotes 1xBet de 04:12" in combo and "ce matin" not in combo and f"xmaj|5|{DAY}" in buttons(combo)
         msgs, _, _ = app.build_day(picks, date(2030, 1, 1), fair_combos=[(5, (legs[:3] + [prono(4, xodds=None, xref=None)], 5.0, 0.27))])

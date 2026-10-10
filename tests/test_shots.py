@@ -50,8 +50,8 @@ def test_shots_combos_and_buttons():
     store.save("bets.json", {"picks": [], "combos": []})
     msgs, _, _ = app.build_day([], date.fromisoformat(DAY), pronos=pronos, fair_combos=list(plan.items()))
     titles = [m.split("\n")[0] for m in msgs]
-    assert "<b>🎯 COMBINÉ TIRS CADRÉS — À VÉRIFIER CHEZ 1XBET</b>" in titles, titles
-    assert "<b>🎯 COMBINÉ TIRS VERS LE BUT — À VÉRIFIER CHEZ 1XBET</b>" in titles, titles
+    assert f"<b>🎯 COMBINÉ TIRS CADRÉS — cote mini {fmt.odds_txt(plan['tc5'][1])} · À VÉRIFIER CHEZ 1XBET</b>" in titles, titles
+    assert f"<b>🎯 COMBINÉ TIRS VERS LE BUT — cote mini {fmt.odds_txt(plan['tv5'][1])} · À VÉRIFIER CHEZ 1XBET</b>" in titles, titles
     fair.record_combos(list(plan.items()), DAY)
     t = played.find("vtc5", DAY)
     assert not isinstance(t, str) and t is not None and "Tirs cadrés" in played.todo(DAY), t

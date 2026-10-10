@@ -375,7 +375,7 @@ def test_display():
 def test_commands_numbers_guard():
     wipe()
     store.save("today.json", {"day": DAY, "picks": [leg(1, 1.9, 0.6, 0.08)], "pronos": []})
-    assert app.handle_command("/combi inf") == "Exemple : /combi 30" and app.handle_command("/combi nan") == "Exemple : /combi 30"
+    assert app.handle_command("/combi inf") == "Exemple : /combi 30, ou /combi 20 tirs fautes" and app.handle_command("/combi nan") == "Exemple : /combi 30, ou /combi 20 tirs fautes"
     for arg in ("", " inf", " -5", " 50000"):                  # /bank ne règle plus rien : Kelly travaille en FCFA avec le budget du jour
         r = app.handle_command("/bank" + arg)
         assert "ne suit plus de bankroll en unités" in r and "FCFA" in r and "Mon budget" in r and not r.startswith("Montant"), r

@@ -15,7 +15,7 @@ seules jambes de valeur positive (espérance du produit >= 1) ; s'il n'y en a pa
 import math
 
 from . import config as C, odds as O
-from .prematch import mispriced
+from .prematch import CARDS, CORNERS, mispriced
 
 NEG = float("-inf")
 EPS = 1e-4                  # à probabilité égale, on préfère moins de jambes
@@ -174,12 +174,15 @@ def _rebuild(choices, kdim, k, b, weights):
     return out
 
 
-def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None):
+def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs=None):
     """Combiné de cote totale dans [min_odds, max_odds] qui maximise la probabilité (produit des probas), au plus une
-    jambe par match, au moins 2 jambes ; `max_legs` (C.MAX_LEGS) n'est qu'une borne de sécurité. -> (jambes triées par
-    heure, cote, proba) ou None. Optimisation exacte à la discrétisation près (pas `step` en log-cote), puis vérification de
-    la vraie cote : jamais de combiné hors fourchette."""
+    jambe par match, au moins 2 jambes ; `max_legs` (C.MAX_LEGS par défaut, une borne de sécurité ; ou le nombre de paris choisi : « combi 20 max 4 »)
+    et `min_legs` (« combi 20 pile 4 » : min = max) bornent le nombre de jambes. -> (jambes triées par heure, cote, proba) ou None. Optimisation exacte à
+    la discrétisation près (pas `step` en log-cote), puis vérification de la vraie cote : jamais de combiné hors fourchette."""
     max_legs = max_legs or C.MAX_LEGS
+    min_legs = max(2, min_legs or 2)
+    if min_legs > max_legs:
+        return None
     max_odds = max_odds or min_odds * 2
     if not 0 < min_odds <= max_odds or max_odds <= 1.0:      # un combiné d'au moins 2 jambes (cote > 1 chacune) ne tient jamais sous 1 : pas de calcul
         return None
@@ -202,7 +205,7 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None):
         cands = sorted(((dp[k][b], b, k) for k in ks for b in range(lo_b, bmax + 1) if dp[k][b] != NEG), reverse=True)
         for _, b, k in cands[:60]:
             idx = _rebuild(choices, kdim, k, b, weights)
-            if not 2 <= len(idx) <= max_legs:
+            if not min_legs <= len(idx) <= max_legs:
                 continue
             odds = math.prod(legs[j]["odds"] for j in idx)
             if min_odds <= odds <= max_odds:
@@ -210,12 +213,12 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None):
         return None
 
     dp, choices = _dp(items, weights, lps, bmax, 3, True)
-    best = finish(dp, choices, 3, (2,))
+    best = finish(dp, choices, 3, (2,)) if min_legs == 2 else None       # « pile N » : le nombre de jambes est compté dans l'état tout de suite
     if best is None:
         # Les meilleurs combinés dépassent peut-être la borne de sécurité `max_legs` : on la compte alors dans l'état.
         kdim = max_legs + 1
         dp, choices = _dp(items, weights, lps, bmax, kdim, False)
-        best = finish(dp, choices, kdim, range(2, kdim))
+        best = finish(dp, choices, kdim, range(min_legs, kdim))
     if best is None:
         return None
     best[0].sort(key=lambda c: c.get("commence", ""))
@@ -262,11 +265,45 @@ def plan(picks, tiers=None, usage=None, rejected=None):
     return out
 
 
-def custom(picks, target, usage=None):
+# ---------- types de paris d'un combiné sur mesure (« combi 20 tirs fautes », cases à cocher après la cote) ----------
+# (code, libellé, préfixes de marché) : un type = des marchés qui commencent par l'un de ses préfixes ; plusieurs types = l'union. Les préfixes
+# passent tels quels aux filtres existants (patch_combo, _live_fair : « prefix ») : « Vérifier ce combiné » ne remplace un pari que par un du même type.
+KINDS = (("v", "Victoire", ("h2h",)), ("dc", "Double chance", ("double_chance",)), ("b", "Buts", ("totals", "team_totals")),
+         ("btts", "Les 2 marquent", ("btts",)), ("co", "Corners", (CORNERS,)), ("ca", "Cartons", (CARDS,)),
+         ("t", "Tirs vers le but", ("team_shots_",)), ("tc", "Tirs cadrés", ("team_sot_",)), ("f", "Fautes", ("team_fouls_",)),
+         ("to", "Touches", ("team_throws_",)), ("hj", "Hors-jeu", ("team_offsides_",)), ("j", "Joueurs", ("player_",)))
+KIND_CODES = tuple(k for k, _, _ in KINDS)
+
+
+def kinds_prefix(codes):
+    """Préfixes de marché des types `codes` (tuple, pour str.startswith) ; None = tous les paris."""
+    codes = set(codes or ())
+    return tuple(p for k, _, ps in KINDS if k in codes for p in ps) or None
+
+
+def kinds_label(codes):
+    """« tirs vers le but, fautes » (ordre de KINDS) ; '' = tous les paris."""
+    codes = set(codes or ())
+    return ", ".join(label.lower() for k, label, _ in KINDS if k in codes)
+
+
+def kind_of(market):
+    """Code du type d'un marché (« team_fouls_total » -> « f ») ; None hors des types (handicap...)."""
+    return next((k for k, _, ps in KINDS if market.startswith(ps)), None)
+
+
+def _keep(legs, prefix):
+    return legs if not prefix else [c for c in legs if c["market"].startswith(prefix)]
+
+
+def custom(picks, target, usage=None, prefix=None, max_legs=None, min_legs=None):
     """/combi <cote> : combiné à la cote visée (± C.CUSTOM_TOLERANCE) sur les jambes de qualité encore disponibles ; celui
-    d'espérance positive s'il existe, sinon le plus probable (demandé explicitement : l'appelant prévient)."""
-    legs = (usage or Usage()).filter(make_pool(picks))
+    d'espérance positive s'il existe, sinon le plus probable (demandé explicitement : l'appelant prévient). `prefix` : types de paris
+    choisis (kinds_prefix), None = tous."""
+    legs = _keep((usage or Usage()).filter(make_pool(picks)), prefix)
     lo, hi = target * (1 - C.CUSTOM_TOLERANCE), target * (1 + C.CUSTOM_TOLERANCE)
+    if max_legs or min_legs:                        # nombre de paris choisi : l'optimiseur le respecte (espérance dite par l'appelant)
+        return best_combo(legs, lo, hi, max_legs=max_legs, min_legs=min_legs)
     combo, _ = best_with_ev(legs, lo, hi)
     return combo or best_combo(legs, lo, hi)
 
@@ -300,16 +337,22 @@ def viable(c):
     Famille où l'ensemble décide (ensemble.is_active : buts, 1N2...) : c["prob"] est la proba RETENUE p_ens, donc le seuil C.VIABLE_MIN_P s'applique à elle ;
     le veto (c["xveto"]) et une cote 1xBet sous la cote mini relevée (c["min_odds"], (1 + marge) / p_ens) écartent le pari comme avant. La référence c["base"] est
     une proba du MODÈLE (un match moyen vu par Kelly) : elle se compare à la proba du modèle (c["p_model"]), pas à p_ens (voir ensemble.model_prob)."""
-    from . import calib, ensemble
-    if c.get("prob", 0) < C.VIABLE_MIN_P or c.get("conf", 1.0) < C.VIABLE_MIN_Q:
-        return False
-    if c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N:
+    from . import ensemble
+    if c.get("prob", 0) < C.VIABLE_MIN_P or not data_ok(c):
         return False
     if c.get("base") is not None and ensemble.model_prob(c) < c["base"]:
         return False
     if c.get("xodds") and c["xodds"] < c.get("min_odds", 0):              # 1xBet paie moins que la cote mini de Kelly : pas joué
         return False
-    if c.get("xnone"):                                                    # match trouvé chez 1xBet, mais ce pari n'y existe pas
+    return not c.get("xnone")                                             # match trouvé chez 1xBet, mais ce pari n'y existe pas (pas encore ouvert)
+
+
+def data_ok(c):
+    """Kelly connaît assez les équipes du pronostic `c` : données de qualité suffisante (C.VIABLE_MIN_Q), assez de matchs récents pour les deux
+    équipes (C.VIABLE_MIN_N), et marché ou championnat où elle ne s'est pas montrée trop sûre d'elle (calib, C.VIABLE_MIN_K). Partie « données »
+    de viable, reprise telle quelle par le combiné audacieux (app._bold_pools), qui assouplit la probabilité mais jamais ces contrôles."""
+    from . import calib
+    if c.get("conf", 1.0) < C.VIABLE_MIN_Q or (c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N):
         return False
     return calib.factor(c["market"], sport_key=c.get("sport_key")) >= C.VIABLE_MIN_K
 
@@ -342,10 +385,12 @@ def fair_legs(pronos):
             if fair_eligible(c) and viable(c) and (c.get("xodds") or not real)]
 
 
-def _fair_best(legs, lo, hi):
-    """Combiné à cote juste : d'abord avec les seules jambes aux cotes 1xBet relevées par Kelly (rien d'inventé), sinon avec toutes."""
+def _fair_best(legs, lo, hi, max_legs=None, min_legs=None):
+    """Combiné à cote juste : d'abord avec les seules jambes aux cotes 1xBet relevées par Kelly (rien d'inventé), sinon avec toutes. `max_legs` /
+    `min_legs` : nombre de paris choisi (voir best_combo)."""
     real = [c for c in legs if c.get("xodds")]
-    return best_combo(real, lo, hi) or (best_combo(legs, lo, hi) if len(real) < len(legs) else None)     # mêmes jambes : inutile de refaire
+    kw = {"max_legs": max_legs, "min_legs": min_legs}
+    return best_combo(real, lo, hi, **kw) or (best_combo(legs, lo, hi, **kw) if len(real) < len(legs) else None)     # mêmes jambes : inutile de refaire
 
 
 def _carried(l, by_key):
@@ -466,17 +511,40 @@ def fair_stats_window(pronos, usage=None, accept=None):
     return best_combo(legs, lo, hi)
 
 
-def fair_custom(pronos, target, usage=None):
+def reach(legs, max_legs=None):
+    """Plus haute cote atteignable avec au plus `max_legs` paris (un par match, la meilleure cote de chacun, les plus hautes d'abord) ; 1 sans 2 matchs."""
+    best = {}
+    for c in legs:
+        best[c["id"]] = max(best.get(c["id"], 1.0), c["odds"])
+    top = sorted(best.values(), reverse=True)[:max_legs or None]
+    return math.prod(top) if len(top) >= 2 else 1.0
+
+
+def kinds_available(picks, pronos):
+    """Types de paris jouables aujourd'hui pour un combiné sur mesure -> {code: nombre de matchs} (jambes de qualité des paris réels et
+    pronostics solides, ceux aux cotes 1xBet dès que 1xBet en a donné), pour les cases à cocher. Les paris réels ne comptent que si
+    app.custom_combo peut les proposer (1xBet les a chiffrés, ou 1xBet n'a rien chiffré du tout)."""
+    xp, xk = any(c.get("xodds") for c in pronos), any(c.get("xodds") for c in picks)
+    ids = {}
+    for c in (make_pool(picks) if picks and (xk or not xp) else []) + fair_legs(pronos):
+        k = kind_of(c["market"])
+        if k:
+            ids.setdefault(k, set()).add(c["id"])
+    return {k: len(v) for k, v in ids.items()}
+
+
+def fair_custom(pronos, target, usage=None, prefix=None, max_legs=None, min_legs=None):
     """/combi <cote> sans cotes réelles : combiné à cote juste dont la cote mini est au moins la cote visée (jusqu'à
-    + C.CUSTOM_TOLERANCE) : on ne promet jamais moins que demandé, puisque c'est un minimum."""
-    legs = (usage or Usage()).filter(fair_legs(pronos))
-    return _fair_best(legs, target, target * (1 + C.CUSTOM_TOLERANCE))
+    + C.CUSTOM_TOLERANCE) : on ne promet jamais moins que demandé, puisque c'est un minimum. `prefix` : types de paris choisis (filtrés
+    APRÈS fair_legs, qui regarde TOUS les pronostics pour savoir si 1xBet a donné des cotes aujourd'hui)."""
+    legs = _keep((usage or Usage()).filter(fair_legs(pronos)), prefix)
+    return _fair_best(legs, target, target * (1 + C.CUSTOM_TOLERANCE), max_legs, min_legs)
 
 
-def fair_shortfall(pronos, target):
+def fair_shortfall(pronos, target, prefix=None):
     """Ce qui manque pour un combiné à cote juste de cote `target` : {matches, legs, best_total, need} (matchs avec un
-    pronostic solide, meilleure cote mini atteignable avec tous, nombre approximatif de matchs nécessaires)."""
-    legs = fair_legs(pronos)
+    pronostic solide, meilleure cote mini atteignable avec tous, nombre approximatif de matchs nécessaires). `prefix` : voir fair_custom."""
+    legs = _keep(fair_legs(pronos), prefix)
     best = {}
     for c in legs:
         if c["id"] not in best or c["prob"] > best[c["id"]]["prob"]:

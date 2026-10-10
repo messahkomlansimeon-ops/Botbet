@@ -385,6 +385,9 @@ def live_check(ids, now=None, fetch=None, fresh_min=None):
         return found
     if sel:
         apply(sel, fetch=run)
+        for c in sel:                               # l'heure de SA cote (fmt.pronos, fraîcheur de la fenêtre des stats) : celle de cette relecture
+            if c["id"] in got and c.get("xodds"):
+                c["xat"] = now.strftime("%H:%M")
         store.save("today.json", today)
     return pronos, got, now.strftime("%H:%M")
 

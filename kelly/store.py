@@ -15,7 +15,7 @@ from contextlib import closing, contextmanager
 DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DB_FILE = "kelly.db"
 BACKUP_DIR = "sauvegarde"
-NO_EXPORT = ("strength_",)      # caches recalculés à partir des matchs : pas dans la sauvegarde
+NO_EXPORT = ("strength_", "progress.json", "telegram_later.json")      # caches recalculés, progression du passage en cours, messages en attente : pas dans la sauvegarde
 NOT_DOCS = ("stats_cache.json",)  # fichier lu directement par stats.py (tests, --sample) : jamais importé
 
 

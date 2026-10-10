@@ -62,7 +62,7 @@ NO_BUDGET = "règle ton budget du jour avec « 💰 Mon budget »"      # à la 
 
 def no_stake_line():
     """Une ligne (une fois par message) à la place de la mise conseillée quand il n'y a pas de budget du jour."""
-    return i("💡 Mise conseillée : " + esc(NO_BUDGET))
+    return i("💰 Mise : " + esc(NO_BUDGET))
 
 
 def signed(x, suffix=" u"):
@@ -225,17 +225,26 @@ def opinion_line(c):
     return i(f"📊 {esc(txt)}") if txt else ""
 
 
+def x_prob(c):
+    """Probabilité de 1xBet sans marge d'un pari : p_x (ensemble), sinon xp (relevé 1xBet), sinon px (live) ; None si inconnue."""
+    return next((c[k] for k in ("p_x", "xp", "px") if c.get(k) is not None), None)
+
+
+def chances_line(c):
+    """« Kelly 67 % · 1xBet 48 % » (en italique, indentée) : les chances retenues par Kelly et, si on la connaît, celle de 1xBet sans marge."""
+    px = x_prob(c)
+    return "   " + i(f"Kelly {pct(c['prob'])}" + (f" · 1xBet {pct(px)}" if px is not None else ""))
+
+
 def leg(n, c, reason=None, price=None):
-    """Bloc d'une jambe : le match, le pari et sa cote, la raison (une information par ligne). `price` : libellé de la cote (price_txt)
-    à la place de la cote en gras."""
+    """Bloc compact d'une jambe : le match ; le pari et sa cote ; les chances (Kelly / 1xBet) ; la raison s'il y en a une. `price` : libellé de la
+    cote (price_txt) à la place de la cote en gras."""
     note = best_note(c)
-    lines = [_match_line(n, c), f"👉 {esc(c['pick'])} — {price or b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else "")]
-    ens = opinion_line(c)
-    if ens:
-        lines.append(ens)
+    lines = [_match_line(n, c), f"   {esc(c['pick'])} · {price or b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else ""),
+             chances_line(c)]
     why = why_line(c, reason)
     if why:
-        lines.append(f"💡 {i(esc(why))}")
+        lines.append(f"   💡 {i(esc(why))}")
     return "\n".join(lines)
 
 
@@ -253,16 +262,15 @@ def coupon_block(coupon, retry=None):
     """Code coupon 1xBet d'un combiné ou d'un pari (xbet.save_coupon), à charger dans l'appli (en <code>, à copier d'un appui) ; '' sans code. `retry` : pari qui devait
     avoir son code (toutes les jambes lues chez 1xBet) mais dont l'enregistrement a échoué -> une ligne dit quoi faire (« touche … »)."""
     if coupon:
-        return f"\n\n🎟️ Code coupon 1xBet : {code(coupon)}\n" + i("Dans l'appli 1xBet : ticket, « Charger le coupon »")
-    return "\n\n" + i(f"Code coupon indisponible pour l'instant : {esc(retry)}") if retry else ""
+        return f"\n\n🎟️ Code : {code(coupon)} " + i("(1xBet › Ticket › Charger le coupon)")
+    return "\n\n" + i(f"🎟️ Code indisponible pour l'instant : {esc(retry)}") if retry else ""
 
 
 def xbet_note(legs, when=None):
     """Pied d'un pari réel dont toutes les cotes sont celles de 1xBet (xprice.price_picks) ; '' sinon. `when` : heure « HH:MM » du relevé."""
     if not legs or not all(c.get("xodds") for c in legs):
         return ""
-    return "\n\n" + i(f"💎 Cotes 1xBet de {esc(when)} : vérifie qu'elles n'ont pas baissé avant de valider." if when else
-                       "💎 Cotes relevées chez 1xBet par Kelly : vérifie qu'elles n'ont pas baissé avant de valider.")
+    return "\n" + i(f"🕒 Cotes 1xBet de {esc(when)} : vérifie-les avant de valider." if when else "🕒 Cotes 1xBet : vérifie-les avant de valider.")
 
 
 def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=None, coupon=None, when=None, retry=None):
@@ -272,20 +280,17 @@ def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=No
     aux cotes 1xBet), `when` : heure « HH:MM » de ces cotes, `retry` : voir coupon_block."""
     reasons = reasons or {}
     head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
-            f"🎯 {len(picks)} paris · {pct(prob)} de chances",
-            f"📈 {expect(prob, odds_total).capitalize()}" + (f" · 💰 mise : {b(esc(stake_txt))}" if stake_txt else "")]
-    if not stake_txt:
-        head.append(no_stake_line())
+            f"🎯 {len(picks)} paris · {pct(prob)} de chances · {expect(prob, odds_total)}",
+            f"💰 Mise : {b(esc(stake_txt))}" if stake_txt else no_stake_line()]
     legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(legs) + coupon_block(coupon, retry) + xbet_note(picks, when))
+    return Html("\n".join(head) + "\n\n" + "\n".join(legs) + coupon_block(coupon, retry) + xbet_note(picks, when))
 
 
 def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None, when=None, retry=None):
     """Pari du jour : une seule jambe (et sa mise conseillée sur le budget du jour, `stake_txt`, sinon la ligne « règle ton budget »).
     `coupon` / `when` / `retry` : voir combo."""
-    head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances" + (f" · 💰 mise : {b(esc(stake_txt))}" if stake_txt else "")]
-    if not stake_txt:
-        head.append(no_stake_line())
+    head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances",
+            f"💰 Mise : {b(esc(stake_txt))}" if stake_txt else no_stake_line()]
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + coupon_block(coupon, retry) + xbet_note([c], when))
 
 
@@ -313,11 +318,10 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
         when = next(iter(stamps))                      # toutes lues à la même heure : c'est elle, même si un relevé plus récent a eu lieu ailleurs
     stamp = f" Cotes 1xBet de {when}." if when and priced and not partial else ""
     lines = [b(title or "🎲 Pronostics Kelly"),
-             i(esc(intro) + esc(stamp) if intro else "Le meilleur pronostic de chaque match, s'il est solide. "
-               + ("💎 = cote 1xBet relevée par Kelly " + ("(relevé partiel : l'heure de lecture est indiquée pour chaque pari)" if partial else
-                                                          f"à {esc(when)}" if when else "aujourd'hui")
-                  + " et assez haute pour jouer (vérifie qu'elle n'a pas baissé). " + _legend() if priced else "")
-               + ("« mini » : à comparer chez 1xBet, joue seulement si la cote est au moins celle indiquée." if unpriced else ""))]
+             i(esc(intro) + esc(stamp) if intro else
+               ("💎 = cote 1xBet " + ("(relevé partiel : heure sur chaque pari)" if partial else f"de {esc(when)}" if when else "du jour")
+                + " assez haute pour jouer." if priced else "")
+               + (" « mini » : joue seulement si 1xBet paie au moins cette cote." if unpriced else "")).strip()]
     by = {}
     for c in shown:
         by.setdefault(c["id"], []).append(c)
@@ -326,17 +330,16 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
         lines.append(_match_line(None, cs[0]))
         for c in cs:
             q = c.get("conf")
-            data = "" if q is None else (" · données solides" if q >= 0.4 else " · données correctes")
+            data = " · données moyennes" if q is not None and q < 0.4 else ""
+            px = x_prob(c)
+            odds_vs = f" · 1xBet {pct(px)}" if px is not None else ""
             if c.get("xodds"):
                 at = f" (lue à {esc(c.get('xat') or when)})" if partial and (c.get("xat") or when) else ""
-                lines.append(f"💎 {esc(c['pick'])} — cote 1xBet {b(num(c['xodds']))}{at}")
-                lines.append(i(f"   {pct(c['prob'])} de chances{data} · valeur {c['xev'] * 100:+.0f} %"))
+                lines.append(f"💎 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
+                lines.append(i(f"   Kelly {pct(c['prob'])}{odds_vs} · valeur {c['xev'] * 100:+.0f} %{data}"))
             else:
-                lines.append(f"👉 {esc(c['pick'])} — mini {b(num(c['min_odds']))}")
-                lines.append(i(f"   {pct(c['prob'])} de chances{data}"))
-            ens = opinion_line(c)
-            if ens:
-                lines.append("   " + ens)
+                lines.append(f"👉 {esc(c['pick'])} · mini {b(num(c['min_odds']))}")
+                lines.append(i(f"   Kelly {pct(c['prob'])}{data}"))
     if len(items) > len(shown):
         lines += ["", i(f"+ {len(items) - len(shown)} autres : écris un nom d'équipe pour voir un match")]
     return Html("\n".join(lines))
@@ -378,13 +381,9 @@ def combo_changes(removed, added, changed=()):
 
 
 def fair_leg(n, c):
-    """Jambe d'un combiné à cote juste : match, pari, cote minimale à exiger chez 1xBet et chances selon Kelly."""
-    chances = i(f"({pct(c['prob'])} de chances)")
-    ens = opinion_line(c)
-    if c.get("xodds"):
-        return "\n".join([_match_line(n, c), f"💎 {esc(c['pick'])}", f"✔️ Cote 1xBet {b(num(c['xodds']))}  {chances}"] + ([ens] if ens else []))
-    return "\n".join([_match_line(n, c), f"👉 {esc(c['pick'])}", f"✔️ Joue si 1xBet paie au moins {b(num(c['min_odds']))}  {chances}"]
-                      + ([ens] if ens else []))
+    """Jambe compacte d'un combiné à cote juste : le match ; le pari et sa cote 1xBet (ou la cote mini à exiger) ; les chances (Kelly / 1xBet)."""
+    price = b(num(c["xodds"])) if c.get("xodds") else f"joue si ≥ {b(num(c['min_odds']))}"
+    return "\n".join([_match_line(n, c), f"   {esc(c['pick'])} · {price}", chances_line(c)])
 
 
 def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, coupon=None, when=None, retry=None, stale=False):
@@ -399,18 +398,14 @@ def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, c
     old = real and stale
     if old:                                          # jamais le titre « aux cotes 1xBet » sans dire de quand elles datent
         tail = "COTES 1XBET DU DERNIER RELEVÉ" + (f" ({when})" if when else "")
-    head = [b(f"{title} — {tail}" if title else (f"💎 COMBINÉ — {tail}" if old else "💎 COMBINÉ AUX COTES 1XBET" if real else
-                                                    "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")),
-            f"🎯 {'Cote' if real else 'Cote mini'} {b(odds_txt(min_total))} · {len(picks)} paris · {pct(prob)} de chances",
-            (f"💰 Mise : {b(esc(stake_txt))}" + ("" if real else f" {i('(seulement si 1xBet paie la cote mini)')}") if stake_txt else
-             no_stake_line())]
-    foot = i(f"💎 Cotes 1xBet du dernier relevé ({esc(when)}) : elles ont pu baisser depuis, vérifie-les avant de valider." if old and when else
-             "💎 Cotes 1xBet du dernier relevé : elles ont pu baisser depuis, vérifie-les avant de valider." if old else
-             f"💎 Cotes 1xBet de {esc(when)} : vérifie qu'elles n'ont pas baissé avant de valider." if real and when else
-             "💎 Cotes relevées chez 1xBet par Kelly : vérifie qu'elles n'ont pas baissé avant de valider." if real else
-             ("⚠️ Kelly n'a pas vu toutes les cotes de 1xBet : " if any(c.get("xodds") for c in picks) else
-              "⚠️ Kelly n'a pas vu les cotes de 1xBet : ") + "joue seulement si CHAQUE pari atteint sa cote mini "
-             f"(la cote totale sera alors d'au moins {odds_txt(min_total)}), sinon passe ton chemin.")
-    c_line = coupon_block(coupon, retry)
-    return Html("\n".join(head) + "\n\n" + "\n\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1))
-                + c_line + "\n\n" + foot)
+    name = title or ("💎 COMBINÉ" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")
+    head = [b(f"{name} — {'cote' if real else 'cote mini'} {odds_txt(min_total)}" + (" · " + tail if old or (title and not real) else "")),
+            f"🎯 {len(picks)} paris · {pct(prob)} de chances",
+            (f"💰 Mise : {b(esc(stake_txt))}" + ("" if real else f" {i('(si 1xBet paie la cote mini)')}") if stake_txt else no_stake_line())]
+    foot = i(f"🕒 Cotes du dernier relevé ({esc(when)}) : 1xBet ne répond pas, vérifie-les avant de valider." if old and when else
+             "🕒 Cotes du dernier relevé : 1xBet ne répond pas, vérifie-les avant de valider." if old else
+             f"🕒 Cotes 1xBet de {esc(when)} : vérifie-les avant de valider." if real and when else
+             "🕒 Cotes 1xBet : vérifie-les avant de valider." if real else
+             f"⚠️ Joue seulement si chaque pari atteint sa cote mini (au total, au moins {odds_txt(min_total)}).")
+    return Html("\n".join(head) + "\n\n" + "\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1))
+                + coupon_block(coupon, retry) + "\n" + foot)

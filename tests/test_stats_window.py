@@ -5,6 +5,7 @@ Hors ligne : aucun réseau (faux relevé 1xBet, faux Telegram, faux coupon). Lan
 import copy
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -23,6 +24,10 @@ import requests  # noqa: E402
 
 from kelly import app, calib, chat, combos as CB, config as C, custom, fair, fmt, money, played, statswindow, store, telegram, xprice  # noqa: E402,F401
 from kelly.sources import fmmatch, http, state, xbet  # noqa: E402
+
+# la mécanique (bornes, fraîcheur, plafonds, combinés) est testée sur une fenêtre de 4 h relue chaque heure ; la fenêtre large par défaut (24 h, relue
+# toutes les 3 h de loin) est testée dans tests/test_pending_stats.py
+C.STATS_WINDOW_MAX_H, C.STATS_WINDOW_NEAR_H = 4, 4
 
 DAY = "2026-10-09"
 NOW = datetime(2026, 10, 9, 17, 5, tzinfo=timezone.utc)
@@ -189,7 +194,7 @@ def test_selection_caps():
     old = C.STATS_WINDOW_MAX_MATCHES
     try:
         C.STATS_WINDOW_MAX_MATCHES = 2
-        assert [m for m, _ in statswindow.select(pr, NOW, doc)] == ["M1", "M2"], "au plus 2 matchs par passage : ceux qui ont le plus de pronostics stats"
+        assert [m for m, _ in statswindow.select(pr, NOW, doc)] == ["M1", "M2"], "au plus 2 matchs par passage : les plus proches du coup d'envoi (M1 18:00, M2 19:30)"
         C.STATS_WINDOW_MAX_MATCHES = 8
         d = copy.deepcopy(doc)
         d["reads"] = {"M1": {"n": C.STATS_WINDOW_TRIES}, "M2": {"miss": C.STATS_WINDOW_MISSES}, "M4": {"n": 1, "at": (NOW - timedelta(minutes=10)).isoformat()},
@@ -273,7 +278,7 @@ def test_combo_sent_once_with_coupon_and_tracking():
     cmb, lst = window_msgs(sent)
     assert len(cmb) == 1 and rep["combo"] == "ts5w1", (rep, [str(m)[:60] for m in sent])
     m = cmb[0]
-    assert "<b>🧮 COMBINÉ STATS — COTES 1XBET</b>" in m and "CODE1" in m and "viennent de s'ouvrir" in m and "Cotes 1xBet de 17:05" in m, m
+    assert re.search(r"<b>🧮 COMBINÉ STATS — cote \d+,\d+</b>", m) and "CODE1" in m and "viennent de s'ouvrir" in m and "Cotes 1xBet de 17:05" in m, m
     assert coupons == [len(store.load(fair.COMBOS_FILE, [])[0]["legs"])] and coupons[0] >= 2
     assert "💰 Mise : <b>" in m and "FCFA" in m, "mise conseillée du budget du jour"
     rows = store.load(fair.COMBOS_FILE, [])
@@ -409,7 +414,7 @@ def test_announce_dedup_and_caps():
         rep, sent, _ = with_fakes(lambda: app.run_stats_window(NOW, fetch=Fx()))
         _, lst = window_msgs(sent)
         assert len(lst) == 1 and lst[0].count("💎 ") == 3 and rep["announced"] == 3, lst
-        assert "cote 1xBet" in lst[0] and "Cotes 1xBet de 17:05" in lst[0]
+        assert len(re.findall(r"\n💎 [^\n]+ · <b>\d+,\d+</b>\n", lst[0])) == 3 and "Cotes 1xBet de 17:05" in lst[0], lst[0]      # chaque pari à sa cote 1xBet
         slots = statswindow.load(DAY)["announced"]
         today = store.load("today.json", {})
         assert len(slots) == 3 and len({s.split("|")[0] for s in slots}) == 3, "un pari stats par match"
@@ -571,7 +576,7 @@ def test_combi_n_uses_window_priced_legs():
     assert live3.calls and live3.calls[0]["kw"].get("live") is True, live3.calls
     stat_ids = {l["id"] for l in CB.fair_custom(pr1, 5)[0] if statswindow.is_stat(l)}
     assert stat_ids and all(live3.calls[0]["wanted"][i] & set(STAT_MARKETS) for i in stat_ids), (stat_ids, live3.calls[0]["wanted"])
-    assert "CODE9" in str(reply) and "aux cotes 1xBet" in str(reply), reply
+    assert "CODE9" in str(reply) and "<b>💎 COMBINÉ — cote " in str(reply) and "🕒 Cotes 1xBet de " in str(reply), reply
     # xprice.live_check directement (boutons « Vérifier ce combiné » et « combi N »)
     live2 = Fx()
     xprice.live_check({"M1", "M4"}, NOW + timedelta(minutes=3), fetch=live2)
@@ -651,7 +656,7 @@ def test_data_budget_and_real_requests():
     assert fx.calls, "sous le seuil : relecture"
     # estimation du pire cas (README) : STATS_WINDOW_DAY_READS relectures par jour, chacune avec les 5 familles stats ouvertes
     worst_day = statswindow.estimate_kb(C.STATS_WINDOW_DAY_READS, 5) / 1000
-    assert worst_day < 2.0 and worst_day * 31 < C.XBET_MONTH_MB * 0.85, (worst_day, worst_day * 31)
+    assert worst_day < 8.0 and worst_day * 31 < C.XBET_MONTH_MB * 0.85 * C.STATS_WINDOW_MONTH_PCT / 100, (worst_day, worst_day * 31)
     print(f"ok  requêtes réelles limitées (≈ {kb:.0f} Ko ce passage), plafond mensuel ; pire cas {worst_day:.2f} Mo/jour = {worst_day * 31:.0f} Mo/mois")
 
 

@@ -20,11 +20,11 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import fmt, money, played, store, telegram, track
+from . import fmt, money, played, progress, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["📊 Mes résultats", "🧾 Mes paris"], ["💰 Mon budget", "🔄 Mettre à jour tous les paris"],
+MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["🔴 Live", "📊 Mes résultats"], ["🧾 Mes paris", "💰 Mon budget"], ["🔄 Mettre à jour tous les paris"],
         ["❓ Aide"]]
 BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
            "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide",      # « À noter » : ancien libellé
@@ -36,12 +36,13 @@ TOP_TEXTS = ("paris", "paris du jour")                                          
 LIST_TEXTS = ("mes paris", "mes paris du jour")                                   # la liste « Mes paris » (/joue), pas /top
 # Mots qui prennent des arguments (« bilan 7 », « budget 5000 », « stats PSG »...) et mots qui ne sont une commande que SEULS (« Top Oss », « Start
 # Kristiansand » sont des équipes) ; clés sans accents ni casse (played.norm)
-WORDS_ARGS = {"bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "joue": "/joue", "jouer": "/joue", "noter": "/joue",
+WORDS_ARGS = {"live": "/live", "bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "joue": "/joue", "jouer": "/joue", "noter": "/joue",
               "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi", "budget": "/budget",
               "monde": "/monde"}
 WORDS_ALONE = {"top": "/top", "meilleurs": "/top", "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide",
                "bonjour": "/aide", "salut": "/aide", "bank": "/bank", "bankroll": "/bank", "ligues": "/ligues", "actualiser": "/cotes",
-               "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes"}
+               "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes", "etat": "/etat",
+               "progression": "/etat", "avancement": "/etat", "status": "/status", "statut": "/status", "sante": "/status"}
 WORDS = WORDS_ARGS | WORDS_ALONE
 YES = {"oui", "o", "ok", "okay", "yes", "y", "confirme", "confirmer", "dac", "ouais"}      # réponse à « cote très éloignée : on la note ? »
 NO = {"non", "n", "no", "nan", "annule", "annuler", "stop", "cancel"}
@@ -135,8 +136,8 @@ def refresh_button(what, day, label="🎟️ Vérifier ce combiné"):
     t = played.find(what, day)
     if t is None or isinstance(t, str) or t.item.get("result") is not None:
         return None
-    if str(what).startswith("v"):
-        return (label, f"xmaj|{what[1:]}|{day}") if played.is_real(t.item) else None
+    if str(what).startswith("v"):                   # combiné live : ses cotes ont bougé depuis, il ne se revérifie pas
+        return (label, f"xmaj|{what[1:]}|{day}") if played.is_real(t.item) and t.item.get("src") != "live" else None
     return (label, f"xmajr|{what}|{day}") if t.item.get("xlegs") or t.item.get("xodds") else None
 
 
@@ -164,9 +165,49 @@ def keep_refresh(markup, what, day):
     return {"inline_keyboard": ((markup or {}).get("inline_keyboard") or []) + extra}
 
 
+LIVE_BUTTON = "🔴 Live"
+LIVE_ASK = "live"
+LEGS_ASK = "legs"            # question « combien de paris au plus ? » (bouton « ✏️ Autre nombre de paris ») : what = « legs|<cote>|<types> »            # question « quelle cote ? » du sélecteur live (« ✏️ Autre cote ») : la cote écrite lance le combiné live
+COMBI_ASK = "combi"          # question ouverte « quelle cote ? » (bouton « ✏️ Autre cote » du sélecteur) : la cote écrite ouvre les cases à cocher
+
+
 def combi_picker():
     return telegram.with_buttons("🎯 Quelle cote veux-tu pour ton combiné ?",
-                                 telegram.inline([[(f"cote {t}", f"combi|{t}") for t in COMBI_TARGETS]]))
+                                 telegram.inline([[(f"cote {t}", f"combi|{t}") for t in COMBI_TARGETS],
+                                                  [("✏️ Autre cote (écris-la)", "combi|autre")]]))
+
+
+def live_picker():
+    return telegram.with_buttons("🔴 Combiné live : quelle cote ?\n" + fmt.i("Matchs en cours de la 30e à la 88e minute, chances recalculées avec le score."),
+                                 telegram.inline([[(f"cote {t}", f"live|{t}") for t in COMBI_TARGETS], [("✏️ Autre cote (écris-la)", "live|autre")]]))
+
+
+def _legs_answer(p, text):
+    """Le nombre écrit après « ✏️ Autre nombre de paris » -> les cases à cocher de nouveau, ce nombre coché (« ✅ ≤ 6 ») ; hors de 2 à MAX_LEGS :
+    on redemande, la question reste ouverte."""
+    from . import app, config as C
+    _, t, codes = (str(p["what"]).split("|") + ["", ""])[:3]
+    n = text.strip()
+    if not n.isdigit() or not 2 <= int(n) <= C.MAX_LEGS:
+        return f"Écris un nombre de paris entre 2 et {C.MAX_LEGS}, par exemple 6."
+    clear_pending()
+    target = app.combi_target([t])
+    if target is None:
+        return None
+    msg, markup = app.kinds_picker(target, [k for k in codes.split(".") if k in KIND_WORD], int(n))
+    return telegram.with_buttons(msg, markup)
+
+
+def _combi_answer(text):
+    """La cote écrite après « ✏️ Autre cote » (« 1900 », « 1 900 », « 2,5 ») -> les cases à cocher des types de paris ; illisible ou trop
+    petite : on redemande, la question reste ouverte."""
+    from . import app
+    target = app.combi_target(text.split())
+    if target is None or target < app.MIN_COMBI:
+        return f"Écris juste la cote voulue, un nombre plus grand que {fmt.num(app.MIN_COMBI)} : par exemple 1900."
+    clear_pending()
+    text, markup = app.kinds_picker(target)
+    return telegram.with_buttons(text, markup)
 
 
 # ---------- pari en attente de cote ----------
@@ -355,6 +396,95 @@ def _command_words(words):
     return None
 
 
+# Types de paris écrits après la cote (« combi 20 tirs fautes ») -> codes de combos.KINDS ; expressions de plusieurs mots d'abord
+KIND_PHRASES = (("tirs vers le but", "t"), ("tir vers le but", "t"), ("tirs au but", "t"), ("tirs cadres", "tc"), ("tir cadre", "tc"),
+                ("tirs cadre", "tc"), ("les 2 marquent", "btts"), ("les deux marquent", "btts"), ("2 equipes marquent", "btts"),
+                ("deux equipes marquent", "btts"), ("2 marquent", "btts"), ("double chance", "dc"), ("hors jeu", "hj"))
+KIND_WORDS = {"victoire": "v", "victoires": "v", "gagnant": "v", "vainqueur": "v", "1n2": "v", "resultat": "v", "dc": "dc", "buts": "b",
+              "but": "b", "goals": "b", "over": "b", "under": "b", "btts": "btts", "corners": "co", "corner": "co", "cartons": "ca",
+              "carton": "ca", "cartes": "ca", "tirs": "t", "tir": "t", "shots": "t", "cadres": "tc", "cadre": "tc", "tirs-cadres": "tc", "fautes": "f", "faute": "f",
+              "touches": "to", "touche": "to", "horsjeu": "hj", "hors-jeu": "hj", "offsides": "hj", "joueurs": "j", "joueur": "j"}
+KIND_ALL = {"tout", "tous", "toutes"}
+BOLD_WORDS = {"audacieux", "loterie", "fou"}       # « combi 1900 tirs audacieux » : complété avec des paris moins solides (app._bold_combo)
+KIND_FILLER = {"k", "fcfa", "cfa", "f", "cote", "a", "de", "des", "du", "et", "avec", "seulement", "que", "sur", "en", "paris", "pari", "le", "la",
+               "les", "+", "&", "ou"}
+KIND_WORD = {"v": "victoire", "dc": "dc", "b": "buts", "btts": "btts", "co": "corners", "ca": "cartons", "t": "tirs", "tc": "tirs-cadres", "f": "fautes",
+             "to": "touches", "hj": "horsjeu", "j": "joueurs"}      # code -> un mot que parse_kinds relit (bouton « Construire ») ; « tirs-cadres » en un mot :
+#                                                                     « tirs » + « cadres » côte à côte seraient lus comme l'expression « tirs cadrés » seule
+
+
+LEGS_MAX_WORDS = {"max", "maximum", "<=", "≤"}
+LEGS_EXACT_WORDS = {"pile", "exactement", "exact", "="}
+LEGS_UNIT = {"paris", "pari", "matchs", "match", "jambes", "jambe", "evenements", "evenement", "selections"}
+
+
+def parse_nlegs(tokens):
+    """Nombre de paris écrit dans un « combi » / « live » -> (N | None, exact, mots restants) : « max 4 », « ≤4 », « 4 paris » (au plus 4),
+    « pile 4 », « exactement 4 », « pile 4 paris » (exactement 4)."""
+    toks = [played.norm(str(t)) for t in tokens]
+    n, exact, used = None, False, set()
+    for i, w in enumerate(toks):
+        m = re.fullmatch(r"(<=|≤|max)(\d{1,2})", str(tokens[i]).strip().lower())     # le texte brut : norm() efface « ≤ »
+        if m and n is None:
+            n, used = int(m.group(2)), used | {i}
+            continue
+        if w.isdigit() and n is None:
+            prev, nxt = toks[i - 1] if i else "", toks[i + 1] if i + 1 < len(toks) else ""
+            if prev in LEGS_MAX_WORDS | LEGS_EXACT_WORDS or nxt in LEGS_UNIT:
+                n, exact = int(w), prev in LEGS_EXACT_WORDS
+                used |= {i} | ({i - 1} if prev in LEGS_MAX_WORDS | LEGS_EXACT_WORDS else set()) | ({i + 1} if nxt in LEGS_UNIT else set())
+    rest = [t for i, t in enumerate(tokens) if i not in used and toks[i] not in ("en", "au", "plus")]
+    return n, exact, rest
+
+
+def legs_words(n, exact):
+    """« pile 4 » / « max 4 » (relu par parse_nlegs) ; '' sans nombre."""
+    return f"{'pile' if exact else 'max'} {n}" if n else ""
+
+
+def legs_label(n, exact):
+    """« en 4 paris pile » / « en 4 paris au plus »."""
+    return f"en {n} paris {'pile' if exact else 'au plus'}" if n else ""
+
+
+def parse_kinds(tokens):
+    """Mots écrits après la cote d'un « combi » -> (codes des types de paris dans l'ordre de combos.KINDS, mots inconnus). « tout » = tous les
+    paris (aucun code) ; les mots de liaison (« et », « avec », « seulement »...) sont ignorés."""
+    from .combos import KIND_CODES
+    txt = " " + re.sub(r"[,;/+&]", " ", played.norm(" ".join(map(str, tokens)))) + " "
+    found, unknown, every = set(), [], False
+    for phrase, code in KIND_PHRASES:
+        if f" {phrase} " in txt:
+            found.add(code)
+            txt = txt.replace(f" {phrase} ", " ")
+    for w in txt.split():
+        if w in KIND_WORDS:
+            found.add(KIND_WORDS[w])
+        elif w in KIND_ALL:
+            every = True
+        elif w not in KIND_FILLER:
+            unknown.append(w)
+    return ([] if every else [k for k in KIND_CODES if k in found]), unknown
+
+
+def kinds_help(unknown):
+    """Réponse à « combi 20 xyz » : le mot inconnu et les types de paris possibles."""
+    return (f"❓ « {' '.join(unknown)} » : type de pari inconnu.\n"
+            "Exemples : combi 20 tirs fautes · combi 10 victoire max 3 · combi 50 corners audacieux\n"
+            "Types : victoire, double chance, buts, les 2 marquent, corners, cartons, tirs, tirs cadrés, fautes, touches, hors-jeu, joueurs, tout.")
+
+
+def quick(text):
+    """« état » (/etat, progression, avancement) : où en est le passage du matin, et « status » (/status, statut, santé : kelly/status.py), répondus
+    par le serveur SANS le verrou des données
+    (telegram.poll `quick`) ; None pour tout autre message. Ne touche pas à la question en cours."""
+    from . import status
+    t = played.norm((text or "").split("@")[0]).strip(" ?!.")
+    if WORDS_ALONE.get(t.lstrip("/")) == "/status":   # « status » : services, sources et API (kelly/status.py), sans le verrou non plus
+        return status.quick(text)
+    return progress.describe() if WORDS_ALONE.get(t.lstrip("/")) == "/etat" else None
+
+
 def route(text):
     """Ce qu'il faut faire d'un message : (commande « / », None) à passer au traitement des commandes, ou (None, réponse). Une question ouverte (cote ou
     mise attendue, confirmation) n'est refermée que par un message qui a un sens pour Kelly (commande, bouton, équipe connue) : « ok », « le », un
@@ -366,6 +496,13 @@ def route(text):
         if answer is not None:
             return None, answer
     num = NUM.match(t)
+    if num and p and p.get("what") == COMBI_ASK:
+        return None, _combi_answer(t)
+    if num and p and str(p.get("what") or "").startswith(LEGS_ASK + "|"):     # nombre de paris écrit après « ✏️ Autre nombre de paris »
+        return None, _legs_answer(p, t)
+    if num and p and p.get("what") == LIVE_ASK:     # cote écrite après « ✏️ Autre cote » du sélecteur live
+        clear_pending()
+        return f"/live {t}", None
     if num and p:
         return None, _answer(p, t)
     if num:
@@ -377,9 +514,15 @@ def route(text):
     if t.startswith("/"):
         clear_pending()
         return t, None
+    if t == LIVE_BUTTON:
+        clear_pending()
+        return None, live_picker()
     if t in BUTTONS:
         clear_pending()
         return (BUTTONS[t], None) if BUTTONS[t] else (None, combi_picker())
+    if played.norm(words[0]).rstrip(" :") == "live" and len(words) == 1:     # « live » seul : le sélecteur de cote du combiné live
+        clear_pending()
+        return None, live_picker()
     if played.norm(words[0]).rstrip(" :") in ("combi", "combine") and len(words) == 1:
         clear_pending()
         return None, combi_picker()
@@ -427,7 +570,7 @@ def on_callback(data, message_id=None):
             return ""                                # réponse vide : rien n'est envoyé (telegram._handle)
         if t.known and not t.item.get("played"):     # cote 1xBet connue : jamais demandée
             if t.stake > 0:                          # et mise conseillée : noté tout de suite (« ✏️ Autre cote » / « ↩️ Annuler » corrigent)
-                reply = played.note(t, t.ref, t.stake)
+                reply = played.note(t, t.ref, t.stake) + played.overlap_suffix(what, t.item.get("date") or day)
                 clear_pending_for(what, day)
                 if message_id:
                     _TAPS[(what, day, message_id)] = time.monotonic()
@@ -456,8 +599,41 @@ def on_callback(data, message_id=None):
         return reply
     if parts[0] == "budget" and len(parts) == 2:
         return app.handle_command(f"/budget {parts[1]}")
-    if parts[0] == "combi" and len(parts) == 2:
-        return app.handle_command(f"/combi {parts[1]}")
+    if parts[0] == "live" and len(parts) == 2:        # sélecteur live : la cote choisie, ou « ✏️ Autre cote »
+        if parts[1] == "autre":
+            set_pending(LIVE_ASK, "", message_id)
+            return "✏️ Écris ta cote live, par exemple 20."
+        return app.handle_command(f"/live {parts[1]}")
+    if parts[0] == "combi" and len(parts) == 2 and parts[1] == "autre":     # « ✏️ Autre cote » : la cote écrite ensuite (route -> _combi_answer)
+        set_pending(COMBI_ASK, "", message_id)
+        return "✏️ Écris ta cote, par exemple 1900."
+    if parts[0] == "combi" and len(parts) == 2:       # cote choisie : les cases à cocher des types de paris
+        if app.combi_target([parts[1]]) is None:
+            return app.handle_command(f"/combi {parts[1]}")
+        text, markup = app.kinds_picker(app.combi_target([parts[1]]))
+        return telegram.with_buttons(text, markup)
+    if parts[0] == "cplus" and len(parts) in (3, 4):  # « 🎲 Aller plus loin quand même » sous un « combi » impossible (4e : nombre de paris au plus)
+        if app.combi_target([parts[1]]) is None:
+            return None
+        n = int(parts[3]) if len(parts) == 4 and parts[3].isdigit() else None
+        return app.handle_command(f"/combi {parts[1]} " + " ".join([KIND_WORD[k] for k in parts[2].split(".") if k in KIND_WORD] + ["audacieux"]
+                                                                    + ([legs_words(n, False)] if n else [])))
+    if parts[0] in ("ck", "cgo") and len(parts) in (3, 4):  # case cochée / décochée (boutons refaits), ou « 🎯 Construire le combiné »
+        target = app.combi_target([parts[1]])
+        sel = [k for k in parts[2].split(".") if k in KIND_WORD]
+        n = int(parts[3]) if len(parts) == 4 and parts[3].isdigit() else None       # nombre de paris au plus (« Libre » : rien)
+        if target is None:
+            return None
+        if parts[0] == "ck":
+            if message_id:
+                telegram.edit_buttons(message_id, app.kinds_picker(target, sel, n)[1])
+            return None
+        return app.handle_command(f"/combi {parts[1]} " + " ".join([KIND_WORD[k] for k in sel] + ([legs_words(n, False)] if n else [])))
+    if parts[0] == "cn" and len(parts) == 3:          # « ✏️ Autre nombre de paris » : le nombre écrit ensuite (route -> _legs_answer)
+        set_pending(f"{LEGS_ASK}|{parts[1]}|{parts[2]}", "", message_id)
+        return "✏️ Combien de paris au plus ? Écris un nombre, par exemple 6."
+    if parts[0] == "cnew" and len(parts) in (3, 4):   # « 🔀 Un autre sans mes matchs » sous un combi ; 4e : « 🔀 Cote X sans mes matchs » après un échec
+        return app.another_combo(parts[1], parts[2], app.combi_target([parts[3]]) if len(parts) == 4 else None)
     if parts[0] == "cjoue" and len(parts) == 3:       # « ✅ Je le joue » sous un combiné « combi N » : il devient un pari suivi
         from . import custom
         return custom.track(parts[1], parts[2], message_id)

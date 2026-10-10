@@ -54,7 +54,7 @@ def test_command_and_messages():
     head = msgs[0]
     assert "💰 Budget du jour : <b>5 000 FCFA</b>" in head, head
     sur = next(m for m in msgs if "SÛR" in m)
-    assert "💰 mise : <b>" in sur and "FCFA" in sur, sur
+    assert "💰 Mise : <b>" in sur and "FCFA" in sur, sur
     assert [b["callback_data"] for b in sur.markup["inline_keyboard"][0]] == ["joue|sur|2026-10-09"], sur.markup
     btn = sur.markup["inline_keyboard"][0][0]["text"]
     assert btn.startswith("✅ Je l'ai joué — ") and btn.endswith(" FCFA") and "❌" not in str(sur.markup), btn      # la mise conseillée dans le bouton
