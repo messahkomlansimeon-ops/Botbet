@@ -439,3 +439,27 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
     if state["offset"] != start:                    # rien de nouveau (la plupart des passages du serveur) : pas d'écriture inutile
         store.save("telegram.json", state)
     return len(updates)
+
+
+def send_document(filepath, caption=None, chat_id=None):
+    """Envoie un fichier (document) sur Telegram. Lève TelegramError en cas d'échec."""
+    token, chat = creds()
+    chat_id = chat_id or chat
+    if not (token and chat_id):
+        raise TelegramError("TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID manquant")
+    with open(filepath, "rb") as f:
+        try:
+            r = _session.post(f"https://api.telegram.org/bot{token}/sendDocument",
+                              data={"chat_id": chat_id, "caption": caption or ""},
+                              files={"document": f},
+                              timeout=(CONNECT_TIMEOUT, 60))
+        except requests.RequestException as e:
+            raise TelegramError(f"réseau : {_scrub(e)}") from None
+    try:
+        body = r.json()
+    except ValueError:
+        body = {}
+    if not body.get("ok"):
+        raise TelegramError(body.get("description") or f"erreur HTTP {r.status_code}", body.get("error_code"))
+    return body.get("result")
+

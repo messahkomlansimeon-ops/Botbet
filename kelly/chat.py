@@ -43,7 +43,8 @@ WORDS_ARGS = {"live": "/live", "bilan": "/bilan", "resultats": "/bilan", "result
 WORDS_ALONE = {"top": "/top", "meilleurs": "/top", "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide",
                "bonjour": "/aide", "salut": "/aide", "bank": "/bank", "bankroll": "/bank", "ligues": "/ligues", "actualiser": "/cotes",
                "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes", "etat": "/etat",
-               "progression": "/etat", "avancement": "/etat", "status": "/status", "statut": "/status", "sante": "/status"}
+               "progression": "/etat", "avancement": "/etat", "status": "/status", "statut": "/status", "sante": "/status",
+               "backup": "/backup", "sauvegarde": "/backup", "save": "/backup"}
 WORDS = WORDS_ARGS | WORDS_ALONE
 YES = {"oui", "o", "ok", "okay", "yes", "y", "confirme", "confirmer", "dac", "ouais"}      # réponse à « cote très éloignée : on la note ? »
 NO = {"non", "n", "no", "nan", "annule", "annuler", "stop", "cancel"}

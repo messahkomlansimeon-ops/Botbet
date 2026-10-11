@@ -1075,13 +1075,60 @@ def test_poll_saves_offset_only_when_changed():
     print("ok  24 poll : telegram.json n'est réécrit que si le décalage a changé")
 
 
+# ---------- 25. commande /backup ----------
+
+def test_backup_command():
+    sent = []
+    old_doc = telegram.send_document
+    telegram.send_document = lambda path, caption=None, chat_id=None: (sent.append((path, caption, chat_id)), {"message_id": 99})[1]
+    try:
+        # /backup et synonymes
+        assert app.handle_command("/backup") is None
+        assert len(sent) == 1 and sent[0][0] == store.db_path()
+        assert "Sauvegarde Kelly" in sent[0][1] and "Mo)" in sent[0][1]
+        assert app.handle_command("sauvegarde") is None
+        assert len(sent) == 2
+        assert app.handle_command("backup") is None
+        assert len(sent) == 3
+
+        # Base introuvable
+        old_path = store.db_path
+        store.db_path = lambda: "/fichier/inexistant/kelly.db"
+        try:
+            assert "introuvable" in app.handle_command("/backup")
+        finally:
+            store.db_path = old_path
+
+        # Échec Telegram -> message d'erreur
+        telegram.send_document = lambda *a, **k: (_ for _ in ()).throw(telegram.TelegramError("réseau coupé"))
+        r = app.handle_command("/backup")
+        assert "Échec de la sauvegarde" in r and "réseau coupé" in r
+    finally:
+        telegram.send_document = old_doc
+
+    # telegram.send_document unitaire (validation des paramètres et gestion d'erreurs)
+    old_env = {k: os.environ.get(k) for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")}
+    for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"):
+        os.environ.pop(k, None)
+    try:
+        try:
+            telegram.send_document(store.db_path())
+            assert False, "devait lever TelegramError"
+        except telegram.TelegramError as e:
+            assert "manquant" in str(e)
+    finally:
+        for k, v in old_env.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+    print("ok  25 commande /backup : envoi de kelly.db, gestion d'erreurs et synonymes")
+
+
 TESTS = [test_noted_combo_never_replaced, test_update_keeps_note_on_rounding, test_report_announces_every_settled_combo,
          test_morning_total_includes_fair_combos, test_noted_rows_survive_retention, test_no_score_is_unknown_not_void,
          test_odds_final_same_price_basis, test_morning_combos_share_usage, test_thousands_space_in_odds, test_absurd_odds_ask_confirmation,
          test_combi_and_bilan_inputs, test_list_keeps_whole_keyboard, test_pending_cleared_and_double_tap, test_route_casual_texts,
          test_texts_and_currency, test_long_list_pages, test_xbet_unexpected_json_and_subgame, test_xbet_circuit_breaker,
          test_xbet_find_markers_and_orientation, test_save_coupon_malformed_never_raises, test_partial_refresh_stamp, test_morning_isolation,
-         test_manual_refresh_gap_and_started, test_poll_saves_offset_only_when_changed]
+         test_manual_refresh_gap_and_started, test_poll_saves_offset_only_when_changed, test_backup_command]
 
 
 def main():

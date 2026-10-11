@@ -1367,8 +1367,9 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 • <i>état</i> : où en est le passage du matin (pourcentage et heure de fin estimée), réponse immédiate même pendant qu'il tourne
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
+• <i>backup</i> (ou <i>sauvegarde</i>) : recevoir la base de données kelly.db directement ici pour la sauvegarder sur ton PC
 
-<i>Les anciennes commandes marchent toujours : /top, /combi, /bilan, /joue, /match, /analyse, /stats, /monde, /ligues, /etat, /status, /live, /bank.</i>""")
+<i>Les anciennes commandes marchent toujours : /top, /combi, /bilan, /joue, /match, /analyse, /stats, /monde, /ligues, /etat, /status, /live, /bank, /backup.</i>""")
 
 
 LEAGUES = {"E0": "Premier League", "SP1": "Liga", "I1": "Serie A", "D1": "Bundesliga", "F1": "Ligue 1",
@@ -1716,6 +1717,17 @@ def _handle_command(text):
     if cmd in ("/status", "/statut", "/sante", "/santé"):
         from . import status
         return status.report()
+    if cmd in ("/backup", "/sauvegarde"):
+        db_file = store.db_path()
+        if not os.path.exists(db_file):
+            return "⚠️ Base de données introuvable."
+        size_mb = os.path.getsize(db_file) / (1024 * 1024)
+        caption = f"💾 Sauvegarde Kelly ({size_mb:.1f} Mo) — {now_utc().strftime('%d/%m/%Y %H:%M UTC')}"
+        try:
+            telegram.send_document(db_file, caption=caption)
+        except telegram.TelegramError as e:
+            return f"⚠️ Échec de la sauvegarde : {e}"
+        return None
     if cmd == "/bank":
         return ("💰 Kelly ne suit plus de bankroll en unités : elle travaille en FCFA, avec ton budget du jour (« 💰 Mon budget » ou écris "
                 "« budget 5000 ») pour les mises conseillées. Seuls les paris que tu notes comptent dans tes résultats (« 📊 Mes résultats »).")
