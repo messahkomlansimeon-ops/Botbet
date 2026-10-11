@@ -1,6 +1,6 @@
 {
-"day": "2026-10-10",
-"at": "05:06",
+"day": "2026-10-11",
+"at": "04:00",
 "brk": 0,
 "complete": 1,
 "act": [
@@ -52,1857 +52,1452 @@
 "soccer_uefa_nations_league"
 ],
 "paid": [
+"soccer_italy_serie_a",
+"soccer_spain_la_liga",
 "soccer_epl"
 ],
 "leagues": {
-"soccer_epl": [
+"soccer_italy_serie_a": [
 [
-"Arsenal",
-"Leeds United",
-"11:30"
+"Como",
+"AS Roma",
+"10:30"
 ],
 [
-"Aston Villa",
-"Brentford",
-"14:00"
+"Lecce",
+"Bologna",
+"13:00"
 ],
 [
-"Chelsea",
-"Bournemouth",
-"14:00"
+"Lazio",
+"Monza",
+"13:00"
 ],
 [
-"Sunderland",
-"Brighton and Hove Albion",
-"14:00"
+"Sassuolo",
+"AC Milan",
+"16:00"
 ],
 [
-"Ipswich Town",
-"Fulham",
-"14:00"
-],
-[
-"Manchester United",
-"Tottenham Hotspur",
-"16:30"
-]
-],
-"soccer_germany_bundesliga": [
-[
-"Augsburg",
-"Bayern Munich",
-"13:30"
-],
-[
-"FSV Mainz 05",
-"Bayer Leverkusen",
-"13:30"
-],
-[
-"Union Berlin",
-"Elversberg",
-"13:30"
-],
-[
-"TSG Hoffenheim",
-"Hamburger SV",
-"13:30"
-],
-[
-"SC Paderborn",
-"VfB Stuttgart",
-"13:30"
-],
-[
-"RB Leipzig",
-"Eintracht Frankfurt",
-"16:30"
-]
-],
-"soccer_france_ligue_one": [
-[
-"Lille",
-"Le Havre",
-"15:15"
-],
-[
-"AS Monaco",
-"Toulouse",
-"18:45"
-],
-[
-"Brest",
-"Angers",
-"18:45"
-],
-[
-"Paris Saint Germain",
-"Le Mans FC",
-"18:45"
-],
-[
-"Lorient",
-"Paris FC",
+"Cagliari",
+"Juventus",
 "18:45"
 ]
 ],
 "soccer_spain_la_liga": [
 [
-"Rayo Vallecano",
-"Athletic Bilbao",
+"Elche CF",
+"Celta Vigo",
 "12:00"
 ],
 [
-"Alavés",
-"Atlético Madrid",
+"Real Sociedad",
+"Deportivo La Coruña",
 "14:15"
 ],
 [
-"Barcelona",
-"Getafe",
+"Real Betis",
+"CA Osasuna",
 "16:30"
 ],
 [
-"Real Madrid",
-"Villarreal",
+"Real Racing Club de Santander",
+"Valencia",
 "19:00"
 ]
 ],
-"soccer_italy_serie_a": [
+"soccer_epl": [
 [
-"Genoa",
-"Fiorentina",
+"Crystal Palace",
+"Nottingham Forest",
 "13:00"
 ],
 [
-"Inter Milan",
-"Parma",
-"16:00"
+"Hull City",
+"Everton",
+"13:00"
 ],
 [
-"Napoli",
-"Frosinone",
+"Liverpool",
+"Manchester City",
+"15:30"
+]
+],
+"soccer_france_ligue_one": [
+[
+"Nice",
+"Strasbourg",
+"13:00"
+],
+[
+"Rennes",
+"Auxerre",
+"15:15"
+],
+[
+"Troyes",
+"Marseille",
 "18:45"
 ]
 ],
-"soccer_efl_champ": [
+"soccer_germany_bundesliga": [
 [
-"West Bromwich Albion",
-"Birmingham City",
-"11:30"
+"1. FC Köln",
+"Borussia Monchengladbach",
+"13:30"
 ],
 [
-"Charlton Athletic",
-"Bristol City",
-"11:30"
-],
-[
-"Swansea City",
-"Norwich City",
-"11:30"
-],
-[
-"Blackburn Rovers",
-"Cardiff City",
-"14:00"
-],
-[
-"Bolton Wanderers",
-"Stoke City",
-"14:00"
-],
-[
-"Watford",
-"Burnley",
-"14:00"
-],
-[
-"Derby County",
-"Wrexham AFC",
-"14:00"
-],
-[
-"Sheffield United",
-"Lincoln City",
-"14:00"
-],
-[
-"Middlesbrough",
-"Wolverhampton Wanderers",
-"14:00"
-],
-[
-"Preston North End",
-"Millwall",
-"14:00"
+"SC Freiburg",
+"FC Schalke 04",
+"15:30"
 ]
 ],
 "soccer_netherlands_eredivisie": [
 [
-"Go Ahead Eagles",
-"Sparta Rotterdam",
-"14:30"
+"FC Utrecht",
+"Willem II",
+"10:15"
 ],
 [
-"Feyenoord",
-"AZ Alkmaar",
-"16:45"
+"SC Telstar",
+"ADO Den Haag",
+"12:30"
 ],
 [
-"Fortuna Sittard",
-"FC Twente Enschede",
-"18:00"
+"FC Zwolle",
+"SC Cambuur",
+"12:30"
 ],
 [
-"Ajax",
-"NEC Nijmegen",
-"19:00"
+"Excelsior",
+"Groningen",
+"14:45"
 ]
 ],
 "soccer_belgium_first_div": [
 [
-"Cercle Brugge KSV",
-"Anderlecht",
+"Standard Liege",
+"Charleroi",
+"11:30"
+],
+[
+"Union Saint-Gilloise",
+"Leuven",
 "14:00"
 ],
 [
-"RAAL La Louvière",
-"Club Brugge",
-"16:15"
+"Westerlo",
+"Royal Antwerp",
+"16:30"
 ],
 [
-"Genk",
-"KV Kortrijk",
-"18:45"
+"KV Mechelen",
+"Sint Truiden",
+"17:15"
+]
+],
+"soccer_portugal_primeira_liga": [
+[
+"Rio Ave FC",
+"Nacional",
+"14:30"
 ],
 [
-"SV Zulte-Waregem",
-"Gent",
-"18:45"
+"Benfica",
+"Vitória SC",
+"17:00"
+],
+[
+"Arouca",
+"CF Estrela",
+"19:30"
 ]
 ],
 "soccer_turkey_super_league": [
 [
-"Genclerbirligi SK",
-"Amed SK",
+"Torku Konyaspor",
+"Basaksehir",
 "10:30"
 ],
 [
-"Alanyaspor",
-"Erzurum BB",
+"Gazişehir Gaziantep",
+"Çorum FK",
 "13:00"
 ],
 [
-"Samsunspor",
-"Trabzonspor",
-"13:00"
-],
-[
-"Çaykur Rizespor",
-"Fenerbahce",
+"Besiktas JK",
+"Kocaelispor",
 "16:00"
 ]
 ],
 "soccer_spl": [
 [
-"Falkirk F.C.",
-"Dundee FC",
-"14:00"
-],
-[
-"Dundee United",
-"Hibernian",
-"14:00"
-],
-[
-"Hearts",
-"St Mirren",
-"14:00"
-],
-[
-"Rangers",
-"Kilmarnock",
-"14:00"
-]
-],
-"soccer_portugal_primeira_liga": [
-[
-"CS Maritimo",
-"FC Porto",
-"17:00"
-],
-[
-"Académico de Viseu",
-"Estoril",
-"19:30"
-],
-[
-"Casa Pia",
-"Santa Clara",
-"19:30"
-]
-],
-"soccer_england_league1": [
-[
-"Notts County",
-"Oxford United",
-"11:30"
-],
-[
-"Plymouth Argyle",
-"Wimbledon",
-"11:30"
-],
-[
-"Stockport County FC",
-"Barnsley",
-"14:00"
-],
-[
-"Cambridge United",
-"Blackpool",
-"14:00"
-],
-[
-"Bradford City",
-"Leyton Orient",
-"14:00"
-],
-[
-"Mansfield Town",
-"Bromley FC",
-"14:00"
-],
-[
-"Doncaster Rovers",
-"Burton Albion",
-"14:00"
-],
-[
-"Huddersfield Town",
-"Sheffield Wednesday",
-"14:00"
-],
-[
-"Leicester City",
-"Peterborough United",
-"14:00"
-],
-[
-"Wycombe Wanderers",
-"Luton",
-"14:00"
-],
-[
-"Milton Keynes Dons",
-"Reading",
-"14:00"
-],
-[
-"Stevenage",
-"Wigan Athletic",
-"14:00"
-]
-],
-"soccer_england_league2": [
-[
-"Oldham Athletic",
-"Accrington Stanley",
-"11:30"
-],
-[
-"Swindon Town",
-"Crewe Alexandra",
-"11:30"
-],
-[
-"Bristol Rovers",
-"Barnet",
-"14:00"
-],
-[
-"Cheltenham Town",
-"Salford City",
-"14:00"
-],
-[
-"Crawley Town",
-"Chesterfield FC",
-"14:00"
-],
-[
-"Newport County",
-"Colchester United",
-"14:00"
-],
-[
-"Shrewsbury Town",
-"Exeter City",
-"14:00"
-],
-[
-"Fleetwood Town",
-"Walsall",
-"14:00"
-],
-[
-"Rotherham United",
-"Gillingham",
-"14:00"
-],
-[
-"Port Vale",
-"Grimsby Town",
-"14:00"
-],
-[
-"York City",
-"Northampton Town",
-"14:00"
-],
-[
-"Tranmere Rovers",
-"Rochdale",
-"14:00"
-]
-],
-"soccer_italy_serie_b": [
-[
-"Südtirol",
-"Ascoli",
-"13:00"
-],
-[
-"Benevento",
-"Cesena FC",
-"13:00"
-],
-[
-"Empoli",
-"Palermo",
-"13:00"
-],
-[
-"Virtus Entella",
-"Juve Stabia",
-"13:00"
-],
-[
-"Vicenza",
-"Pisa",
-"15:15"
-],
-[
-"Arezzo",
-"Cremonese",
-"17:30"
-]
-],
-"soccer_germany_liga3": [
-[
-"SC Fortuna Köln",
-"1. FC Saarbrücken",
-"12:00"
-],
-[
-"FC Würzburger Kickers",
-"Hansa Rostock",
-"12:00"
-],
-[
-"Jahn Regensburg",
-"TSV Havelse",
-"12:00"
-],
-[
-"SG Sonnenhof Großaspach",
-"Waldhof Mannheim",
-"12:00"
-],
-[
-"SV Meppen",
-"VfB Stuttgart II",
-"12:00"
-],
-[
-"MSV Duisburg",
-"TSG Hoffenheim II",
-"14:30"
-]
-],
-"soccer_xb_israel": [
-[
-"Ironi Tiberias",
-"Hapoel Be'er Sheva",
-"16:00"
-],
-[
-"Hapoel Haifa",
-"Maccabi Petah Tikva",
-"16:00"
-],
-[
-"Hapoel Ironi Kiryat Shmona",
-"Hapoel Tel Aviv",
-"16:15"
-],
-[
-"Hapoel Petah Tikva",
-"Maccabi Netanya",
-"16:15"
-],
-[
-"Maccabi Tel Aviv",
-"Bnei Sakhnin",
-"16:30"
-]
-],
-"soccer_xb_northern_ireland": [
-[
-"Dungannon Swifts",
-"Carrick Rangers",
-"14:00"
-],
-[
-"Coleraine",
-"Cliftonville",
-"14:00"
-],
-[
-"Crusaders",
-"Larne",
-"14:00"
-],
-[
-"Limavady United",
-"Ballymena United",
-"14:00"
-],
-[
-"Linfield",
-"Bangor",
-"14:00"
-]
-],
-"soccer_xb_scotland_2": [
-[
-"Arbroath",
-"Greenock Morton",
-"14:00"
-],
-[
-"Inverness",
-"Stenhousemuir",
-"14:00"
-],
-[
-"Livingston",
-"Partick Thistle",
-"14:00"
-],
-[
-"Raith Rovers",
-"Queen's Park",
-"14:00"
-],
-[
-"Ayr United",
-"Dunfermline Athletic",
-"14:00"
-]
-],
-"soccer_germany_bundesliga2": [
-[
-"1. FC Magdeburg",
-"Hannover 96",
+"Motherwell",
+"Celtic",
 "11:00"
 ],
 [
-"VfL Osnabrück",
-"Dynamo Dresden",
-"11:00"
-],
-[
-"SV Darmstadt 98",
-"FC Energie Cottbus",
-"11:00"
-],
-[
-"1. FC Nürnberg",
-"VfL Wolfsburg",
-"18:30"
+"Aberdeen",
+"St Johnstone",
+"13:00"
 ]
 ],
-"soccer_sweden_superettan": [
+"soccer_efl_champ": [
 [
-"Landskrona BoIS",
-"Sandvikens IF",
+"Southampton",
+"Portsmouth",
 "11:00"
+]
 ],
+"soccer_xb_norway_2": [
 [
-"Östersunds FK",
-"Varbergs BoIS",
-"13:00"
-],
-[
-"IK Oddevold",
-"Nordic United FC",
+"Asane",
+"Sogndal",
 "15:00"
 ],
 [
-"Norrby IF",
-"Östers IF",
+"KIL Toppfotball",
+"Ranheim",
 "15:00"
-]
-],
-"soccer_xb_austria_2": [
-[
-"Austria Salzburg",
-"Floridsdorfer AC",
-"13:30"
 ],
 [
-"WSC Hertha Wels",
-"Bregenz",
-"13:30"
+"Lyn Fotball",
+"Stromsgodset",
+"15:00"
 ],
 [
-"Liefering Salzburg",
-"Sturm Graz II",
-"13:30"
+"Odds",
+"Bryne",
+"15:00"
 ],
 [
-"Rapid Wien II",
-"Wacker Innsbruck",
-"13:30"
-]
-],
-"soccer_xb_czech": [
-[
-"Viktoria Plzen",
-"Mlada Boleslav",
-"13:00"
+"Raufoss",
+"Moss",
+"15:00"
 ],
 [
-"Hradec Kralove",
-"Artis Brno",
-"13:00"
+"Sandnes Ulf",
+"Haugesund",
+"15:00"
 ],
 [
-"Zbrojovka",
-"Jablonec",
-"13:00"
+"Stabaek",
+"Strommen",
+"15:00"
 ],
 [
-"Bohemians 1905 Prague",
-"Banik Ostrava",
-"16:00"
-]
-],
-"soccer_xb_portugal_2": [
-[
-"Tondela",
-"S.C.U. Torreense",
-"10:00"
-],
-[
-"Amarante",
-"Portimonense",
-"13:00"
-],
-[
-"Leixoes",
-"Porto II",
-"14:30"
-],
-[
-"Vizela",
-"Sporting Clube de Portugal II",
-"19:30"
-]
-],
-"soccer_xb_russia": [
-[
-"Orenburg",
-"Dynamo Makhachkala",
-"10:00"
-],
-[
-"Fakel Voronezh",
-"Lokomotiv Moscow",
-"12:15"
-],
-[
-"Krylia Sovetov",
-"Spartak Moscow",
-"14:30"
-],
-[
-"Krasnodar",
-"Zenit Saint Petersburg",
-"16:30"
-]
-],
-"soccer_xb_slovakia": [
-[
-"Kosice",
-"KFC Komarno",
-"13:30"
-],
-[
-"Skalica",
-"Slovan Bratislava",
-"13:30"
-],
-[
-"Trencin",
-"Dukla Banska Bystrica",
-"13:30"
-],
-[
-"Zemplin",
-"DAC 1904",
-"16:00"
-]
-],
-"soccer_xb_turkey_2": [
-[
-"Boluspor",
-"Antalyaspor",
-"10:30"
-],
-[
-"Igdir Alagoz Holding",
-"Batman Petrolspor",
-"13:00"
-],
-[
-"İstanbulspor",
-"Esenler Erokspor",
-"16:00"
-],
-[
-"Kayserispor",
-"Manisa",
-"16:00"
+"Egersunds",
+"Hodd",
+"15:00"
 ]
 ],
 "soccer_spain_segunda_division": [
 [
-"AD Ceuta FC",
-"Sabadell FC",
+"Andorra CF",
+"CD Castellón",
+"12:00"
+],
+[
+"Almería",
+"Leganés",
 "14:15"
 ],
 [
-"CD Eldense",
-"Córdoba",
+"Mallorca",
+"Las Palmas",
 "16:30"
 ],
 [
-"Celta Fortuna",
-"Real Sociedad B",
+"Cádiz CF",
+"Sporting Gijón",
 "19:00"
-]
-],
-"soccer_france_ligue_two": [
-[
-"Clermont",
-"Red Star",
-"12:00"
-],
-[
-"Nantes",
-"Stade de Reims",
-"12:00"
-],
-[
-"Saint Etienne",
-"Rodez AF",
-"18:00"
-]
-],
-"soccer_switzerland_superleague": [
-[
-"FC Lugano",
-"FC Luzern",
-"16:00"
-],
-[
-"Servette",
-"FC Sion",
-"16:00"
-],
-[
-"FC Zurich",
-"FC Thun",
-"16:00"
-]
-],
-"soccer_austria_bundesliga": [
-[
-"Grazer AK",
-"RB Salzburg",
-"15:00"
-],
-[
-"WSG Tirol",
-"Ried",
-"15:00"
-],
-[
-"Austria Wien",
-"Sturm Graz",
-"17:30"
-]
-],
-"soccer_poland_ekstraklasa": [
-[
-"Cracovia Kraków",
-"Zagłębie Lubin",
-"12:45"
-],
-[
-"Śląsk Wrocław",
-"Lech Poznań",
-"15:30"
-],
-[
-"Jagiellonia Białystok",
-"Górnik Zabrze",
-"18:15"
-]
-],
-"soccer_sweden_allsvenskan": [
-[
-"AIK",
-"IF Brommapojkarna",
-"13:00"
-],
-[
-"GAIS",
-"IK Sirius",
-"13:00"
-],
-[
-"Mjällby AIF",
-"Degerfors IF",
-"15:30"
-]
-],
-"soccer_xb_belgium_2": [
-[
-"Lierse SK",
-"Francs Borains",
-"14:00"
-],
-[
-"R.E. Virton",
-"Sporting Hasselt",
-"14:00"
-],
-[
-"Beerschot",
-"Liege",
-"18:00"
-]
-],
-"soccer_xb_bulgaria": [
-[
-"Botev Vratsa",
-"Spartak Varna",
-"12:00"
-],
-[
-"Lokomotiv Sofia",
-"Lokomotiv Plovdiv",
-"14:30"
-],
-[
-"Botev Plovdiv",
-"Slavia Sofia",
-"17:00"
-]
-],
-"soccer_xb_denmark_2": [
-[
-"Hillerod",
-"Fredericia",
-"11:00"
-],
-[
-"Esbjerg fB",
-"AaB Fodbold",
-"11:30"
-],
-[
-"Hobro",
-"Kolding",
-"16:30"
-]
-],
-"soccer_xb_hungary": [
-[
-"Vasas",
-"Kisvarda",
-"12:45"
-],
-[
-"Ferencvarosi",
-"Debreceni VSC",
-"15:00"
-],
-[
-"Paksi",
-"MTK Budapest",
-"17:30"
-]
-],
-"soccer_xb_poland_2": [
-[
-"Arka Gdynia",
-"KSP Polonia Warszawa",
-"13:30"
-],
-[
-"Unia Skierniewice",
-"Bruk-Bet Termalica",
-"13:30"
-],
-[
-"Chrobry Glogow",
-"Pogon Grodzisk Mazowiecki",
-"13:30"
-]
-],
-"soccer_xb_serbia": [
-[
-"IMT Novi Beograd",
-"Radnik Surdulica",
-"13:00"
-],
-[
-"Cukaricki",
-"Macva Sabac",
-"15:00"
-],
-[
-"Radnicki 1923",
-"Crvena Zvezda",
-"17:00"
-]
-],
-"soccer_xb_slovenia": [
-[
-"NK Radomlje",
-"Koper",
-"13:00"
-],
-[
-"Celje",
-"NK Aluminij",
-"15:30"
-],
-[
-"Olimpija Ljubljana",
-"Mura",
-"18:15"
-]
-],
-"soccer_xb_ukraine": [
-[
-"Kolos Kovalivka",
-"Epicentr",
-"10:00"
-],
-[
-"Obolon Kyiv",
-"Kryvbas",
-"10:00"
-],
-[
-"Chornomorets Odesa",
-"Kharkiv",
-"10:00"
 ]
 ],
 "soccer_greece_super_league": [
 [
-"AEK Athens",
-"OFI Crete",
-"16:30"
+"AE Kifisia FC",
+"Panetolikos Agrinio",
+"14:00"
 ],
 [
-"Asteras Tripolis",
-"Atromitos Athens",
-"16:30"
+"Iraklis FC",
+"Levadiakos",
+"14:00"
+],
+[
+"Aris Thessaloniki",
+"Volos FC",
+"16:00"
+],
+[
+"Olympiakos Piraeus",
+"Panathinaikos",
+"18:00"
+]
+],
+"soccer_denmark_superliga": [
+[
+"Silkeborg IF",
+"AC Horsens",
+"12:00"
+],
+[
+"Randers FC",
+"Viborg FF",
+"12:00"
+],
+[
+"Brondby IF",
+"Lyngby",
+"14:00"
+],
+[
+"FC Midtjylland",
+"FC Copenhagen",
+"16:00"
 ]
 ],
 "soccer_norway_eliteserien": [
 [
-"Bodø/Glimt",
-"Kristiansund BK",
-"14:00"
+"Fredrikstad FK",
+"Tromso",
+"12:30"
 ],
 [
-"Rosenborg",
-"Sandefjord",
-"16:00"
+"Aalesund",
+"Sarpsborg FK",
+"15:00"
+],
+[
+"IK Start",
+"HamKam",
+"15:00"
+],
+[
+"Lillestrom",
+"Molde",
+"17:15"
 ]
 ],
-"soccer_finland_veikkausliiga": [
+"soccer_xb_poland_2": [
 [
-"TPS Turku",
-"Jaro",
-"14:00"
+"Stal Mielec",
+"Warta Poznan",
+"10:00"
 ],
 [
-"IFK Mariehamn",
-"Ilves Tampere",
-"16:00"
+"LKS Lodz",
+"Ruch Chorzow",
+"12:30"
+],
+[
+"Puszcza Niepolomice",
+"Polonia Bytom",
+"15:00"
+],
+[
+"Odra Opole",
+"Miedz Legnica",
+"18:15"
 ]
 ],
-"soccer_xb_croatia": [
+"soccer_germany_bundesliga2": [
 [
-"Hajduk Split",
-"Dinamo Zagreb",
+"VfL Bochum",
+"Arminia Bielefeld",
+"11:30"
+],
+[
+"FC St. Pauli",
+"Karlsruher SC",
+"11:30"
+],
+[
+"Hertha Berlin",
+"Greuther Fürth",
+"11:30"
+]
+],
+"soccer_italy_serie_b": [
+[
+"US Catanzaro 1929",
+"Mantova",
 "13:00"
 ],
 [
-"Osijek",
-"NK Istra 1961",
-"16:00"
+"Padova",
+"Carrarese",
+"15:15"
+],
+[
+"Modena",
+"Hellas Verona",
+"17:30"
+]
+],
+"soccer_switzerland_superleague": [
+[
+"Grasshopper Zürich",
+"BSC Young Boys",
+"12:00"
+],
+[
+"FC Vaduz",
+"FC Basel",
+"14:30"
+],
+[
+"FC St Gallen",
+"FC Lausanne-Sport",
+"14:30"
+]
+],
+"soccer_austria_bundesliga": [
+[
+"Hartberg",
+"Austria Lustenau",
+"12:30"
+],
+[
+"Rheindorf Altach",
+"Wolfsberger AC",
+"12:30"
+],
+[
+"LASK",
+"Rapid Wien",
+"15:00"
+]
+],
+"soccer_poland_ekstraklasa": [
+[
+"Piast Gliwice",
+"Widzew Łódź",
+"12:45"
+],
+[
+"Pogoń Szczecin",
+"Korona Kielce",
+"15:30"
+],
+[
+"Legia Warszawa",
+"Wisła Kraków",
+"18:15"
+]
+],
+"soccer_sweden_superettan": [
+[
+"Örebro SK",
+"Ljungskile SK",
+"11:00"
+],
+[
+"IFK Värnamo",
+"Falkenbergs FF",
+"13:00"
+],
+[
+"IK Brage",
+"Helsingborgs IF",
+"15:00"
+]
+],
+"soccer_germany_liga3": [
+[
+"FC Ingolstadt 04",
+"Wehen Wiesbaden",
+"11:30"
+],
+[
+"Alemannia Aachen",
+"FC Viktoria Köln 1904",
+"14:30"
+],
+[
+"Fortuna Düsseldorf",
+"SC Verl",
+"17:30"
+]
+],
+"soccer_xb_bulgaria": [
+[
+"Septemvri Sofia",
+"Dunav Ruse",
+"12:00"
+],
+[
+"Cherno More Varna",
+"Levski Sofia",
+"14:30"
+],
+[
+"CSKA Sofia 1948",
+"CSKA Sofia",
+"17:00"
 ]
 ],
 "soccer_xb_cyprus": [
 [
-"Krasava ENY",
-"Apollon Limassol",
+"Anorthosis",
+"Pafos",
 "15:00"
 ],
 [
-"APOEL",
-"Nea Salamis",
+"AEL Limassol",
+"Omonia 29th May",
+"16:00"
+],
+[
+"Olympiakos Nicosia",
+"Aris Limassol",
+"16:00"
+]
+],
+"soccer_xb_czech": [
+[
+"Slovan Liberec",
+"1. Slovacko",
+"11:00"
+],
+[
+"Teplice",
+"Sigma Olomouc",
+"13:00"
+],
+[
+"AC Sparta Prague",
+"Pardubice",
+"16:00"
+]
+],
+"soccer_xb_hungary": [
+[
+"Zalaegerszegi",
+"Nyiregyhaza Spartacus",
+"12:45"
+],
+[
+"Honved",
+"Ujpest",
+"14:45"
+],
+[
+"Gyori ETO",
+"Puskas Akademia",
+"17:00"
+]
+],
+"soccer_xb_portugal_2": [
+[
+"Lusitania Lourosa",
+"Chaves",
+"10:00"
+],
+[
+"Farense",
+"Feirense",
+"13:00"
+],
+[
+"UD Leiria",
+"Academica de Coimbra OAF",
+"17:00"
+]
+],
+"soccer_xb_russia": [
+[
+"Akhmat",
+"Baltika Kaliningrad",
+"11:00"
+],
+[
+"CSKA Moscow",
+"Rodina Moscow",
+"13:30"
+],
+[
+"Rubin Kazan",
+"Dynamo Moscow",
+"16:30"
+]
+],
+"soccer_xb_serbia": [
+[
+"Radnicki Nis",
+"Vojvodina Novi Sad",
+"13:00"
+],
+[
+"Partizan Belgrade",
+"Novi Pazar",
+"15:00"
+],
+[
+"Zemun",
+"Zeleznicar Pancevo",
+"17:00"
+]
+],
+"soccer_xb_ukraine": [
+[
+"Dynamo Kyiv",
+"Karpaty Lviv",
+"10:00"
+],
+[
+"LNZ",
+"Kudrivka",
+"10:00"
+],
+[
+"Bukovyna Chernivtsi",
+"Polissya Zhytomyr",
+"15:00"
+]
+],
+"soccer_sweden_allsvenskan": [
+[
+"Hammarby IF",
+"Djurgardens IF",
+"12:00"
+],
+[
+"BK Hacken",
+"Örgryte IS",
+"14:30"
+]
+],
+"soccer_xb_belgium_2": [
+[
+"Patro Eisden Maasmechelen",
+"Genk II",
+"14:00"
+],
+[
+"Gent II",
+"RFC Seraing",
+"17:15"
+]
+],
+"soccer_xb_croatia": [
+[
+"NK Lokomotiva",
+"NK Varazdin",
+"13:00"
+],
+[
+"Slaven Belupo",
+"Rijeka",
 "16:00"
 ]
 ],
 "soccer_xb_romania": [
 [
-"Botosani",
-"UTA Arad",
-"14:15"
+"Csikszereda Miercurea Ciuc",
+"CS Universitatea Craiova",
+"15:00"
 ],
 [
-"FCSB",
-"Otelul Galati",
-"18:30"
-]
-],
-"soccer_usa_mls": [
-[
-"Toronto FC",
-"CF Montreal",
-"17:00"
-],
-[
-"Chicago Fire",
-"New York City FC",
-"18:30"
-],
-[
-"Atlanta United FC",
-"FC Cincinnati",
-"23:30"
-],
-[
-"Charlotte FC",
-"FC Dallas",
-"23:30"
-],
-[
-"Orlando City SC",
-"Columbus Crew SC",
-"23:30"
-],
-[
-"Inter Miami CF",
-"D.C. United",
-"23:30"
-],
-[
-"New England Revolution",
-"Seattle Sounders FC",
-"23:30"
-],
-[
-"New York Red Bulls",
-"San Diego FC",
-"23:30"
-],
-[
-"Philadelphia Union",
-"Real Salt Lake",
-"23:30"
-],
-[
-"Austin FC",
-"Nashville SC",
-"00:30"
-],
-[
-"Minnesota United FC",
-"Houston Dynamo",
-"00:30"
-],
-[
-"Sporting Kansas City",
-"Portland Timbers",
-"00:30"
-],
-[
-"Colorado Rapids",
-"San Jose Earthquakes",
-"01:30"
-],
-[
-"Los Angeles FC",
-"Vancouver Whitecaps FC",
-"02:30"
-]
-],
-"soccer_argentina_primera_division": [
-[
-"Barracas Central",
-"Atlético Huracán",
-"18:45"
-],
-[
-"Central Córdoba",
-"Estudiantes",
-"20:00"
-],
-[
-"CA Tigre BA",
-"Banfield",
-"22:15"
-],
-[
-"River Plate",
-"Estudiantes de Río Cuarto",
-"00:30"
-]
-],
-"soccer_mexico_ligamx": [
-[
-"Querétaro",
-"Atlante FC",
-"23:00"
-],
-[
-"FC Juárez",
-"Tijuana",
-"23:00"
-],
-[
-"Atlas",
-"Guadalajara",
-"01:00"
-],
-[
-"América",
-"Monterrey",
-"03:00"
-]
-],
-"soccer_chile_campeonato": [
-[
-"Cobresal",
-"Universidad de Concepción",
+"Farul Constanta",
+"Petrolul Ploiesti",
 "18:00"
+]
+],
+"soccer_xb_slovakia": [
+[
+"Ruzomberok",
+"MSK Zilina",
+"13:30"
 ],
 [
-"Huachipato",
-"O'Higgins",
-"20:30"
+"Zeleziarne Podbrezova",
+"Spartak Trnava",
+"16:00"
+]
+],
+"soccer_xb_slovenia": [
+[
+"NK Nafta Lendava",
+"NK Bravo",
+"13:00"
 ],
 [
-"Universidad Católica (CHI)",
-"Audax Italiano",
-"23:00"
+"NK Brinje Grosuplje",
+"Maribor",
+"15:30"
+]
+],
+"soccer_xb_turkey_2": [
+[
+"Fatih Karagumruk",
+"Muglaspor",
+"13:00"
+],
+[
+"Bursaspor",
+"Mardin 1969 Spor",
+"16:00"
+]
+],
+"soccer_finland_veikkausliiga": [
+[
+"FC Inter Turku",
+"KuPS Kuopio",
+"12:00"
+]
+],
+"soccer_xb_austria_2": [
+[
+"Admira Wacker",
+"ASK Voitsberg",
+"08:30"
+]
+],
+"soccer_xb_denmark_2": [
+[
+"Vendsyssel",
+"HB Koge",
+"12:00"
+]
+],
+"soccer_xb_israel": [
+[
+"Hapoel Ramat Gan Giv'atayim",
+"Beitar Jerusalem",
+"17:15"
 ]
 ],
 "soccer_brazil_campeonato": [
 [
-"Vasco da Gama",
-"Remo",
-"21:00"
+"Atletico Mineiro",
+"Santos",
+"19:00"
 ],
 [
-"Sao Paulo",
-"Vitoria",
-"00:00"
+"Palmeiras",
+"Corinthians",
+"20:30"
+],
+[
+"Flamengo",
+"Fluminense",
+"20:30"
+],
+[
+"Grêmio",
+"Internacional",
+"20:30"
+],
+[
+"Bahia",
+"Mirassol",
+"22:30"
 ]
 ],
-"soccer_xb_usl": [
+"soccer_argentina_primera_division": [
 [
-"Sporting Jacksonville",
-"Birmingham Legion",
-"17:00"
+"San Lorenzo",
+"Deportivo Riestra",
+"17:45"
 ],
 [
-"Charleston Battery",
-"Louisville City",
-"22:00"
+"Platense",
+"Argentinos Juniors",
+"20:00"
 ],
 [
-"Detroit City",
-"Rhode Island",
-"23:00"
+"Rosario Central",
+"Independiente Rivadavia",
+"20:00"
 ],
 [
-"Indy Eleven",
-"Tampa Bay Rowdies",
-"23:00"
+"Racing Club",
+"Belgrano de Cordoba",
+"22:15"
 ],
 [
-"Miami",
-"Loudoun United",
-"23:00"
-],
-[
-"Pittsburgh Riverhounds",
-"Hartford Athletic",
-"23:00"
-],
-[
-"New Mexico United",
-"Monterey Bay",
-"01:00"
-],
-[
-"El Paso Locomotive",
-"Orange County Blues",
-"01:00"
-],
-[
-"Oakland Roots",
-"San Antonio Texas",
-"02:00"
-],
-[
-"Sacramento Republic",
-"Colorado Springs Switchbacks",
-"02:00"
-],
-[
-"Phoenix Rising",
-"Las Vegas Lights",
-"02:00"
+"Talleres",
+"Independiente",
+"00:30"
 ]
 ],
-"soccer_xb_mexico_2": [
+"soccer_chile_campeonato": [
 [
-"Coyotes de Tlaxcala",
-"Piratas Veracruz",
-"22:00"
+"Everton de Viña del Mar",
+"La Serena",
+"15:30"
 ],
 [
-"Venados",
-"Universidad de Guadalajara",
+"Coquimbo Unido",
+"Colo Colo",
+"18:00"
+],
+[
+"Deportes Concepción",
+"Union La Calera",
+"20:30"
+],
+[
+"Deportes Limache",
+"Palestino",
+"23:00"
+]
+],
+"soccer_mexico_ligamx": [
+[
+"Atlético San Luis",
+"Santos Laguna",
 "23:00"
 ],
 [
-"Dorados de Sinaloa",
-"Cruz Azul Hidalgo",
-"01:00"
+"Pachuca",
+"Necaxa",
+"23:10"
 ],
 [
-"Club Deportivo Mineros de Zacatecas",
-"Cancun",
-"01:00"
+"Pumas",
+"Cruz Azul",
+"01:15"
+]
 ],
+"soccer_usa_mls": [
 [
-"Jaiba Brava",
-"Alacranes de Durango",
-"01:00"
+"St. Louis City SC",
+"LA Galaxy",
+"23:00"
 ]
 ],
 "soccer_xb_argentina_2": [
 [
-"Colegiales",
-"Club Social y Deportivo Tristan Suarez",
+"Club Atletico Atlanta",
+"Club Atletico San Martín de Tucuman",
 "18:00"
 ],
 [
-"Club Almagro",
-"Chacarita Juniors",
+"Deportivo Madryn",
+"Chaco For Ever",
+"18:00"
+],
+[
+"Club Almirante Brown",
+"CA San Miguel",
 "18:30"
 ],
 [
-"Quilmes",
-"Agropecuario",
+"Defensores de Belgrano",
+"Acassuso",
+"18:30"
+],
+[
+"Estudiantes de Buenos Aires",
+"Deportivo Moron",
+"18:30"
+],
+[
+"Club Atletico Mitre",
+"Club Atletico Colon",
 "19:00"
 ],
 [
-"Ferrocarril Midland",
-"Atletico de Rafaela",
-"19:30"
-]
-],
-"soccer_xb_brazil_c": [
-[
-"Botafogo da Paraíba",
-"Santa Cruz PE",
-"20:00"
-],
-[
-"Brusque",
-"Paysandu",
-"20:00"
-],
-[
-"Maringa Futebol Clube",
-"Floresta EC",
-"20:00"
-],
-[
-"Ferroviaria",
-"Associacao Atletica Internacional",
-"20:00"
-]
-],
-"soccer_xb_costa_rica": [
-[
-"Inter San Carlos",
-"Municipal Perez Zeledon",
-"21:00"
-],
-[
-"Puntarenas",
-"Alajuelense",
-"23:00"
-],
-[
-"Herediano",
-"San Carlos",
-"02:00"
-]
-],
-"soccer_xb_ecuador": [
-[
-"Independiente del Valle",
-"SD Aucas",
-"16:30"
-],
-[
-"Manta",
-"Tecnico Universitario",
+"Club Atletico Patronato",
+"Club Atletico Guemes",
 "19:00"
 ],
 [
-"Guayaquil City",
-"Emelec",
-"21:30"
+"Club Atletico Temperley",
+"Nueva Chicago",
+"19:00"
+],
+[
+"Gimnasia y Esgrima de Jujuy",
+"Gimnasia y Tiro",
+"19:00"
+],
+[
+"Deportivo Maipu",
+"San Martin de San Juan",
+"20:00"
+],
+[
+"Central Norte Salta",
+"Ferro Carril Oeste",
+"20:00"
+],
+[
+"Ciudad de Bolivar",
+"CA San Telmo",
+"22:30"
 ]
 ],
-"soccer_xb_guatemala": [
+"soccer_brazil_serie_b": [
 [
-"Aurora Guatemala",
-"Xelaju",
-"21:00"
+"Juventude",
+"São Bernardo",
+"19:00"
 ],
 [
-"Suchitepequez",
-"Deportivo Mixco",
-"23:00"
+"Atletico Goianiense",
+"Sport Recife",
+"19:10"
 ],
 [
-"Deportivo Malacateco",
-"Deportivo Guastatoya",
-"01:00"
-]
-],
-"soccer_xb_peru": [
-[
-"ADT Tarma",
-"Cajamarca",
-"18:00"
-],
-[
-"Club Comerciantes Unidos",
-"Juan Pablo II",
+"Nautico PE",
+"Vila Nova",
 "20:30"
 ],
 [
-"Club Universitario de Deportes",
-"Melgar",
-"00:00"
-]
-],
-"soccer_xb_uruguay": [
-[
-"Defensor Sporting",
-"C.A. Cerro",
-"14:00"
+"Cuiabá",
+"Avai",
+"21:30"
 ],
 [
-"Montevideo Wanderers",
-"Club Atletico Boston River",
-"18:00"
-],
-[
-"Penarol",
-"C.A. Progreso",
+"Operario PR",
+"Goiás",
 "21:30"
 ]
 ],
 "soccer_xb_venezuela": [
 [
-"Portuguesa Acarigua",
-"Deportivo La Guaira",
-"21:00"
+"Anzoategui",
+"Carabobo",
+"20:00"
 ],
 [
-"Deportivo Tachira",
-"Universidad Central de Venezuela",
+"Trujillanos",
+"Academia Puerto Cabello",
+"20:00"
+],
+[
+"Caracas",
+"Zamora",
+"21:30"
+],
+[
+"Monagas",
+"Estudiantes de Merida",
 "22:00"
-],
-[
-"Metropolitanos",
-"Deportivo Rayo Zuliano",
-"23:30"
 ]
 ],
 "soccer_xb_bolivia": [
 [
-"Universitario de Vinto",
-"Real Oruro",
+"Club Bamin Real Potosi",
+"The Strongest",
 "19:00"
 ],
 [
-"Oriente Petrolero",
-"ABB",
+"Club Aurora",
+"Nacional Potosi",
+"21:15"
+],
+[
+"Bolivar",
+"Club Blooming",
 "23:30"
 ]
 ],
 "soccer_xb_colombia": [
 [
-"Deportivo Pereira",
-"Deportivo Cali",
+"Jaguares de Cordoba",
+"Deportes Tolima",
+"21:05"
+],
+[
+"Boyaca Chico",
+"Cucuta Deportivo",
+"23:10"
+],
+[
+"America de Cali",
+"Independiente Medellin",
+"01:15"
+]
+],
+"soccer_xb_ecuador": [
+[
+"Universidad Catolica Quito",
+"Club Social y Deportivo Macara",
+"16:30"
+],
+[
+"Orense Sporting Club",
+"Deportivo Cuenca",
+"18:45"
+],
+[
+"Liga Deportiva Universitaria de Quito",
+"Barcelona Sporting Club",
+"21:30"
+]
+],
+"soccer_xb_guatemala": [
+[
+"Deportivo San Pedro",
+"C.S.D. Comunicaciones",
+"21:00"
+],
+[
+"C.S.D. Municipal",
+"Deportivo Marquense",
+"23:00"
+],
+[
+"Antigua GFC",
+"Coban Imperial",
+"01:10"
+]
+],
+"soccer_xb_peru": [
+[
+"Universidad Tecnica de Cajamarca",
+"Sporting Cristal",
+"18:00"
+],
+[
+"Sport Boys",
+"Alianza Atletico Sullana",
 "20:30"
 ],
 [
-"Junior de Barranquilla",
-"Internacional de Bogota",
-"23:10"
+"Cusco",
+"Alianza Lima",
+"23:30"
+]
+],
+"soccer_xb_uruguay": [
+[
+"Juventud de Las Piedras",
+"Racing Club de Montevideo",
+"14:00"
+],
+[
+"Cerro Largo",
+"Albion Montevideo",
+"18:00"
+],
+[
+"Central Espanol",
+"Club Nacional Montevideo",
+"21:30"
 ]
 ],
 "soccer_xb_paraguay": [
 [
-"Club Sportivo San Lorenzo",
-"Sportivo Trinidense",
+"Club Rubio Nu",
+"Club Olimpia",
 "20:00"
 ],
 [
-"Sportivo Luqueno",
-"Cerro Porteno",
+"Club Libertad",
+"Club Guarani",
 "22:20"
 ]
 ],
 "soccer_xb_canada": [
 [
-"Supra du Quebec",
-"Vancouver Langley",
-"20:00"
+"Pacific",
+"Atletico Ottawa",
+"23:00"
+]
+],
+"soccer_xb_costa_rica": [
+[
+"Escorpiones",
+"Deportivo Saprissa",
+"23:00"
 ]
 ],
 "soccer_japan_j_league": [
 [
-"Avispa Fukuoka",
-"Fagiano Okayama",
+"JEF United Chiba",
+"V-Varen Nagasaki",
+"05:00"
+],
+[
+"Tokyo Verdy",
+"Hiroshima Sanfrecce FC",
 "06:00"
 ],
 [
-"FC Tokyo",
-"Urawa Red Diamonds",
+"Mito HollyHock",
+"Shimizu S Pulse",
 "06:00"
 ],
 [
-"Kyoto Purple Sanga",
-"FC Machida Zelvia",
-"10:00"
+"Kawasaki Frontale",
+"Nagoya Grampus",
+"07:00"
 ]
 ],
 "soccer_saudi_arabia_pro_league": [
 [
-"Al-Hazem",
-"Neom",
-"13:50"
+"Al-Fayha",
+"Al-Riyadh",
+"13:40"
 ],
 [
-"Al-Ettifaq",
-"Al-Khaleej",
-"14:55"
+"Abha Club",
+"Al-Faisaly KSA FC",
+"15:25"
 ],
 [
-"Al-Hilal",
-"Al-Ittihad",
+"Al-Shabab",
+"Al-Taawoun",
 "18:00"
 ]
 ],
 "soccer_china_superleague": [
 [
-"Chengdu Rongcheng FC",
-"Tianjin Jinmen Tiger FC",
+"Qingdao West Coast FC",
+"Dalian Yingbo",
+"10:00"
+],
+[
+"Chongqing Tonglianglong FC",
+"Shandong Luneng Taishan FC",
 "11:35"
 ],
 [
-"Shanghai Shenhua FC",
-"Yunnan Yukun",
+"Liaoning Tieren FC",
+"Wuhan Three Towns",
 "11:35"
 ]
 ],
 "soccer_korea_kleague1": [
 [
-"Sangju Sangmu FC",
-"FC Anyang",
-"07:30"
-]
-],
-"soccer_xb_indonesia": [
-[
-"Arema",
-"Bhayangkara",
-"08:30"
-],
-[
-"Persita Tangerang",
-"Garuda Yaksa",
-"08:30"
-],
-[
-"PSIM Yogyakarta",
-"Persija Jakarta",
-"08:30"
-],
-[
-"Bali United Pusam",
-"Persijap Jepara",
-"12:00"
+"Gwangju FC",
+"Ulsan Hyundai FC",
+"05:00"
 ]
 ],
 "soccer_xb_china_2": [
 [
-"Dalian Kun City",
-"Changchun Yatai",
+"Yanbian Longding",
+"Nantong Zhiyun",
+"07:00"
+],
+[
+"Shaanxi Union",
+"Foshan Nanshi",
+"07:30"
+],
+[
+"Guangxi Hengchen",
+"Shenzhen Juniors",
 "11:00"
 ],
 [
-"Suzhou Dongwu",
-"Shijiazhuang Gongfu",
+"Ningbo",
+"Nanjing City",
 "11:00"
 ],
 [
-"Meizhou Hakka",
-"Wuxi Wugou",
+"Guangdong GZ-Power",
+"Jiangxi Dingnan United",
 "11:30"
+]
+],
+"soccer_xb_indonesia": [
+[
+"Java United",
+"Borneo",
+"08:30"
+],
+[
+"PSS Sleman",
+"PSM Makassar",
+"08:30"
+],
+[
+"Persib Bandung",
+"Dewa United",
+"12:00"
 ]
 ],
 "soccer_xb_japan_2": [
 [
-"Ventforet Kofu",
-"Tochigi City",
-"07:00"
+"Kataller Toyama",
+"Tegevajaro Miyazaki",
+"05:00"
 ],
 [
-"Jubilo Iwata",
-"Consadole Sapporo",
+"Iwaki",
+"Blaublitz Akita",
+"06:00"
+],
+[
+"Shonan Bellmare",
+"Albirex Niigata",
 "09:00"
 ]
 ],
 "soccer_xb_korea_2": [
 [
-"Gimhae City",
-"Chungnam Asan",
-"07:30"
-],
-[
-"Cheonan City",
-"Gyeongnam",
-"07:30"
+"Suwon Samsung Bluewings",
+"Ansan Greeners",
+"05:00"
 ]
 ],
-"soccer_xb_qatar": [
+"africa_egypt_premier_league": [
 [
-"Al-Shahaniya",
-"Lusail",
-"14:45"
+"Al Qanah",
+"Al-Masry",
+"14:00"
 ],
 [
-"Al Ahli Doha",
-"Al-Sailiya",
+"Zamalek",
+"Al Ahly Cairo",
 "17:00"
-]
-],
-"soccer_xb_iran": [
-[
-"Paykan",
-"Shams Azar Qazvin",
-"13:30"
 ]
 ],
 "africa_morocco_botola_pro": [
 [
-"KAC Marrakech",
-"Ittihad Riadhi de Tanger",
-"17:00"
-],
-[
-"Amal Tiznit",
-"Difaa El Jadida",
-"19:00"
+"Wydad Casablanca",
+"COD Meknes",
+"20:00"
 ]
 ]
 },
 "africa": [
 [
-"Premier League (Lesotho)",
-"Machokha",
-"Mzamane",
-"07:30"
-],
-[
 "Diski Challenge (South-Africa)",
-"Golden Arrows U23",
-"Chippa United U23",
+"Sekhukhune United U23",
+"Durban City U23",
 "08:00"
 ],
 [
 "Diski Challenge (South-Africa)",
-"Richards Bay U23",
-"Kaizer Chiefs U23",
+"Stellenbosch U23",
+"Polokwane City U23",
 "08:00"
 ],
 [
 "Diski Challenge (South-Africa)",
-"Siwelele U23",
-"Orlando Pirates U23",
+"Mamelodi Sundowns U23",
+"Kruger United U23",
 "08:00"
 ],
 [
 "Diski Challenge (South-Africa)",
-"TS Galaxy U23",
-"AmaZulu U23",
+"Milford FC U23",
+"Marumo Gallants U23",
 "08:00"
-],
-[
-"Premier League (Lesotho)",
-"Lioli",
-"Majantja",
-"09:30"
 ],
 [
 "FKF Premier League (Kenya)",
-"Mathare United",
-"APS Bomet",
+"Ulinzi Stars",
+"Tusker",
 "11:00"
 ],
 [
-"Premier League (Eswatini)",
-"Mbabane Swallows",
-"Madlenya",
-"11:00"
+"FKF Premier League (Kenya)",
+"3K",
+"Mara Sugar",
+"12:00"
 ],
 [
-"Premier League (Lesotho)",
-"Limkokwing University",
-"Matlama",
-"11:30"
+"FKF Premier League (Kenya)",
+"Migori Youth",
+"Police",
+"12:00"
 ],
 [
 "Premier League (Ethiopia)",
-"Kedus Giorgis",
-"Negelle Arsi",
+"Ethiopia Bunna",
+"Sheger Ketema",
 "12:00"
 ],
 [
-"Premier League (Eswatini)",
-"Ezulwini United",
-"Nsingizini Hotspurs",
+"Premier League (Ethiopia)",
+"Hadiya Hosaena",
+"Bahardar",
+"12:00"
+],
+[
+"Premier League (Ethiopia)",
+"Awassa Kenema",
+"Mekelakeya",
 "12:00"
 ],
 [
 "Super League (Malawi)",
-"Ekhaya",
-"Kamuzu Barracks",
+"Karonga United",
+"CIVO United",
 "12:30"
 ],
 [
 "Super League (Malawi)",
-"Mitundu Baptist",
-"Red Lions",
+"Nyasa Big Bullets",
+"Blue Eagles",
 "12:30"
 ],
 [
 "Super League (Malawi)",
-"Silver Strikers",
-"Be Forward Wanderers",
+"Creck",
+"Moyale Barracks",
 "12:30"
 ],
 [
 "Super League (Malawi)",
-"Chitipa United",
-"MAFCO",
+"Dedza Dynamos",
+"Masters FC",
 "12:30"
 ],
 [
 "Ligue A (Burundi)",
-"Kayanza United",
-"Aigle Noir",
+"Ngozi City",
+"Royal Vision",
 "13:00"
 ],
 [
 "Ligue A (Burundi)",
-"Flambeau du Centre",
-"Muzinga",
+"Musongati",
+"Le Messager Ngozi",
 "13:00"
 ],
 [
-"Ligue A (Burundi)",
-"Olympic Star",
-"Never Give Up Academy",
-"13:00"
-],
-[
-"Super League (Zambia)",
-"Kabwe Warriors",
-"Mutondo Stars",
+"FKF Premier League (Kenya)",
+"Nairobi United",
+"KCB",
 "13:00"
 ],
 [
 "Super League (Zambia)",
-"Man Utd Zambia Academy",
-"Kansanshi Dynamos",
+"Zanaco",
+"Konkola Blades",
 "13:00"
 ],
 [
 "Super League (Zambia)",
-"Nkana",
-"Makeni All Stars",
-"13:00"
-],
-[
-"Super League (Zambia)",
-"Nkwazi",
-"Chirundu Utd",
-"13:00"
-],
-[
-"Super League (Zambia)",
-"Red Arrows",
-"Mufulira Wanderers",
-"13:00"
-],
-[
-"Super League (Zambia)",
-"Roan United",
-"Green Buffaloes",
-"13:00"
-],
-[
-"Super League (Zambia)",
-"Trident",
-"NAPSA Stars",
-"13:00"
-],
-[
-"Super League (Zambia)",
-"ZESCO United",
-"Green Eagles",
+"Power Dynamos",
+"Nchanga Rangers",
 "13:00"
 ],
 [
 "National Soccer League (Rwanda)",
-"Al Merreikh",
-"Etoile de l'Est",
+"Amagaju",
+"Mukura",
 "13:00"
 ],
 [
 "National Soccer League (Rwanda)",
-"Bugesera",
-"Etincelles",
+"Musanze",
+"Gasogi United",
 "13:00"
 ],
 [
 "National Soccer League (Rwanda)",
-"Marines",
-"Kiyovu Sports",
+"Sunrise",
+"Police",
 "13:00"
 ],
 [
 "Premier League (Uganda)",
-"Kataka",
-"Kitara",
+"Mbarara City",
+"Blacks Power",
 "13:00"
 ],
 [
 "Premier League (Ethiopia)",
-"Welayta Dicha",
-"Fasil Ketema",
+"Gamo Chencha",
+"Ethiopian Medhin",
 "13:00"
 ],
 [
 "Premier Soccer League (Zimbabwe)",
-"Agama",
-"Hunters",
+"CAPS United",
+"Simba Bhora",
 "13:00"
 ],
 [
-"Premier Soccer League (Zimbabwe)",
-"Chicken Inn",
-"Platinum",
+"Premier League (Lesotho)",
+"LCS",
+"LDF",
 "13:00"
 ],
 [
-"Premier Soccer League (Zimbabwe)",
-"Hardrock",
-"Bulawayo Chiefs",
+"Premier League (Lesotho)",
+"Lijabatho",
+"Members",
 "13:00"
 ],
 [
-"Premier Soccer League (Zimbabwe)",
-"Herentals",
-"MWOS",
+"Premier League (Lesotho)",
+"Linare",
+"Manonyane",
 "13:00"
 ],
 [
-"Premier Soccer League (Zimbabwe)",
-"Manica Diamonds",
-"TelOne",
+"Premier League (Lesotho)",
+"SC Villa",
+"LMPS",
 "13:00"
 ],
 [
-"Premier Soccer League (Zimbabwe)",
-"Kariba",
-"Scotland Mabvuku",
-"13:00"
+"Ligue 1 (Tunisia)",
+"ES Sahel",
+"CS Hammam-Lif",
+"13:30"
 ],
 [
-"Premier League (Eswatini)",
-"Manzini Sea Birds",
-"Young Buffaloes",
-"13:00"
+"Ligue 1 (Tunisia)",
+"Jeunesse Sportive Omrane",
+"AS Marsa",
+"13:30"
 ],
 [
-"Premier League (Eswatini)",
-"Rangers FC",
-"Red Rhinos",
-"13:00"
+"Ligue 1 (Tunisia)",
+"ES Metlaoui",
+"Stade Tunisien",
+"13:30"
 ],
 [
-"FKF Premier League (Kenya)",
-"Posta Rangers FC",
-"Shabana",
-"13:15"
+"Ligue 1 (Tunisia)",
+"ES Zarzis",
+"ES Hammam-Sousse",
+"13:30"
+],
+[
+"1st Division (South-Africa)",
+"Cape Town City",
+"The Bees",
+"13:30"
+],
+[
+"1st Division (South-Africa)",
+"Gomora United FC",
+"Upington City",
+"13:30"
+],
+[
+"Ligue 2 (Tunisia)",
+"Kerkennah",
+"AS Agareb",
+"13:30"
+],
+[
+"Ligue 2 (Tunisia)",
+"Ariana",
+"Kalaâ Sport",
+"13:30"
+],
+[
+"Ligue 2 (Tunisia)",
+"Bouchamma",
+"Stade Gabesien",
+"13:30"
+],
+[
+"Ligue 2 (Tunisia)",
+"CO Medenine",
+"AS Kasserine",
+"13:30"
+],
+[
+"Ligue 2 (Tunisia)",
+"JS Kairouanaise",
+"Ksour Essef",
+"13:30"
 ]
 ]
 }

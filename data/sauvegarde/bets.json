@@ -106,7 +106,119 @@
 "coupon": "ZTNB3",
 "at": "05:17",
 "date": "2026-10-10",
-"result": null
+"result": "loss",
+"counted": true,
+"reported": true
+},
+{
+"tier": "🛡️ SÛR (cote 5 à 7)",
+"keys": [
+"984691837d31fd0c59c088f377f55f75|h2h|||Real Betis",
+"407f7d03157d1dfad384876e6a6bc910|totals||2.5|Under",
+"66a4f4201806b928c9007116727fdd61|totals||2.5|Over"
+],
+"odds": 5.15,
+"prob": 0.20153,
+"stake": null,
+"xlegs": [
+{
+"key": "984691837d31fd0c59c088f377f55f75|h2h|||Real Betis",
+"xodds": 1.575,
+"xref": [
+753654635,
+1,
+0
+]
+},
+{
+"key": "407f7d03157d1dfad384876e6a6bc910|totals||2.5|Under",
+"xodds": 1.877,
+"xref": [
+753387475,
+10,
+2.5
+]
+},
+{
+"key": "66a4f4201806b928c9007116727fdd61|totals||2.5|Over",
+"xodds": 1.742,
+"xref": [
+753654654,
+9,
+2.5
+]
+}
+],
+"coupon": "GHVKJ",
+"at": "04:48",
+"date": "2026-10-11",
+"result": null,
+"played": {
+"odds": 5.15,
+"stake": 200,
+"at": "2026-10-11T04:59+00:00"
+},
+"cur": "FCFA"
+},
+{
+"tier": "⚖️ COSTAUD (cote 12 à 20)",
+"keys": [
+"7daf7edaf572eba3ac86196c663d67d3|totals||2.5|Over",
+"0bdae4d304810578e47386606bff7106|totals||2.5|Under",
+"2997b68cc93f62d8a1dee9f06bedbefd|h2h|||Real Sociedad",
+"6dbab232dd8d2aed0cb1d6f7978fb7b1|totals||2.5|Under"
+],
+"odds": 15.57,
+"prob": 0.06582,
+"stake": null,
+"xlegs": [
+{
+"key": "7daf7edaf572eba3ac86196c663d67d3|totals||2.5|Over",
+"xodds": 2.073,
+"xref": [
+756422241,
+9,
+2.5
+]
+},
+{
+"key": "0bdae4d304810578e47386606bff7106|totals||2.5|Under",
+"xodds": 1.886,
+"xref": [
+752320871,
+10,
+2.5
+]
+},
+{
+"key": "2997b68cc93f62d8a1dee9f06bedbefd|h2h|||Real Sociedad",
+"xodds": 1.655,
+"xref": [
+756422229,
+1,
+0
+]
+},
+{
+"key": "6dbab232dd8d2aed0cb1d6f7978fb7b1|totals||2.5|Under",
+"xodds": 2.406,
+"xref": [
+752303707,
+10,
+2.5
+]
+}
+],
+"coupon": "VHVKJ",
+"at": "04:48",
+"date": "2026-10-11",
+"result": null,
+"played": {
+"odds": 15.57,
+"stake": 200,
+"at": "2026-10-11T05:02+00:00"
+},
+"cur": "FCFA"
 }
 ]
 }

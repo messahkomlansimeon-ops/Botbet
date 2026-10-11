@@ -1,11 +1,8 @@
 {
-"day": "2026-10-10",
+"day": "2026-10-11",
 "items": {
-"2026-10-10|vm2|danger": 71.397,
-"2026-10-10|vm7|danger": 70.503,
-"2026-10-10|vm4|danger": 0.0,
-"349c47668fdd909039a9408c14cad8bc|team_fouls_home||12.5|Under|rise": 2.12,
-"2026-10-10|vm14|danger": 51.715,
-"xb758722925|alternate_totals_corners||8.5|Under|rise": 1.926
+"xb758723324|alternate_totals_corners||8.5|Under|rise": 2.116,
+"abcd3d2baa7f40fc30571cfa1a46b323|team_totals_home||1.5|Under|rise": 2.06,
+"b784be601500dd4744c5fc610d56fc96|team_fouls_away||13.5|Under|rise": 2.15
 }
 }

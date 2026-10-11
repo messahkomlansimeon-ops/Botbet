@@ -682,5 +682,2351 @@
 "home_id": 292,
 "away_id": 287,
 "status": "NS"
+},
+"2026-10-10|Arsenal|Leeds United": {
+"id": 1557417,
+"home_id": 42,
+"away_id": 63,
+"status": "FT"
+},
+"2026-10-10|Manchester United|Tottenham Hotspur": {
+"id": 1557425,
+"home_id": 33,
+"away_id": 47,
+"status": "FT"
+},
+"2026-10-10|Sunderland|Brighton and Hove Albion": {
+"id": 1557426,
+"home_id": 746,
+"away_id": 51,
+"status": "FT"
+},
+"2026-10-10|Aston Villa|Brentford": {
+"id": 1557418,
+"home_id": 66,
+"away_id": 55,
+"status": "FT"
+},
+"2026-10-10|Chelsea|Bournemouth": {
+"id": 1557419,
+"home_id": 49,
+"away_id": 35,
+"status": "FT"
+},
+"2026-10-10|Ipswich Town|Fulham": {
+"id": 1557423,
+"home_id": 57,
+"away_id": 36,
+"status": "FT"
+},
+"2026-10-10|Rotherham United|Gillingham": {
+"id": 1563798,
+"home_id": 73,
+"away_id": 1347,
+"status": "FT"
+},
+"2026-10-10|Inter Milan|Parma": {
+"id": 1550141,
+"home_id": 505,
+"away_id": 523,
+"status": "FT"
+},
+"2026-10-10|SC Paderborn|VfB Stuttgart": {
+"id": 1575184,
+"home_id": 185,
+"away_id": 172,
+"status": "FT"
+},
+"2026-10-10|TSG Hoffenheim|Hamburger SV": {
+"id": 1575178,
+"home_id": 167,
+"away_id": 175,
+"status": "FT"
+},
+"2026-10-10|Go Ahead Eagles|Sparta Rotterdam": {
+"id": 1552182,
+"home_id": 410,
+"away_id": 426,
+"status": "FT"
+},
+"2026-10-10|Preston North End|Millwall": {
+"id": 1563184,
+"home_id": 59,
+"away_id": 58,
+"status": "FT"
+},
+"2026-10-10|SV Darmstadt 98|FC Energie Cottbus": {
+"id": 1576190,
+"home_id": 181,
+"away_id": 1320,
+"status": "FT"
+},
+"2026-10-10|Rayo Vallecano|Athletic Bilbao": {
+"id": 1570410,
+"home_id": 728,
+"away_id": 531,
+"status": "INT"
+},
+"2026-10-10|FSV Mainz 05|Bayer Leverkusen": {
+"id": 1575181,
+"home_id": 164,
+"away_id": 168,
+"status": "FT"
+},
+"2026-10-10|Barcelona|Getafe": {
+"id": 1570404,
+"home_id": 529,
+"away_id": 546,
+"status": "FT"
+},
+"2026-10-10|Lorient|Paris FC": {
+"id": 1552777,
+"home_id": 97,
+"away_id": 114,
+"status": "FT"
+},
+"2026-10-10|Real Madrid|Villarreal": {
+"id": 1570411,
+"home_id": 541,
+"away_id": 533,
+"status": "FT"
+},
+"2026-10-10|CS Maritimo|FC Porto": {
+"id": 1575515,
+"home_id": 214,
+"away_id": 212,
+"status": "FT"
+},
+"2026-10-10|Paris Saint Germain|Le Mans FC": {
+"id": 1552780,
+"home_id": 85,
+"away_id": 1298,
+"status": "FT"
+},
+"2026-10-10|Derby County|Wrexham AFC": {
+"id": 1563182,
+"home_id": 69,
+"away_id": 1837,
+"status": "FT"
+},
+"2026-10-10|Sportivo Luqueno|Cerro Porteno": {
+"id": 1632031,
+"home_id": 1183,
+"away_id": 1176,
+"status": "FT"
+},
+"2026-10-11|Dorados de Sinaloa|Cruz Azul Hidalgo": {
+"id": 1581445,
+"home_id": 2297,
+"away_id": 15928,
+"status": "FT"
+},
+"2026-10-10|Genk|KV Kortrijk": {
+"id": 1558646,
+"home_id": 742,
+"away_id": 734,
+"status": "FT"
+},
+"2026-10-10|Virtus Entella|Juve Stabia": {
+"id": 1601548,
+"home_id": 527,
+"away_id": 863,
+"status": "FT"
+},
+"2026-10-10|Dundee United|Hibernian": {
+"id": 1556671,
+"home_id": 1386,
+"away_id": 249,
+"status": "FT"
+},
+"2026-10-10|Cambridge United|Blackpool": {
+"id": 1564344,
+"home_id": 1370,
+"away_id": 1356,
+"status": "FT"
+},
+"2026-10-10|Çaykur Rizespor|Fenerbahce": {
+"id": 1584428,
+"home_id": 1007,
+"away_id": 611,
+"status": "FT"
+},
+"2026-10-10|AEK Athens|OFI Crete": {
+"id": 1593324,
+"home_id": 575,
+"away_id": 1124,
+"status": "FT"
+},
+"2026-10-10|Ural|Veles Moscow": {
+"id": 1577548,
+"home_id": 1084,
+"away_id": 6833,
+"status": "FT"
+},
+"2026-10-10|Leca|Marco 09": {
+"id": 1597781,
+"home_id": 4757,
+"away_id": 22089,
+"status": "FT"
+},
+"2026-10-10|Daejeon Korail|Dangjin Citizen": {
+"id": 1520570,
+"home_id": 7068,
+"away_id": 18653,
+"status": "FT"
+},
+"2026-10-10|Hoang Anh Gia Lai|SHB Da Nang": {
+"id": 1633902,
+"home_id": 3673,
+"away_id": 3669,
+"status": "FT"
+},
+"2026-10-10|Chornomorets Odesa|Kharkiv": {
+"id": 1565490,
+"home_id": 3615,
+"away_id": 3628,
+"status": "FT"
+},
+"2026-10-10|Tondela|S.C.U. Torreense": {
+"id": 1576501,
+"home_id": 218,
+"away_id": 4799,
+"status": "FT"
+},
+"2026-10-10|Kyoto Sanga|Machida Zelvia": {
+"id": 1556088,
+"home_id": 302,
+"away_id": 303,
+"status": "FT"
+},
+"2026-10-10|Stockport County FC|Barnsley": {
+"id": 1564353,
+"home_id": 4686,
+"away_id": 747,
+"status": "FT"
+},
+"2026-10-10|Coleraine|Cliftonville": {
+"id": 1562086,
+"home_id": 669,
+"away_id": 2266,
+"status": "FT"
+},
+"2026-10-10|Lille|Le Havre": {
+"id": 1552776,
+"home_id": 79,
+"away_id": 111,
+"status": "FT"
+},
+"2026-10-10|RB Leipzig|Eintracht Frankfurt": {
+"id": 1575177,
+"home_id": 173,
+"away_id": 169,
+"status": "FT"
+},
+"2026-10-10|Fortuna Sittard|FC Twente Enschede": {
+"id": 1552184,
+"home_id": 205,
+"away_id": 415,
+"status": "FT"
+},
+"2026-10-10|Penarol|C.A. Progreso": {
+"id": 1643171,
+"home_id": 2348,
+"away_id": 2363,
+"status": "FT"
+},
+"2026-10-10|Hillerod|Fredericia": {
+"id": 1551349,
+"home_id": 6026,
+"away_id": 2061,
+"status": "FT"
+},
+"2026-10-10|Darmstadt 98|Energie Cottbus": {
+"id": 1576190,
+"home_id": 181,
+"away_id": 1320,
+"status": "FT"
+},
+"2026-10-10|1. Magdeburg|Hannover 96": {
+"id": 1576193,
+"home_id": 179,
+"away_id": 166,
+"status": "FT"
+},
+"2026-10-10|Bengaluru|Sporting Delhi": {
+"id": 1642167,
+"home_id": 3472,
+"away_id": 26963,
+"status": "FT"
+},
+"2026-10-10|Plymouth Argyle|Wimbledon": {
+"id": 1564351,
+"home_id": 1357,
+"away_id": 1333,
+"status": "FT"
+},
+"2026-10-10|Notts County|Oxford United": {
+"id": 1564350,
+"home_id": 1376,
+"away_id": 1338,
+"status": "FT"
+},
+"2026-10-10|Napoli|Frosinone": {
+"id": 1550144,
+"home_id": 492,
+"away_id": 512,
+"status": "FT"
+},
+"2026-10-10|Feyenoord|AZ Alkmaar": {
+"id": 1552181,
+"home_id": 209,
+"away_id": 201,
+"status": "FT"
+},
+"2026-10-10|Saint Etienne|Rodez AF": {
+"id": 1552494,
+"home_id": 1063,
+"away_id": 1301,
+"status": "FT"
+},
+"2026-10-10|Trencin|Dukla Banska Bystrica": {
+"id": 1551574,
+"home_id": 655,
+"away_id": 10533,
+"status": "FT"
+},
+"2026-10-10|TSG 1899 Hoffenheim|Hamburger": {
+"id": 1575178,
+"home_id": 167,
+"away_id": 175,
+"status": "FT"
+},
+"2026-10-10|Augsburg|Bayern Munich": {
+"id": 1575180,
+"home_id": 170,
+"away_id": 157,
+"status": "FT"
+},
+"2026-10-10|Paderborn 07|VfB Stuttgart": {
+"id": 1575184,
+"home_id": 185,
+"away_id": 172,
+"status": "FT"
+},
+"2026-10-10|Crawley Town|Chesterfield": {
+"id": 1563793,
+"home_id": 1362,
+"away_id": 1345,
+"status": "FT"
+},
+"2026-10-10|Fleetwood Town|Walsall": {
+"id": 1563794,
+"home_id": 1336,
+"away_id": 1342,
+"status": "FT"
+},
+"2026-10-10|Cheltenham Town|Salford City": {
+"id": 1563792,
+"home_id": 1372,
+"away_id": 1844,
+"status": "FT"
+},
+"2026-10-10|Livingston|Partick Thistle": {
+"id": 1556874,
+"home_id": 255,
+"away_id": 901,
+"status": "FT"
+},
+"2026-10-10|Rangers|Kilmarnock": {
+"id": 1556675,
+"home_id": 257,
+"away_id": 250,
+"status": "FT"
+},
+"2026-10-10|Bolton Wanderers|Stoke City": {
+"id": 1563180,
+"home_id": 68,
+"away_id": 75,
+"status": "FT"
+},
+"2026-10-10|Watford|Burnley": {
+"id": 1563188,
+"home_id": 38,
+"away_id": 44,
+"status": "FT"
+},
+"2026-10-10|Derby County|Wrexham": {
+"id": 1563182,
+"home_id": 69,
+"away_id": 1837,
+"status": "FT"
+},
+"2026-10-10|Cercle Brugge|Anderlecht": {
+"id": 1558645,
+"home_id": 741,
+"away_id": 554,
+"status": "FT"
+},
+"2026-10-10|Deportivo Alaves|Atletico Madrid": {
+"id": 1570403,
+"home_id": 542,
+"away_id": 530,
+"status": "FT"
+},
+"2026-10-10|Quilmes|Agropecuario": {
+"id": 1498880,
+"home_id": 480,
+"away_id": 462,
+"status": "FT"
+},
+"2026-10-10|Deportivo Pereira|Deportivo Cali": {
+"id": 1549821,
+"home_id": 1462,
+"away_id": 1127,
+"status": "FT"
+},
+"2026-10-10|Miami|Loudoun United": {
+"id": 1493738,
+"home_id": 9030,
+"away_id": 3999,
+"status": "FT"
+},
+"2026-10-10|Ayr United|Dunfermline Athletic": {
+"id": 1556872,
+"home_id": 1387,
+"away_id": 1388,
+"status": "FT"
+},
+"2026-10-10|Blackburn Rovers|Cardiff City": {
+"id": 1563179,
+"home_id": 67,
+"away_id": 43,
+"status": "FT"
+},
+"2026-10-10|Sunderland|Brighton & Hove Albion": {
+"id": 1557426,
+"home_id": 746,
+"away_id": 51,
+"status": "FT"
+},
+"2026-10-10|Dhofar|Samail": {
+"id": 1642111,
+"home_id": 5330,
+"away_id": 15962,
+"status": "FT"
+},
+"2026-10-10|Calcio Desenzano|Dolomiti Bellunesi": {
+"id": 1608313,
+"home_id": 17816,
+"away_id": 17820,
+"status": "FT"
+},
+"2026-10-10|Slask Wroclaw|Lech Poznan": {
+"id": 1553189,
+"home_id": 337,
+"away_id": 347,
+"status": "FT"
+},
+"2026-10-10|İstanbulspor|Esenler Erokspor": {
+"id": 1585773,
+"home_id": 3578,
+"away_id": 7402,
+"status": "FT"
+},
+"2026-10-10|Hapoel Petah Tikva|Maccabi Netanya": {
+"id": 1555516,
+"home_id": 4488,
+"away_id": 4505,
+"status": "FT"
+},
+"2026-10-10|RAAL La Louvière|Club Brugge": {
+"id": 1558648,
+"home_id": 5902,
+"away_id": 569,
+"status": "FT"
+},
+"2026-10-10|Junior de Barranquilla|Internacional de Bogota": {
+"id": 1549819,
+"home_id": 1135,
+"away_id": 1134,
+"status": "FT"
+},
+"2026-10-10|Indy Eleven|Tampa Bay Rowdies": {
+"id": 1493737,
+"home_id": 3996,
+"away_id": 4021,
+"status": "FT"
+},
+"2026-10-11|Club Deportivo Mineros de Zacatecas|Cancun": {
+"id": 1581448,
+"home_id": 2299,
+"away_id": 14276,
+"status": "FT"
+},
+"2026-10-11|El Paso Locomotive|Orange County Blues": {
+"id": 1493736,
+"home_id": 3993,
+"away_id": 4007,
+"status": "FT"
+},
+"2026-10-10|Fuerte San Francisco|CD Cacahuatique": {
+"id": 1600625,
+"home_id": 22157,
+"away_id": 24530,
+"status": "FT"
+},
+"2026-10-10|Inter San Carlos|Municipal Perez Zeledon": {
+"id": 1551693,
+"home_id": 24391,
+"away_id": 819,
+"status": "FT"
+},
+"2026-10-10|CR Vasco da Gama|Clube do Remo": {
+"id": 1492409,
+"home_id": 133,
+"away_id": 1198,
+"status": "FT"
+},
+"2026-10-10|Guayaquil City|Emelec": {
+"id": 1639850,
+"home_id": 1159,
+"away_id": 1148,
+"status": "FT"
+},
+"2026-10-10|Charleston Battery|Louisville City": {
+"id": 1493734,
+"home_id": 3990,
+"away_id": 4000,
+"status": "FT"
+},
+"2026-10-10|Union Omaha|Fort Wayne": {
+"id": 1494036,
+"home_id": 10283,
+"away_id": 16679,
+"status": "FT"
+},
+"2026-10-10|Portuguesa Acarigua|Deportivo La Guaira": {
+"id": 1638778,
+"home_id": 2814,
+"away_id": 2813,
+"status": "FT"
+},
+"2026-10-10|Delfines de Coatzacoalcos|Artesanos Metepec": {
+"id": 1631759,
+"home_id": 28303,
+"away_id": 22049,
+"status": "FT"
+},
+"2026-10-10|Real Refineros|Halcones Negros": {
+"id": 1631757,
+"home_id": 28307,
+"away_id": 28305,
+"status": "FT"
+},
+"2026-10-10|Coyotes de Tlaxcala|Piratas Veracruz": {
+"id": 1581481,
+"home_id": 14280,
+"away_id": 27935,
+"status": "FT"
+},
+"2026-10-10|FC Paysandu|Rentistas": {
+"id": 1643449,
+"home_id": 19410,
+"away_id": 2371,
+"status": "FT"
+},
+"2026-10-10|Club Atletico Tigre|Club Atletico Banfield": {
+"id": 1493180,
+"home_id": 452,
+"away_id": 449,
+"status": "FT"
+},
+"2026-10-10|Tigres|Toluca": {
+"id": 1550986,
+"home_id": 2279,
+"away_id": 2281,
+"status": "FT"
+},
+"2026-10-10|Raith Rovers|Queen's Park": {
+"id": 1556875,
+"home_id": 1385,
+"away_id": 6778,
+"status": "FT"
+},
+"2026-10-10|Linfield|Bangor": {
+"id": 1562090,
+"home_id": 583,
+"away_id": 11112,
+"status": "FT"
+},
+"2026-10-10|Maccabi Tel Aviv|Bnei Sakhnin": {
+"id": 1555520,
+"home_id": 604,
+"away_id": 4481,
+"status": "FT"
+},
+"2026-10-10|Liefering Salzburg|Sturm Graz II": {
+"id": 1567922,
+"home_id": 1400,
+"away_id": 8251,
+"status": "FT"
+},
+"2026-10-10|Independiente del Valle|SD Aucas": {
+"id": 1639791,
+"home_id": 1153,
+"away_id": 1156,
+"status": "FT"
+},
+"2026-10-10|Al Ahli Doha|Al-Sailiya": {
+"id": 1597932,
+"home_id": 2896,
+"away_id": 2898,
+"status": "FT"
+},
+"2026-10-10|Bali United Pusam|Persijap Jepara": {
+"id": 1622785,
+"home_id": 2448,
+"away_id": 11132,
+"status": "FT"
+},
+"2026-10-10|Shanghai Shenhua FC|Yunnan Yukun": {
+"id": 1523270,
+"home_id": 833,
+"away_id": 21265,
+"status": "FT"
+},
+"2026-10-10|Metropolitanos|Deportivo Rayo Zuliano": {
+"id": 1638781,
+"home_id": 2825,
+"away_id": 16847,
+"status": "FT"
+},
+"2026-10-10|Colegiales|Club Social y Deportivo Tristan Suarez": {
+"id": 1498873,
+"home_id": 8377,
+"away_id": 1965,
+"status": "FT"
+},
+"2026-10-10|Botafogo da Paraíba|Santa Cruz PE": {
+"id": 1637852,
+"home_id": 1197,
+"away_id": 753,
+"status": "FT"
+},
+"2026-10-10|Oriente Petrolero|ABB": {
+"id": 1619322,
+"home_id": 3707,
+"away_id": 17743,
+"status": "FT"
+},
+"2026-10-11|New Mexico United|Monterey Bay": {
+"id": 1493739,
+"home_id": 4003,
+"away_id": 18375,
+"status": "FT"
+},
+"2026-10-10|Osijek|NK Istra 1961": {
+"id": 1548540,
+"home_id": 616,
+"away_id": 1016,
+"status": "FT"
+},
+"2026-10-10|Kayserispor|Manisa": {
+"id": 1585775,
+"home_id": 1001,
+"away_id": 3597,
+"status": "FT"
+},
+"2026-10-10|Casa Pia|Santa Clara": {
+"id": 1575513,
+"home_id": 4716,
+"away_id": 227,
+"status": "FT"
+},
+"2026-10-10|Hradec Kralove|Artis Brno": {
+"id": 1560035,
+"home_id": 3723,
+"away_id": 4257,
+"status": "FT"
+},
+"2026-10-10|Orenburg|Dynamo Makhachkala": {
+"id": 1561409,
+"home_id": 1080,
+"away_id": 6813,
+"status": "FT"
+},
+"2026-10-11|Deportivo Malacateco|Deportivo Guastatoya": {
+"id": 1559664,
+"home_id": 3664,
+"away_id": 3662,
+"status": "FT"
+},
+"2026-10-10|Dungannon Swifts|Carrick Rangers": {
+"id": 1562088,
+"home_id": 5351,
+"away_id": 5350,
+"status": "FT"
+},
+"2026-10-10|Celje|NK Aluminij": {
+"id": 1558019,
+"home_id": 4360,
+"away_id": 4358,
+"status": "FT"
+},
+"2026-10-10|Maringa Futebol Clube|Floresta EC": {
+"id": 1637855,
+"home_id": 7833,
+"away_id": 7774,
+"status": "FT"
+},
+"2026-10-10|Paykan|Shams Azar Qazvin": {
+"id": 1639652,
+"home_id": 2741,
+"away_id": 18159,
+"status": "FT"
+},
+"2026-10-10|Beerschot|Liege": {
+"id": 1559170,
+"home_id": 263,
+"away_id": 6220,
+"status": "FT"
+},
+"2026-10-10|Zbrojovka|Jablonec": {
+"id": 1560034,
+"home_id": 3733,
+"away_id": 1122,
+"status": "FT"
+},
+"2026-10-10|Olimpija Ljubljana|Mura": {
+"id": 1558022,
+"home_id": 677,
+"away_id": 4197,
+"status": "FT"
+},
+"2026-10-10|Botev Vratsa|Spartak Varna": {
+"id": 1551118,
+"home_id": 859,
+"away_id": 4660,
+"status": "FT"
+},
+"2026-10-10|Limavady United|Ballymena United": {
+"id": 1562089,
+"home_id": 11114,
+"away_id": 668,
+"status": "FT"
+},
+"2026-10-10|Universitario de Vinto|Real Oruro": {
+"id": 1619321,
+"home_id": 17762,
+"away_id": 20252,
+"status": "FT"
+},
+"2026-10-10|Botosani|UTA Arad": {
+"id": 1565267,
+"home_id": 2581,
+"away_id": 2589,
+"status": "FT"
+},
+"2026-10-10|Al-Shahaniya|Lusail": {
+"id": 1597934,
+"home_id": 2893,
+"away_id": 7527,
+"status": "FT"
+},
+"2026-10-10|Krasnodar|Zenit Saint Petersburg": {
+"id": 1561407,
+"home_id": 621,
+"away_id": 596,
+"status": "FT"
+},
+"2026-10-10|IMT Novi Beograd|Radnik Surdulica": {
+"id": 1553879,
+"home_id": 12316,
+"away_id": 2657,
+"status": "FT"
+},
+"2026-10-10|Puntarenas|Alajuelense": {
+"id": 1551695,
+"home_id": 2045,
+"away_id": 822,
+"status": "FT"
+},
+"2026-10-10|Cheonan City|Gyeongnam": {
+"id": 1510464,
+"home_id": 7060,
+"away_id": 2751,
+"status": "FT"
+},
+"2026-10-10|Cukaricki|Macva Sabac": {
+"id": 1553878,
+"home_id": 2656,
+"away_id": 2637,
+"status": "FT"
+},
+"2026-10-10|APOEL|Nea Salamis": {
+"id": 1603574,
+"home_id": 2247,
+"away_id": 3401,
+"status": "FT"
+},
+"2026-10-10|Kosice|KFC Komarno": {
+"id": 1551570,
+"home_id": 10534,
+"away_id": 10535,
+"status": "FT"
+},
+"2026-10-10|Ferrocarril Midland|Atletico de Rafaela": {
+"id": 1498878,
+"home_id": 1963,
+"away_id": 465,
+"status": "FT"
+},
+"2026-10-10|Bohemians 1905 Prague|Banik Ostrava": {
+"id": 1560033,
+"home_id": 3714,
+"away_id": 3713,
+"status": "FT"
+},
+"2026-10-10|Radnicki 1923|Crvena Zvezda": {
+"id": 1553882,
+"home_id": 2644,
+"away_id": 598,
+"status": "FT"
+},
+"2026-10-10|Arka Gdynia|KSP Polonia Warszawa": {
+"id": 1558230,
+"home_id": 344,
+"away_id": 16239,
+"status": "FT"
+},
+"2026-10-10|NK Radomlje|Koper": {
+"id": 1558023,
+"home_id": 4378,
+"away_id": 4374,
+"status": "FT"
+},
+"2026-10-10|Arbroath|Greenock Morton": {
+"id": 1556871,
+"home_id": 4249,
+"away_id": 1383,
+"status": "FT"
+},
+"2026-10-10|Hajduk Split|Dinamo Zagreb": {
+"id": 1548538,
+"home_id": 608,
+"away_id": 620,
+"status": "FT"
+},
+"2026-10-10|Lokomotiv Sofia|Lokomotiv Plovdiv": {
+"id": 1551121,
+"home_id": 1416,
+"away_id": 858,
+"status": "FT"
+},
+"2026-10-10|Botev Plovdiv|Slavia Sofia": {
+"id": 1551117,
+"home_id": 634,
+"away_id": 854,
+"status": "FT"
+},
+"2026-10-10|Chrobry Glogow|Pogon Grodzisk Mazowiecki": {
+"id": 1558231,
+"home_id": 3483,
+"away_id": 14750,
+"status": "FT"
+},
+"2026-10-10|FCSB|Otelul Galati": {
+"id": 1565268,
+"home_id": 559,
+"away_id": 6886,
+"status": "FT"
+},
+"2026-10-10|Skalica|Slovan Bratislava": {
+"id": 1551573,
+"home_id": 10542,
+"away_id": 656,
+"status": "FT"
+},
+"2026-10-10|Crusaders|Larne": {
+"id": 1562087,
+"home_id": 697,
+"away_id": 5354,
+"status": "FT"
+},
+"2026-10-10|Hapoel Haifa|Maccabi Petah Tikva": {
+"id": 1555514,
+"home_id": 2253,
+"away_id": 4495,
+"status": "FT"
+},
+"2026-10-10|Hobro|Kolding": {
+"id": 1551350,
+"home_id": 408,
+"away_id": 4676,
+"status": "FT"
+},
+"2026-10-10|Club Almagro|Chacarita Juniors": {
+"id": 1498866,
+"home_id": 482,
+"away_id": 447,
+"status": "FT"
+},
+"2026-10-10|Vasas|Kisvarda": {
+"id": 1560253,
+"home_id": 675,
+"away_id": 2394,
+"status": "FT"
+},
+"2026-10-10|Defensor Sporting|C.A. Cerro": {
+"id": 1643169,
+"home_id": 2350,
+"away_id": 2362,
+"status": "FT"
+},
+"2026-10-10|Igdir Alagoz Holding|Batman Petrolspor": {
+"id": 1585772,
+"home_id": 17259,
+"away_id": 7395,
+"status": "FT"
+},
+"2026-10-10|Ventforet Kofu|Tochigi City": {
+"id": 1606690,
+"home_id": 308,
+"away_id": 7145,
+"status": "FT"
+},
+"2026-10-10|Austria Salzburg|Floridsdorfer AC": {
+"id": 1567918,
+"home_id": 5000,
+"away_id": 1395,
+"status": "FT"
+},
+"2026-10-10|Boluspor|Antalyaspor": {
+"id": 1585770,
+"home_id": 3569,
+"away_id": 1005,
+"status": "FT"
+},
+"2026-10-10|Wycombe Wanderers|Luton": {
+"id": 1564354,
+"home_id": 1358,
+"away_id": 1359,
+"status": "FT"
+},
+"2026-10-10|Lierse SK|Francs Borains": {
+"id": 1559173,
+"home_id": 6219,
+"away_id": 5805,
+"status": "FT"
+},
+"2026-10-10|Jubilo Iwata|Consadole Sapporo": {
+"id": 1606691,
+"home_id": 280,
+"away_id": 279,
+"status": "FT"
+},
+"2026-10-10|Detroit City|Rhode Island": {
+"id": 1493735,
+"home_id": 9043,
+"away_id": 22855,
+"status": "FT"
+},
+"2026-10-10|Inverness|Stenhousemuir": {
+"id": 1556873,
+"home_id": 903,
+"away_id": 6784,
+"status": "FT"
+},
+"2026-10-10|Arema|Bhayangkara": {
+"id": 1622783,
+"home_id": 2438,
+"away_id": 2443,
+"status": "FT"
+},
+"2026-10-10|Nantes|Stade de Reims": {
+"id": 1552491,
+"home_id": 83,
+"away_id": 93,
+"status": "FT"
+},
+"2026-10-10|PSIM Yogyakarta|Persija Jakarta": {
+"id": 1622786,
+"home_id": 4235,
+"away_id": 10134,
+"status": "FT"
+},
+"2026-10-10|Stevenage|Wigan Athletic": {
+"id": 1564352,
+"home_id": 1368,
+"away_id": 61,
+"status": "FT"
+},
+"2026-10-10|Bradford City|Leyton Orient": {
+"id": 1564343,
+"home_id": 1343,
+"away_id": 1373,
+"status": "FT"
+},
+"2026-10-10|Milton Keynes Dons|Reading": {
+"id": 1564349,
+"home_id": 1348,
+"away_id": 53,
+"status": "FT"
+},
+"2026-10-10|Middlesbrough|Wolverhampton Wanderers": {
+"id": 1563183,
+"home_id": 70,
+"away_id": 39,
+"status": "FT"
+},
+"2026-10-10|Shrewsbury Town|Exeter City": {
+"id": 1563799,
+"home_id": 1352,
+"away_id": 1364,
+"status": "FT"
+},
+"2026-10-10|Ajax|NEC Nijmegen": {
+"id": 1552183,
+"home_id": 194,
+"away_id": 413,
+"status": "FT"
+},
+"2026-10-10|Swansea City|Norwich City": {
+"id": 1563187,
+"home_id": 76,
+"away_id": 71,
+"status": "FT"
+},
+"2026-10-10|Supra du Quebec|Vancouver Langley": {
+"id": 1517362,
+"home_id": 27461,
+"away_id": 20881,
+"status": "FT"
+},
+"2026-10-10|Swindon Town|Crewe Alexandra": {
+"id": 1563800,
+"home_id": 1353,
+"away_id": 1363,
+"status": "FT"
+},
+"2026-10-10|Falkirk F.C.|Dundee FC": {
+"id": 1556672,
+"home_id": 1389,
+"away_id": 253,
+"status": "FT"
+},
+"2026-10-10|Pittsburgh Riverhounds|Hartford Athletic": {
+"id": 1493742,
+"home_id": 4010,
+"away_id": 3995,
+"status": "FT"
+},
+"2026-10-10|Asteras Tripolis|Atromitos Athens": {
+"id": 1593326,
+"home_id": 955,
+"away_id": 12260,
+"status": "FT"
+},
+"2026-10-10|CD Eldense|Córdoba": {
+"id": 1569965,
+"home_id": 9692,
+"away_id": 713,
+"status": "FT"
+},
+"2026-10-10|Doncaster Rovers|Burton Albion": {
+"id": 1564345,
+"home_id": 1354,
+"away_id": 748,
+"status": "FT"
+},
+"2026-10-10|Port Vale|Grimsby Town": {
+"id": 1563797,
+"home_id": 1351,
+"away_id": 1365,
+"status": "FT"
+},
+"2026-10-10|Huddersfield Town|Sheffield Wednesday": {
+"id": 1564346,
+"home_id": 37,
+"away_id": 74,
+"status": "FT"
+},
+"2026-10-10|AD Ceuta FC|Sabadell FC": {
+"id": 1569964,
+"home_id": 10139,
+"away_id": 9593,
+"status": "FT"
+},
+"2026-10-10|Crawley Town|Chesterfield FC": {
+"id": 1563793,
+"home_id": 1362,
+"away_id": 1345,
+"status": "FT"
+},
+"2026-10-10|Mansfield Town|Bromley FC": {
+"id": 1564348,
+"home_id": 1374,
+"away_id": 1832,
+"status": "FT"
+},
+"2026-10-10|Clermont|Red Star": {
+"id": 1552486,
+"home_id": 99,
+"away_id": 104,
+"status": "FT"
+},
+"2026-10-10|1. FC Magdeburg|Hannover 96": {
+"id": 1576193,
+"home_id": 179,
+"away_id": 166,
+"status": "FT"
+},
+"2026-10-10|Charlton Athletic|Bristol City": {
+"id": 1563181,
+"home_id": 1335,
+"away_id": 56,
+"status": "FT"
+},
+"2026-10-10|Samsunspor|Trabzonspor": {
+"id": 1584429,
+"home_id": 3603,
+"away_id": 998,
+"status": "FT"
+},
+"2026-10-10|Aurora Guatemala|Xelaju": {
+"id": 1559662,
+"home_id": 10154,
+"away_id": 3667,
+"status": "FT"
+},
+"2026-10-10|Alavés|Atlético Madrid": {
+"id": 1570403,
+"home_id": 542,
+"away_id": 530,
+"status": "FT"
+},
+"2026-10-10|SV Zulte-Waregem|Gent": {
+"id": 1558651,
+"home_id": 600,
+"away_id": 631,
+"status": "FT"
+},
+"2026-10-10|Genclerbirligi SK|Amed SK": {
+"id": 1584426,
+"home_id": 997,
+"away_id": 3579,
+"status": "FT"
+},
+"2026-10-10|Tai Po|Kowloon City": {
+"id": 1607323,
+"home_id": 4457,
+"away_id": 20392,
+"status": "FT"
+},
+"2026-10-10|Ayeyawady United|Thitsar Arman": {
+"id": 1634837,
+"home_id": 12523,
+"away_id": 24091,
+"status": "FT"
+},
+"2026-10-10|CS Gloria Bistrita|Ramnicu Valcea": {
+"id": 1602503,
+"home_id": 22824,
+"away_id": 2616,
+"status": "FT"
+},
+"2026-10-10|Mohammedan Dhaka|Arambagh KS": {
+"id": 1640109,
+"home_id": 5014,
+"away_id": 5011,
+"status": "FT"
+},
+"2026-10-10|Orijent|Dubrava": {
+"id": 1590182,
+"home_id": 6256,
+"away_id": 6255,
+"status": "FT"
+},
+"2026-10-10|Resita|CSM Slatina": {
+"id": 1602501,
+"home_id": 6229,
+"away_id": 6898,
+"status": "FT"
+},
+"2026-10-10|Tikvesh|Bregalnica Stip": {
+"id": 1551469,
+"home_id": 4348,
+"away_id": 4333,
+"status": "FT"
+},
+"2026-10-10|Genclerbirligi|Amedspor": {
+"id": 1584426,
+"home_id": 997,
+"away_id": 3579,
+"status": "FT"
+},
+"2026-10-10|VfL Osnabruck|Dynamo Dresden": {
+"id": 1576196,
+"home_id": 1324,
+"away_id": 183,
+"status": "FT"
+},
+"2026-10-10|Tobol Kostanay|Astana": {
+"id": 1528112,
+"home_id": 2259,
+"away_id": 562,
+"status": "FT"
+},
+"2026-10-10|Altrincham|Aldershot Town": {
+"id": 1585282,
+"home_id": 4700,
+"away_id": 1818,
+"status": "FT"
+},
+"2026-10-10|Parnu Vaprus|Narva Trans": {
+"id": 1513640,
+"home_id": 3525,
+"away_id": 2274,
+"status": "FT"
+},
+"2026-10-10|Tukums 2000|Riga FC": {
+"id": 1515929,
+"home_id": 4144,
+"away_id": 10124,
+"status": "FT"
+},
+"2026-10-10|Landskrona BoIS|Sandvikens": {
+"id": 1497714,
+"home_id": 2176,
+"away_id": 6697,
+"status": "FT"
+},
+"2026-10-10|BG Pathum United|Ayutthaya United": {
+"id": 1598036,
+"home_id": 2769,
+"away_id": 2803,
+"status": "FT"
+},
+"2026-10-10|Hai Phong|Thanh Hoa": {
+"id": 1633903,
+"home_id": 3671,
+"away_id": 3680,
+"status": "FT"
+},
+"2026-10-10|Babrungas|Jonava": {
+"id": 1556462,
+"home_id": 14382,
+"away_id": 3862,
+"status": "FT"
+},
+"2026-10-10|Garliava|Atmosfera Mazeikiai": {
+"id": 1556463,
+"home_id": 16674,
+"away_id": 3856,
+"status": "FT"
+},
+"2026-10-10|Shanghai Shenhua|Yunnan Yukun": {
+"id": 1523270,
+"home_id": 833,
+"away_id": 21265,
+"status": "FT"
+},
+"2026-10-10|Carlisle United|Kidderminster Harriers": {
+"id": 1585283,
+"home_id": 1371,
+"away_id": 4695,
+"status": "FT"
+},
+"2026-10-10|Meshakhte Tkibuli|Iberia 1999": {
+"id": 1509194,
+"home_id": 13847,
+"away_id": 3502,
+"status": "FT"
+},
+"2026-10-10|Buriram United|Rayong": {
+"id": 1598037,
+"home_id": 2780,
+"away_id": 2797,
+"status": "FT"
+},
+"2026-10-10|Quick Boys|VV Katwijk": {
+"id": 1579497,
+"home_id": 1272,
+"away_id": 1237,
+"status": "FT"
+},
+"2026-10-10|Van|Gandzasar": {
+"id": 1581538,
+"home_id": 6286,
+"away_id": 688,
+"status": "FT"
+},
+"2026-10-10|Jahn Regensburg|Havelse": {
+"id": 1584022,
+"home_id": 177,
+"away_id": 9342,
+"status": "FT"
+},
+"2026-10-10|Metalac Gornji Milanovac|Teleoptik": {
+"id": 1554187,
+"home_id": 2647,
+"away_id": 2645,
+"status": "FT"
+},
+"2026-10-10|Kallithea|Panthrakikos": {
+"id": 1636941,
+"home_id": 2095,
+"away_id": 2090,
+"status": "FT"
+},
+"2026-10-10|Tallinna Kalev|Viimsi JK": {
+"id": 1519654,
+"home_id": 3529,
+"away_id": 14340,
+"status": "FT"
+},
+"2026-10-10|Vushtrria|KF Gjilani": {
+"id": 1642100,
+"home_id": 14396,
+"away_id": 12772,
+"status": "FT"
+},
+"2026-10-10|Naftan|Belshina Bobruisk": {
+"id": 1525996,
+"home_id": 750,
+"away_id": 3384,
+"status": "FT"
+},
+"2026-10-10|Kairat|Zhetysu": {
+"id": 1528109,
+"home_id": 664,
+"away_id": 4560,
+"status": "FT"
+},
+"2026-10-10|Sonnenhof|Waldhof Mannheim": {
+"id": 1584018,
+"home_id": 1317,
+"away_id": 4268,
+"status": "FT"
+},
+"2026-10-10|Wurzburger Kickers|Hansa Rostock": {
+"id": 1584023,
+"home_id": 784,
+"away_id": 1321,
+"status": "FT"
+},
+"2026-10-10|OLS Oulu|Tampere United": {
+"id": 1638175,
+"home_id": 9195,
+"away_id": 9190,
+"status": "FT"
+},
+"2026-10-10|Genoa|Fiorentina": {
+"id": 1550140,
+"home_id": 495,
+"away_id": 502,
+"status": "FT"
+},
+"2026-10-10|Fakel Voronezh|Lokomotiv Moscow": {
+"id": 1561405,
+"home_id": 1993,
+"away_id": 597,
+"status": "FT"
+},
+"2026-10-10|Alanyaspor|BB Erzurumspor": {
+"id": 1584421,
+"home_id": 996,
+"away_id": 1009,
+"status": "FT"
+},
+"2026-10-10|Viktoria Plzen|Mlada Boleslav": {
+"id": 1560037,
+"home_id": 567,
+"away_id": 640,
+"status": "FT"
+},
+"2026-10-10|Benevento Calcio|Cesena": {
+"id": 1601545,
+"home_id": 506,
+"away_id": 509,
+"status": "FT"
+},
+"2026-10-10|Empoli|Citta di Palermo": {
+"id": 1601547,
+"home_id": 511,
+"away_id": 522,
+"status": "FT"
+},
+"2026-10-10|Sudtirol|Ascoli Calcio 1898": {
+"id": 1601552,
+"home_id": 1578,
+"away_id": 507,
+"status": "FT"
+},
+"2026-10-10|Amarante|Portimonense": {
+"id": 1576494,
+"home_id": 4725,
+"away_id": 216,
+"status": "FT"
+},
+"2026-10-10|AIK|Brommapojkarna": {
+"id": 1494289,
+"home_id": 377,
+"away_id": 371,
+"status": "FT"
+},
+"2026-10-10|GAIS|Sirius": {
+"id": 1494291,
+"home_id": 2170,
+"away_id": 370,
+"status": "FT"
+},
+"2026-10-10|Bari|Giugliano": {
+"id": 1609072,
+"home_id": 508,
+"away_id": 9556,
+"status": "FT"
+},
+"2026-10-10|Casertana|Monopoli": {
+"id": 1609075,
+"home_id": 885,
+"away_id": 10138,
+"status": "FT"
+},
+"2026-10-10|Crotone|Audace Cerignola": {
+"id": 1609076,
+"home_id": 501,
+"away_id": 9539,
+"status": "FT"
+},
+"2026-10-10|Super Nova|Grobina": {
+"id": 1515930,
+"home_id": 4143,
+"away_id": 4138,
+"status": "FT"
+},
+"2026-10-10|Saham|Sur Club": {
+"id": 1642110,
+"home_id": 5335,
+"away_id": 5337,
+"status": "FT"
+},
+"2026-10-10|1. FSV Mainz 05|Bayer 04 Leverkusen": {
+"id": 1575181,
+"home_id": 164,
+"away_id": 168,
+"status": "FT"
+},
+"2026-10-10|Union Berlin|Elversberg": {
+"id": 1575182,
+"home_id": 182,
+"away_id": 1660,
+"status": "FT"
+},
+"2026-10-10|Sheffield United|Lincoln City": {
+"id": 1563185,
+"home_id": 62,
+"away_id": 1379,
+"status": "FT"
+},
+"2026-10-10|BATE Borisov|Slavia-Mozyr": {
+"id": 1525992,
+"home_id": 388,
+"away_id": 751,
+"status": "FT"
+},
+"2026-10-10|Mansfield Town|Bromley": {
+"id": 1564348,
+"home_id": 1374,
+"away_id": 1832,
+"status": "FT"
+},
+"2026-10-10|Stockport County|Barnsley": {
+"id": 1564353,
+"home_id": 4686,
+"away_id": 747,
+"status": "FT"
+},
+"2026-10-10|Wycombe Wanderers|Luton Town": {
+"id": 1564354,
+"home_id": 1358,
+"away_id": 1359,
+"status": "FT"
+},
+"2026-10-10|Bodo-Glimt|Kristiansund BK": {
+"id": 1494773,
+"home_id": 327,
+"away_id": 320,
+"status": "FT"
+},
+"2026-10-10|Tranmere Rovers|Rochdale": {
+"id": 1563801,
+"home_id": 1381,
+"away_id": 1339,
+"status": "FT"
+},
+"2026-10-10|York City|Northampton Town": {
+"id": 1563802,
+"home_id": 1828,
+"away_id": 1337,
+"status": "FT"
+},
+"2026-10-10|Boston United|Southend United": {
+"id": 1585285,
+"home_id": 8146,
+"away_id": 1341,
+"status": "FT"
+},
+"2026-10-10|Fylde|Scunthorpe United": {
+"id": 1585284,
+"home_id": 1839,
+"away_id": 1340,
+"status": "FT"
+},
+"2026-10-10|Halifax Town|Gateshead": {
+"id": 1585286,
+"home_id": 1841,
+"away_id": 1823,
+"status": "FT"
+},
+"2026-10-10|Hornchurch|Eastleigh": {
+"id": 1585287,
+"home_id": 7690,
+"away_id": 1822,
+"status": "FT"
+},
+"2026-10-10|Woking|Harrogate Town": {
+"id": 1585290,
+"home_id": 1836,
+"away_id": 1842,
+"status": "FT"
+},
+"2026-10-10|Worthing|Solihull Moors": {
+"id": 1585291,
+"home_id": 7761,
+"away_id": 1834,
+"status": "FT"
+},
+"2026-10-10|Brackley Town|Spennymoor Town": {
+"id": 1587825,
+"home_id": 4701,
+"away_id": 4707,
+"status": "FT"
+},
+"2026-10-10|Darlington|Merthyr Town": {
+"id": 1587828,
+"home_id": 10157,
+"away_id": 7732,
+"status": "FT"
+},
+"2026-10-10|Hereford|Hednesford Town": {
+"id": 1587831,
+"home_id": 4692,
+"away_id": 7721,
+"status": "FT"
+},
+"2026-10-10|King's Lynn Town|Buxton": {
+"id": 1587832,
+"home_id": 8655,
+"away_id": 7706,
+"status": "FT"
+},
+"2026-10-10|Macclesfield Town|South Shields": {
+"id": 1587833,
+"home_id": 1380,
+"away_id": 7746,
+"status": "FT"
+},
+"2026-10-10|Marine|Spalding United": {
+"id": 1587834,
+"home_id": 7656,
+"away_id": 7671,
+"status": "FT"
+},
+"2026-10-10|Worksop Town|Morecambe": {
+"id": 1587836,
+"home_id": 7266,
+"away_id": 1375,
+"status": "FT"
+},
+"2026-10-10|Braintree Town|Truro City": {
+"id": 1588379,
+"home_id": 1831,
+"away_id": 4699,
+"status": "FT"
+},
+"2026-10-10|Chesham United|Chelmsford City": {
+"id": 1588380,
+"home_id": 4702,
+"away_id": 4689,
+"status": "FT"
+},
+"2026-10-10|Dover Athletic|Dorking Wanderers": {
+"id": 1588382,
+"home_id": 1829,
+"away_id": 8659,
+"status": "FT"
+},
+"2026-10-10|Hampton & Richmond Borough|Ebbsfleet United": {
+"id": 1588384,
+"home_id": 4680,
+"away_id": 1840,
+"status": "FT"
+},
+"2026-10-10|Horsham|Maidstone United": {
+"id": 1588385,
+"home_id": 7723,
+"away_id": 1825,
+"status": "FT"
+},
+"2026-10-10|Maidenhead United|Tonbridge Angels": {
+"id": 1588386,
+"home_id": 1838,
+"away_id": 8662,
+"status": "FT"
+},
+"2026-10-10|Torquay United|Slough Town": {
+"id": 1588387,
+"home_id": 1827,
+"away_id": 4685,
+"status": "FT"
+},
+"2026-10-10|Totton|Walton & Hersham": {
+"id": 1588377,
+"home_id": 7612,
+"away_id": 8986,
+"status": "FT"
+},
+"2026-10-10|Weston-super-Mare|Folkestone Invicta": {
+"id": 1588388,
+"home_id": 4687,
+"away_id": 7716,
+"status": "FT"
+},
+"2026-10-10|Valur|Hafnarfjordur": {
+"id": 1638645,
+"home_id": 274,
+"away_id": 270,
+"status": "FT"
+},
+"2026-10-10|Goa|Chennaiyin": {
+"id": 1642168,
+"home_id": 3475,
+"away_id": 3473,
+"status": "FT"
+},
+"2026-10-10|Falkirk|Dundee": {
+"id": 1556672,
+"home_id": 1389,
+"away_id": 253,
+"status": "FT"
+},
+"2026-10-10|Bristol Rovers|Barnet": {
+"id": 1563791,
+"home_id": 1334,
+"away_id": 1369,
+"status": "FT"
+},
+"2026-10-10|Newport County|Colchester United": {
+"id": 1563795,
+"home_id": 1367,
+"away_id": 1361,
+"status": "FT"
+},
+"2026-10-10|Tamworth|Barrow": {
+"id": 1585288,
+"home_id": 7752,
+"away_id": 1819,
+"status": "FT"
+},
+"2026-10-10|Wealdstone|Yeovil Town": {
+"id": 1585289,
+"home_id": 8663,
+"away_id": 1377,
+"status": "FT"
+},
+"2026-10-10|Chester|Bedford Town": {
+"id": 1587826,
+"home_id": 1820,
+"away_id": 7616,
+"status": "FT"
+},
+"2026-10-10|Harborough Town|Southport": {
+"id": 1587829,
+"home_id": 8812,
+"away_id": 1826,
+"status": "FT"
+},
+"2026-10-10|Radcliffe|Scarborough Athletic": {
+"id": 1587835,
+"home_id": 7740,
+"away_id": 7745,
+"status": "FT"
+},
+"2026-10-10|Dagenham & Redbridge|Hemel Hempstead Town": {
+"id": 1588381,
+"home_id": 1821,
+"away_id": 8660,
+"status": "FT"
+},
+"2026-10-10|Rotor Volgograd|Volga Ulyanovsk": {
+"id": 1577544,
+"home_id": 2010,
+"away_id": 6834,
+"status": "FT"
+},
+"2026-10-10|Chorley|Telford United": {
+"id": 1587827,
+"home_id": 4679,
+"away_id": 4688,
+"status": "FT"
+},
+"2026-10-10|Hebburn Town|Oxford City": {
+"id": 1587830,
+"home_id": 8822,
+"away_id": 4684,
+"status": "FT"
+},
+"2026-10-10|Billericay Town|Farnborough": {
+"id": 1588378,
+"home_id": 4678,
+"away_id": 7715,
+"status": "FT"
+},
+"2026-10-10|Farnham|Salisbury": {
+"id": 1588383,
+"home_id": 8783,
+"away_id": 7744,
+"status": "FT"
+},
+"2026-10-10|Krylia Sovetov|Spartak Moscow": {
+"id": 1561408,
+"home_id": 1079,
+"away_id": 558,
+"status": "FT"
+},
+"2026-10-10|AD Ceuta|Sabadell": {
+"id": 1569964,
+"home_id": 10139,
+"away_id": 9593,
+"status": "FT"
+},
+"2026-10-10|Rustavi|Dila Gori": {
+"id": 1509195,
+"home_id": 3501,
+"away_id": 3499,
+"status": "FT"
+},
+"2026-10-10|Ben Guerdane|Club Africain": {
+"id": 1607443,
+"home_id": 986,
+"away_id": 988,
+"status": "FT"
+},
+"2026-10-10|Sakiet Eddaier|CS Sfaxien": {
+"id": 1607449,
+"home_id": 13358,
+"away_id": 983,
+"status": "FT"
+},
+"2026-10-10|Grazer AK|Red Bull Salzburg": {
+"id": 1561938,
+"home_id": 4256,
+"away_id": 571,
+"status": "FT"
+},
+"2026-10-10|Ferencvarosi|Debreceni VSC": {
+"id": 1560249,
+"home_id": 651,
+"away_id": 2392,
+"status": "FT"
+},
+"2026-10-10|Ararat - Armenia|Alashkert": {
+"id": 1581533,
+"home_id": 3683,
+"away_id": 582,
+"status": "FT"
+},
+"2026-10-10|Lille OSC|Le Havre": {
+"id": 1552776,
+"home_id": 79,
+"away_id": 111,
+"status": "FT"
+},
+"2026-10-10|Internazionale Milano|Parma": {
+"id": 1550141,
+"home_id": 505,
+"away_id": 523,
+"status": "FT"
+},
+"2026-10-10|Caykur Rizespor|Fenerbahce": {
+"id": 1584428,
+"home_id": 1007,
+"away_id": 611,
+"status": "FT"
+},
+"2026-10-10|Mariehamn|Ilves": {
+"id": 1638088,
+"home_id": 587,
+"away_id": 1163,
+"status": "FT"
+},
+"2026-10-10|Vicenza Calcio|Pisa": {
+"id": 1601549,
+"home_id": 1584,
+"away_id": 801,
+"status": "FT"
+},
+"2026-10-10|Mjallby|Degerfors": {
+"id": 1494296,
+"home_id": 2240,
+"away_id": 2172,
+"status": "FT"
+},
+"2026-10-10|Lugano|Luzern": {
+"id": 1555403,
+"home_id": 606,
+"away_id": 644,
+"status": "FT"
+},
+"2026-10-10|Servette|Sion": {
+"id": 1555401,
+"home_id": 2184,
+"away_id": 630,
+"status": "FT"
+},
+"2026-10-10|Zurich|Thun": {
+"id": 1555402,
+"home_id": 783,
+"away_id": 1012,
+"status": "FT"
+},
+"2026-10-10|Lumezzane|AlbinoLeffe": {
+"id": 1608315,
+"home_id": 1689,
+"away_id": 879,
+"status": "FT"
+},
+"2026-10-10|Novara Calcio|Cittadella": {
+"id": 1608316,
+"home_id": 513,
+"away_id": 510,
+"status": "FT"
+},
+"2026-10-10|Spaeri|Torpedo Kutaisi": {
+"id": 1509197,
+"home_id": 14864,
+"away_id": 685,
+"status": "FT"
+},
+"2026-10-10|Norrby|Osters": {
+"id": 1497715,
+"home_id": 2173,
+"away_id": 2174,
+"status": "FT"
+},
+"2026-10-10|Oddevold|Nordic United": {
+"id": 1497717,
+"home_id": 11674,
+"away_id": 16601,
+"status": "FT"
+},
+"2026-10-10|Hanacka Slavia Kromeriz|1. Pribram": {
+"id": 1559796,
+"home_id": 7291,
+"away_id": 3718,
+"status": "FT"
+},
+"2026-10-10|Trinec|Kladno": {
+"id": 1559799,
+"home_id": 3727,
+"away_id": 7307,
+"status": "FT"
+},
+"2026-10-10|Dobrudzha Dobrich|Chernomorets Burgas": {
+"id": 1571583,
+"home_id": 1427,
+"away_id": 8530,
+"status": "FT"
+},
+"2026-10-10|Al Minaa Basra|Ghaz Al-Shamal": {
+"id": 1627996,
+"home_id": 11065,
+"away_id": 28223,
+"status": "FT"
+},
+"2026-10-10|Swedru All Blacks|Asante Kotoko": {
+"id": 1602154,
+"home_id": 21093,
+"away_id": 6411,
+"status": "FT"
+},
+"2026-10-10|Boujaad|KAC Kenitra": {
+"id": 1641176,
+"home_id": 26496,
+"away_id": 979,
+"status": "FT"
+},
+"2026-10-10|Ikorodu City|Kwara United": {
+"id": 1628541,
+"home_id": 24512,
+"away_id": 5185,
+"status": "FT"
+},
+"2026-10-10|Ranchers Bees|Niger Tornadoes": {
+"id": 1628548,
+"home_id": 28169,
+"away_id": 5189,
+"status": "FT"
+},
+"2026-10-10|SFC Shturmi|Kolkheti-1913 Poti": {
+"id": 1507232,
+"home_id": 16516,
+"away_id": 3507,
+"status": "FT"
+},
+"2026-10-10|RasenBallsport Leipzig|Eintracht Frankfurt": {
+"id": 1575177,
+"home_id": 173,
+"away_id": 169,
+"status": "FT"
+},
+"2026-10-10|RAAL La Louviere|Club Brugge": {
+"id": 1558648,
+"home_id": 5902,
+"away_id": 569,
+"status": "FT"
+},
+"2026-10-10|Neman Grodno|Baranovichi": {
+"id": 1525997,
+"home_id": 387,
+"away_id": 3383,
+"status": "FT"
+},
+"2026-10-10|Eldense|Cordoba": {
+"id": 1569965,
+"home_id": 9692,
+"away_id": 713,
+"status": "FT"
+},
+"2026-10-10|Asteras Tripolis|Atromitos": {
+"id": 1593326,
+"home_id": 955,
+"away_id": 12260,
+"status": "FT"
+},
+"2026-10-10|Hapoel Ironi Kiryat Shmona|Hapoel Tel Aviv": {
+"id": 1555519,
+"home_id": 4510,
+"away_id": 4501,
+"status": "FT"
+},
+"2026-10-10|Ironi Tiberias|Hapoel Be'er Sheva": {
+"id": 1555518,
+"home_id": 6181,
+"away_id": 563,
+"status": "FT"
+},
+"2026-10-10|Manama Club|Al-Ahli Club Manama": {
+"id": 1643397,
+"home_id": 5487,
+"away_id": 5580,
+"status": "FT"
+},
+"2026-10-10|ORBIT College|Highbury": {
+"id": 1627734,
+"home_id": 10582,
+"away_id": 24758,
+"status": "FT"
+},
+"2026-10-10|De Treffers|BVV Barendrecht": {
+"id": 1579491,
+"home_id": 1277,
+"away_id": 1271,
+"status": "FT"
+},
+"2026-10-10|Uruguay Montevideo|Colon Montevideo": {
+"id": 1643447,
+"home_id": 16740,
+"away_id": 15628,
+"status": "FT"
+},
+"2026-10-10|SD Amorebieta|Club Portugalete": {
+"id": 1572076,
+"home_id": 9380,
+"away_id": 9408,
+"status": "FT"
+},
+"2026-10-10|UD Llanera|Marino de Luanco": {
+"id": 1572081,
+"home_id": 9627,
+"away_id": 9401,
+"status": "FT"
+},
+"2026-10-10|Marsaxlokk|Zabbar Saint Patrick": {
+"id": 1582286,
+"home_id": 14507,
+"away_id": 4622,
+"status": "FT"
+},
+"2026-10-10|Simba SC|Young Africans": {
+"id": 1600787,
+"home_id": 6432,
+"away_id": 5370,
+"status": "FT"
+},
+"2026-10-10|Aliaga AS|Menemen Belediyespor": {
+"id": 1591333,
+"home_id": 21993,
+"away_id": 3599,
+"status": "FT"
+},
+"2026-10-10|Kabuscorp S.C.P|Wiliete de Benguela": {
+"id": 1627290,
+"home_id": 4929,
+"away_id": 6383,
+"status": "FT"
+},
+"2026-10-10|Genesis PN|Club Deportivo Olimpia": {
+"id": 1636817,
+"home_id": 21858,
+"away_id": 1051,
+"status": "FT"
+},
+"2026-10-10|Portland Hearts of Pine|Athletic Boise": {
+"id": 1494034,
+"home_id": 25486,
+"away_id": 27251,
+"status": "FT"
+},
+"2026-10-10|Cordobes|Tigres de Alica": {
+"id": 1635991,
+"home_id": 24939,
+"away_id": 24952,
+"status": "FT"
+},
+"2026-10-10|Racing de Veracruz|Club Celaya": {
+"id": 1635990,
+"home_id": 22046,
+"away_id": 2308,
+"status": "FT"
+},
+"2026-10-11|Silkeborg IF|AC Horsens": {
+"id": 1549033,
+"home_id": 2073,
+"away_id": 404,
+"status": "NS"
+},
+"2026-10-11|Randers FC|Viborg FF": {
+"id": 1549032,
+"home_id": 401,
+"away_id": 2070,
+"status": "NS"
+},
+"2026-10-11|Brondby IF|Lyngby": {
+"id": 1549029,
+"home_id": 407,
+"away_id": 625,
+"status": "NS"
+},
+"2026-10-11|FC Midtjylland|FC Copenhagen": {
+"id": 1549030,
+"home_id": 397,
+"away_id": 400,
+"status": "NS"
+},
+"2026-10-11|Fredrikstad FK|Tromso": {
+"id": 1494775,
+"home_id": 2149,
+"away_id": 325,
+"status": "NS"
+},
+"2026-10-11|Aalesund|Sarpsborg FK": {
+"id": 1494772,
+"home_id": 757,
+"away_id": 333,
+"status": "NS"
+},
+"2026-10-11|Lillestrom|Molde": {
+"id": 1494777,
+"home_id": 321,
+"away_id": 329,
+"status": "NS"
+},
+"2026-10-11|FC Vaduz|FC Basel": {
+"id": 1555406,
+"home_id": 660,
+"away_id": 551,
+"status": "NS"
+},
+"2026-10-11|FC St Gallen|FC Lausanne-Sport": {
+"id": 1555405,
+"home_id": 1011,
+"away_id": 1014,
+"status": "NS"
+},
+"2026-10-11|Hartberg|Austria Lustenau": {
+"id": 1561939,
+"home_id": 1072,
+"away_id": 1399,
+"status": "NS"
+},
+"2026-10-11|Piast Gliwice|Widzew Łódź": {
+"id": 1553185,
+"home_id": 349,
+"away_id": 6962,
+"status": "NS"
+},
+"2026-10-11|Pogoń Szczecin|Korona Kielce": {
+"id": 1553186,
+"home_id": 348,
+"away_id": 346,
+"status": "NS"
+},
+"2026-10-11|Legia Warszawa|Wisła Kraków": {
+"id": 1553184,
+"home_id": 339,
+"away_id": 338,
+"status": "NS"
+},
+"2026-10-11|Örebro SK|Ljungskile SK": {
+"id": 1497718,
+"home_id": 365,
+"away_id": 2165,
+"status": "NS"
+},
+"2026-10-11|IFK Värnamo|Falkenbergs FF": {
+"id": 1497720,
+"home_id": 2163,
+"away_id": 812,
+"status": "NS"
+},
+"2026-10-11|IK Brage|Helsingborgs IF": {
+"id": 1497713,
+"home_id": 2175,
+"away_id": 811,
+"status": "NS"
+},
+"2026-10-11|FC Ingolstadt 04|Wehen Wiesbaden": {
+"id": 1584019,
+"home_id": 184,
+"away_id": 1319,
+"status": "NS"
+},
+"2026-10-11|Alemannia Aachen|FC Viktoria Köln 1904": {
+"id": 1584014,
+"home_id": 4259,
+"away_id": 1620,
+"status": "NS"
+},
+"2026-10-11|Fortuna Düsseldorf|SC Verl": {
+"id": 1584016,
+"home_id": 158,
+"away_id": 4265,
+"status": "NS"
+},
+"2026-10-11|Hammarby IF|Djurgardens IF": {
+"id": 1494294,
+"home_id": 363,
+"away_id": 364,
+"status": "NS"
+},
+"2026-10-11|BK Hacken|Örgryte IS": {
+"id": 1494293,
+"home_id": 367,
+"away_id": 2166,
+"status": "NS"
+},
+"2026-10-11|FC Inter Turku|KuPS Kuopio": {
+"id": 1638104,
+"home_id": 1164,
+"away_id": 1165,
+"status": "NS"
+},
+"2026-10-11|Atletico Mineiro|Santos": {
+"id": 1492400,
+"home_id": 1062,
+"away_id": 128,
+"status": "NS"
+},
+"2026-10-11|Palmeiras|Corinthians": {
+"id": 1492407,
+"home_id": 121,
+"away_id": 131,
+"status": "NS"
+},
+"2026-10-11|Flamengo|Fluminense": {
+"id": 1492405,
+"home_id": 127,
+"away_id": 124,
+"status": "NS"
+},
+"2026-10-11|Grêmio|Internacional": {
+"id": 1492406,
+"home_id": 130,
+"away_id": 119,
+"status": "NS"
+},
+"2026-10-11|Bahia|Mirassol": {
+"id": 1492401,
+"home_id": 118,
+"away_id": 7848,
+"status": "NS"
+},
+"2026-10-11|San Lorenzo|Deportivo Riestra": {
+"id": 1493178,
+"home_id": 460,
+"away_id": 476,
+"status": "NS"
+},
+"2026-10-11|Platense|Argentinos Juniors": {
+"id": 1493174,
+"home_id": 1064,
+"away_id": 458,
+"status": "NS"
+},
+"2026-10-11|Racing Club|Belgrano de Cordoba": {
+"id": 1493175,
+"home_id": 436,
+"away_id": 440,
+"status": "NS"
+},
+"2026-10-12|Talleres|Independiente": {
+"id": 1493179,
+"home_id": 456,
+"away_id": 453,
+"status": "NS"
+},
+"2026-10-11|Everton de Viña del Mar|La Serena": {
+"id": 1505534,
+"home_id": 2325,
+"away_id": 2341,
+"status": "NS"
+},
+"2026-10-11|Coquimbo Unido|Colo Colo": {
+"id": 1505532,
+"home_id": 2330,
+"away_id": 2315,
+"status": "NS"
+},
+"2026-10-11|Deportes Concepción|Union La Calera": {
+"id": 1505533,
+"home_id": 5635,
+"away_id": 2326,
+"status": "NS"
+},
+"2026-10-11|Deportes Limache|Palestino": {
+"id": 1505536,
+"home_id": 16730,
+"away_id": 2318,
+"status": "NS"
+},
+"2026-10-11|Atlético San Luis|Santos Laguna": {
+"id": 1550990,
+"home_id": 2314,
+"away_id": 2285,
+"status": "NS"
+},
+"2026-10-11|Pachuca|Necaxa": {
+"id": 1550991,
+"home_id": 2292,
+"away_id": 2288,
+"status": "NS"
+},
+"2026-10-12|Pumas|Cruz Azul": {
+"id": 1550992,
+"home_id": 2286,
+"away_id": 2295,
+"status": "NS"
+},
+"2026-10-11|St. Louis City SC|LA Galaxy": {
+"id": 1490525,
+"home_id": 20787,
+"away_id": 1605,
+"status": "NS"
+},
+"2026-10-11|Juventude|São Bernardo": {
+"id": 1520934,
+"home_id": 152,
+"away_id": 7865,
+"status": "NS"
+},
+"2026-10-11|Atletico Goianiense|Sport Recife": {
+"id": 1520921,
+"home_id": 144,
+"away_id": 123,
+"status": "NS"
+},
+"2026-10-11|Nautico PE|Vila Nova": {
+"id": 1520926,
+"home_id": 755,
+"away_id": 142,
+"status": "NS"
+},
+"2026-10-11|Cuiabá|Avai": {
+"id": 1520924,
+"home_id": 1193,
+"away_id": 145,
+"status": "NS"
+},
+"2026-10-11|Operario PR|Goiás": {
+"id": 1520928,
+"home_id": 1223,
+"away_id": 151,
+"status": "NS"
+},
+"2026-10-11|JEF United Chiba|V-Varen Nagasaki": {
+"id": 1556083,
+"home_id": 301,
+"away_id": 285,
+"status": "NS"
+},
+"2026-10-11|Tokyo Verdy|Hiroshima Sanfrecce FC": {
+"id": 1556090,
+"home_id": 306,
+"away_id": 282,
+"status": "NS"
+},
+"2026-10-11|Mito HollyHock|Shimizu S Pulse": {
+"id": 1556089,
+"home_id": 305,
+"away_id": 283,
+"status": "NS"
+},
+"2026-10-11|Kawasaki Frontale|Nagoya Grampus": {
+"id": 1556087,
+"home_id": 294,
+"away_id": 288,
+"status": "NS"
+},
+"2026-10-11|Al-Fayha|Al-Riyadh": {
+"id": 1603038,
+"home_id": 2944,
+"away_id": 10511,
+"status": "NS"
+},
+"2026-10-11|Abha Club|Al-Faisaly KSA FC": {
+"id": 1603035,
+"home_id": 2951,
+"away_id": 2930,
+"status": "NS"
+},
+"2026-10-11|Al-Shabab|Al-Taawoun": {
+"id": 1603043,
+"home_id": 2940,
+"away_id": 2936,
+"status": "NS"
+},
+"2026-10-11|Chongqing Tonglianglong FC|Shandong Luneng Taishan FC": {
+"id": 1523273,
+"home_id": 21262,
+"away_id": 844,
+"status": "NS"
+},
+"2026-10-11|Gwangju FC|Ulsan Hyundai FC": {
+"id": 1507081,
+"home_id": 2759,
+"away_id": 2767,
+"status": "2H"
 }
 }

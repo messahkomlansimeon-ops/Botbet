@@ -1,47 +1,41 @@
 {
-"day": "2026-10-10",
+"day": "2026-10-11",
 "sources": {
-"events": {
-"hit": 93,
-"miss": 1,
-"saved": 93,
-"spent": 1
-},
 "footballdata": {
-"hit": 68,
-"miss": 0,
-"saved": 68,
-"spent": 0
+"hit": 36,
+"miss": 32,
+"saved": 36,
+"spent": 32
 },
 "fotmob": {
-"hit": 42,
-"miss": 57,
-"saved": 42,
-"spent": 57
-},
-"betexplorer": {
-"hit": 40,
-"miss": 21,
-"saved": 40,
-"spent": 21
+"hit": 0,
+"miss": 65,
+"saved": 0,
+"spent": 65
 },
 "api-football": {
-"hit": 18,
-"miss": 3,
-"saved": 18,
-"spent": 3
+"hit": 9102,
+"miss": 61,
+"saved": 9102,
+"spent": 61
+},
+"events": {
+"hit": 0,
+"miss": 93,
+"saved": 0,
+"spent": 93
 },
 "odds": {
-"hit": 7,
-"miss": 3,
-"saved": 8,
-"spent": 4
+"hit": 0,
+"miss": 14,
+"saved": 0,
+"spent": 17
 },
 "xbet": {
-"hit": 396,
-"miss": 55,
-"saved": 396,
-"spent": 55
+"hit": 16,
+"miss": 422,
+"saved": 16,
+"spent": 422
 }
 }
 }

@@ -3,7 +3,7 @@
 "rows": 18491,
 "ok": true,
 "last_error": null,
-"last_success": "2026-10-10T05:06:12+00:00",
+"last_success": "2026-10-11T04:02:18+00:00",
 "stale": 0
 },
 "understat": {
@@ -20,31 +20,31 @@
 "stale": 0
 },
 "fotmob": {
-"rows": 4604,
+"rows": 4606,
 "ok": true,
-"last_error": "soccer_international_friendlies : structure de la page modifiée : classement introuvable ; soccer_african_football_league : structure de la page modifiée : classement introuvable ; profil trop volumineux (réduire FOTMOB_KEEP)",
-"last_success": "2026-10-10T05:12:40+00:00",
-"stale": 0
+"last_error": "48 ligue(s) servie(s) depuis un cache périmé (téléchargement reporté ou refusé) : soccer_fifa_world_cup_qualifiers_south_america, soccer_uefa_champs_league, soccer_uefa_europa_conference_league, soccer_uefa_europa_league… ; soccer_international_friendlies : structure de la page modifiée : classement introuvable ; soccer_african_football_league : structure de la page modifiée : classement introuvable (+1)",
+"last_success": "2026-10-11T04:08:11+00:00",
+"stale": 48
 },
 "betexplorer": {
 "rows": 4436,
 "ok": true,
-"last_error": "soccer_australia_aleague : structure de la page modifiée : aucun match avec cotes ; soccer_uefa_europa_conference_league : structure de la page modifiée : aucun match avec cotes ; africa_kenya_premier_league : structure de la page modifiée : aucun match avec cotes (+2)",
-"last_success": "2026-10-10T05:14:33+00:00",
-"stale": 0
+"last_error": "56 ligue(s) servie(s) depuis un cache périmé (téléchargement reporté ou refusé) : soccer_usa_mls, soccer_argentina_primera_division, soccer_austria_bundesliga, soccer_belgium_first_div… ; soccer_australia_aleague : délai dépassé, téléchargement reporté au prochain passage ; soccer_uefa_europa_conference_league : délai dépassé, téléchargement reporté au prochain passage (+3)",
+"last_success": "2026-10-11T04:12:49+00:00",
+"stale": 56
 },
 "xbet": {
-"rows": 5,
+"rows": 38,
 "ok": true,
 "last_error": null,
-"last_success": "2026-10-10T22:42:04+00:00",
+"last_success": "2026-10-11T18:34:11+00:00",
 "stale": 0
 },
 "s365": {
-"rows": 1382,
+"rows": 1520,
 "ok": true,
 "stale": 0,
-"last_error": "match 4735672 : réponse illisible",
-"last_success": "2026-10-10T22:09:02+00:00"
+"last_error": null,
+"last_success": "2026-10-11T17:10:50+00:00"
 }
 }

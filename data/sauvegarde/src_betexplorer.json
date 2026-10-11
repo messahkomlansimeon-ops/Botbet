@@ -532,7 +532,8 @@
 "mid": "2wRbr51D"
 }
 ],
-"at": "2026-10-10T05:14+00:00"
+"at": "2026-10-10T05:14+00:00",
+"stale": true
 },
 "soccer_argentina_primera_division": {
 "path": "argentina/liga-profesional",
@@ -648,7 +649,8 @@
 "mid": "M1KbYCx1"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_austria_bundesliga": {
 "path": "austria/bundesliga",
@@ -1116,7 +1118,8 @@
 "mid": "pSksPwD6"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_belgium_first_div": {
 "path": "belgium/jupiler-pro-league",
@@ -1815,7 +1818,7 @@
 "mid": "jFLZQsko"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Beveren",
 "away": "Lommel SK",
 "hg": 1,
@@ -1826,7 +1829,8 @@
 "mid": "AFzBnGHL"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_brazil_campeonato": {
 "path": "brazil/serie-a-betano",
@@ -2679,7 +2683,7 @@
 "mid": "bLLlZBOp"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Palmeiras",
 "away": "Bahia",
 "hg": 1,
@@ -2690,7 +2694,7 @@
 "mid": "Mg7qego4"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Fluminense",
 "away": "Coritiba",
 "hg": 4,
@@ -2701,7 +2705,7 @@
 "mid": "EmpIvY0N"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Athletico-PR",
 "away": "Atletico-MG",
 "hg": 2,
@@ -2712,7 +2716,8 @@
 "mid": "QmkB9h0c"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_brazil_serie_b": {
 "path": "brazil/serie-b",
@@ -3598,7 +3603,8 @@
 "mid": "IFdjvvvK"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_chile_campeonato": {
 "path": "chile/liga-de-primera",
@@ -4484,7 +4490,8 @@
 "mid": "OWWaQs2l"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_china_superleague": {
 "path": "china/super-league",
@@ -5337,7 +5344,7 @@
 "mid": "fVlFSFPk"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Zhejiang Professional",
 "away": "Shanghai Port",
 "hg": 2,
@@ -5348,7 +5355,7 @@
 "mid": "I3hqQyMs"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Shenzhen Xinpengcheng",
 "away": "Henan Songshan Longmen",
 "hg": 2,
@@ -5359,7 +5366,7 @@
 "mid": "nL1DVcbK"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Qingdao Hainiu",
 "away": "Beijing Guoan",
 "hg": 0,
@@ -5370,7 +5377,8 @@
 "mid": "4vc7KXkJ"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_denmark_superliga": {
 "path": "denmark/superliga",
@@ -5970,7 +5978,7 @@
 "mid": "hKmQ0v15"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Nordsjaelland",
 "away": "Odense",
 "hg": 0,
@@ -5981,7 +5989,8 @@
 "mid": "byNUTxVi"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_efl_champ": {
 "path": "england/championship",
@@ -6856,7 +6865,7 @@
 "mid": "QcuenVhR"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "West Ham",
 "away": "QPR",
 "hg": 1,
@@ -6867,7 +6876,8 @@
 "mid": "d0OOV3Pp"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_england_efl_cup": {
 "path": "england/efl-cup",
@@ -7555,7 +7565,8 @@
 "mid": "0xXvydIM"
 }
 ],
-"at": "2026-10-10T05:14+00:00"
+"at": "2026-10-10T05:14+00:00",
+"stale": true
 },
 "soccer_england_league1": {
 "path": "england/league-one",
@@ -8441,7 +8452,8 @@
 "mid": "YcH0fUvR"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_england_league2": {
 "path": "england/league-two",
@@ -9327,7 +9339,8 @@
 "mid": "Kh6mwTxP"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_epl": {
 "path": "england/premier-league",
@@ -9883,7 +9896,8 @@
 "mid": "joCde00k"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_fa_cup": {
 "path": "england/fa-cup",
@@ -10769,7 +10783,8 @@
 "mid": "8rAAq14U"
 }
 ],
-"at": "2026-10-10T05:14+00:00"
+"at": "2026-10-10T05:14+00:00",
+"stale": true
 },
 "soccer_finland_veikkausliiga": {
 "path": "finland/veikkausliiga",
@@ -10907,7 +10922,8 @@
 "mid": "86Wob8La"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_france_ligue_one": {
 "path": "france/ligue-1",
@@ -11408,7 +11424,7 @@
 "mid": "KSEQBX7d"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Lens",
 "away": "Lyon",
 "hg": 2,
@@ -11419,7 +11435,8 @@
 "mid": "MFDuQNS6"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_germany_bundesliga": {
 "path": "germany/bundesliga",
@@ -11821,7 +11838,7 @@
 "mid": "fqjrNwLr"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Dortmund",
 "away": "Werder Bremen",
 "hg": 2,
@@ -11832,7 +11849,8 @@
 "mid": "plkwWY3D"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_greece_super_league": {
 "path": "greece/super-league",
@@ -12223,7 +12241,8 @@
 "mid": "tlUWTPvK"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_international_friendlies": {
 "path": "world/friendly-international",
@@ -13065,7 +13084,8 @@
 "mid": "E5j2p2At"
 }
 ],
-"at": "2026-10-10T05:14+00:00"
+"at": "2026-10-10T05:14+00:00",
+"stale": true
 },
 "soccer_italy_serie_a": {
 "path": "italy/serie-a",
@@ -13621,7 +13641,8 @@
 "mid": "ClKl2gCt"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_japan_j_league": {
 "path": "japan/j1-league",
@@ -14485,7 +14506,7 @@
 "mid": "OQh4Tncd"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Kashiwa Reysol",
 "away": "Vissel Kobe",
 "hg": 4,
@@ -14496,7 +14517,7 @@
 "mid": "4vgUL1ff"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Kashima Antlers",
 "away": "Gamba Osaka",
 "hg": 2,
@@ -14507,7 +14528,8 @@
 "mid": "r5YOh3Q7"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_league_of_ireland": {
 "path": "ireland/premier-division",
@@ -15382,7 +15404,7 @@
 "mid": "rcJKjzIM"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Shelbourne",
 "away": "Sligo Rovers",
 "hg": 5,
@@ -15393,7 +15415,8 @@
 "mid": "lGH4fIIc"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_mexico_ligamx": {
 "path": "mexico/liga-mx",
@@ -16268,7 +16291,7 @@
 "mid": "nelb1QCt"
 },
 {
-"d": "2026-10-10",
+"d": "2026-10-11",
 "home": "Puebla",
 "away": "Club Leon",
 "hg": 1,
@@ -16279,7 +16302,8 @@
 "mid": "zagMeMtI"
 }
 ],
-"at": "2026-10-10T04:33+00:00"
+"at": "2026-10-10T04:33+00:00",
+"stale": true
 },
 "soccer_netherlands_eredivisie": {
 "path": "netherlands/eredivisie",
@@ -16967,7 +16991,7 @@
 "mid": "E7m86zqJ"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "PSV",
 "away": "Heerenveen",
 "hg": 2,
@@ -16978,7 +17002,8 @@
 "mid": "ABvXMeTa"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_norway_eliteserien": {
 "path": "norway/eliteserien",
@@ -17853,7 +17878,7 @@
 "mid": "xtIYZzc4"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Brann",
 "away": "Viking",
 "hg": 0,
@@ -17864,7 +17889,8 @@
 "mid": "QLfplRHE"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_poland_ekstraklasa": {
 "path": "poland/ekstraklasa",
@@ -18728,7 +18754,7 @@
 "mid": "MuqwdSTO"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Rakow",
 "away": "GKS Katowice",
 "hg": 1,
@@ -18739,7 +18765,7 @@
 "mid": "tn3rPQcB"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Wieczysta Krakow",
 "away": "Wisla Plock",
 "hg": 3,
@@ -18750,7 +18776,8 @@
 "mid": "jFP2CmE5"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_portugal_primeira_liga": {
 "path": "portugal/liga-portugal",
@@ -19438,7 +19465,7 @@
 "mid": "OrdYcWu9"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Moreirense",
 "away": "Gil Vicente",
 "hg": 0,
@@ -19449,7 +19476,7 @@
 "mid": "z3PvErW6"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Braga",
 "away": "Sporting CP",
 "hg": 1,
@@ -19460,7 +19487,8 @@
 "mid": "Iqp7aqHD"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_saudi_arabia_pro_league": {
 "path": "saudi-arabia/saudi-professional-league",
@@ -20159,7 +20187,7 @@
 "mid": "n5PPg2cf"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Al Nassr",
 "away": "Al Diriyah",
 "hg": 3,
@@ -20170,7 +20198,7 @@
 "mid": "I9RilJrT"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Al Kholood",
 "away": "Al Qadsiah",
 "hg": 0,
@@ -20181,7 +20209,7 @@
 "mid": "U5MTgNEi"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Al Fateh",
 "away": "Al Ahli SC",
 "hg": 0,
@@ -20192,7 +20220,8 @@
 "mid": "vJ4960bc"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_spain_la_liga": {
 "path": "spain/laliga",
@@ -20957,7 +20986,7 @@
 "mid": "hGycdKve"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Malaga",
 "away": "Espanyol",
 "hg": 1,
@@ -20968,7 +20997,8 @@
 "mid": "dUikzzNa"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_spl": {
 "path": "scotland/premiership",
@@ -21436,7 +21466,8 @@
 "mid": "dlEIBMJU"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_sweden_allsvenskan": {
 "path": "sweden/allsvenskan",
@@ -22311,7 +22342,7 @@
 "mid": "8bs9APkf"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Goteborg",
 "away": "Vasteras SK",
 "hg": 1,
@@ -22322,7 +22353,8 @@
 "mid": "IB9bLt4C"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_switzerland_superleague": {
 "path": "switzerland/super-league",
@@ -22922,7 +22954,8 @@
 "mid": "EgxNBdhI"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_turkey_super_league": {
 "path": "turkey/super-lig",
@@ -23522,7 +23555,7 @@
 "mid": "YXPPZwhc"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Galatasaray",
 "away": "Kasimpasa",
 "hg": 3,
@@ -23533,7 +23566,8 @@
 "mid": "YiWPvQZg"
 }
 ],
-"at": "2026-10-10T04:34+00:00"
+"at": "2026-10-10T04:34+00:00",
+"stale": true
 },
 "soccer_uefa_champs_league": {
 "path": "europe/champions-league",
@@ -23737,7 +23771,8 @@
 "mid": "21qdVdR6"
 }
 ],
-"at": "2026-10-10T05:14+00:00"
+"at": "2026-10-10T05:14+00:00",
+"stale": true
 },
 "soccer_usa_mls": {
 "path": "usa/mls",
@@ -24623,7 +24658,8 @@
 "mid": "xn3OX2y3"
 }
 ],
-"at": "2026-10-10T04:32+00:00"
+"at": "2026-10-10T04:32+00:00",
+"stale": true
 },
 "soccer_uefa_europa_league": {
 "path": "europe/europa-league",
@@ -24827,7 +24863,8 @@
 "mid": "SGlk19Jl"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "soccer_uefa_nations_league": {
 "path": "europe/uefa-nations-league",
@@ -25185,7 +25222,8 @@
 "mid": "GYG5XytT"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_algeria_ligue_1": {
 "path": "algeria/ligue-1",
@@ -25488,7 +25526,7 @@
 "mid": "8n0Nhjdd"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "MC Alger",
 "away": "Temouchent",
 "hg": 1,
@@ -25499,7 +25537,7 @@
 "mid": "Y70GEXIF"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Kabylie",
 "away": "ASO Chlef",
 "hg": 1,
@@ -25510,7 +25548,8 @@
 "mid": "0tm9Ggl3"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_angola_girabola": {
 "path": "angola/girabola",
@@ -25736,7 +25775,7 @@
 "mid": "tj7oKRMG"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Petro Atletico",
 "away": "Caala",
 "hg": 0,
@@ -25747,7 +25786,8 @@
 "mid": "KdO0XIpK"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_botswana_premier_league": {
 "path": "botswana/premier-league",
@@ -25918,7 +25958,7 @@
 "mid": "WxNm4jkR"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Tonota",
 "away": "Sua Flamingoes",
 "hg": 1,
@@ -25929,7 +25969,7 @@
 "mid": "rgOPEt3n"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Gaborone Utd",
 "away": "Morupule",
 "hg": 3,
@@ -25940,7 +25980,8 @@
 "mid": "zZBRd8s1"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_burkina_premier_league": {
 "path": "burkina-faso/premier-league",
@@ -26199,7 +26240,7 @@
 "mid": "bTIWQl6L"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "CFFEB",
 "away": "Salitas",
 "hg": 1,
@@ -26210,7 +26251,7 @@
 "mid": "dEFCss4D"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "ASF Dioulasso",
 "away": "Majestic",
 "hg": 0,
@@ -26221,7 +26262,8 @@
 "mid": "l82b5pdK"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_burundi_primus_league": {
 "path": "burundi/primus-league",
@@ -26337,7 +26379,7 @@
 "mid": "ITgcK42L"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Young Star",
 "away": "Bumamuru",
 "hg": 0,
@@ -26348,7 +26390,8 @@
 "mid": "nNtNuCUb"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_caf_champions_league": {
 "path": "africa/caf-champions-league",
@@ -26695,7 +26738,8 @@
 "mid": "hMY0YCMP"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_cameroon_elite_one": {
 "path": "cameroon/elite-one",
@@ -27581,7 +27625,8 @@
 "mid": "tblfTZy8"
 }
 ],
-"at": "2026-10-10T04:35+00:00"
+"at": "2026-10-10T04:35+00:00",
+"stale": true
 },
 "africa_chad_premiere_division": {
 "path": "chad/premiere-division",
@@ -28258,7 +28303,8 @@
 "mid": "hjTzqWXN"
 }
 ],
-"at": "2026-10-10T05:12+00:00"
+"at": "2026-10-10T05:12+00:00",
+"stale": true
 },
 "africa_egypt_premier_league": {
 "path": "egypt/premier-league",
@@ -28814,13 +28860,14 @@
 "mid": "Svq99FbD"
 }
 ],
-"at": "2026-10-10T05:12+00:00"
+"at": "2026-10-10T05:12+00:00",
+"stale": true
 },
 "africa_ethiopia_premier_league": {
 "path": "ethiopia/premier-league",
 "matches": [
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Halaba Ketema",
 "away": "Welwalo Adigrat",
 "hg": 1,
@@ -28831,7 +28878,7 @@
 "mid": "IR0hVwJ8"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Ethio Electric",
 "away": "Adama City",
 "hg": 0,
@@ -28842,7 +28889,8 @@
 "mid": "2s5TEIYR"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_ghana_premier_league": {
 "path": "ghana/premier-league",
@@ -29189,7 +29237,8 @@
 "mid": "4IkvEzri"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_ivory_coast_ligue_1": {
 "path": "ivory-coast/ligue-1",
@@ -29283,7 +29332,8 @@
 "mid": "EBomwtmC"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_mali_premiere_division": {
 "path": "mali/premiere-division",
@@ -30169,7 +30219,8 @@
 "mid": "MF5vFHEO"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_morocco_botola_pro": {
 "path": "morocco/botola-pro",
@@ -30373,7 +30424,7 @@
 "mid": "ze1juqdR"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Moghreb Tetouan",
 "away": "FUS Rabat",
 "hg": 0,
@@ -30384,7 +30435,8 @@
 "mid": "CzeUX0l1"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_mozambique_mocambola": {
 "path": "mozambique/mocambola",
@@ -31138,7 +31190,7 @@
 "mid": "QaUyXfwe"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Costa do Sol",
 "away": "Ferroviario Lichinga",
 "hg": 2,
@@ -31149,7 +31201,7 @@
 "mid": "YPXqVY77"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "AD Pemba",
 "away": "Chingale de Tete",
 "hg": 1,
@@ -31160,7 +31212,8 @@
 "mid": "0WPVhx0E"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_niger_super_ligue": {
 "path": "niger/super-ligue",
@@ -31199,7 +31252,7 @@
 "mid": "bstT6K36"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Nigelec",
 "away": "AS UAM",
 "hg": 0,
@@ -31210,7 +31263,8 @@
 "mid": "W6ItL5nT"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_nigeria_npfl": {
 "path": "nigeria/npfl",
@@ -31799,7 +31853,7 @@
 "mid": "K8bNc46k"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Katsina Utd",
 "away": "Enyimba",
 "hg": 4,
@@ -31810,7 +31864,8 @@
 "mid": "AN4v3h1c"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 },
 "africa_rwanda_premier_league": {
 "path": "rwanda/premier-league",
@@ -32014,7 +32069,7 @@
 "mid": "0KFT4W87"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Kigali FC",
 "away": "Gicumbi",
 "hg": 1,
@@ -32025,7 +32080,7 @@
 "mid": "juT8hYr4"
 },
 {
-"d": "2026-10-09",
+"d": "2026-10-10",
 "home": "Gorilla",
 "away": "Rayon Sport",
 "hg": 1,
@@ -32036,8 +32091,9 @@
 "mid": "dxWGjCDG"
 }
 ],
-"at": "2026-10-10T05:13+00:00"
+"at": "2026-10-10T05:13+00:00",
+"stale": true
 }
 },
-"updated": "2026-10-10T05:14+00:00"
+"updated": "2026-10-11T04:12+00:00"
 }

@@ -106,6 +106,9 @@
 "d": "2026-10-09",
 "sk": [
 "soccer_brazil_campeonato"
+],
+"al": [
+"Atletico Mineiro"
 ]
 },
 "124": {
@@ -349,6 +352,9 @@
 "d": "2026-10-09",
 "sk": [
 "soccer_finland_veikkausliiga"
+],
+"al": [
+"KuPS Kuopio"
 ]
 },
 "2077": {
@@ -511,6 +517,9 @@
 "d": "2026-10-09",
 "sk": [
 "soccer_brazil_serie_b"
+],
+"al": [
+"Nautico PE"
 ]
 },
 "7834": {
@@ -2375,6 +2384,1032 @@ null,
 "sk": [
 "soccer_colombia_primera_a"
 ]
+},
+"2184": {
+"m": [
+[
+261010,
+19,
+1,
+3,
+0,
+16,
+12,
+5,
+3,
+5,
+5,
+12,
+10,
+5,
+2
+]
+],
+"nm": "Servette FC",
+"lg": "Super League suisse",
+"d": "2026-10-11",
+"sk": [
+"soccer_switzerland_superleague"
+]
+},
+"630": {
+"m": [
+[
+261010,
+19,
+0,
+0,
+3,
+12,
+16,
+3,
+5,
+5,
+5,
+10,
+12,
+2,
+5
+]
+],
+"nm": "FC Sion",
+"lg": "Super League suisse",
+"d": "2026-10-11",
+"sk": [
+"soccer_switzerland_superleague"
+]
+},
+"336": {
+"m": [
+[
+261010,
+9,
+1,
+1,
+3,
+11,
+15,
+3,
+9,
+4,
+4,
+13,
+18,
+2,
+4
+]
+],
+"nm": "Jagiellonia",
+"lg": "Ekstraklasa",
+"d": "2026-10-11",
+"sk": [
+"soccer_poland_ekstraklasa"
+]
+},
+"340": {
+"m": [
+[
+261010,
+9,
+0,
+3,
+1,
+15,
+11,
+9,
+3,
+4,
+4,
+18,
+13,
+4,
+2
+]
+],
+"nm": "Gornik Zabrze",
+"lg": "Ekstraklasa",
+"d": "2026-10-11",
+"sk": [
+"soccer_poland_ekstraklasa"
+]
+},
+"2348": {
+"m": [
+[
+261010,
+18,
+1,
+1,
+1,
+22,
+10,
+6,
+6,
+4,
+2,
+null,
+null,
+2,
+0
+]
+],
+"nm": "Penarol",
+"lg": "Primera uruguayenne",
+"d": "2026-10-11",
+"sk": [
+"soccer_uruguay_primera_division"
+]
+},
+"2363": {
+"m": [
+[
+261010,
+18,
+0,
+1,
+1,
+10,
+22,
+6,
+6,
+2,
+4,
+null,
+null,
+0,
+2
+]
+],
+"nm": "Progreso",
+"lg": "Primera uruguayenne",
+"d": "2026-10-11",
+"sk": [
+"soccer_uruguay_primera_division"
+]
+},
+"1183": {
+"m": [
+[
+261010,
+20,
+1,
+0,
+3,
+18,
+17,
+4,
+6,
+7,
+9,
+14,
+15,
+2,
+2
+]
+],
+"nm": "Sportivo Luqueno",
+"lg": "Primera paraguayenne",
+"d": "2026-10-11",
+"sk": [
+"soccer_paraguay_primera"
+]
+},
+"1176": {
+"m": [
+[
+261010,
+20,
+0,
+3,
+0,
+17,
+18,
+6,
+4,
+9,
+7,
+15,
+14,
+2,
+2
+]
+],
+"nm": "Cerro Porteno",
+"lg": "Primera paraguayenne",
+"d": "2026-10-11",
+"sk": [
+"soccer_paraguay_primera"
+]
+},
+"2290": {
+"m": [
+[
+261010,
+15,
+1,
+2,
+0,
+11,
+17,
+3,
+9,
+6,
+8,
+9,
+14,
+1,
+3
+]
+],
+"nm": "Club Queretaro",
+"lg": "Liga MX",
+"d": "2026-10-11",
+"sk": [
+"soccer_mexico_ligamx"
+]
+},
+"2312": {
+"m": [
+[
+261010,
+15,
+0,
+0,
+2,
+17,
+11,
+9,
+3,
+8,
+6,
+14,
+9,
+3,
+1
+]
+],
+"nm": "Atlante FC",
+"lg": "Liga MX",
+"d": "2026-10-11",
+"sk": [
+"soccer_mexico_ligamx"
+]
+},
+"1135": {
+"m": [
+[
+261010,
+16,
+1,
+2,
+2,
+19,
+18,
+4,
+4,
+6,
+7,
+13,
+7,
+2,
+1
+]
+],
+"nm": "Junior",
+"lg": "Primera colombienne",
+"d": "2026-10-11",
+"sk": [
+"soccer_colombia_primera_a"
+]
+},
+"1134": {
+"m": [
+[
+261010,
+16,
+0,
+2,
+2,
+18,
+19,
+4,
+4,
+7,
+6,
+7,
+13,
+1,
+2
+]
+],
+"nm": "Internacional de Bogota",
+"lg": "Primera colombienne",
+"d": "2026-10-11",
+"sk": [
+"soccer_colombia_primera_a"
+]
+},
+"2283": {
+"m": [
+[
+261011,
+15,
+1,
+1,
+1,
+6,
+12,
+3,
+5,
+7,
+7,
+15,
+19,
+2,
+4
+]
+],
+"nm": "Atlas",
+"lg": "Liga MX",
+"d": "2026-10-11",
+"sk": [
+"soccer_mexico_ligamx"
+]
+},
+"2278": {
+"m": [
+[
+261011,
+15,
+0,
+1,
+1,
+12,
+6,
+5,
+3,
+7,
+7,
+19,
+15,
+4,
+2
+]
+],
+"nm": "Guadalajara Chivas",
+"lg": "Liga MX",
+"d": "2026-10-11",
+"sk": [
+"soccer_mexico_ligamx"
+]
+},
+"2279": {
+"m": [
+[
+261010,
+15,
+1,
+3,
+2,
+20,
+17,
+13,
+8,
+5,
+6,
+13,
+20,
+1,
+4
+]
+],
+"nm": "Tigres UANL",
+"lg": "Liga MX",
+"d": "2026-10-11",
+"sk": [
+"soccer_mexico_ligamx"
+]
+},
+"2281": {
+"m": [
+[
+261010,
+15,
+0,
+2,
+3,
+17,
+20,
+8,
+13,
+6,
+5,
+20,
+13,
+4,
+1
+]
+],
+"nm": "Toluca",
+"lg": "Liga MX",
+"d": "2026-10-11",
+"sk": [
+"soccer_mexico_ligamx"
+]
+},
+"2766": {
+"m": [
+[
+261010,
+5,
+1,
+2,
+1,
+11,
+8,
+5,
+2,
+1,
+4,
+null,
+null,
+3,
+1
+]
+],
+"nm": "FC Seoul",
+"lg": "K League 1",
+"d": "2026-10-11",
+"sk": [
+"soccer_korea_kleague1"
+]
+},
+"2761": {
+"m": [
+[
+261010,
+5,
+0,
+1,
+2,
+8,
+11,
+2,
+5,
+4,
+1,
+null,
+null,
+1,
+3
+]
+],
+"nm": "Jeju United FC",
+"lg": "K League 1",
+"d": "2026-10-11",
+"sk": [
+"soccer_korea_kleague1"
+]
+},
+"291": {
+"m": [
+[
+261010,
+6,
+1,
+0,
+0,
+11,
+12,
+2,
+1,
+5,
+4,
+11,
+13,
+4,
+1
+]
+],
+"nm": "Cerezo Osaka",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"296": {
+"m": [
+[
+261010,
+6,
+0,
+0,
+0,
+12,
+11,
+1,
+2,
+4,
+5,
+13,
+11,
+1,
+4
+]
+],
+"nm": "Yokohama F. Marinos",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"316": {
+"m": [
+[
+261010,
+6,
+1,
+2,
+1,
+11,
+10,
+6,
+3,
+2,
+3,
+13,
+10,
+4,
+2
+]
+],
+"nm": "Avispa Fukuoka",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"310": {
+"m": [
+[
+261010,
+6,
+0,
+1,
+2,
+10,
+11,
+3,
+6,
+3,
+2,
+10,
+13,
+2,
+4
+]
+],
+"nm": "Fagiano Okayama",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"292": {
+"m": [
+[
+261010,
+6,
+1,
+3,
+0,
+16,
+11,
+5,
+2,
+3,
+3,
+13,
+13,
+1,
+0
+]
+],
+"nm": "FC Tokyo",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"287": {
+"m": [
+[
+261010,
+6,
+0,
+0,
+3,
+11,
+16,
+2,
+5,
+3,
+3,
+13,
+13,
+0,
+1
+]
+],
+"nm": "Urawa",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"2768": {
+"m": [
+[
+261010,
+5,
+1,
+0,
+1,
+5,
+8,
+3,
+4,
+9,
+1,
+null,
+null,
+1,
+2
+]
+],
+"nm": "Gimcheon Sangmu FC",
+"lg": "K League 1",
+"d": "2026-10-11",
+"sk": [
+"soccer_korea_kleague1"
+]
+},
+"2748": {
+"m": [
+[
+261010,
+5,
+0,
+1,
+0,
+8,
+5,
+4,
+3,
+1,
+9,
+null,
+null,
+2,
+1
+]
+],
+"nm": "FC Anyang",
+"lg": "K League 1",
+"d": "2026-10-11",
+"sk": [
+"soccer_korea_kleague1"
+]
+},
+"302": {
+"m": [
+[
+261010,
+6,
+1,
+0,
+1,
+17,
+13,
+4,
+5,
+4,
+10,
+16,
+6,
+1,
+1
+]
+],
+"nm": "Kyoto Sanga",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"303": {
+"m": [
+[
+261010,
+6,
+0,
+1,
+0,
+13,
+17,
+5,
+4,
+10,
+4,
+6,
+16,
+1,
+1
+]
+],
+"nm": "Machida Zelvia",
+"lg": "J League",
+"d": "2026-10-11",
+"sk": [
+"soccer_japan_j_league"
+]
+},
+"2176": {
+"m": [
+[
+261010,
+21,
+1,
+3,
+2,
+8,
+4,
+4,
+2,
+7,
+2,
+null,
+null,
+1,
+2
+]
+],
+"nm": "Landskrona BoIS",
+"lg": "Superettan",
+"d": "2026-10-11",
+"sk": [
+"soccer_sweden_superettan"
+]
+},
+"6697": {
+"m": [
+[
+261010,
+21,
+0,
+2,
+3,
+4,
+8,
+2,
+4,
+2,
+7,
+null,
+null,
+2,
+1
+]
+],
+"nm": "Sandviken",
+"lg": "Superettan",
+"d": "2026-10-11",
+"sk": [
+"soccer_sweden_superettan"
+]
+},
+"5648": {
+"m": [
+[
+261010,
+7,
+1,
+0,
+1,
+3,
+3,
+0,
+1,
+4,
+1,
+7,
+6,
+0,
+0
+]
+],
+"nm": "Chengdu Better City",
+"lg": "Super League chinoise",
+"d": "2026-10-11",
+"sk": [
+"soccer_china_superleague"
+]
+},
+"837": {
+"m": [
+[
+261010,
+7,
+0,
+1,
+0,
+3,
+3,
+1,
+0,
+1,
+4,
+6,
+7,
+0,
+0
+]
+],
+"nm": "Tianjin Teda",
+"lg": "Super League chinoise",
+"d": "2026-10-11",
+"sk": [
+"soccer_china_superleague"
+]
+},
+"833": {
+"m": [
+[
+261010,
+7,
+1,
+7,
+1,
+32,
+10,
+16,
+6,
+10,
+5,
+11,
+8,
+0,
+1
+]
+],
+"nm": "Shanghai Shenhua",
+"lg": "Super League chinoise",
+"d": "2026-10-11",
+"sk": [
+"soccer_china_superleague"
+]
+},
+"21265": {
+"m": [
+[
+261010,
+7,
+0,
+1,
+7,
+10,
+32,
+6,
+16,
+5,
+10,
+8,
+11,
+1,
+0
+]
+],
+"nm": "Yunnan Yukun",
+"lg": "Super League chinoise",
+"d": "2026-10-11",
+"sk": [
+"soccer_china_superleague"
+]
+},
+"1326": {
+"m": [
+[
+261010,
+13,
+1,
+0,
+0,
+10,
+11,
+5,
+6,
+6,
+3,
+null,
+null,
+1,
+2
+]
+],
+"nm": "Fortuna Köln",
+"lg": "3. Liga",
+"d": "2026-10-11",
+"sk": [
+"soccer_germany_liga3"
+]
+},
+"1639": {
+"m": [
+[
+261010,
+13,
+0,
+0,
+0,
+11,
+10,
+6,
+5,
+3,
+6,
+null,
+null,
+2,
+1
+]
+],
+"nm": "FC Saarbrücken",
+"lg": "3. Liga",
+"d": "2026-10-11",
+"sk": [
+"soccer_germany_liga3"
+]
+},
+"1317": {
+"m": [
+[
+261010,
+13,
+1,
+1,
+5,
+10,
+15,
+2,
+10,
+8,
+5,
+null,
+null,
+1,
+3
+]
+],
+"nm": "SG Sonnenhof Grossaspach",
+"lg": "3. Liga",
+"d": "2026-10-11",
+"sk": [
+"soccer_germany_liga3"
+]
+},
+"4268": {
+"m": [
+[
+261010,
+13,
+0,
+5,
+1,
+15,
+10,
+10,
+2,
+5,
+8,
+null,
+null,
+3,
+1
+]
+],
+"nm": "Waldhof Mannheim",
+"lg": "3. Liga",
+"d": "2026-10-11",
+"sk": [
+"soccer_germany_liga3"
+]
 }
 },
 "lg": [
@@ -2396,7 +3431,10 @@ null,
 "Liga MX",
 "Primera colombienne",
 "LigaPro",
-"Primera uruguayenne"
+"Primera uruguayenne",
+"Super League suisse",
+"Primera paraguayenne",
+"Superettan"
 ],
 "seen": {
 "1492398": 261008,
@@ -2442,15 +3480,34 @@ null,
 "1639821": 261009,
 "1549813": 261009,
 "1643168": 261009,
-"1549820": 261010
+"1549820": 261010,
+"1555401": 261010,
+"1553183": 261010,
+"1643171": 261010,
+"1632031": 261010,
+"1550985": 261010,
+"1549819": 261010,
+"1550988": 261011,
+"1550986": 261010,
+"1507079": 261010,
+"1556082": 261010,
+"1556081": 261010,
+"1556084": 261010,
+"1507080": 261010,
+"1556088": 261010,
+"1497714": 261010,
+"1523269": 261010,
+"1523270": 261010,
+"1584017": 261010,
+"1584018": 261010
 },
 "rep": {
-"day": "2026-10-10",
-"added": 0,
-"requests": 3,
+"day": "2026-10-11",
+"added": 19,
+"requests": 13,
 "cov": 0,
-"tot": 167,
-"stop": null
+"tot": 148,
+"stop": "budget"
 },
 "v": 2
 }
