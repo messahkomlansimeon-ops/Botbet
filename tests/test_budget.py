@@ -113,6 +113,7 @@ def test_skip_and_money_bilan():
     simple = settle.bilan(store.load("bets.json", {}), rows=track.load())
     assert "💰 <b>Tes paris notés</b>" in simple and "Joués chez 1xBet" not in simple and "FCFA" in simple, simple
     assert " u<" not in simple and " u " not in simple and "unités" not in simple, simple              # jamais d'unités
+    store.save("today.json", {"day": "2026-10-09", "picks": [], "pronos": []})       # « Mes paris » liste le jour Kelly en cours
     todo = app.handle_command("🧾 Mes paris")
     assert "Méchant" in todo and any(b["callback_data"].startswith("annule|") for row in todo.markup["inline_keyboard"] for b in row), todo
     print("ok  paris notés seuls comptés, anciens boutons pas joué, autre cote et bilan en argent")

@@ -31,8 +31,10 @@ from . import apistats, calib, catalogue, config as C, odds, prematch, stats, st
 
 FILE = "fair.json"
 LINES = {"goals": (1.5, 2.5, 3.5), "corners": (7.5, 8.5, 9.5, 10.5, 11.5, 12.5), "cards": (2.5, 3.5, 4.5, 5.5, 6.5)}
-FAMILIES = ("totals", "btts", "double_chance", prematch.CORNERS, prematch.CARDS)
-FREE_MARKETS = ("totals", "btts", "double_chance", "h2h")       # réglés avec le seul score : suivis en nombre, gratuitement
+# 1N2 (« Inter gagne ») et buts d'une équipe (« Inter : plus de 1,5 buts ») : ajoutés le 10/10, Kelly les calculait sans jamais les proposer
+TEAM_GOALS = ("team_totals_home", "team_totals_away")
+FAMILIES = ("totals", "btts", "double_chance", "h2h") + TEAM_GOALS + (prematch.CORNERS, prematch.CARDS)
+FREE_MARKETS = ("totals", "btts", "double_chance", "h2h") + TEAM_GOALS      # réglés avec le seul score : suivis en nombre, gratuitement
 # Tirs et tirs cadrés : total du match, puis une équipe (le suffixe _home / _away dit laquelle) ; (clé des chiffres d'avant-match,
 # libellé, bornes plausibles de la moyenne attendue, dispersion de la binomiale négative)
 STAT_SPECS = {"team_shots_total": ("exp_shots", "tirs", (12.0, 45.0), 0.03),
@@ -90,7 +92,7 @@ def deep_options(f, home, away):
     kinds = {prematch.CORNERS: "corners", prematch.CARDS: "cards"}
     for l in strength.lines(d, home, away):
         mk, pt = l["market"], l["point"]
-        if mk in SIDE_MARKETS and l.get("side"):
+        if (mk in SIDE_MARKETS or mk == "team_totals") and l.get("side"):
             mk = f"{mk}_{l['side']}"
         if mk not in ALL_FAMILIES:
             continue
@@ -190,6 +192,11 @@ def _simple_options(f, home, away):
         tag = f"{label} : {lh:.1f}-{la:.1f} buts attendus"
         out.append(("double_chance", f"{home} or Draw", None, ph + pd, tag))
         out.append(("double_chance", f"Draw or {away}", None, pd + pa, tag))
+        out += [("h2h", nm, None, p, tag) for nm, p in ((home, ph), ("Draw", pd), (away, pa))]
+        for market, mean in (("team_totals_home", lh), ("team_totals_away", la)):
+            for pt in (0.5, 1.5, 2.5):
+                for name in ("Over", "Under"):
+                    out.append((market, name, pt, prematch.over_p(name, prematch.poisson_over(mean, pt)), tag))
     return out + _stat_options(f, home, away)
 
 
@@ -227,7 +234,7 @@ def alternatives(opts, bases, market):
 
 def side_name(market, ev):
     """Équipe visée par un marché « par équipe » (suffixe _home / _away), sinon None."""
-    if market in STAT_SPECS and not market.endswith("_total"):
+    if (market in STAT_SPECS and not market.endswith("_total")) or market in TEAM_GOALS:
         return ev["home_team"] if market.endswith("_home") else ev["away_team"]
     return None
 
@@ -304,7 +311,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
             return _rank(out)
         seen += 1
         paid = ev["id"] in have
-        families = {prematch.CORNERS, prematch.CARDS} - have.get(ev["id"], set()) if paid else set(ALL_FAMILIES)
+        families = {prematch.CORNERS, prematch.CARDS, *TEAM_GOALS} - have.get(ev["id"], set()) if paid else set(ALL_FAMILIES)
         if paid and all_families and C.FAIR_STATS_PAID:        # relevé 1xBet : les championnats payés (grands championnats) sont ceux où 1xBet liste tirs, fautes, touches, hors-jeu
             families |= set(STAT_MARKETS) - have.get(ev["id"], set())      # (rejeu du 09/10 : 3 matchs payés sur 14 listés n'avaient aucun pronostic stats)
         f = odds.match_numbers(ev["home_team"], ev["away_team"], key)

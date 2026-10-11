@@ -193,8 +193,10 @@ SOURCES_CACHE_KEEP_DAYS = _int("SOURCES_CACHE_KEEP_DAYS", 45)   # .cache/sources
 FAIR_MAX = _int("FAIR_MAX", 10)                   # pronostics détaillés dans le message du matin (5 si des combinés existent)
 FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json), montrés le matin
 FAIR_TRACK_FREE = _int("FAIR_TRACK_FREE", 150)    # en plus, pronostics buts / 1N2 / double chance / 2 marquent suivis en silence (réglés sans requête)
-FAIR_CALIB_MIN = 60                               # pronostics réglés d'une famille avant de corriger ses probas (kelly/calib.py)
-FAIR_CALIB_PRIOR = 200                            # la correction n'a tout son poids qu'avec bien plus de pronostics : n / (n + 200)
+FAIR_CALIB_MIN = _int("FAIR_CALIB_MIN", 60)                               # pronostics réglés d'une famille avant de corriger ses probas (kelly/calib.py)
+FAIR_CALIB_PRIOR = _int("FAIR_CALIB_PRIOR", 200)                            # la correction monte progressivement : n / (n + 200)
+FAIR_CALIB_MIN_PROPS = _int("FAIR_CALIB_MIN_PROPS", 30)                    # marchés stats/props (tirs, fautes...) : calibrés plus tôt (dès 30 résultats)
+FAIR_CALIB_PRIOR_PROPS = _int("FAIR_CALIB_PRIOR_PROPS", 60)
 FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe
 FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'est du hasard, au-dessus la cote juste est < 1.25
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
@@ -273,7 +275,7 @@ FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0)
     + ((("ts5", ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_"), "🧮 COMBINÉ STATS", 5.0, 7.0),) if FAIR_STATS_TIER else ())
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
 # Cotes 1xBet (kelly/sources/xbet.py) : le prix exact des pronostics chez le bookmaker de l'utilisateur, lu le matin (gratuit, poli)
-XBET_ENABLED = os.environ.get("XBET_ENABLED", "1") != "0"
+XBET_ENABLED = _bool("XBET_ENABLED", True)
 XBET_SECONDS = _int("XBET_SECONDS", 1200)           # temps maximal du relevé 1xBet du matin (3 s entre requêtes)
 XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 150)    # matchs relevés au plus (les mieux classés d'abord) : ~2 Mo
 # Proxy de l'utilisateur pour 1xBet (celui de scrap_stat) : les relevés ne partent jamais de la connexion du compte 1xBet. XBET_PROXY
@@ -364,6 +366,9 @@ CUSTOM_TOLERANCE = 0.25    # /combi <cote> : fourchette cote x (1 - 25 %) à cot
 COMBI_OPEN_MAX = _int("COMBI_OPEN_MAX", 10)        # « combi N tirs » : matchs relus en direct chez 1xBet au plus (stats pas encore chiffrées, fenêtre des stats ; ~1 s et ~13 Ko chacun)
 COMBI_BOLD_MIN_P = _float("COMBI_BOLD_MIN_P", 0.5)   # « 🎲 Aller plus loin quand même » : chances minimales d'un pari moins solide (Kelly le voit gagnant plus d'une fois sur deux)
 COMBI_BOLD_MIN_EV = _float("COMBI_BOLD_MIN_EV", -0.10)   # ... et espérance minimale à la cote 1xBet (un peu sous l'équilibre au plus : -10 %)
+# « combi 100 min 15 » sans assez de paris rentables : le trou est comblé par des paris probables mais mal payés par 1xBet (signalés « mal payé »)
+COMBI_FILL_MIN_P = _float("COMBI_FILL_MIN_P", 0.60)      # ... Kelly les voit gagnants au moins 60 fois sur 100
+COMBI_FILL_MIN_EV = _float("COMBI_FILL_MIN_EV", -0.08)   # ... et 1xBet ne paie pas plus de 8 % sous leur juste valeur
 COMBI_BOLD_FRESH_MIN = _int("COMBI_BOLD_FRESH_MIN", 30)   # ... cotes de ses paris lues il y a plus de N min : relues en direct avant de répondre
 # Combinés LIVE (kelly/live.py, « 🔴 Live ») : à la demande, matchs en cours dans la fenêtre de minutes, apprentissage à part par tranche
 LIVE_MIN_MINUTE = _int("LIVE_MIN_MINUTE", 30)       # avant : le match n'a encore rien montré
@@ -377,6 +382,14 @@ LIVE_COUNT = _int("LIVE_COUNT", 150)                # matchs demandés à 1xBet 
 LIVE_TTL = _int("LIVE_TTL", 30)                     # secondes pendant lesquelles la liste live lue est reprise du cache
 LIVE_W_PROFILES = _float("LIVE_W_PROFILES", 0.7)   # poids de l'avis de Kelly face à 1xBet avec les profils FotMob / API-Football (modèle de force : 1)
 LIVE_W_LIGHT = _float("LIVE_W_LIGHT", 0.5)         # ... avec les données légères (derniers résultats 365scores) : moitié Kelly, moitié marché
+QUIET_HOURS = os.environ.get("QUIET_HOURS", "23-7")   # heures calmes des alertes (heure d'Abidjan = UTC) : gardées et envoyées au réveil (kelly/quiet.py) ; « off » : jamais
+# Suivi des tickets et opportunités live (kelly/watch.py, `bot.py --watch`, kelly-watch.timer toutes les 10 min)
+LIVE_OPP = _bool("LIVE_OPP", True)                  # 0 : plus d'« 🔴 Opportunité live »
+LIVE_OPP_HOURS = os.environ.get("LIVE_OPP_HOURS", "12-23")   # heures (Abidjan) où Kelly cherche des opportunités live
+LIVE_OPP_DAY = _int("LIVE_OPP_DAY", 3)              # opportunités live annoncées au plus par jour
+LIVE_OPP_GAP_H = _float("LIVE_OPP_GAP_H", 2)        # ... et au moins N heures entre deux
+LIVE_OPP_GATE = _int("LIVE_OPP_GATE", 8)            # contrôle léger (365scores) : au moins N matchs en cours dans la fenêtre avant de lire 1xBet (~500 Ko)
+LIVE_OPP_MATCHES = _int("LIVE_OPP_MATCHES", 4)      # ... et au moins N matchs avec un bon pari pour l'annoncer
 LIVE_SMALL = _bool("LIVE_SMALL", False)            # 1 : jeunes (U19, U21...), réserves (II, B), amateurs et ligues régionales autorisés en live
 # Équipes inconnues de Kelly préparées à l'avance pour le live (kelly/livedata.py, passage horaire, 365scores via le proxy)
 LIVE_PREP = _bool("LIVE_PREP", True)                # 0 : pas de préparation (le live n'a que le modèle de force et les profils FotMob / API-Football)
@@ -434,7 +447,7 @@ LEG_SAFE_PROB = _float("LEG_SAFE_PROB", 0.68)
 LEG_REUSE_MAX = _int("LEG_REUSE_MAX", 3)
 
 # Priorité aux marchés mal pricés. 1N2/buts/points : efficaces, pénalisés.
-MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8, "btts": 1.0,
+MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8, "btts": 1.0, "team_totals_home": 0.9, "team_totals_away": 0.9,
                  "alternate_totals_corners": 1.6, "alternate_totals_cards": 1.6,
                  # tirs et tirs cadrés (total ou une équipe) : marchés mal pricés, comme corners et cartons
                  "team_shots_total": 1.6, "team_shots_home": 1.5, "team_shots_away": 1.5,

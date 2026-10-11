@@ -375,16 +375,18 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
     except Exception as e:                          # noqa: BLE001 - le journal ne bloque jamais la réponse
         print(f"[live] journal non écrit : {type(e).__name__}: {e}", file=sys.stderr)
     lo, hi = target, target * (1 + C.CUSTOM_TOLERANCE)
+    from . import chat
     n_max, exact = nlegs or (None, False)
-    best = CB.best_combo(cands, lo, hi, max_legs=n_max, min_legs=n_max if exact else None)
+    mx, mn = chat.legs_bounds(n_max, exact)
+    best = CB.best_combo(cands, lo, hi, max_legs=mx, min_legs=mn)
     win = f"entre {C.LIVE_MIN_MINUTE}e et {C.LIVE_MAX_MINUTE}e"
     if not best:
         per = {}
         for c in cands:
             per[c["id"]] = max(per.get(c["id"], 1.0), c["odds"])
-        top = sorted(per.values(), reverse=True)[:n_max or None]
+        top = sorted(per.values(), reverse=True)[:mx or None]
         reach = math.prod(top) if len(top) >= 2 else None
-        lab = f" en {n_max} paris {'pile' if exact else 'au plus'}" if n_max else ""
+        lab = " " + chat.legs_label(n_max, exact) if n_max else ""
         return (f"🔴 Pas de combiné live à la cote {t}{lab}.\n"
                 f"📡 {count['live']} matchs en cours · {count['window']} {win} · {count['known']} que Kelly connaît\n"
                 + (f"📉 {len(per)} avec un bon pari : au plus {fmt.trim(reach, 1)}\n" if reach else f"📉 {len(per)} avec un bon pari\n")

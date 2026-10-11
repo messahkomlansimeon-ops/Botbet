@@ -11,6 +11,8 @@ import gzip
 import hashlib
 import json
 import os
+import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -136,14 +138,32 @@ def load(key, max_age_hours):
 
 
 def save(key, data, **meta):
-    """Écrit une réponse dans le cache disque (échec silencieux : le cache est facultatif). Nettoie les vieux fichiers."""
+    """Écrit une réponse dans le cache disque (échec silencieux : le cache est facultatif). Nettoie les vieux fichiers.
+    Tmp qualifié par le PID : deux passages qui écrivent la même clé ne s'écrasent pas l'un l'autre."""
     try:
         os.makedirs(odds_dir(), exist_ok=True)
-        tmp = _path(key) + ".tmp"
+        tmp = f"{_path(key)}.{os.getpid()}.tmp"
         with gzip.open(tmp, "wt", encoding="utf-8") as f:
             json.dump({"key": key, "fetched_at": clock(), "data": data} | meta, f)
         os.replace(tmp, _path(key))
         prune()
+    except OSError:
+        pass
+    except (TypeError, ValueError) as e:            # données non sérialisables : échec silencieux aussi, tmp jamais laissé
+        print(f"[cache] réponse non cachée ({type(e).__name__}: {e})", file=sys.stderr)
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+    prune_stale_tmp()
+
+
+def prune_stale_tmp():
+    """Reste d'un save() interrompu (tmp d'un PID mort) : supprimé."""
+    try:
+        for name in os.listdir(odds_dir()):
+            m = re.fullmatch(r"([0-9a-f]{24}\.json\.gz)\.(\d+)\.tmp", name)
+            p = os.path.join(odds_dir(), name)
+            if m and (int(m.group(2)) == os.getpid() or not store._pid_alive(int(m.group(2)))):
+                os.remove(p)
     except OSError:
         pass
 
@@ -152,9 +172,13 @@ def prune(days=2):
     """Supprime les réponses de plus de `days` jours : le dossier ne grossit pas."""
     limit = clock() - days * 86400
     try:
-        for name in os.listdir(odds_dir()):
-            p = os.path.join(odds_dir(), name)
+        names = os.listdir(odds_dir())
+    except OSError:
+        return
+    for name in names:                              # par fichier : une course (fichier déjà supprimé) n'arrête pas le reste
+        p = os.path.join(odds_dir(), name)
+        try:
             if os.path.getmtime(p) < limit:
                 os.remove(p)
-    except OSError:
-        pass
+        except OSError:
+            pass

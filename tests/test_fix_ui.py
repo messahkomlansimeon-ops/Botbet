@@ -203,6 +203,7 @@ def test_zero_stake_has_no_buttons():
     track.save([])
     track.record(picks, {c["key"] for c in picks}, DAY, single_key=picks[0]["key"])
     store.save("bets.json", {"picks": [], "combos": [c | {"date": DAY, "result": None} for c in combos_]})
+    store.save("today.json", {"day": DAY, "picks": [], "pronos": []})            # « Mes paris » liste le jour Kelly en cours
     assert chat.on_callback(f"joue|pari|{DAY}").startswith("À quelle cote et avec quelle mise en FCFA ?")
     assert chat.on_callback(f"joue|costaud|{DAY}").startswith("À quelle cote et avec quelle mise en FCFA ?")
     assert not bankroll.load().get("real") and chat.get_pending()["what"] == "costaud"

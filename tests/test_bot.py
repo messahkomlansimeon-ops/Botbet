@@ -1210,10 +1210,15 @@ def test_fair_pronostics():
         # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
         f = {"n_home": 10, "n_away": 10, "exp_corners": 10.2, "exp_cards": 4.9, "exp_goals_home": 1.6, "exp_goals_away": 1.3}
         opts = fair.options(f, "Alpha", "Bravo")
-        assert {o[0] for o in opts} == {"totals", "btts", "double_chance", "alternate_totals_corners", "alternate_totals_cards"}
+        assert {o[0] for o in opts} == {"totals", "btts", "double_chance", "h2h", "team_totals_home", "team_totals_away",
+                                        "alternate_totals_corners", "alternate_totals_cards"}
         picks = {c["market"]: c for c in (fair.make_pick(ev("m9", "Alpha", "Bravo"), *b, "football-data") for b in
                                           fair.best_per_family(opts, set(fair.FAMILIES)))}
-        assert set(picks) == set(fair.FAMILIES), picks.keys()
+        assert set(picks) == set(fair.FAMILIES) - {"h2h"}, picks.keys()      # match équilibré : aucun côté n'a 55 % au 1N2
+        picks_h2h = {c["market"]: c for c in (fair.make_pick(ev("m9", "Alpha", "Bravo"), *b, "football-data") for b in
+                                              fair.best_per_family(fair.options(dict(f, exp_goals_home=2.1, exp_goals_away=0.8),
+                                                                                "Alpha", "Bravo"), {"h2h"}))}
+        assert set(picks_h2h) == {"h2h"} and picks_h2h["h2h"]["pick"] == "Alpha gagne", picks_h2h
         labels = {c["pick"] for c in picks.values()}
         assert any(x.startswith(("Plus de", "Moins de")) and x.endswith(" buts") for x in labels), labels
         assert any(x.startswith("Les deux équipes marquent : ") for x in labels) and any(x.startswith("Double chance : ") for x in labels)
@@ -1225,7 +1230,8 @@ def test_fair_pronostics():
         paid = [{"id": "m1", "market": "alternate_totals_corners"}, {"id": "m1", "market": "totals"}]
         left = fair.make(scan, paid, datetime(2026, 10, 8).date())
         assert left and all(c["market"] != "alternate_totals_corners" and c["market"] != "totals" for c in left), left
-        assert all(c["market"] in ("alternate_totals_corners", "alternate_totals_cards") for c in left)   # match payé : corners/cartons seulement
+        assert all(c["market"] in ("alternate_totals_corners", "alternate_totals_cards") or c["market"] in fair.TEAM_GOALS
+                   for c in left), left                                     # match payé : corners/cartons et buts d'une équipe seulement
         # repli API-Football : au plus FAIR_API_EVENTS matchs sans profil, jamais sous la réserve de requêtes
         calls = []
         real = (stats.expected_totals, stats.left_today)

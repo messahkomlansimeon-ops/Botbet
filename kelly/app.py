@@ -314,7 +314,7 @@ def morning_report(now):
     échec est écrit dans les logs, les autres parties et le message du matin partent quand même. Les combinés à cote juste / sur mesure sont réglés AVANT
     le message des résultats : son total en argent compte ceux réglés ce matin-là."""
     got = _step("règlement des paris", lambda: settle.settle_pending(now))
-    bets, settled = got if got else (store.load("bets.json", {"picks": [], "combos": []}), [])
+    bets, settled = got if got else (store.load_doc("bets.json", {"picks": [], "combos": []}), [])
     if not money.active():                          # budget du jour : le bilan en argent remplace la bankroll
         _step("bankroll", lambda: bankroll.apply_results(bets["combos"]))
     _step("sauvegarde des paris", lambda: store.save("bets.json", bets))
@@ -386,9 +386,12 @@ FAIR_REPORT_DETAIL = 6      # combinés détaillés jambe par jambe dans le rapp
 
 
 def _fair_combo_name(c):
-    return (played.custom_name(c) if played.is_custom(c) else
-            "Combiné " + (f"aux cotes 1xBet (cote {fmt.odds_txt(c['min_odds'])})" if played.is_real(c)
-                          else f"à cote mini {fmt.odds_txt(c['min_odds'])}"))
+    if played.is_custom(c):
+        return played.custom_name(c)
+    name = "Combiné " + (f"aux cotes 1xBet (cote {fmt.odds_txt(c['min_odds'])})" if played.is_real(c)
+                         else f"à cote mini {fmt.odds_txt(c['min_odds'])}")
+    shot = played._fair_name(str(c["tier"])) if CB.shots_title(str(c["tier"])) else None     # « Stats », « Tirs cadrés »... : jamais la clé interne (« ts5 »)
+    return f"{name} — {shot}" if shot else name
 
 
 def fair_combos_report(now, settled_=None):
@@ -686,6 +689,7 @@ def keep_pronos(pronos, fair_combos=()):
     Dans l'ordre du classement."""
     must = {c["key"] for c in CB.best_per_match(pronos)} | {l["key"] for _, combo in fair_combos if combo for l in combo[0]}
     must |= {c["key"] for c in CB.fair_legs(pronos)}        # toutes les jambes possibles d'un combiné : « combi N » et la relecture de 15:00 les rebâtissent (rejeu du 09/10 : 3 sur 26 perdues)
+    must |= {c["key"] for legs in _bold_pools([], pronos, None) for c in legs}    # paris probables chiffrés, mal payés compris : « 🎲 » et « min N » s'en servent
     first = [c for c in pronos if c["key"] in must]
     rest = [c for c in pronos if c["key"] not in must]
     n = max(0, 40 - len(first))
@@ -1207,7 +1211,7 @@ def run_track(events_for=None, now=None, xfetch=None):
     rows = track.load()
     due, missed = track.pending_closing(rows, now)
     track.mark_missed(rows, missed, now)
-    combos = store.load("bets.json", {"combos": []})["combos"]
+    combos = store.load_doc("bets.json", {"combos": []})["combos"]
     calls = plan_closing(due, combos, bulk=events_for is None)
     if (calls and events_for is None and odds.CREDITS["remaining"] is None
             and store.load(budget.FILE, {}).get("remaining") is None):         # jamais connus : sinon l'état du budget suffit
@@ -1338,12 +1342,13 @@ MAX_BILAN_DAYS = 3650                    # « /bilan N » : N jours au plus (10 
 HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 
 <b>Les boutons en bas</b>
-🔝 <b>Paris du jour</b> : les meilleurs paris encore jouables
-🎯 <b>Un combiné</b> : choisis une cote, puis coche les types de paris que tu veux (victoire, buts, corners, tirs vers le but, tirs cadrés, fautes…, ou tout), Kelly le construit
+🎯 <b>Un combiné</b> : choisis la cote, les types de paris (victoire, buts, corners, tirs, fautes…) et le nombre de paris
+🔴 <b>Live</b> : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score
+🔝 <b>Paris du jour</b> : les meilleurs paris encore jouables ; dessous, 🔄 <b>Mettre à jour les cotes</b> (ou écris <i>maj</i>)
+🧾 <b>Mes paris</b> : tes paris du jour, à noter quand tu les joues
 📊 <b>Mes résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
-🧾 <b>Mes paris</b> : les paris du jour, leur mise conseillée et ceux que tu as notés
+🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage)
 💰 <b>Mon budget</b> : voir ou changer ton budget du jour
-🔄 <b>Mettre à jour tous les paris</b> : Kelly relit tout de suite les cotes 1xBet de tous les paris du jour, t'envoie les nouveaux paris 💎, les combinés du matin qui ont changé ou qui passent aux cotes 1xBet, et le pari du jour s'il y est maintenant (sinon : 04:00 et 15:00)
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
@@ -1358,7 +1363,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 
 <b>Tu peux aussi écrire</b>
 • un nom d'équipe : <i>Flamengo</i>
-• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>budget 5000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
+• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>budget 5000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
 • <i>état</i> : où en est le passage du matin (pourcentage et heure de fin estimée), réponse immédiate même pendant qu'il tourne
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
@@ -1522,7 +1527,7 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
         head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))}\n{fmt.i(fmt.hhmm(free[0]['start']) + ' · ' + fmt.esc(free[0]['league']))}"
         fl = [] if deep else features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"]))
         body = ("\n" + fmt.esc(deep)) if deep else ("\n".join(fl) if fl else "\nPas assez de données pour une analyse approfondie de ce match.")
-        shown, wait = CB.best_per_match(free), pending_lines(free)
+        shown, wait = CB.best_per_match(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
         return Html(comma(head + "\n" + body) + "\n\n" + ("\n\n".join(([str(fmt.pronos(shown, 6, when=when))] if shown or not wait else []) + [wait])
                                                          if wait else str(fmt.pronos(shown, 6, when=when))))
     events = list(dict.fromkeys(c["event"] for c in found))
@@ -1552,7 +1557,8 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
     shown = _event_pronos(pronos, found)
     if shown:
         lines += ["", str(fmt.pronos(shown, 6, when=when))]
-    wait = pending_lines([c for c in pronos if c["id"] in {x["id"] for x in found}])
+    mine_ = [c for c in pronos if c["id"] in {x["id"] for x in found}]
+    wait = "\n\n".join(x for x in (pending_lines(mine_), underpaid_lines(mine_)) if x)
     if wait:
         lines += ["", wait]
     return Html(comma("\n".join(lines)))
@@ -1647,7 +1653,8 @@ def top_reply(live, live_pronos, when=None, picks_when=None):
     if not parts:
         return ("Aucun pari de qualité aujourd'hui : rien qui ait un avantage clair, une vraie raison de statistiques "
                 "ou une forte probabilité. /match <équipe> montre tout ce qui existe pour un match.")
-    return parts[0] if len(parts) == 1 else Html("\n\n".join(parts))
+    out = parts[0] if len(parts) == 1 else Html("\n\n".join(parts))
+    return telegram.with_buttons(out, telegram.inline([[("🔄 Mettre à jour les cotes", "maj")]]))       # l'ancien bouton du menu, là où il sert
 
 
 def upcoming(items, now=None):
@@ -1668,7 +1675,7 @@ def waiting_note(today, now=None):
 
 def _todays_usage(day, picks):
     """Réutilisation des matchs par les combinés déjà envoyés aujourd'hui (voir combos.Usage)."""
-    combos = [c for c in store.load("bets.json", {"combos": []})["combos"] if c.get("date") == str(day)]
+    combos = [c for c in store.load_doc("bets.json", {"combos": []})["combos"] if c.get("date") == str(day)]
     return CB.Usage.from_sent(combos, picks), len(combos)
 
 
@@ -1685,8 +1692,8 @@ def handle_command(text):
 def _handle_command(text):
     parts = text.split()
     cmd, args = parts[0].lower().split("@")[0], parts[1:]
-    today = store.load("today.json", {"day": "", "picks": []})
-    picks = today["picks"]
+    today = store.load_doc("today.json", {"day": "", "picks": []})
+    picks = today.get("picks") or []
     if cmd in ("/aide", "/help", "/start"):
         return telegram.with_buttons(HELP, chat.menu())
     if cmd == "/bilan":
@@ -1717,7 +1724,9 @@ def _handle_command(text):
     if cmd == "/budget":
         return money.command(args)
     if cmd in ("/joue", "/joué", "/jouer"):
-        day = str(today.get("day") or now_utc().date())[:10]
+        now_ = now_utc()
+        kday = now_.date() if now_.hour >= C.DAY_END_HOUR else now_.date() - timedelta(days=1)
+        day = str(today.get("day") or kday)[:10]
         reply = played.command(args, day)
         if isinstance(reply, str) and reply.startswith(played.NEED_STAKE):      # mise manquante : la réponse « cote mise » suivante la note
             chat.set_pending(args[0], day, None, odds=played.parse_odds_stake(args[1:])[0])      # la cote tapée est retenue : seule la mise manque
@@ -1758,7 +1767,7 @@ def _handle_command(text):
         if not found:
             free = event_matches(pronos, " ".join(args))
             if free:
-                shown, wait = CB.best_per_match(free), pending_lines(free)
+                shown, wait = CB.best_per_match(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
                 if wait and not shown:
                     return Html(wait)
                 return Html(str(fmt.pronos(shown, 8, when=when)) + ("\n\n" + wait if wait else ""))
@@ -1773,7 +1782,8 @@ def _handle_command(text):
         shown = _event_pronos(pronos, found)
         if shown:
             lines += ["", str(fmt.pronos(shown, 8, when=when))]
-        wait = pending_lines([c for c in pronos if c["id"] in {x["id"] for x in found}])
+        mine_ = [c for c in pronos if c["id"] in {x["id"] for x in found}]
+        wait = "\n\n".join(x for x in (pending_lines(mine_), underpaid_lines(mine_)) if x)
         if wait:
             lines += ["", wait]
         return Html("\n".join(lines))
@@ -1906,8 +1916,10 @@ def _live_reply(fc, lo, hi, now=None, check=None, keep=None, usage=None, avoid=N
                                f"{fmt.trim(fc[1], 1)}), sans code coupon. Vérifie chaque cote avant de jouer.", coupon=False,
                            when=last, stale=True, budget=True, keep=keep)
     nl = (keep or {}).get("nlegs")
-    if res is not None and nl and not ((nl[0] if nl[1] else 2) <= len(res[0]) <= nl[0]):     # des remplaçants ne doivent pas sortir du nombre de paris choisi
-        res = None
+    if res is not None and nl:                      # des remplaçants ne doivent pas sortir du nombre de paris choisi
+        mx_, mn_ = chat.legs_bounds(*nl)
+        if not (mn_ or 2) <= len(res[0]) <= (mx_ or C.MAX_LEGS):
+            res = None
     if res is None:
         return (f"Les cotes 1xBet ont bougé depuis le dernier relevé : plus de combiné à la cote {fmt.trim(lo, 1)} avec des paris "
                 "encore jouables. Essaie une autre cote.")
@@ -2122,7 +2134,8 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     au plus N paris (« combi 20 max 4 », case « ≤ 4 »), ou exactement N (« combi 20 pile 4 ») ; un échec dit la plus haute cote en N paris et propose
     « ➕ Autoriser plus de paris »."""
     n_max, exact = (nlegs or (None, False))
-    lim = {"max_legs": n_max, "min_legs": n_max if exact else None}
+    mx, mn = chat.legs_bounds(n_max, exact)        # au plus / pile / au moins (« combi 100 min 15 »)
+    lim = {"max_legs": mx, "min_legs": mn}
     t = fmt.trim(target, 1)
     prefix = CB.kinds_prefix(kinds)
     only = CB.kinds_label(kinds)
@@ -2198,6 +2211,10 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
             real = ""
     else:
         real = ""
+    if n_max and exact == "min" and not avoid:      # au moins N : le trou est comblé avec les paris les plus probables après les solides
+        filled = _bold_combo(picks, pronos, target, day, kinds, now, note=note, nlegs=nlegs, fill=True)
+        if filled:
+            return filled
     if n_max and not avoid:                         # nombre de paris choisi : la vraie raison en une phrase, et les solutions en boutons
         return _legs_failure(picks, pronos, target, kinds, prefix, n_max, exact)
     sf = CB.fair_shortfall(pronos, target, prefix=prefix)
@@ -2227,15 +2244,18 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     rows = []
     if avoid:
         rows += ([[(f"🔀 Cote {best_ok} sans mes matchs", f"cnew|{again}|{str(day)[:10]}|{best_ok}")]] if best_ok and again else []) \
-            + [[(f"🎯 Cote {t} avec mes matchs", f"cgo|{t}|{codes}" + (f"|{n_max}" if n_max and not exact else ""))]]
+            + [[(f"🎯 Cote {t} avec mes matchs", f"cgo|{t}|{codes}"
+                 + (f"|{'=' if exact and exact != 'min' else ''}{n_max}{'+' if exact == 'min' else ''}" if n_max else ""))]]
         return telegram.with_buttons("\n".join(lines), telegram.inline(rows))
     if best_ok:
         rows.append([(f"🎯 Cote {best_ok}" + (f" ({only})" if only else ""), f"cgo|{best_ok}|{codes}|")])
     bold_max = max((_reach(legs) for legs in _bold_pools(picks, pronos, prefix)), default=1.0)
     if bold_max >= target:                          # des paris moins solides suffiraient : proposé, jamais imposé
+        lines.append(f"💡 Tu as le choix de forcer l'analyse pour dénicher les événements les plus proches statistiquement (bouton 🎲 ci-dessous ou « combi {t} forcer »).")
         rows.append([("🎲 Plus risqué, même cote", f"cplus|{t}|{codes}")])
     elif bold_max > max(top, 2.0) * 1.2:
         b_low = fmt.trim(math.floor(bold_max * 10) / 10, 1)
+        lines.append(f"💡 Tu peux dénicher les événements les plus proches jusqu'à la cote {b_low} (bouton 🎲 ou « combi {b_low} forcer »).")
         rows.append([(f"🎲 Plus risqué : jusqu'à {b_low}", f"cplus|{b_low}|{codes}")])
     if prefix:
         rows.append([("🔄 Tous les types de paris", f"cgo|{t}||")])
@@ -2271,8 +2291,8 @@ def _open_stats(pronos, prefix, now):
             return pronos
         label = CB.kinds_label([CB.kind_of(p) for p in pre]) or "stats"
         telegram.send(f"⏳ Je regarde chez 1xBet si les paris {label} de {len(ids)} match{'s' if len(ids) > 1 else ''} viennent d'ouvrir…", queue=False)
-        _OPEN_READ.update({i: clock for i in ids})
-        fresh, _, _ = xprice.live_check(set(ids), now, fresh_min=C.STATS_WINDOW_FRESH_MIN)
+        fresh, got, _ = xprice.live_check(set(ids), now, fresh_min=C.STATS_WINDOW_FRESH_MIN)
+        _OPEN_READ.update({i: clock for i in got})      # horodatés APRÈS la lecture (matchs réellement relus) : un échec laisse retenter plus tôt
         return upcoming(fresh, now)
     except Exception as e:                          # noqa: BLE001 - la réponse part quand même, avec les cotes déjà connues
         print(f"[1xbet] relecture des stats pour « combi » impossible : {type(e).__name__}: {e}", file=sys.stderr)
@@ -2328,16 +2348,46 @@ def _when_note(legs):
     return hm(new), f"\n⚠️ {len(old)} cote{'s' if many else ''} pas relue{'s' if many else ''} depuis {oldest} : {names_} — vérifie-{'les' if many else 'la'}"
 
 
-def _bold_pools(picks, pronos, prefix):
+def _bold_pools(picks, pronos, prefix, min_p=None, min_ev=None):
     """Jambes d'un combiné « audacieux » : (pronostics, paris réels) chiffrés chez 1xBet, des types choisis, que Kelly voit gagnants au moins
     C.COMBI_BOLD_MIN_P et d'espérance d'au moins C.COMBI_BOLD_MIN_EV à la cote 1xBet, sur des équipes qu'elle connaît assez (combos.data_ok : 68 % calculés
     sur 3 matchs contre 31 % chez 1xBet ne tiennent pas, le 10/10) ; jamais
-    un pari sans cote 1xBet."""
-    ok = lambda c, odd: (c.get("xodds") and (not prefix or c["market"].startswith(prefix)) and c["prob"] >= C.COMBI_BOLD_MIN_P   # noqa: E731
-                         and c["prob"] * odd - 1 >= C.COMBI_BOLD_MIN_EV and CB.data_ok(c))
-    mine = [c | {"odds": c["xodds"]} for c in pronos if ok(c, c.get("xodds") or 0)]
-    real = [c for c in picks if ok(c, c.get("xodds") or 0)]
+    un pari sans cote 1xBet, ni un pari que l'ensemble écarte (c["xveto"] : modèle et marché en désaccord). `min_p` / `min_ev` : seuils du
+    « au moins N » (C.COMBI_FILL_MIN_P / C.COMBI_FILL_MIN_EV : paris probables mais mal payés pour combler le trou)."""
+    lo_p = C.COMBI_BOLD_MIN_P if min_p is None else min_p
+    lo_ev = C.COMBI_BOLD_MIN_EV if min_ev is None else min_ev
+    real_odds = any(c.get("xodds") for c in pronos) or any(c.get("xodds") for c in picks)
+    ok = lambda c, odd: (odd and (not prefix or c["market"].startswith(prefix)) and c.get("prob", 0) >= lo_p   # noqa: E731
+                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto")
+                         and (c.get("xodds") or not real_odds))
+    mine = [c | {"odds": c.get("xodds") or c.get("min_odds")} for c in pronos if ok(c, c.get("xodds") or c.get("min_odds") or 0)]
+    real = [c for c in picks if ok(c, c.get("xodds") or c.get("odds") or 0)]
     return mine, real
+
+
+def underpaid(c):
+    """Pari que 1xBet paie sous la cote mini de Kelly (sa juste valeur + marge) : probable, mais il fait perdre un peu sur la durée."""
+    return bool(c.get("xodds") and c.get("min_odds") and c["xodds"] < c["min_odds"])
+
+
+def underpaid_lines(rows, limit=4):
+    """Bloc « ⚠️ Probables mais mal payés » de /analyse et /match : paris du match que Kelly voit gagnants au moins C.COMBI_FILL_MIN_P mais que 1xBet
+    paie sous leur juste valeur (C.COMBI_FILL_MIN_EV au pire), données suffisantes, pas écartés par l'ensemble. Ils ne sont jamais proposés seuls ;
+    « combi N min M » s'en sert pour compléter. '' s'il n'y en a pas."""
+    best = {}
+    for c in rows:
+        if (underpaid(c) and c.get("prob", 0) >= C.COMBI_FILL_MIN_P and c["prob"] * c["xodds"] - 1 >= C.COMBI_FILL_MIN_EV
+                and CB.data_ok(c) and not c.get("xveto")):
+            k = (c["id"], c["market"])
+            if k not in best or c["prob"] > best[k]["prob"]:
+                best[k] = c
+    top = sorted(best.values(), key=lambda c: -c["prob"])[:limit]
+    if not top:
+        return ""
+    lines = [fmt.b("⚠️ Probables mais mal payés"), fmt.i("1xBet paie moins que leur juste valeur : jamais seuls, seulement pour compléter un « combi … min N ».")]
+    lines += [f"• {fmt.esc(c['pick'])} · Kelly {fmt.pct(c['prob'])} · 1xBet {fmt.odds_txt(c['xodds'])} (juste {fmt.odds_txt(round(1 / c['prob'], 2))})"
+              for c in top]
+    return "\n".join(lines)
 
 
 def _reach(legs):
@@ -2353,50 +2403,77 @@ def _chances(p):
     return fmt.pct(p) if p >= 0.01 else f"{p * 100:.2f} %".replace(".", ",") + f" (environ 1 chance sur {int(round(1 / p, -1 if p > 0.001 else -2)):,})".replace(",", " ")
 
 
-def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nlegs=None):
+def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nlegs=None, fill=False):
     """« 🎲 Aller plus loin quand même » : combiné à la cote visée avec les paris chiffrés chez 1xBet des types choisis, solides ou non (_bold_pools) ;
     l'optimiseur prend d'abord les plus probables. Les paris moins solides (hors combos.fair_legs / make_pool) sont nommés, les chances et l'espérance
     dites, la mise conseillée vient du budget (petite). Pronostics d'abord, puis paris réels ; jamais les deux mélangés. Gardé comme un « combi »
-    (« ✅ Je le joue »)."""
+    (« ✅ Je le joue »). `fill` (« combi 100 min 15 » sans assez de paris solides) : les N paris sont toujours là — le trou est comblé avec les
+    plus probables après les solides, et si N paris dépassent déjà la cote, c'est la plus proche au-dessus ; -> None si même ainsi c'est impossible."""
     t, prefix, only = fmt.trim(target, 1), CB.kinds_prefix(kinds), CB.kinds_label(kinds)
     lo, hi = target, target * (1 + C.CUSTOM_TOLERANCE)
-    mine, real = _bold_pools(picks, pronos, prefix)
+    thr = {"min_p": C.COMBI_FILL_MIN_P, "min_ev": C.COMBI_FILL_MIN_EV} if fill else {}
+    mine, real = _bold_pools(picks, pronos, prefix, **thr)
     if usage is not None:                           # tes tickets joués du jour : mêmes règles de réutilisation
         mine, real = usage.filter(mine), usage.filter(real)
-    first = CB.best_combo(mine, lo, hi)
+    mx_, mn_ = chat.legs_bounds(*(nlegs or (None, False)))
+
+    def pick(legs):
+        combo = CB.best_combo(legs, lo, hi, max_legs=mx_, min_legs=mn_)
+        if combo or not (fill and mn_):
+            return combo, None
+        low = {}                                    # N paris dépassent déjà la cote : la plus petite cote en N paris (les plus sûrs de chaque match)
+        for c in legs:
+            low[c["id"]] = min(low.get(c["id"], 99.0), c["odds"])
+        if len(low) < mn_:
+            return None, None
+        floor_n = math.prod(sorted(low.values())[:mn_])
+        if floor_n <= hi:
+            return None, None
+        return CB.best_combo(legs, floor_n * 0.999, floor_n * (1 + C.CUSTOM_TOLERANCE), max_legs=mx_, min_legs=mn_), floor_n   # 0,999 : arrondis du produit
+    first = pick(mine)[0]
     old = [c for c in (first[0] if first else []) if (_leg_time(c) or 0) < time.time() - C.COMBI_BOLD_FRESH_MIN * 60]
     if old:                                         # cotes de plus de C.COMBI_BOLD_FRESH_MIN min : relues en direct avant de répondre
         try:
             telegram.send(f"⏳ Je revérifie {len(old)} cote{'s' if len(old) > 1 else ''} chez 1xBet…", queue=False)
             pronos = upcoming(xprice.live_check({c["id"] for c in old}, now, fresh_min=C.COMBI_BOLD_FRESH_MIN)[0], now)
-            mine, _ = _bold_pools(picks, pronos, prefix)
+            mine, _ = _bold_pools(picks, pronos, prefix, **thr)
             mine = usage.filter(mine) if usage is not None else mine
         except Exception as e:                      # noqa: BLE001 - la réponse part avec les cotes connues, leur heure est dite
             print(f"[1xbet] relecture du combiné audacieux impossible : {type(e).__name__}: {e}", file=sys.stderr)
-    keep = {"day": day, "target": target, "lo": lo, "hi": hi} | ({"kinds": list(kinds)} if prefix else {})
+    keep = {"day": day, "target": target, "lo": lo, "hi": hi} | ({"kinds": list(kinds)} if prefix else {}) | ({"nlegs": list(nlegs)} if nlegs and nlegs[0] else {})
+    title = "🎯 COMBINÉ SUR MESURE" if fill else "🎲 COMBINÉ AUDACIEUX"
     for legs, solid, src in ((mine, {c["key"] for c in CB.fair_legs(pronos)}, "pronos"), (real, {c["key"] for c in CB.make_pool(picks)}, "picks")):
-        combo = CB.best_combo(legs, lo, hi, max_legs=(nlegs or [None])[0], min_legs=nlegs[0] if nlegs and nlegs[1] else None)
+        combo, over = pick(legs)
         if not combo:
             continue
         weak = [c for c in combo[0] if c["key"] not in solid]
-        head = (f"🎲 Ticket de loterie : {_chances(combo[2])} de chances, mise très petite."
-                + (f" Espérance {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}." if CB.ev(combo) < 1 else "")
-                + (f"\n⚠️ {len(weak)} pari{'s' if len(weak) > 1 else ''} moins sûr{'s' if len(weak) > 1 else ''} : "
-                   + ", ".join(f"{c['home']} – {c['away']} ({fmt.pct(c['prob'])})" for c in weak) if weak else "\n✅ Tous ses paris sont solides."))
+        many = len(weak) > 1
+        if fill:                                    # au moins N : les N paris d'abord, les moins sûrs comblent le trou
+            head = (f"🧩 {len(combo[0])} paris (au moins {mn_} demandés)"
+                    + (f" : en {mn_} paris, même les plus sûrs, la cote ne descend pas sous {fmt.trim(over, 1)} (pas {t}) ; voici le plus sûr à partir de là." if over else ".")
+                    + f"\n🎲 {_chances(combo[2])} de chances, mise petite.")
+        else:
+            head = f"🎲 Ticket de loterie : {_chances(combo[2])} de chances, mise très petite."
+        head += ((f" Espérance {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}." if CB.ev(combo) < 1 else "")
+                 + (f"\n⚠️ {len(weak)} pari{'s' if many else ''} moins sûr{'s' if many else ''}{' pour compléter' if fill else ''} : "
+                    + ", ".join(f"{c['home']} – {c['away']} ({fmt.pct(c['prob'])}{', mal payé' if underpaid(c) else ''})" for c in weak)
+                    if weak else "\n✅ Tous ses paris sont solides."))
         foot = (f"\n🎯 Paris choisis : {only}" if only else "") + (f"\n{note}" if note else "") + _shared_note(day, combo[0])
         when, stale = _when_note(combo[0])
         when = when or store.load("today.json", {}).get("xbet_at")
         foot += stale
         if src == "pronos":
-            return _fair_reply(combo, head, title="🎲 COMBINÉ AUDACIEUX", when=when, retry="redemande le combi", budget=True, keep=keep, tail=foot)
+            return _fair_reply(combo, head, title=title, when=when, retry="redemande le combi", budget=True, keep=keep, tail=foot)
         st = _budget_stake(combo[2], combo[1], "combo", "🎯") if money.active() else None
         code = xbet.save_coupon(combo[0]) if all(c.get("xref") for c in combo[0]) else None
-        msg = Html(fmt.esc(head) + "\n\n" + fmt.combo("🎲 COMBINÉ AUDACIEUX" + (f" · {only.upper()}" if only else ""), combo[0], combo[1], combo[2],
-                                                        reasons={c["key"]: CB.leg_reason(c) for c in combo[0]}, stake_txt=_stake_words(st), coupon=code,
+        msg = Html(fmt.esc(head) + "\n\n" + fmt.combo(title + (f" · {only.upper()}" if only else ""), combo[0], combo[1], combo[2],
+                                                        reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st), coupon=code,
                                                         when=when) + ("\n" + fmt.esc(foot.strip("\n")) if foot.strip() else ""))
         cid = custom.remember(day, target, lo, hi, combo, st, money.cur() if st is not None else None, code, when, src="picks",
                               kinds=kinds if prefix else None, nlegs=nlegs)
         return custom.with_button(msg, cid, day, code)
+    if fill:
+        return None
     best = max(_reach(mine), _reach(real))
     closed = _not_open(pronos, prefix, now)
     return (f"❌ Pas de combiné à la cote {t}{' (' + only + ')' if only else ''}, même avec des paris plus risqués."
@@ -2408,6 +2485,8 @@ def _legs_failure(picks, pronos, target, kinds, prefix, n_max, exact):
     paris, sans limite de paris, et des paris plus risqués en N paris (seulement s'ils atteignent la cote)."""
     t, lab = fmt.trim(target, 1), chat.legs_label(n_max, exact)
     codes = ".".join(k for k in CB.KIND_CODES if k in set(kinds or ()))
+    if exact == "min":                              # au moins N : il manque des matchs, ou N paris dépassent déjà la cote
+        return _min_legs_failure(picks, pronos, target, prefix, n_max, codes)
     words = " ".join(chat.KIND_WORD[k] for k in CB.KIND_CODES if k in set(kinds or ()))
     keep = lambda legs: [c for c in legs if not prefix or c["market"].startswith(prefix)]       # noqa: E731
     xp, xk = any(c.get("xodds") for c in pronos), any(c.get("xodds") for c in picks)
@@ -2434,6 +2513,34 @@ def _legs_failure(picks, pronos, target, kinds, prefix, n_max, exact):
     if bold >= target:
         rows.append([(f"🎲 Paris plus risqués, {n_max} paris", f"cplus|{t}|{codes}|{n_max}")])
         lines.append(f"🎲 Avec des paris un peu moins sûrs, la cote {t} passe {lab}.")
+    return telegram.with_buttons("\n".join(lines), telegram.inline(rows))
+
+
+def _min_legs_failure(picks, pronos, target, prefix, n, codes):
+    """« combi 100 min 15 » impossible : pas assez de matchs avec un bon pari (boutons : sans minimum, paris plus risqués), ou 15 paris font déjà
+    plus que la cote demandée (bouton : la plus petite cote en 15 paris)."""
+    t = fmt.trim(target, 1)
+    hi = target * (1 + C.CUSTOM_TOLERANCE)
+    pool = [c for c in CB.fair_legs(pronos) if not prefix or c["market"].startswith(prefix)]
+    low = {}
+    for c in pool:
+        low[c["id"]] = min(low.get(c["id"], 99.0), c["odds"])
+    lines, rows = [f"❌ Pas de combiné à la cote {t} en {n} paris au moins."], []
+    if len(low) < n:
+        lines.append(f"📉 Seulement {len(low)} match{'s' if len(low) > 1 else ''} avec un bon pari en ce moment : il en faut {n}.")
+        rows.append([(f"➕ Sans minimum (cote {t})", f"cgo|{t}|{codes}|")])
+        bold = {c["id"] for legs in _bold_pools(picks, pronos, prefix) for c in legs}
+        if len(bold) >= n:
+            rows.append([(f"🎲 Paris plus risqués, {n} paris au moins", f"cplus|{t}|{codes}|{n}+")])
+    else:
+        floor_n = math.prod(sorted(low.values())[:n])
+        if floor_n > hi:
+            up = math.ceil(floor_n)
+            lines.append(f"📈 En {n} paris, même les plus sûrs, la cote est déjà d'au moins {fmt.trim(floor_n, 1)}.")
+            rows.append([(f"🎯 Cote {up} en {n} paris au moins", f"cgo|{up}|{codes}|{n}+")])
+        else:
+            lines.append(f"📉 Aucune combinaison de {n} paris au moins ne tombe entre {t} et {fmt.trim(hi, 1)}.")
+        rows.append([(f"➕ Sans minimum (cote {t})", f"cgo|{t}|{codes}|")])
     return telegram.with_buttons("\n".join(lines), telegram.inline(rows))
 
 
@@ -2504,21 +2611,25 @@ def kinds_picker(target, sel=(), n=None):
     wait = {k: len(v) for k, v in wait.items()}
     sel = [k for k in CB.KIND_CODES if k in set(sel)]
     t = fmt.trim(target, 1)
-    rows = [[(("✅ " if not sel else "⬜ ") + "Tout", f"ck|{t}||{n or ''}")]]
+    n = str(n) if n else ""                          # « 5 » : au plus 5 ; « 15+ » : au moins 15 ; « » : libre
+    num, at_least = (int(n.rstrip("+")) if n.rstrip("+").isdigit() else None), n.endswith("+")
+    rows = [[(("✅ " if not sel else "⬜ ") + "Tout", f"ck|{t}||{n}")]]
     items = []
     for k, label, _ in CB.KINDS:
         if avail.get(k) or wait.get(k) or k in sel:
             on = k in sel
             nxt = [x for x in CB.KIND_CODES if x in set(sel) ^ {k}]          # cocher / décocher, dans l'ordre de KINDS
             count = f"{avail.get(k, 0)}" + (f" + {wait[k]} ⏳" if wait.get(k) else "")
-            items.append((("✅ " if on else "⬜ ") + f"{label} ({count})", f"ck|{t}|{'.'.join(nxt)}|{n or ''}"))
+            items.append((("✅ " if on else "⬜ ") + f"{label} ({count})", f"ck|{t}|{'.'.join(nxt)}|{n}"))
     rows += [items[i:i + 2] for i in range(0, len(items), 2)]
     codes = ".".join(sel)
-    choices = list(LEGS_CHOICES) + ([n] if n and n not in LEGS_CHOICES else [])        # un nombre écrit (« ✏️ Autre ») s'affiche coché
     rows.append([(("✅ " if not n else "") + "Paris : libre", f"ck|{t}|{codes}|")]
-                + [(("✅ " if n == k else "") + f"≤ {k}", f"ck|{t}|{codes}|{k}") for k in sorted(choices)])
+                + [(("✅ " if num == k and not at_least else "") + f"≤ {k}", f"ck|{t}|{codes}|{k}") for k in LEGS_CHOICES])
+    if num and (at_least or num not in LEGS_CHOICES):    # un nombre écrit (« ✏️ Autre ») : au moins / au plus, au choix
+        rows.append([(("✅ " if at_least else "") + f"≥ {num} (au moins)", f"ck|{t}|{codes}|{num}+"),
+                     (("✅ " if not at_least else "") + f"≤ {num} (au plus)", f"ck|{t}|{codes}|{num}")])
     rows.append([("✏️ Autre nombre de paris", f"cn|{t}|{codes}")])
-    rows.append([("🎯 Construire le combiné", f"cgo|{t}|{codes}|{n or ''}")])
+    rows.append([("🎯 Construire le combiné", f"cgo|{t}|{codes}|{n}")])
     text = (f"🎯 Combiné à la cote {t} : quels paris ?\n" + fmt.i("Rien de coché = tout. (N) = matchs avec un bon pari"
                                                                     + (" · ⏳ pas encore ouverts chez 1xBet" if wait else "") + "."))
     if not avail and not wait:

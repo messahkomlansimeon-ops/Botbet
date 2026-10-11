@@ -110,6 +110,9 @@ TEAM_UNITS = {"shots": "tirs vers le but", "sot": "tirs cadrés", "fouls": "faut
 def label(market, name, point, who, group):
     """« Plus de 2,5 buts », « Moins de 9,5 corners », « Total cartons : plus de 3,5 », « Mbappé : 2 tirs cadrés ou plus »,
     « Les deux équipes marquent : oui », « Double chance : Nul ou Flamengo », « Flamengo gagne »."""
+    if market in ("team_totals_home", "team_totals_away"):                 # buts d'une équipe : « Inter : plus de 1,5 buts »
+        who_txt = who or ("Équipe à domicile" if market.endswith("_home") else "Équipe extérieure")
+        return f"{who_txt} : {'plus' if name == 'Over' else 'moins'} de {trim(point)} but{'s' if point and float(point) > 1 else ''}"
     tm = TEAM_MARKET.match(market)
     if tm:                                                         # tirs, tirs cadrés, fautes, touches, hors-jeu : total ou par équipe
         u = TEAM_UNITS[tm[1]]
@@ -182,6 +185,8 @@ def why_line(c, reason=None):
             return f"D'après les stats, cette équipe devrait marquer {num(pm['xgd'], 1)} but de plus que l'autre"
     if reason == "safe" or (c.get("prob") or 0) >= C.LEG_SAFE_PROB:
         return f"Très probable : {pct(c['prob'])} de chances"
+    if reason in ("proche", "force"):
+        return f"Repêché statistiquement : {pct(c['prob'])} de chances (proche du seuil)"
     return ""
 
 

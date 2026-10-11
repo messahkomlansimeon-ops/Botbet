@@ -102,12 +102,13 @@ def test_keep_pronos_keeps_every_combo_leg():
     assert leg["key"] in {c["key"] for c in CB.fair_legs(pronos)} and leg not in CB.best_per_match(pronos)
     kept = app.keep_pronos(pronos)
     assert leg in kept and best in kept and len(kept) < len(pronos), (len(kept), len(pronos))
-    old = app.CB.fair_legs
+    old = app.CB.fair_legs, app._bold_pools
     app.CB.fair_legs = lambda p: []                    # avant le correctif : la jambe est perdue au-delà de la limite
+    app._bold_pools = lambda *a, **k: ([], [])         # (les paris probables chiffrés sont aussi gardés depuis le 10/10)
     try:
         assert leg not in app.keep_pronos(pronos)
     finally:
-        app.CB.fair_legs = old
+        app.CB.fair_legs, app._bold_pools = old
     print("ok  today.json garde toutes les jambes de combiné")
 
 

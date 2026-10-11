@@ -53,7 +53,7 @@ def message(now=None):
     """Le message de la semaine (Html), ou None s'il n'y a encore rien à dire."""
     now = now or datetime.now(timezone.utc)
     cut = str((now - timedelta(days=7)).date())
-    bets, rows, fair_combos = store.load("bets.json", {"picks": [], "combos": []}), track.load(), fair.load_combos()
+    bets, rows, fair_combos = store.load_doc("bets.json", {"picks": [], "combos": []}), track.load(), fair.load_combos()
     blocks = []
     combos = [c for c in bets["combos"] if c.get("result") in ("win", "loss") and c["date"] >= cut]
     if combos:

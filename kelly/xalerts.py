@@ -23,7 +23,7 @@ import math
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import chat, combos as CB, config as C, ensemble, fair, fmt, gapbets, money, played, sharpgap, store, telegram, track, xprice
+from . import chat, combos as CB, config as C, ensemble, fair, fmt, gapbets, money, played, quiet, sharpgap, store, telegram, track, xprice
 from .sources import state, xbet
 from .telegram import Html
 
@@ -289,7 +289,7 @@ def _send_gap(entries, day, now):
         return None
     track.record_gap(rec, day, now)                   # retenus avant l'envoi : un message mis en attente (réseau) n'est pas doublé
     LAST["gap"] += len(rec)
-    telegram.send(msg)
+    quiet.send(msg, now)                              # heures calmes : gardé pour le réveil
     return msg
 
 
@@ -330,6 +330,8 @@ def danger_items(targets, prices, day):
     de perdre sa raison d'être (_worth). Un pari dont la cote a baissé mais garde son avantage ne déclenche rien."""
     out = []
     for name, short, what, x, legs in targets:
+        if x.get("played"):                         # ticket déjà placé : rien à faire de cette alerte (le suivi des tickets, kelly/watch.py, dit le reste)
+            continue
         lines, cur, gone = [], [], False
         for c in legs:
             st = prices.get(c)
@@ -436,7 +438,7 @@ def send(items, day, now):
     for it in shown:                                # retenues avant l'envoi : un message mis en attente (réseau) ne sera pas doublé
         sent["items"][f"{it['key']}|{it['type']}"] = it["odds"]
     store.save(FILE, sent)
-    telegram.send(msg)
+    quiet.send(msg)                                 # heures calmes : gardé pour le réveil
     return msg
 
 

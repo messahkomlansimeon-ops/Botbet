@@ -263,7 +263,7 @@ def parse_main(data, home, away, refs=None, gid=0):
         out[key] = cf
         if refs is not None:
             refs[key] = [gid, t, 0]
-    _ladder(groups, "totals", None, None, out, refs, gid)
+    _ladder(groups, "totals", "team_totals_home", "team_totals_away", out, refs, gid)      # buts du match, puis de chaque équipe (types 11 à 14)
     subs = {}
     for s in data.get("subGamesForMainGame") or []:
         if isinstance(s, dict) and s.get("gameTypeId") in SUBGAMES and not s.get("period") and s.get("id"):
@@ -632,10 +632,13 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
 def save_coupon(legs):
     """Enregistre un combiné chez 1xBet (ticket sans mise, Summ 0, sans connexion) et retourne son code (str) ou None.
     Ne lève jamais (un échec de coupon ne bloque jamais l'envoi du combiné).
-    `legs` : liste de pronostics avec 'xref' ([GameId, Type, Param]) et 'xodds' (cote/Coef), ou événements bruts."""
+    `legs` : liste de pronostics avec 'xref' ([GameId, Type, Param]) et 'xodds' (cote/Coef), ou événements bruts. Un pari LIVE (c["live"],
+    kelly/live.py) part avec Kind 1 et le ticket avec Live vrai (le site fait pareil : clés « Kind » par pari, « Live » du ticket) ; avec Kind 3
+    (avant-match) 1xBet rendait un code, mais le relisait « évènements terminés » et l'appli le refusait (le 10/10 : BR3HG, XF4HG, Q9LHG)."""
     if not legs:
         return None
     events = []
+    live = any(isinstance(c, dict) and c.get("live") for c in legs)
     try:                                            # une référence mal formée (xref / xodds illisibles) ne lève jamais : pas de code
         for c in legs:
             if isinstance(c, dict) and "GameId" in c:
@@ -649,7 +652,7 @@ def save_coupon(legs):
                     "Param": 0.0 if p is None else float(p),
                     "PV": None,
                     "PlayerId": 0,
-                    "Kind": 3,
+                    "Kind": 1 if c.get("live") else 3,       # 1 : match en cours (live), 3 : avant-match (ligne)
                     "InstrumentId": 0,
                     "Seconds": 0,
                     "Price": 0,
@@ -667,8 +670,9 @@ def save_coupon(legs):
         "Events": events,
         "Summ": 0,
         "Vid": 1,
-        "Kind": 3,
+        "Kind": 1 if live else 3,
         "partner": C.XBET_COUPON_PARTNER,      # 1 : lisible dans l'appli mobile ET sur le site 1xbet.ci (voir config)
+        "Live": live,
         "notWait": True,
         "CheckCf": 1,
     }

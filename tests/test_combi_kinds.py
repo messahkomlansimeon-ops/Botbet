@@ -182,12 +182,25 @@ def test_nlegs():
     rows = [[b["text"] for b in row] for row in mk["inline_keyboard"]]
     assert rows[-3] == ["Paris : libre", "≤ 3", "✅ ≤ 5", "≤ 8"] and rows[-2] == ["✏️ Autre nombre de paris"], rows
     assert mk["inline_keyboard"][-1][0]["callback_data"] == "cgo|20|f|5"
+    # le bouton « 🎯 Cote X avec mes matchs » garde aussi la contrainte « pile N » (encodée « =N »), et le callback la relit
+    with Fakes():
+        fail = app.custom_combo([], app.upcoming(store.load("today.json", {})["pronos"]), 500.0, DAY, avoid={"m0"}, again="m1", nlegs=(3, True))
+    btns = [b["callback_data"] for row in fail.markup["inline_keyboard"] for b in row]
+    assert any(d == "cgo|500||=3" for d in btns), btns
+    seen, old_cmd = [], app.handle_command
+    app.handle_command = lambda cmd: seen.append(cmd) or "ok"
+    try:
+        chat.on_callback("cgo|500||=3", 9)
+    finally:
+        app.handle_command = old_cmd
+    assert seen and "pile 3" in seen[0], seen
     # « ✏️ Autre nombre de paris » : le nombre écrit revient coché dans les cases
-    assert chat.on_callback("cn|20|f", 9).startswith("✏️ Combien de paris au plus")
+    assert chat.on_callback("cn|20|f", 9).startswith("✏️ Combien de paris ?")
     assert chat.route("1")[1].startswith("Écris un nombre de paris entre 2"), "trop petit : redemandé"
     _, back = chat.route("6")
     rows6 = [[b["text"] for b in row] for row in back.markup["inline_keyboard"]]
-    assert "✅ ≤ 6" in rows6[-3] and back.markup["inline_keyboard"][-1][0]["callback_data"] == "cgo|20|f|6" and chat.get_pending() is None, rows6
+    assert rows6[-3] == ["✅ ≥ 6 (au moins)", "≤ 6 (au plus)"] and back.markup["inline_keyboard"][-1][0]["callback_data"] == "cgo|20|f|6+", rows6
+    assert chat.get_pending() is None
     with Fakes():
         out = chat.on_callback("cgo|3|f|3", 9)
     item = store.load(custom.FILE, {})["items"]["m3"]
@@ -200,7 +213,31 @@ def test_nlegs():
     finally:
         app.custom_combo = old
     assert seen["nlegs"] == (3, False), "« 🔀 Un autre » garde le nombre de paris"
-    print("ok  nombre de paris : au plus / pile, texte et cases à cocher, échec en N paris, « 🔀 » le garde")
+    # au moins N (« min 4 », « au moins 4 », « ≥4 ») : jamais moins de N paris ; impossible : dit pourquoi
+    assert chat.parse_nlegs("min 4".split())[:2] == (4, "min") and chat.parse_nlegs(["≥4"])[:2] == (4, "min") and chat.parse_nlegs("au moins 4".split())[:2] == (4, "min")
+    assert chat.legs_bounds(4, "min") == (None, 4) and chat.legs_bounds(4, True) == (4, 4) and chat.legs_bounds(4, False) == (4, None)
+    setup()
+    store.save("today.json", {"day": DAY, "picks": [], "pronos": pool})
+    with Fakes():
+        out = app.handle_command("combi 5 min 4")
+    item = store.load(custom.FILE, {})["items"]["m1"]
+    assert len(item["legs"]) >= 4 and item["exact"] == "min" and 5.0 <= item["total"] <= 6.25, item
+    with Fakes():
+        out = app.handle_command("combi 2 min 6")                  # 6 paris dépassent déjà 2,5 : les 6 paris quand même, la plus petite cote dite
+    assert "🧩 6 paris (au moins 6 demandés) : en 6 paris, même les plus sûrs, la cote ne descend pas sous" in str(out), out
+    items = store.load(custom.FILE, {})["items"]
+    assert len(items[max(items, key=lambda k: int(k[1:]))]["legs"]) == 6
+    with Fakes():
+        out = app.handle_command("combi 50 min 20")
+    assert "Seulement 12 matchs avec un bon pari" in out and "il en faut 20" in out, out
+    _, mk = app.kinds_picker(20, [], "15+")
+    rows = [[b["text"] for b in row] for row in mk["inline_keyboard"]]
+    assert rows[-3] == ["✅ ≥ 15 (au moins)", "≤ 15 (au plus)"] and mk["inline_keyboard"][-1][0]["callback_data"] == "cgo|20||15+", rows
+    with Fakes():
+        out = chat.on_callback("cgo|5||4+", 9)
+    items = store.load(custom.FILE, {})["items"]
+    assert items[max(items, key=lambda k: int(k[1:]))]["exact"] == "min", ("le bouton « ≥ » donne « au moins »", items.keys())
+    print("ok  nombre de paris : au plus / pile / au moins, texte et cases à cocher, échecs expliqués, « 🔀 » le garde")
 
 
 def test_when_note():
@@ -275,12 +312,42 @@ def test_bold():
     with Fakes():
         out = app.custom_combo([], world(), 5.0, DAY, kinds=["f"], bold=True)      # les solides suffisent : dit tel quel
     assert "Tous ses paris sont solides" in out, out
+    # au moins N, plus de N que de matchs solides : le trou est comblé avec les paris les plus probables après les solides, nommés
+    solid = {c["id"] for c in CB.fair_legs(world()) if c["market"].startswith(CB.kinds_prefix(["f"]))}
+    n = len(solid) + 2
+    fill = [c | {"prob": 0.62, "xodds": 1.55, "min_odds": 1.69} for c in weak]       # bouche-trous : probables (60 % au moins) mais mal payés
+    store.save("today.json", {"day": DAY, "picks": [], "pronos": world() + fill})
+    with Fakes():
+        out = app.custom_combo([], world() + fill, 2.0, DAY, kinds=["f"], nlegs=(n, "min"))
+    assert f"🧩 {n} paris (au moins {n} demandés)" in str(out) and "⚠️ 2 paris moins sûrs pour compléter : " in str(out) and "(62 %, mal payé)" in str(out), out
+    items = store.load(custom.FILE, {})["items"]
+    assert len(items[max(items, key=lambda k: int(k[1:]))]["legs"]) == n
     assert app._chances(0.0005) == "0,05 % (environ 1 chance sur 2 000)" and app._chances(0.2) == "20 %"
     # données trop maigres (3 matchs, qualité 20 %) : jamais dans un combiné audacieux, même à 68 % (le 10/10 : corners Paraguay / Mexique à 30 % chez 1xBet)
     thin = [fouls(20 + i, id=f"t{i}", key=f"t{i}|team_fouls_total||22.5|Over", prob=0.68, xodds=2.9, conf=0.2, n_min=3) for i in range(4)]
     mine, _ = app._bold_pools([], world() + thin, CB.kinds_prefix(["f"]))
     assert not {c["id"] for c in mine} & {"t0", "t1", "t2", "t3"} and {c["id"] for c in mine} >= {"f0", "f1"}, [c["id"] for c in mine]
     print("ok  « 🎲 Aller plus loin quand même » : paris moins solides nommés, chances et loterie dites, suivi comme un combi")
+
+
+def test_force_and_proches():
+    """L'utilisateur peut choisir de forcer pour dénicher les événements les plus proches statistiquement."""
+    rest = ["fautes", "forcer"]
+    bold = any(played.norm(w) in chat.BOLD_WORDS for w in rest)
+    kinds, unknown = chat.parse_kinds([w for w in rest if played.norm(w) not in chat.BOLD_WORDS])
+    assert bold and kinds == ["f"] and not unknown
+    assert "proche" in chat.BOLD_WORDS and "proches" in chat.BOLD_WORDS and "force" in chat.BOLD_WORDS
+    weak = [fouls(10 + i, id=f"w{i}", key=f"w{i}|team_fouls_total||22.5|Over", prob=0.55, xodds=1.9) for i in range(3)]
+    pool = world() + weak
+    store.save("today.json", {"day": DAY, "picks": [], "pronos": pool})
+    with Fakes():
+        out = app.handle_command("combi 30 fautes forcer")
+    assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out and "🎯 Paris choisis : fautes" in out, out
+    assert "⚠️ 3 paris moins sûrs : FH12 – FA12 (55 %), FH11 – FA11 (55 %), FH10 – FA10 (55 %)" in out, out
+    with Fakes():
+        out2 = chat.on_callback("cforce|30|f", 9)
+    assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out2, out2
+    print("ok  « forcer » et « proche » : commande libre et callback cforce pour dénicher les événements proches")
 
 
 def main():
@@ -294,8 +361,10 @@ def main():
     test_when_note()
     test_open_stats_and_hint()
     test_bold()
+    test_force_and_proches()
     print("tests types de paris des combinés : OK")
 
 
 if __name__ == "__main__":
     main()
+

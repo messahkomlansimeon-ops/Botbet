@@ -807,6 +807,38 @@ def test_patch_combo_carry_and_changes():
     print("ok  combiné remis à jour : jambes non relues gardées, lignes changées signalées, borne hi respectée")
 
 
+def test_patch_combo_min_legs():
+    """Un combiné remis à jour a toujours au moins 2 jambes : un remplaçant seul ne devient jamais « le combiné », un survivant
+    isolé est complété (ou le combiné est abandonné)."""
+    store.save(calib.FILE, {})
+    calib._memo.clear()
+    pool = live_pronos(3)
+    pool[0]["xnone"] = 1
+    pool[1]["xnone"] = 1
+    pool[2]["xodds"] = 5.5
+    # tout est tombé, un remplaçant possible dont la cote seule tombe dans la fourchette : pas de combiné à 1 jambe
+    assert CB.patch_combo(pool[:2], pool, 5.0, 6.5, fresh_ids={"m0", "m1", "m2"}) is None
+    # un survivant isolé sous la cote mini : complété par un remplaçant (2 jambes, dans [lo, hi])
+    pool = live_pronos(3)
+    pool[1]["xnone"] = 1
+    pool[2]["xodds"] = 3.6
+    res = CB.patch_combo(pool[:2], pool, 5.0, 6.5, fresh_ids={"m0", "m1", "m2"})
+    assert res is not None and [c["id"] for c in res[0]] == ["m0", "m2"] and 5.0 <= res[1] <= 6.5, res
+    # un survivant isolé déjà dans la fourchette : complété quand même (jamais 1 jambe), sinon abandonné
+    pool = live_pronos(3)
+    pool[1]["xnone"] = 1
+    pool[0]["xodds"] = 5.5
+    pool[2]["xodds"] = 1.1
+    pool[2]["min_odds"] = 1.05
+    res = CB.patch_combo(pool[:2], pool, 5.0, 6.5, fresh_ids={"m0", "m1", "m2"})
+    assert res is not None and [c["id"] for c in res[0]] == ["m0", "m2"] and 5.0 <= res[1] <= 6.5, res
+    pool = live_pronos(3)
+    pool[1]["xnone"] = 1
+    pool[0]["xodds"] = 5.5
+    assert CB.patch_combo(pool[:2], pool, 5.0, 6.5, fresh_ids={"m0", "m1", "m2"}) is None
+    print("ok  combiné remis à jour : au moins 2 jambes")
+
+
 def test_fair_best_single_pass():
     """A9 : toutes les jambes réelles -> un seul best_combo."""
     calls = []
@@ -841,6 +873,7 @@ def main():
     test_fetch_day_menu_down()
     test_choose_prefers_combo_line()
     test_patch_combo_carry_and_changes()
+    test_patch_combo_min_legs()
     test_fair_best_single_pass()
     print("tests 1xBet : OK")
 

@@ -24,11 +24,12 @@ from . import fmt, money, played, progress, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🔝 Paris du jour", "🎯 Un combiné"], ["🔴 Live", "📊 Mes résultats"], ["🧾 Mes paris", "💰 Mon budget"], ["🔄 Mettre à jour tous les paris"],
-        ["❓ Aide"]]
+MENU = [["🎯 Un combiné", "🔴 Live"], ["🔝 Paris du jour", "🧾 Mes paris"], ["📊 Mes résultats", "🩺 Status"], ["💰 Mon budget", "❓ Aide"]]
+# « 🔄 Mettre à jour tous les paris » n'est plus dans le menu (action rare) : bouton sous « 🔝 Paris du jour » (callback « maj »), et « maj » / ancien bouton marchent
 BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
            "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide",      # « À noter » : ancien libellé
-           "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes"}     # 2e : ancien libellé du menu
+           "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes",     # anciens libellés du menu
+           "🩺 Status": "/status"}
 COMBI_TARGETS = (3, 5, 10, 20, 50)
 UNIT = r"(?:fcfa|cfa|xof|francs?|frs?|f|k|eur|euros?|usd|dollars?|[€$£¥])"        # unités d'un montant : « 2k », « 2000F », « 50 € »
 NUM = re.compile(rf"^\s*\d[\d\s.,]*(?:\s*{UNIT})?\s*$", re.I)            # « 5,40 », « 5,40 2 000 », « 5,40 2.000 FCFA », « 5,40 2k » (« 05 Mainz », « 1xbet » : pas des montants)
@@ -194,7 +195,7 @@ def _legs_answer(p, text):
     target = app.combi_target([t])
     if target is None:
         return None
-    msg, markup = app.kinds_picker(target, [k for k in codes.split(".") if k in KIND_WORD], int(n))
+    msg, markup = app.kinds_picker(target, [k for k in codes.split(".") if k in KIND_WORD], f"{int(n)}+")      # nombre écrit : « au moins » d'abord
     return telegram.with_buttons(msg, markup)
 
 
@@ -405,7 +406,7 @@ KIND_WORDS = {"victoire": "v", "victoires": "v", "gagnant": "v", "vainqueur": "v
               "carton": "ca", "cartes": "ca", "tirs": "t", "tir": "t", "shots": "t", "cadres": "tc", "cadre": "tc", "tirs-cadres": "tc", "fautes": "f", "faute": "f",
               "touches": "to", "touche": "to", "horsjeu": "hj", "hors-jeu": "hj", "offsides": "hj", "joueurs": "j", "joueur": "j"}
 KIND_ALL = {"tout", "tous", "toutes"}
-BOLD_WORDS = {"audacieux", "loterie", "fou"}       # « combi 1900 tirs audacieux » : complété avec des paris moins solides (app._bold_combo)
+BOLD_WORDS = {"audacieux", "loterie", "fou", "forcer", "force", "proche", "proches"}  # « combi 1900 tirs forcer » / « audacieux » : complété avec des paris proches (_bold_combo)
 KIND_FILLER = {"k", "fcfa", "cfa", "f", "cote", "a", "de", "des", "du", "et", "avec", "seulement", "que", "sur", "en", "paris", "pari", "le", "la",
                "les", "+", "&", "ou"}
 KIND_WORD = {"v": "victoire", "dc": "dc", "b": "buts", "btts": "btts", "co": "corners", "ca": "cartons", "t": "tirs", "tc": "tirs-cadres", "f": "fautes",
@@ -415,36 +416,47 @@ KIND_WORD = {"v": "victoire", "dc": "dc", "b": "buts", "btts": "btts", "co": "co
 
 LEGS_MAX_WORDS = {"max", "maximum", "<=", "≤"}
 LEGS_EXACT_WORDS = {"pile", "exactement", "exact", "="}
+LEGS_MIN_WORDS = {"min", "minimum", "moins", ">=", "≥"}     # « au moins 15 », « min 15 », « ≥15 »
 LEGS_UNIT = {"paris", "pari", "matchs", "match", "jambes", "jambe", "evenements", "evenement", "selections"}
 
 
 def parse_nlegs(tokens):
-    """Nombre de paris écrit dans un « combi » / « live » -> (N | None, exact, mots restants) : « max 4 », « ≤4 », « 4 paris » (au plus 4),
-    « pile 4 », « exactement 4 », « pile 4 paris » (exactement 4)."""
+    """Nombre de paris écrit dans un « combi » / « live » -> (N | None, mode, mots restants). mode : False = au plus (« max 4 », « ≤4 », « 4 paris »),
+    True = exactement (« pile 4 », « exactement 4 »), "min" = au moins (« min 15 », « au moins 15 », « ≥15 »)."""
     toks = [played.norm(str(t)) for t in tokens]
     n, exact, used = None, False, set()
     for i, w in enumerate(toks):
-        m = re.fullmatch(r"(<=|≤|max)(\d{1,2})", str(tokens[i]).strip().lower())     # le texte brut : norm() efface « ≤ »
+        m = re.fullmatch(r"(<=|≤|max|>=|≥|min)(\d{1,2})", str(tokens[i]).strip().lower())     # le texte brut : norm() efface « ≤ » / « ≥ »
         if m and n is None:
-            n, used = int(m.group(2)), used | {i}
+            n, exact, used = int(m.group(2)), ("min" if m.group(1) in (">=", "≥", "min") else False), used | {i}
             continue
         if w.isdigit() and n is None:
-            prev, nxt = toks[i - 1] if i else "", toks[i + 1] if i + 1 < len(toks) else ""
-            if prev in LEGS_MAX_WORDS | LEGS_EXACT_WORDS or nxt in LEGS_UNIT:
-                n, exact = int(w), prev in LEGS_EXACT_WORDS
-                used |= {i} | ({i - 1} if prev in LEGS_MAX_WORDS | LEGS_EXACT_WORDS else set()) | ({i + 1} if nxt in LEGS_UNIT else set())
+            raw_prev = str(tokens[i - 1]).strip().lower() if i else ""
+            prev = raw_prev if raw_prev in ("≥", "≤") else (toks[i - 1] if i else "")
+            nxt = toks[i + 1] if i + 1 < len(toks) else ""
+            if prev in LEGS_MAX_WORDS | LEGS_EXACT_WORDS | LEGS_MIN_WORDS or nxt in LEGS_UNIT:
+                n = int(w)
+                exact = True if prev in LEGS_EXACT_WORDS else "min" if prev in LEGS_MIN_WORDS else False
+                used |= {i} | ({i - 1} if prev in LEGS_MAX_WORDS | LEGS_EXACT_WORDS | LEGS_MIN_WORDS else set()) | ({i + 1} if nxt in LEGS_UNIT else set())
     rest = [t for i, t in enumerate(tokens) if i not in used and toks[i] not in ("en", "au", "plus")]
     return n, exact, rest
 
 
+def legs_bounds(n, mode):
+    """(paris au plus, paris au moins) pour best_combo : au plus N -> (N, None) ; pile N -> (N, N) ; au moins N -> (None, N)."""
+    if not n:
+        return None, None
+    return (None, n) if mode == "min" else (n, n) if mode else (n, None)
+
+
 def legs_words(n, exact):
     """« pile 4 » / « max 4 » (relu par parse_nlegs) ; '' sans nombre."""
-    return f"{'pile' if exact else 'max'} {n}" if n else ""
+    return f"{'min' if exact == 'min' else 'pile' if exact else 'max'} {n}" if n else ""
 
 
 def legs_label(n, exact):
     """« en 4 paris pile » / « en 4 paris au plus »."""
-    return f"en {n} paris {'pile' if exact else 'au plus'}" if n else ""
+    return f"en {n} paris {'au moins' if exact == 'min' else 'pile' if exact else 'au plus'}" if n else ""
 
 
 def parse_kinds(tokens):
@@ -612,26 +624,31 @@ def on_callback(data, message_id=None):
             return app.handle_command(f"/combi {parts[1]}")
         text, markup = app.kinds_picker(app.combi_target([parts[1]]))
         return telegram.with_buttons(text, markup)
-    if parts[0] == "cplus" and len(parts) in (3, 4):  # « 🎲 Aller plus loin quand même » sous un « combi » impossible (4e : nombre de paris au plus)
+    if parts[0] in ("cplus", "cforce") and len(parts) in (3, 4):  # « 🎲 Dénicher les plus proches » / « Aller plus loin » sous un « combi » impossible
         if app.combi_target([parts[1]]) is None:
             return None
-        n = int(parts[3]) if len(parts) == 4 and parts[3].isdigit() else None
+        raw = parts[3] if len(parts) == 4 else ""
+        n = int(raw.rstrip("+")) if raw.rstrip("+").isdigit() else None
         return app.handle_command(f"/combi {parts[1]} " + " ".join([KIND_WORD[k] for k in parts[2].split(".") if k in KIND_WORD] + ["audacieux"]
-                                                                    + ([legs_words(n, False)] if n else [])))
+                                                                    + ([legs_words(n, "min" if raw.endswith("+") else False)] if n else [])))
     if parts[0] in ("ck", "cgo") and len(parts) in (3, 4):  # case cochée / décochée (boutons refaits), ou « 🎯 Construire le combiné »
         target = app.combi_target([parts[1]])
         sel = [k for k in parts[2].split(".") if k in KIND_WORD]
-        n = int(parts[3]) if len(parts) == 4 and parts[3].isdigit() else None       # nombre de paris au plus (« Libre » : rien)
+        raw = parts[3] if len(parts) == 4 else ""
+        n = int(raw.lstrip("=").rstrip("+")) if raw.lstrip("=").rstrip("+").isdigit() else None     # nombre de paris (« 15 » : au plus, « 15+ » : au moins, « =4 » : pile ; libre : rien)
+        mode = True if raw.startswith("=") else ("min" if raw.endswith("+") else False)
         if target is None:
             return None
         if parts[0] == "ck":
             if message_id:
-                telegram.edit_buttons(message_id, app.kinds_picker(target, sel, n)[1])
+                telegram.edit_buttons(message_id, app.kinds_picker(target, sel, raw or None)[1])
             return None
-        return app.handle_command(f"/combi {parts[1]} " + " ".join([KIND_WORD[k] for k in sel] + ([legs_words(n, False)] if n else [])))
+        return app.handle_command(f"/combi {parts[1]} " + " ".join([KIND_WORD[k] for k in sel] + ([legs_words(n, mode)] if n else [])))
+    if parts[0] == "maj" and len(parts) == 1:         # « 🔄 Mettre à jour les cotes » sous « 🔝 Paris du jour »
+        return app.handle_command("/cotes")
     if parts[0] == "cn" and len(parts) == 3:          # « ✏️ Autre nombre de paris » : le nombre écrit ensuite (route -> _legs_answer)
         set_pending(f"{LEGS_ASK}|{parts[1]}|{parts[2]}", "", message_id)
-        return "✏️ Combien de paris au plus ? Écris un nombre, par exemple 6."
+        return "✏️ Combien de paris ? Écris un nombre, par exemple 15 (tu choisiras ensuite au moins ou au plus)."
     if parts[0] == "cnew" and len(parts) in (3, 4):   # « 🔀 Un autre sans mes matchs » sous un combi ; 4e : « 🔀 Cote X sans mes matchs » après un échec
         return app.another_combo(parts[1], parts[2], app.combi_target([parts[3]]) if len(parts) == 4 else None)
     if parts[0] == "cjoue" and len(parts) == 3:       # « ✅ Je le joue » sous un combiné « combi N » : il devient un pari suivi

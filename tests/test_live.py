@@ -255,7 +255,32 @@ def test_telegram_flow():
     print("ok  Telegram : bouton 🔴 Live, sélecteur de cote, « ✏️ Autre cote », « live 20 »")
 
 
+def test_live_coupon_kind():
+    """Ticket d'un combiné live : chaque pari avec Kind 1 et le ticket avec Live vrai (Kind 1) ; un ticket avant-match reste Kind 3, sans Live."""
+    import json
+    from kelly.sources import http, xbet
+    posted = []
+
+    class Direct:                                   # pas de proxy dans ce test : la session passe l'appel tel quel
+        why = None
+        call = staticmethod(lambda fn: fn())
+        close = staticmethod(lambda *a, **k: None)
+    old = http.post, xbet._Session
+    http.post = lambda url, body, **kw: (posted.append(body), http.Result(url, json.dumps({"Success": True, "Value": "LV1"}).encode(), 200))[1]
+    xbet._Session = Direct
+    try:
+        assert xbet.save_coupon([{"xref": [760263995, 10, 4.5], "xodds": 1.3, "live": True}, {"xref": [760263957, 6, 0], "xodds": 1.5, "live": True}]) == "LV1"
+        assert xbet.save_coupon([{"xref": [900, 10, 3.5], "xodds": 1.55}]) == "LV1"
+    finally:
+        http.post, xbet._Session = old
+    live_, pre = posted[0], posted[1]
+    assert [e["Kind"] for e in live_["Events"]] == [1, 1] and live_["Live"] is True and live_["Kind"] == 1, live_
+    assert [e["Kind"] for e in pre["Events"]] == [3] and pre["Live"] is False and pre["Kind"] == 3, pre
+    print("ok  code coupon live : Kind 1 par pari et Live vrai sur le ticket ; avant-match inchangé (Kind 3)")
+
+
 def main():
+    test_live_coupon_kind()
     test_basics()
     test_probs()
     test_legs_and_guards()

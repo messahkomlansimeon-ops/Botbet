@@ -662,6 +662,12 @@ def test_alerts():
     # ⚠️ un pari quitte 1xBet : message, bouton « Vérifier ce combiné : Combi sur mesure (cote 5) »
     px = {f"m{i}": {("totals", "Under", 3.5): 1.55} for i in range(4)} | {"m2": {("btts", "Yes", None): 1.8}}
     up, got = [prono(i) for i in range(7)], {"m0", "m1", "m2", "m3"}
+    with Fakes() as f:                                               # ticket déjà placé (noté joué) : plus d'alerte « en danger »
+        assert xalerts.on_refresh(today, at(13), got, up, fake_fetch(px)) is None and not f.sent, f.sent
+    rows_ = fair.load_combos()                                       # la suite : le même combi, suivi mais PAS ENCORE joué
+    rows_[0].pop("played", None)
+    store.save(fair.COMBOS_FILE, rows_)
+    store.save(xalerts.FILE, {})
     with Fakes() as f:
         msg = xalerts.on_refresh(today, at(13), got, up, fake_fetch(px))
     assert msg is not None and len(f.sent) == 1, f.sent
@@ -724,8 +730,14 @@ def test_alerts_real_picks_and_good_news():
     reader = lambda: xalerts.Reader(fake_fetch({"e1": {("h2h", "HOME", None): 1.8}}))      # noqa: E731
     assert len(xalerts.lag_items([(0.3, moved, prev)], today, reader(), at(13), set())) == 1
     assert xalerts.lag_items([(0.3, moved, prev)], today, reader(), at(13), noted) == []
-    # ⚠️ e2 n'est plus chez 1xBet : le danger part, avec le bouton « Vérifier » du combi sur mesure
+    # ⚠️ e2 n'est plus chez 1xBet : le danger part, avec le bouton « Vérifier » du combi sur mesure — s'il n'est pas encore joué
     px = {f"e{i}": {("h2h", "HOME", None): XB} for i in range(1, 5)} | {"e2": {("btts", "Yes", None): 1.8}}
+    with Fakes() as f:
+        assert xalerts.on_refresh(today, at(13), {"e1", "e2", "e3", "e4"}, [], fake_fetch(px)) is None, "ticket placé : pas d'alerte « en danger »"
+    rows_ = fair.load_combos()
+    rows_[0].pop("played", None)
+    store.save(fair.COMBOS_FILE, rows_)
+    store.save(xalerts.FILE, {})
     with Fakes() as f:
         msg = xalerts.on_refresh(today, at(13), {"e1", "e2", "e3", "e4"}, [], fake_fetch(px))
     assert msg and "Le combi sur mesure (cote 5) n'est plus jouable tel quel" in str(msg) and "Home2 – Away2" in str(msg), msg

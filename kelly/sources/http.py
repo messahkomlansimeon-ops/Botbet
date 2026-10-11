@@ -42,8 +42,10 @@ _deadline = None
 
 
 def set_deadline(seconds=None):
+    """Délai global des téléchargements : `seconds` secondes à partir de maintenant (0 ou négatif : déjà échu — un téléchargement
+    saute, seuls le cache et les erreurs répondent) ; None : sans limite."""
     global _deadline
-    _deadline = time.monotonic() + seconds if seconds else None
+    _deadline = None if seconds is None else time.monotonic() + max(0.0, seconds)
 
 
 def monotonic():
@@ -178,9 +180,10 @@ def _write(key, meta, body):
         os.makedirs(cache_dir(), exist_ok=True)
         base = os.path.join(cache_dir(), key)
         for ext, data, mode in ((".bin", body, "wb"), (".json", json.dumps(meta), "w")):
-            with open(base + ext + ".tmp", mode) as f:
+            tmp = f"{base}{ext}.{os.getpid()}.tmp"      # qualifié par le PID : deux passages sur la même clé ne s'écrasent pas l'un l'autre
+            with open(tmp, mode) as f:
                 f.write(data)
-            os.replace(base + ext + ".tmp", base + ext)
+            os.replace(tmp, base + ext)
     except OSError:
         pass
 
@@ -394,6 +397,8 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
             if blocked:
                 state.block(source, why)
             return _fail(url, cached, why, blocked=blocked)
+        if _deadline is not None and time.monotonic() > _deadline:      # la lecture de robots.txt (jusqu'à 2 essais) a pu épuiser le délai
+            return _fail(url, cached, "délai dépassé (robots.txt), téléchargement reporté au prochain passage")
     cond = {}
     if cached:
         if cached[0].get("etag"):
@@ -405,7 +410,9 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
     if r is None:
         return _fail(url, cached, err)
     code = r.status_code
-    if code == 304 and cached:
+    if code == 304:
+        if not cached:                              # 304 sans copie locale : rien d'utilisable, jamais caché comme un succès
+            return _fail(url, None, "HTTP 304 sans copie en cache", status=304)
         meta = cached[0] | {"fetched_at": state.clock()}
         _write(key, meta, cached[1])
         return Result(url, cached[1], 200, from_cache=True)

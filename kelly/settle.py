@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from . import calib, config as C, ensemble, fair, fmt, learn, odds, played, sharpgap, stats, store, track
 from .sources import fmmatch, footballdata as fd, fotmob, names, s365
 
-GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals")
+GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals", "team_totals_home", "team_totals_away")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
 UNKNOWN = "unknown"                                        # match joué mais jambe invérifiable (« non vérifiable ») : ni gagné ni perdu
 SHOT_MARKETS = tuple(f"team_{k}_{s}" for k in ("shots", "sot", "fouls", "throws", "offsides") for s in ("total", "home", "away"))
@@ -57,7 +57,7 @@ def settle_pick(b, ev, fstats=None):
         mine, other = (h, a) if name == b["home"] else (a, h)
         diff = mine + point - other
         return "push" if diff == 0 else ("win" if diff > 0 else "loss")
-    totals = {"totals": h + a}
+    totals = {"totals": h + a, "team_totals_home": h, "team_totals_away": a}
     if fstats:
         for mk, k in (("alternate_totals_corners", "corners"), ("alternate_totals_cards", "cards")):
             if fstats.get(k) is not None:
@@ -219,7 +219,7 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     devient « unknown » sans toucher la bankroll). `scores_by_sport` / `stats_for` : injectables (tests)."""
     now = now or datetime.now(timezone.utc)
     rows = track.load()
-    bets = store.load("bets.json", {"picks": [], "combos": []})
+    bets = store.load_doc("bets.json", {"picks": [], "combos": []})
     pending = [r for r in rows if r.get("result") is None
                and datetime.fromisoformat(r["commence"].replace("Z", "+00:00")) < now - timedelta(hours=3)]
     pending.sort(key=lambda r: not r["sent"])
@@ -362,7 +362,7 @@ def settle_fair_combos(now=None, stats_for=None):
 
 
 def record_combos(combos_sent, day):
-    bets = store.load("bets.json", {"picks": [], "combos": []})
+    bets = store.load_doc("bets.json", {"picks": [], "combos": []})
     for combo in combos_sent:
         if any(c["date"] == str(day) and c["tier"] == combo["tier"] for c in bets["combos"]):
             continue                                # relance du matin : un seul combiné par palier et par jour (le premier envoyé)
@@ -484,7 +484,7 @@ def _bilan_simple(days, rows, picks, combos):
         w = sum(1 for r in sent if r["result"] == "win")
         blocks.append([f"✅ <b>Paris envoyés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(sent)} ({fmt.pct(w / len(sent))})"])
     from . import money
-    bets_ = store.load("bets.json", {"combos": []})
+    bets_ = store.load_doc("bets.json", {"combos": []})
     ml = money.summary_lines(bets_, rows, fair.load_combos())
     if ml:
         blocks.append(["💰 <b>Tes paris notés</b> " + fmt.i("(seuls ceux que tu as notés comptent)")] + [f"• {fmt.esc(x)}" for x in ml])

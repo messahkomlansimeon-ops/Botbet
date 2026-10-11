@@ -33,7 +33,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-from . import combos as CB, config as C, fair, fmt, money, store, telegram, xprice
+from . import combos as CB, config as C, fair, fmt, money, quiet, store, telegram, xprice
 from .sources import fmmatch, xbet
 
 FILE = "stats_window.json"          # {"day", "reads": {id: {n, miss, at, priced}}, "combos": [{tier, keys, at, coupon}], "announced": [id|marché], "passes", "bytes", "requests"}
@@ -288,7 +288,7 @@ def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep):
         app.log_opinions(changed, day, now)         # derniers avis de l'ensemble avant le match (journal d'apprentissage)
     if new:
         rep["announced"] = len(new)
-        telegram.send(fmt.pronos(new, limit=C.STATS_WINDOW_ANNOUNCE, title="🧮 Stats ouvertes chez 1xBet", when=hhmm,
+        quiet.send(fmt.pronos(new, limit=C.STATS_WINDOW_ANNOUNCE, title="🧮 Stats ouvertes chez 1xBet", when=hhmm,
                                  intro="Paris tirs / fautes / touches / hors-jeu devenus jouables avec les cotes 1xBet du moment (1xBet les ouvre quelques heures "
                                        "avant le match et les ferme ~30 min avant). Vérifie la cote avant de valider."))
     return plan_combo(app, today, doc, fair.load_combos(), now)
@@ -368,6 +368,6 @@ def send_combo(app, plan, day, now):
                 f"voici un combiné aux cotes de {when}.")
         msg = app._fair_reply((legs, total, prob), head, title=C.STATS_WINDOW_TITLE, stake_txt=app._stake_words(stake), when=when, code=coupon,
                               retry=app.RETRY_BUTTON)
-        telegram.send(app.chat.with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon))
+        quiet.send(app.chat.with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon))
     print(f"[stats] combiné {tier} envoyé : cote {total:.2f}, {len(legs)} pari(s), code {'oui' if coupon else 'non'}", file=sys.stderr)
     return tier

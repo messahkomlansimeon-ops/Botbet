@@ -20,9 +20,9 @@ from . import catalogue, config as C, store
 FILE = "calib.json"
 K_RANGE = (0.4, 1.2)
 SHOW_MIN = 20              # pronostics réglés minimum pour afficher une famille dans le bilan
-FAMILIES = {"totals": "goals", "btts": "btts", "double_chance": "dc", "h2h": "h2h",
+FAMILIES = {"totals": "goals", "btts": "btts", "double_chance": "dc", "h2h": "h2h", "team_totals_home": "team_goals", "team_totals_away": "team_goals",
             "alternate_totals_corners": "corners", "alternate_totals_cards": "cards"}
-LABELS = {"goals": "buts", "btts": "les 2 marquent", "dc": "double chance", "h2h": "1N2", "corners": "corners",
+LABELS = {"goals": "buts", "team_goals": "buts d'une équipe", "btts": "les 2 marquent", "dc": "double chance", "h2h": "1N2", "corners": "corners",
           "cards": "cartons", "shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu",
           "player": "stats joueurs"}
 
@@ -75,16 +75,31 @@ def add(rows):
     return n
 
 
-def _k(acc, prior_k=1.0):
-    """k d'un cumul [n, gagnés, somme des probas], rapproché de `prior_k` tant que n est petit ; None sous FAIR_CALIB_MIN."""
-    if not acc or acc[0] < C.FAIR_CALIB_MIN:
+PROPS_FAMILIES = {"shots", "sot", "fouls", "throws", "offsides", "player"}
+
+
+def min_need(fam):
+    """Pronostics réglés requis pour activer la calibration d'une famille."""
+    return C.FAIR_CALIB_MIN_PROPS if fam in PROPS_FAMILIES else C.FAIR_CALIB_MIN
+
+
+def prior_need(fam):
+    """Inertie prioritaire de la calibration d'une famille."""
+    return C.FAIR_CALIB_PRIOR_PROPS if fam in PROPS_FAMILIES else C.FAIR_CALIB_PRIOR
+
+
+def _k(acc, prior_k=1.0, fam=None):
+    """k d'un cumul [n, gagnés, somme des probas], rapproché de `prior_k` tant que n est petit ; None sous le seuil requis."""
+    min_n = min_need(fam) if fam else C.FAIR_CALIB_MIN
+    prior_n = prior_need(fam) if fam else C.FAIR_CALIB_PRIOR
+    if not acc or acc[0] < min_n:
         return None
     n, w, s = acc
     p0 = s / n - 0.5
     if p0 < 0.02:
         return None
     raw = (w / n - 0.5) / p0
-    k = prior_k + (raw - prior_k) * n / (n + C.FAIR_CALIB_PRIOR)
+    k = prior_k + (raw - prior_k) * n / (n + prior_n)
     return max(K_RANGE[0], min(K_RANGE[1], k))
 
 
@@ -93,9 +108,9 @@ def factor(market, data=None, sport_key=None):
     de la famille."""
     data = data if data is not None else load()
     fam = family(market)
-    k = _k(data.get(fam))
+    k = _k(data.get(fam), fam=fam)
     k = 1.0 if k is None else k
-    lg = _k(((data.get("_lg") or {}).get(sport_key) or {}).get(fam), k) if sport_key else None
+    lg = _k(((data.get("_lg") or {}).get(sport_key) or {}).get(fam), k, fam=fam) if sport_key else None
     return k if lg is None else lg
 
 

@@ -73,8 +73,14 @@ def round_step(budget):
 
 
 def money(x, currency=None):
-    """« 1 500 FCFA »."""
-    txt = f"{x:,.0f}".replace(",", " ") if float(x).is_integer() or abs(x) >= 100 else fmt.trim(x, 2)
+    """« 1 500 FCFA » ; un montant non entier garde ses décimales (« 1 500,5 FCFA »), toujours le même séparateur de milliers."""
+    if float(x).is_integer():
+        txt = f"{x:,.0f}".replace(",", " ")
+    else:
+        txt = fmt.trim(x, 2)
+        whole, _, dec = txt.partition(",")
+        digits = re.sub(r"\D", "", whole)
+        txt = whole[:len(whole) - len(digits)] + re.sub(r"\B(?=(\d{3})+(?!\d))", " ", digits) + ("," + dec if dec else "")
     return f"{txt} {safe_cur(currency) if currency else cur()}"
 
 
@@ -301,13 +307,6 @@ def skip(what, day, undo=False):
 
 
 # ---------- bilan en argent ----------
-
-def _won_odds(x):
-    """Cote payée par les jambes gagnées d'un combiné de fair_combos.json (cote 1xBet de chacune s'il est réel, cote mini sinon)."""
-    from .bankroll import won_odds
-    won = won_odds(x)
-    return math.prod(won) if won else 1.0
-
 
 def gain(x):
     """Gain (devise) d'un pari NOTÉ (x["played"]) et réglé (gagné / perdu), à la cote et à la mise notées ; None s'il ne compte pas (pas

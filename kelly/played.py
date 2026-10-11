@@ -143,7 +143,7 @@ def find(word, day):
     w = norm(word)
     tiers = tier_words()
     if w in tiers:
-        bets = store.load("bets.json", {"picks": [], "combos": []})
+        bets = store.load_doc("bets.json", {"picks": [], "combos": []})
         c = _pick([c for c in bets["combos"] if c["tier"] == tiers[w]], day)
         if not c:
             return f"Pas de combiné {fmt.tier_word(tiers[w])} à noter (ni aujourd'hui ni en attente de résultat)."
@@ -152,7 +152,7 @@ def find(word, day):
                       lambda: store.save("bets.json", bets), "cote 1xBet" if px["real"] else "cote typique", _known(px))
     if w in ("pari", "jour", "single"):
         rows = track.load()
-        r = _pick(single_rows(rows, store.load("bets.json", {"combos": []}).get("combos", [])), day)
+        r = _pick(single_rows(rows, store.load_doc("bets.json", {"combos": []}).get("combos", [])), day)
         if not r:
             return "Pas de pari du jour à noter (ni aujourd'hui ni en attente de résultat)."
         px = price_info("pari", r)
@@ -334,7 +334,7 @@ def todo(day, page=None):
     Message HTML : tout le texte est échappé (fmt.esc). PAGE paris au plus par message : une longue liste a plusieurs pages (« (2/3) »), la 1re
     est rendue et les suivantes sont dans son attribut `more` (telegram.send les envoie à la suite) ; `page` : seulement cette page (la liste
     d'un message déjà envoyé, rafraîchie après une note : chat.on_callback). Les boutons d'une page portent son numéro (« joue|sur|jour|l1 »)."""
-    bets = store.load("bets.json", {"picks": [], "combos": []})
+    bets = store.load_doc("bets.json", {"picks": [], "combos": []})
     items_ = [(fmt.tier_word(c["tier"]), c, c["odds"], norm(fmt.tier_word(c["tier"]))) for c in bets["combos"] if c["date"] == day]
     rows_ = track.load()
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(rows_, bets["combos"]) if r["date"] == day]

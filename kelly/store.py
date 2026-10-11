@@ -3,6 +3,7 @@
 Les anciens fichiers data/*.json sont importés une seule fois, à la création de la base, puis rangés dans data/sauvegarde/ ; une base
 recréée (kelly.db perdu) sans ancien fichier se remplit depuis data/sauvegarde/ (_restore_backup) au lieu de repartir à vide.
 Sauvegarde lisible (et commitée par git) : export() écrit chaque document en JSON dans data/sauvegarde/ ; import_dir() restaure."""
+import contextlib
 import fcntl
 import json
 import os
@@ -114,7 +115,8 @@ def _migrate(con):
         con.execute("INSERT INTO meta (key, value) VALUES ('migrated', ?)", (_now(),))
         con.execute("COMMIT")
     except BaseException:
-        con.execute("ROLLBACK")
+        with contextlib.suppress(sqlite3.Error):    # la transaction est peut-être déjà finie : ne masque jamais l'erreur d'origine
+            con.execute("ROLLBACK")
         raise
     for name, p in done:
         dest = os.path.join(backup_dir(), name)
@@ -140,21 +142,48 @@ def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
+_unreadable = set()     # documents dont la dernière lecture a raté sur ERREUR DE BASE dans ce processus : save() refuse de les écraser (lire un default puis le réécrire effacerait de bonnes données)
+
+
 def load(name, default):
-    """Document `name`, ou `default` s'il n'existe pas (ou si la base est illisible : le bot continue)."""
+    """Document `name`, ou `default` s'il n'existe pas (ou si la base est illisible : le bot continue). Une erreur de base (verrou
+    dépassé, disque) est mémorisée (réussie -> oubliée) : le prochain save() du document est refusé, pour ne pas remplacer de bonnes
+    données par un default. Un JSON abîmé, lui, est réparable : le save() suivant remplace le document."""
     try:
         with _db() as con:
             row = con.execute("SELECT body FROM docs WHERE name=?", (name,)).fetchone()
+        _unreadable.discard(name)
         return json.loads(row[0]) if row else default
-    except (OSError, ValueError) as e:
+    except OSError as e:
+        _unreadable.add(name)
         print(f"[store] lecture de {name} impossible : {e}", file=sys.stderr)
         return default
+    except ValueError as e:
+        print(f"[store] lecture de {name} impossible : {e}", file=sys.stderr)
+        return default
+
+
+def load_doc(name, default):
+    """load(name, default) ; un document EXISTANT d'une autre forme (dict attendu, liste ou champ d'un autre type trouvés) compte
+    aussi comme absent : `default`. Un document malformé (écriture partielle, édition à la main) ne plante plus le passage qui
+    l'attend ; comme un JSON corrompu, le save() suivant le répare."""
+    d = load(name, default)
+    if type(d) is not type(default):
+        return default
+    if isinstance(default, dict) and any(k not in d or type(d[k]) is not type(default[k]) for k in default):
+        return default
+    return d
 
 
 def save(name, obj, compact=False):
     """Enregistre le document `name` (remplace l'ancien). Une transaction SQLite : un lecteur (le bot Telegram pendant un passage
     programmé) ne voit jamais un document à moitié écrit, même si le PC s'éteint. `compact` : gardé pour compatibilité (tout est
-    stocké compact). Lève OSError si la base refuse l'écriture."""
+    stocké compact). Lève OSError si la base refuse l'écriture. Un document dont la lecture a raté sur erreur de base dans ce
+    processus n'est PAS écrasé : l'écriture est ignorée (et signalée), le contenu existant reste."""
+    if name in _unreadable:
+        print(f"[store] {name} non enregistré : la base n'a pas pu être relue dans ce processus (le contenu existant est gardé)",
+              file=sys.stderr)
+        return
     body = _dump(obj)
     with _db() as con:
         con.execute("INSERT INTO docs (name, body, updated) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET body=excluded.body,"
@@ -267,16 +296,22 @@ def export(dest=None):
 
 def import_dir(src=None):
     """Restaure les documents depuis un dossier de sauvegarde (data/sauvegarde/ par défaut) : chaque .json remplace le document du
-    même nom ; les autres documents de la base restent. -> nombre de documents importés."""
+    même nom ; les autres documents de la base restent. Un fichier illisible est sauté (la restauration continue) : signalé. ->
+    nombre de documents importés."""
+    _unreadable.clear()                             # une restauration remplace délibérément, même ce qui n'a pas pu être lu
     src = src or backup_dir()
     n = 0
     for root, _, files in os.walk(src):
         for f in sorted(files):
-            if not f.endswith(".json"):
+            if not f.endswith(".json") or f.startswith(NO_EXPORT):
                 continue
             p = os.path.join(root, f)
-            with open(p, encoding="utf-8") as fh:
-                obj = json.load(fh)
+            try:
+                with open(p, encoding="utf-8") as fh:
+                    obj = json.load(fh)
+            except (OSError, ValueError) as e:
+                print(f"[store] {p} non restauré ({type(e).__name__}) : la restauration continue", file=sys.stderr)
+                continue
             save(os.path.relpath(p, src).replace(os.sep, "/"), obj)
             n += 1
     return n
@@ -299,9 +334,9 @@ def data_lock(wait=None, on_busy=None):
     tournent, et l'un écraserait l'autre (mise à jour perdue : lire, modifier, réécrire tout le document). `wait` : secondes
     d'attente au plus (None = sans limite, 0 = ne pas attendre) ; dépassé -> LockTimeout. `on_busy()` est appelé une fois si le
     verrou est déjà pris, avant d'attendre. Le verrou se libère en sortant (et si le processus meurt). Ne l'utilise pas autour d'un
-    code déjà lancé sous `flock` : inter-blocage."""
-    os.makedirs(os.path.dirname(lock_path()), exist_ok=True)
+    code déjà lancé sous `flock` : inter-blocage. Verrou impossible (dossier, fichier, erreur flock) : travail sans verrou plutôt que bloquer."""
     try:
+        os.makedirs(os.path.dirname(lock_path()), exist_ok=True)
         f = open(lock_path(), "a")
     except OSError as e:                            # verrou impossible : mieux vaut travailler sans que ne plus répondre
         print(f"[store] verrou indisponible ({e}) : travail sans verrou", file=sys.stderr)
@@ -327,6 +362,10 @@ def data_lock(wait=None, on_busy=None):
                         if time.monotonic() >= end:
                             raise LockTimeout(lock_path()) from None
                         time.sleep(0.25)
+        except OSError as e:                        # flock refusé autrement : travail sans verrou, comme si le fichier était inaccessible
+            print(f"[store] verrou indisponible ({e}) : travail sans verrou", file=sys.stderr)
+            yield
+            return
         yield
     finally:
         f.close()                                   # libère le verrou

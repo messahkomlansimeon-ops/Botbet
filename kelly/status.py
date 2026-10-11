@@ -15,7 +15,7 @@ from . import config as C, progress
 
 # (unité systemd, nom dit à l'utilisateur, minuterie ou None pour le bot)
 UNITS = (("kelly-serve", "Bot Telegram", False), ("kelly-daily", "Passage du matin", True), ("kelly-track", "Passage horaire", True),
-         ("kelly-xbet", "Relevé 1xBet de 15h", True), ("kelly-evening", "Relecture de 12h", True), ("kelly-backup", "Sauvegarde de 23h", True),
+         ("kelly-xbet", "Relevé 1xBet de 15h", True), ("kelly-evening", "Relecture de 12h", True), ("kelly-watch", "Suivi des tickets (10 min)", True), ("kelly-backup", "Sauvegarde de 23h", True),
          ("kelly-tune", "Réglage du dimanche", True))
 PROPS = "ActiveState,SubState,Result,ExecMainStartTimestamp,ExecMainExitTimestamp,LoadState"
 TIMER_PROPS = "NextElapseUSecRealtime,LastTriggerUSec,LoadState"
@@ -130,7 +130,7 @@ def learning_lines(top=6):
     d = calib.load()
     fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and a[0]), key=lambda x: -x[1][0])
     for f, (n, w, s) in fams[:top]:
-        out.append(f"• {calib.LABELS.get(f, f).capitalize()} : " + _state(n, w, s, C.FAIR_CALIB_MIN, calib._k([n, w, s])))
+        out.append(f"• {calib.LABELS.get(f, f).capitalize()} : " + _state(n, w, s, calib.min_need(f), calib._k([n, w, s], fam=f)))
     ens = [(f, ensemble.weights(f)) for f in ("goals", "dc", "btts", "h2h")]
     ens_txt = ", ".join(f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in ens)
     out.append(f"• Ensemble (avis de Kelly face au marché) : {ens_txt}")

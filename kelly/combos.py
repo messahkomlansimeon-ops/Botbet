@@ -409,6 +409,8 @@ def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None, usage=None):
     complétés par le meilleur combiné des remplaçants (`prefix` : marchés permis, combinés spécial tirs) pour revenir dans [lo, hi],
     sans jamais dépasser `hi`. `usage` (Usage des AUTRES combinés du jour) : un remplaçant déjà pris ailleurs n'est repris que si les règles de
     réutilisation le permettent (jambe sûre, jamais une jambe risquée prise deux fois) ; les survivants ne sont pas concernés.
+    Le résultat a toujours AU MOINS 2 jambes (comme `best_combo`) : un survivant isolé, ou un remplaçant seul quand tout est tombé, est
+    complété sinon le combiné est abandonné.
     -> (jambes, cote, proba, retirées, ajoutées, changées [(ancienne, nouvelle)]) ou None si impossible."""
     fresh = {}
     for c in fair_legs(pool):
@@ -433,14 +435,14 @@ def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None, usage=None):
     if fresh_ids is not None and not fresh_ids:                 # rien relu : rien à juger
         return keep, total, math.prod(c["prob"] for c in keep), [], [], []
     added = []
-    if not keep or total < lo:
+    if not keep or total < lo or len(keep) < 2:             # un combiné a toujours au moins 2 jambes : un survivant isolé est complété (ou abandonné)
         used = {c["id"] for c in keep}
         spares = [c for c in fresh.values() if c["id"] not in used and (usage is None or usage.allowed(c))]
         rlo, rhi = max(lo / total, 1.01), hi / total
         if rhi < rlo:
             return None
-        one = max((c for c in spares if rlo <= c["odds"] <= rhi), key=lambda c: c["prob"], default=None)   # un seul remplaçant suffit ?
-        extra = ([one], one["odds"], one["prob"]) if one else best_combo(spares, rlo, rhi)               # sinon plusieurs (2 au moins)
+        one = max((c for c in spares if rlo <= c["odds"] <= rhi), key=lambda c: c["prob"], default=None)   # un seul remplaçant suffit (s'il reste au moins une jambe) ?
+        extra = ([one], one["odds"], one["prob"]) if (one and keep) else best_combo(spares, rlo, rhi)    # tout est tombé : best_combo, au moins 2 jambes
         if not extra:
             return None
         added = extra[0]

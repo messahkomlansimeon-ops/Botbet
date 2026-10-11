@@ -17,12 +17,15 @@
   python bot.py --tune       réglage sur l'historique football-data en cache (demi-vie par ligue, poids des buts) -> data/tuning.json ;
                              budget TUNE_SECONDS (1800 s), reprend où il s'est arrêté ; --force refait tout. À planifier chaque semaine.
                              Mode séparé : ne touche ni aux paris ni à Telegram, ne plante jamais le run du matin.
-  python bot.py --xbet       second relevé des cotes 1xBet (15:00) : pronostics du matin remis aux cotes du moment, message si nouveaux 💎
+  python bot.py --xbet       second relevé des cotes 1xBet (15:00) : pronostics du matin remis aux cotes du moment, message si nouveaux 💎.
+                              Prend lui-même le verrou des données (relecture-écriture de today.json pendant tout le relevé) ; --no-lock s'il est déjà lancé sous `flock`
   python bot.py --stats-window  la fenêtre des stats seule (déjà faite par chaque `--track`) : relit les paris tirs / fautes / touches des matchs qui commencent dans
                              45 min à 4 h, « 🧮 COMBINÉ STATS » + 💎 si possible. Prend lui-même le verrou des données (seulement pour choisir puis fusionner) ; --no-lock s'il est déjà sous `flock`
   python bot.py --evening    relecture du SOIR : les matchs du jour Kelly pas encore commencés sont réanalysés (stats du moment, sources en cache, aucun appel
                              payant), remis aux cotes 1xBet et fusionnés dans today.json ; UN message « 🌙 Pronostics de ce soir mis à jour : N 💎 »,
                              aucun combiné envoyé (« combi N » les bâtit). Prend lui-même le verrou des données ; --no-lock s'il est déjà lancé sous `flock`
+  python bot.py --watch      toutes les 10 min : suivi de tes tickets pendant les matchs (⚽ buts, ✅/❌ paris décidés, 🏆 ticket gagné), 🔴 opportunités live,
+                             alertes gardées pendant les heures calmes (QUIET_HOURS) ; ne prend pas le verrou des données (documents à part)
   python bot.py --export     copie lisible de la base (data/kelly.db) en JSON dans data/sauvegarde/ (la sauvegarde de 23:00 la commite)
   python bot.py --import [dossier]  restaure la base depuis une copie JSON (data/sauvegarde/ par défaut) ; sous le verrou des données
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
@@ -71,12 +74,24 @@ def main(argv):
             app.run_stats_window()
             app.fill_match_stats()
     elif "--xbet" in argv:
-        app.run_xbet_refresh()
+        if "--no-lock" in argv:                 # déjà sous `flock` (unité systemd) : en reprendre un bloquerait
+            app.run_xbet_refresh()
+        else:
+            from kelly import store
+            try:
+                with store.data_lock(wait=600, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):
+                    app.run_xbet_refresh()
+            except store.LockTimeout:
+                print("Kelly travaille depuis plus de 10 minutes : relevé 1xBet abandonné", file=sys.stderr)
+                sys.exit(1)
     elif "--stats-window" in argv:
         if "--no-lock" not in argv:             # à la main (ou par un timer) : le verrou des données n'est pris que pour choisir puis fusionner, jamais pendant les requêtes 1xBet
             from kelly.sources import fmmatch
             os.environ[fmmatch.OWN_LOCK_ENV] = "1"
         app.run_stats_window()
+    elif "--watch" in argv:                     # toutes les 10 min (kelly-watch.timer) : tes tickets pendant les matchs, opportunités live, alertes de la nuit
+        from kelly import watch
+        watch.tick()
     elif "--evening" in argv:
         if "--no-lock" in argv:                 # déjà sous `flock` (unité systemd) : en reprendre un bloquerait
             app.run_evening()
