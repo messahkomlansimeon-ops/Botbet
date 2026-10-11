@@ -97,9 +97,13 @@ def api_lines():
     except Exception as e:                              # noqa: BLE001
         out.append(f"⚠️ API-Football : vérification impossible ({type(e).__name__})")
     try:
-        u = xbet.usage()
-        out.append(f"{'✅' if u['bytes'] < 0.9 * C.XBET_MONTH_MB * 1e6 else '⚠️'} 1xBet via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois "
-                   f"sur {C.XBET_MONTH_MB:.0f} ({u['requests']} requêtes)")
+        p = xbet.proxy()
+        if not p and not C.XBET_DIRECT:
+            out.append("❌ Proxy 1xBet : non configuré (XBET_PROXY manquant dans .env) — cotes 1xBet coupées")
+        else:
+            u = xbet.usage()
+            out.append(f"{'✅' if u['bytes'] < 0.9 * C.XBET_MONTH_MB * 1e6 else '⚠️'} 1xBet via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois "
+                       f"sur {C.XBET_MONTH_MB:.0f} ({u['requests']} requêtes)")
         out.append("✅ " + s365.usage_line())
     except Exception as e:                              # noqa: BLE001
         out.append(f"⚠️ Proxy : compteurs illisibles ({type(e).__name__})")

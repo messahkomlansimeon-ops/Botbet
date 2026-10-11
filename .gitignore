@@ -6,4 +6,6 @@ node_modules/
 .cache/
 data/strength_*.json
 .env
+sofa.env
+data/sofa.env
 probe/

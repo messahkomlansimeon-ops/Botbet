@@ -12,7 +12,7 @@ import requests
 from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, custom, ensemble, fair, fmt, freeclose, gapbets,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                xprice, xworld)
-from .sources import fmmatch, http, xbet
+from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
 DISCLAIMER = Html("<i>Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
@@ -982,6 +982,12 @@ def manual_refresh(now=None, fetch=None):
     run_xbet_refresh(now, fetch, announce=True, live=True, seconds=C.XBET_MANUAL_SECONDS)
     st = LAST_REFRESH
     if not st["matches"]:                           # rien n'a été lu : le délai entre deux relevés n'est pas armé (on peut réessayer tout de suite)
+        if not xbet.proxy() and not C.XBET_DIRECT:
+            return "1xBet ne répond pas : proxy 1xBet non configuré (ajoute XBET_PROXY dans ton fichier .env)."
+        h = state.health("xbet")
+        err = (h.get("last_error") if isinstance(h, dict) else None)
+        if err:
+            return f"1xBet ne répond pas en ce moment ({err}) : cotes non actualisées. Réessaie dans quelques minutes."
         return "1xBet ne répond pas en ce moment : cotes non actualisées. Réessaie dans quelques minutes."
     today = store.load("today.json", {})
     today["xbet_manual"] = now.isoformat(timespec="seconds")
