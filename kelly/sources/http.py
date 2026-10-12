@@ -72,6 +72,56 @@ def reset():
     _last.clear(), _crawl.clear(), _robots.clear()
 
 
+def env(name, default):
+    """Réglage local d'un module (config.py n'est pas touché) : la variable d'environnement `name` lue comme le type de `default`, sinon `default`."""
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return type(default)(float(raw)) if isinstance(default, int) and not isinstance(default, bool) else type(default)(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_CREDS = re.compile(r"[^\s/@:'\"<>()]+:[^\s/@'\"<>()]*@")      # « user-GB-20:mot-de-passe@ » (avec ou sans « http:// » devant)
+
+
+def scrub(text):
+    """`text` sans identifiants de proxy : tout « utilisateur:mot-de-passe@ » devient « ***@ », et une adresse de proxy connue (PROXIES) disparaît
+    entière. À utiliser pour tout message d'erreur réseau qui part dans un journal ou sur Telegram."""
+    out = str(text)
+    for p in set(PROXIES.values()):
+        if p:
+            out = out.replace(p, "***")
+    return _CREDS.sub("***@", out)
+
+
+def err(e, limit=200):
+    """« TypeError: message » d'une exception, sans identifiants de proxy (scrub) et coupé à `limit` caractères."""
+    msg = scrub(e).strip()
+    return f"{type(e).__name__}: {msg[:limit]}" if msg else type(e).__name__
+
+
+NOT_THE_GAME = ("délai dépassé", "hors ligne", "robots.txt", "source bloquée", "bloqu", "accès refusé", "anti-robot")      # échecs qui ne disent rien de l'adresse demandée
+
+
+def failure_kind(error, status=None):
+    """Nature d'un échec de téléchargement pour une file d'attente : "skip" (délai du passage épuisé, hors ligne, source bloquée : rien à retenir),
+    "systemic" (réseau, 5xx : peut être une panne générale, à ne retenir que si le reste du passage a marché) ou "specific" (le serveur a répondu
+    par une erreur 4xx ou une réponse inutilisable : cette adresse-là est en cause)."""
+    msg = str(error or "").lower()
+    if any(k in msg for k in NOT_THE_GAME):
+        return "skip"
+    if status is None:
+        m = re.match(r"http (\d{3})", msg)
+        status = int(m.group(1)) if m else None
+    if status is not None and 400 <= status < 500:
+        return "specific"
+    if status is not None and status < 400:
+        return "specific"                              # réponse reçue mais inutilisable (appelant : JSON illisible...)
+    return "systemic"
+
+
 @dataclass
 class Result:
     url: str
@@ -229,7 +279,8 @@ def delay_for(domain):
 def _wait(domain):
     t = _last.get(domain)
     if t is not None:
-        gap = delay_for(domain) - (state.clock() - t)
+        delay = delay_for(domain)
+        gap = min(delay, delay - (state.clock() - t))      # horloge reculée (changement d'heure, NTP) : jamais plus d'attente que l'écart normal
         if gap > 0:
             _sleep(gap)
 
@@ -271,12 +322,24 @@ def _not_sent(e):
     return isinstance(e, requests.ConnectionError) and not isinstance(e, requests.Timeout) and "NewConnectionError" in repr(e)
 
 
+SOURCES = {}              # domaine -> nom de la source (state.block) : post() applique les mêmes blocages que fetch() (xbet.py enregistre 1xbet.ci)
+
+
+def register_source(domain, source):
+    SOURCES[domain.lower()] = source
+
+
 def post(url, body, headers=None, timeout=TIMEOUT):
     """POST JSON (ticket enregistré chez le bookmaker...) : comme _request mais en écriture — ni cache, ni robots.txt, ni
     conditionnel : une écriture n'est jamais rejouée depuis le cache, ni renvoyée si elle a pu arriver (délai de lecture, 5xx) :
     un seul nouvel essai, et seulement quand la connexion n'a pas pu s'établir (_not_sent). Même session proxy par domaine et même
-    compteur WIRE. Retourne un Result : .ok si une réponse HTTP (<500) a été obtenue, .content brut, .error sinon."""
+    compteur WIRE. Retourne un Result : .ok si une réponse HTTP exploitable a été obtenue, .content brut, .status le code HTTP, .error sinon.
+    Mêmes blocages que fetch() pour la source du domaine (register_source) : 403 / 429, Cloudflare ou page de vérification coupent la source
+    24 h (state.block) et le Result porte blocked=True, sans contenu ; une source déjà coupée n'est plus appelée du tout."""
     domain = urlparse(url).netloc.lower()
+    source = SOURCES.get(domain)
+    if source and state.is_blocked(source):
+        return Result(url, None, error=state.health(source)["last_error"] or "source bloquée", blocked=True)
     h = {"User-Agent": UA, "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
     r, err = None, None
     for attempt in (0, 1):
@@ -297,13 +360,31 @@ def post(url, body, headers=None, timeout=TIMEOUT):
                 stale.close()
         _last[domain] = state.clock()
         if r is not None and r.status_code < 500:
-            return Result(url, r.content, r.status_code)
+            return _post_result(url, r, source)
         if r is not None:
             err = f"HTTP {r.status_code}"           # le serveur a reçu la requête : jamais renvoyée
         if attempt == 0 and retry:
             continue
         break
-    return Result(url, None, error=err)
+    return Result(url, None, getattr(r, "status_code", None), error=err)
+
+
+def _post_result(url, r, source):
+    """Réponse HTTP (< 500) d'un POST -> Result, avec les règles de blocage de fetch() quand la source du domaine est connue."""
+    code = r.status_code
+    body = getattr(r, "content", None) or b""
+    h = getattr(r, "headers", None) or {}
+    if source:
+        if any(str(k).lower() == "cf-mitigated" for k in h):
+            state.block(source, f"HTTP {code}, Cloudflare", cloudflare=True)
+            return Result(url, None, code, blocked=True, error="Cloudflare bloque les robots")
+        if code in (403, 429):
+            state.block(source, f"HTTP {code}")
+            return Result(url, None, code, blocked=True, error=f"HTTP {code} : accès refusé")
+        if body and not body.lstrip().startswith((b"{", b"[")) and is_challenge(body):
+            state.block(source, "page de vérification anti-robot")
+            return Result(url, None, code, blocked=True, error="page de vérification anti-robot")
+    return Result(url, body, code, error=f"HTTP {code}" if code >= 400 else None)
 
 
 def _count(domain, r):

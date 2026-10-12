@@ -7,6 +7,7 @@ comme « état ») :
   - les API et les quotas : The Odds API (clé, crédits : /sports, gratuit), API-Football (requêtes du jour), données du proxy 1xBet et 365scores du
     mois, Telegram (getMe).
 Aucun crédit dépensé, aucune écriture. Ne lève jamais : une partie en échec est dite en une ligne."""
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -79,18 +80,34 @@ def service_lines(now=None):
     return lines
 
 
+def odds_line():
+    """The Odds API en UNE ligne, sans le tour de ligues de app._check_odds (odds.scan_today : jusqu'à 150 s cache froid, dans la boucle qui répond
+    à Telegram) : les crédits déjà connus de ce processus (odds.CREDITS, lus dans les en-têtes du dernier appel), sinon UN appel /sports (gratuit,
+    jamais hors passage : commande Telegram = hors ligne) pour les lire."""
+    from . import odds
+    try:
+        if odds.CREDITS["remaining"] is None and os.environ.get("ODDS_API_KEY"):
+            odds.get("/sports")                         # un seul appel, gratuit : met les crédits à jour
+        rem, used = odds.CREDITS["remaining"], odds.CREDITS["used"]
+        if not os.environ.get("ODDS_API_KEY"):
+            return "❌ The Odds API : ODDS_API_KEY absente"
+        if rem is None:
+            return "✅ The Odds API : clé présente (crédits connus au prochain passage)"
+        return f"✅ The Odds API : {rem} crédits restants ({used if used is not None else '?'} utilisés ce mois)"
+    except odds.OddsError as e:
+        if e.code == "OFFLINE":
+            return "✅ The Odds API : clé présente (crédits connus au prochain passage)"
+        return f"❌ The Odds API : {e}"
+    except Exception as e:                              # noqa: BLE001
+        return f"⚠️ The Odds API : vérification impossible ({type(e).__name__})"
+
+
 def api_lines():
     """The Odds API, API-Football, données du proxy (1xBet, 365scores), Telegram : une ligne chacun."""
-    from . import app, odds
+    from . import app
     from .sources import s365, xbet
     out = []
-    try:
-        ok, lines = app._check_odds()
-        rem, used = odds.CREDITS["remaining"], odds.CREDITS["used"]
-        out.append(f"✅ The Odds API : {rem if rem is not None else '?'} crédits restants ({used if used is not None else '?'} utilisés ce mois)"
-                   if ok else lines[0])
-    except Exception as e:                              # noqa: BLE001
-        out.append(f"⚠️ The Odds API : vérification impossible ({type(e).__name__})")
+    out.append(odds_line())
     try:
         ok, lines = app._check_stats()
         out.append(lines[0])

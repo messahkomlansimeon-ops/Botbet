@@ -127,6 +127,12 @@ def goal_weight(c):
     return C.MODEL_WEIGHT["goals"] if w is None else w
 
 
+def btts_weight(c):
+    """Poids du modèle de buts pour « les 2 marquent » : celui de config (MODEL_WEIGHT["goals"]), JAMAIS le poids mesuré par tune.py, qui est celui
+    du plus/moins de 2,5 buts (football-data n'a aucune cote historique des 2 marquent : le poids du modèle sur ce marché n'est pas mesuré)."""
+    return C.MODEL_WEIGHT["goals"]
+
+
 def deep_assess(c, f, d):
     """Évaluation par le modèle approfondi (f["deep"]) pour corners, cartons, buts, 2 équipes marquent, 1N2 ; None sinon."""
     m, point = c["market"], c.get("point")
@@ -156,7 +162,7 @@ def deep_assess(c, f, d):
                 "tag": tag, "flag": C.PM_FLAG * 1.25, "q": q}
     if m == "btts":
         tag = strength.shorten(f"{label} : {lh:.1f}-{la:.1f} buts attendus (les 2 marquent)" + (f" ; {why['goals']}" if why.get("goals") else ""), 200)
-        return {"kind": "btts", "p": deep_p(d, lh, la, m, None, c["name"]), "w": goal_weight(c) * qscale(q),
+        return {"kind": "btts", "p": deep_p(d, lh, la, m, None, c["name"]), "w": btts_weight(c) * qscale(q),
                 "tag": tag, "flag": C.PM_FLAG * 1.25, "q": q}
     if m == "h2h":
         who = "draw" if c["name"] == "Draw" else ("home" if c["name"] == c["home"] else "away")

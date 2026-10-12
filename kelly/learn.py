@@ -2,17 +2,20 @@
 
 1. Modèle CLV : régression ridge qui prédit, à partir des signaux d'un pari
    (valeur, désaccord, mouvement, marché, bookmaker...), de combien il battra
-   la clôture. Il n'est adopté que s'il fait au moins aussi bien que le score
-   heuristique sur des jours qu'il n'a pas vus (split temporel).
+   la clôture. Il n'est adopté que s'il bat le score heuristique, d'une marge (LEARN_OOS_MARGIN), sur des
+   jours qu'il n'a pas vus (split temporel, au moins LEARN_MIN_TEST_ROWS lignes sur LEARN_MIN_TEST_DAYS jours,
+   jamais sur les lignes d'apprentissage). Marchés / books / groupes rares (< LEARN_RARE_MIN lignes) : une seule
+   variable « other » ; pénalité ridge proportionnelle au nombre de variables.
 2. Calibration : une fois assez de résultats réglés (>= CALIB_MIN_ROWS par
-   famille de marchés), Platt scaling pour que « 60 % » passe bien 60 % du temps.
+   famille de marchés), Platt scaling pour que « 60 % » passe bien 60 % du temps ; activée seulement si le Brier
+   s'améliore HORS échantillon (validation croisée par blocs de jours, CALIB_FOLDS).
 3. Bookmakers lents : CLV moyen quand un book porte la meilleure cote.
 
 4. Amorçage : lignes historiques football-data (data/bootstrap.json, cotes d'ouverture vs clôture, voir
    kelly/bootstrap.py) pour entraîner le modèle dès le premier jour. Elles sont marquées (`boot`), pèsent
    moins qu'un pari réel et un indicateur « bootstrap » absorbe l'écart entre les deux populations. Le test
-   hors échantillon se fait sur les paris réels dès qu'il y en a assez, sinon sur une tranche historique
-   mise de côté.
+   hors échantillon se fait sur les paris réels dès qu'il y en a assez (test valable), sinon sur une tranche
+   historique mise de côté ; sans test valable, pas d'adoption.
 
 Pur Python : quelques centaines à milliers de lignes, ~30 variables.
 """
@@ -125,22 +128,56 @@ def _ridge(rows, names, lam):
     return {"names": names, "mean": mean, "std": std, "w": w}
 
 
+DUMMIES = ("market=", "group=", "book=")
+
+
+def _keep_dummies(rows):
+    """Variables muettes (marché, groupe, book) assez fréquentes pour avoir leur propre poids : vues dans >= C.LEARN_RARE_MIN lignes (books :
+    les C.TOP_BOOKS plus fréquents). Les autres sont regroupées dans « <préfixe>other » (une variable à écart-type minuscule, vue 1 ou 2 fois,
+    est standardisée en un pic énorme que le ridge interpole)."""
+    cnt = {}
+    for r in rows:
+        for n in r["features"]:
+            if n.startswith(DUMMIES):
+                cnt[n] = cnt.get(n, 0) + 1
+    keep = {n for n, c in cnt.items() if c >= C.LEARN_RARE_MIN}
+    books = sorted((n for n in keep if n.startswith("book=")), key=lambda n: (-cnt[n], n))[:C.TOP_BOOKS]
+    return {n for n in keep if not n.startswith("book=")} | set(books)
+
+
+def _bucket(row, keep):
+    """Ligne dont les variables muettes rares sont fondues dans « other » (la ligne d'origine est inchangée)."""
+    f = row["features"]
+    if all(n in keep for n in f if n.startswith(DUMMIES)):
+        return row
+    g = {n: v for n, v in f.items() if not n.startswith(DUMMIES) or n in keep}
+    for n, v in f.items():
+        if n.startswith(DUMMIES) and n not in keep and v:
+            g[n.partition("=")[0] + "=other"] = 1.0
+    return dict(row, features=g)
+
+
 def predict(model, feats):
     if not model or not model.get("w"):
         return None
     w, names = model["w"], model["names"]
+    for p in DUMMIES:                       # marché / book jamais vu à l'entraînement (ou rare) : la variable « other » du modèle, si elle existe
+        o = p + "other"
+        if o in names and o not in feats and any(k.startswith(p) and k not in names and v for k, v in feats.items()):
+            feats = dict(feats, **{o: 1.0})
     # écart-type quasi nul (variable constante à l'entraînement) : poids ~ 0, on évite la division explosive
     return sum(w[j] * (feats.get(n, 0.0) - model["mean"][j]) / (model["std"][j] if model["std"][j] > 1e-6 else 1.0)
                for j, n in enumerate(names)) + w[-1]
 
 
 def _feature_names(rows):
+    """Variables du modèle ; `rows` déjà regroupées (_bucket) : au plus C.TOP_BOOKS books plus « other »."""
     books = {}
     for r in rows:
         for n in r["features"]:
             if n.startswith("book="):
                 books[n] = books.get(n, 0) + 1
-    top_books = [b for b, _ in sorted(books.items(), key=lambda kv: -kv[1])[:C.TOP_BOOKS]]
+    top_books = [b for b, _ in sorted(books.items(), key=lambda kv: (-kv[1], kv[0]))[:C.TOP_BOOKS + 1]]
     base = ["edge", "spread", "steam", "log_odds", "hours_to_ko", "heuristic", "n_books", "is_player"]
     base += [n for n in PM_NAMES if any(r["features"].get(n) for r in rows)]
     if any(r.get("boot") for r in rows):
@@ -150,58 +187,100 @@ def _feature_names(rows):
     return base + markets + groups + top_books
 
 
-def _top_mean(rows, key, k=15):
-    """CLV moyen des meilleurs paris (au plus k, au plus le tiers) de chaque jour (ou groupe `grp`, une semaine
-    pour l'historique), selon `key`, moyenné sur les jours."""
+def _top_by_day(rows, key, k=15):
+    """CLV moyen des meilleurs paris (au plus k, au plus le tiers) de chaque jour (ou groupe `grp`, une semaine pour l'historique), selon `key` :
+    {jour: CLV moyen}."""
     by_day = {}
     for r in rows:
         by_day.setdefault(r.get("grp", r["date"]), []).append(r)
-    vals = []
-    for day_rows in by_day.values():
+    out = {}
+    for day, day_rows in by_day.items():
         best = sorted(day_rows, key=key, reverse=True)[:max(1, min(k, len(day_rows) // 3))]
-        vals.append(sum(r["clv"] for r in best) / len(best))
+        out[day] = sum(r["clv"] for r in best) / len(best)
+    return out
+
+
+def _top_mean(rows, key, k=15):
+    """CLV moyen des meilleurs paris de chaque jour (voir _top_by_day), moyenné sur les jours."""
+    vals = list(_top_by_day(rows, key, k).values())
     return sum(vals) / len(vals) if vals else 0.0
 
 
-def _split(rows):
-    """Découpe temporelle 80/20 par date : (apprentissage, test). Test vide = en échantillon (derniers 20 %)."""
+def beats(test, key_model, key_heur):
+    """(modèle bat l'heuristique ?, oos modèle, oos heuristique, t) sur le test : écart moyen des CLV des meilleurs paris, jour par jour. Il faut un écart > C.LEARN_OOS_MARGIN ET
+    un écart > C.LEARN_OOS_Z erreurs-types (écart-type des écarts quotidiens / racine du nombre de jours) : avec 5 jours de test, un écart de quelques millièmes
+    est du bruit."""
+    a, b = _top_by_day(test, key_model), _top_by_day(test, key_heur)
+    diffs = [a[d] - b[d] for d in a]
+    n = len(diffs)
+    mean = sum(diffs) / n if n else 0.0
+    sd = math.sqrt(sum((x - mean) ** 2 for x in diffs) / (n - 1)) if n > 1 else 0.0
+    t = mean / (sd / math.sqrt(n)) if sd > 0 else (math.inf if mean > 0 else 0.0)
+    return mean > C.LEARN_OOS_MARGIN and t >= C.LEARN_OOS_Z, sum(a.values()) / n if n else 0.0, sum(b.values()) / n if n else 0.0, t
+
+
+def _split(rows, min_days=0, min_train_days=1):
+    """Découpe temporelle par date : (apprentissage, test), 80/20 des jours (le test a au moins `min_days` jours, l'apprentissage au moins
+    `min_train_days`). Jamais de test sur les lignes d'apprentissage : trop peu de jours = test vide."""
     days = sorted({r["date"] for r in rows})
-    cut = days[max(1, int(len(days) * 0.8)) - 1]
-    train = [r for r in rows if r["date"] <= cut]
-    return train, [r for r in rows if r["date"] > cut] or train[-max(5, len(train) // 5):]
+    n_train = min(max(1, int(len(days) * 0.8)), len(days) - min_days)
+    if n_train < max(1, min_train_days) or len(days) < 2:
+        return rows, []
+    cut = days[n_train - 1]
+    return [r for r in rows if r["date"] <= cut], [r for r in rows if r["date"] > cut]
+
+
+def oos_valid(test):
+    """Test hors échantillon valable : au moins C.LEARN_MIN_TEST_ROWS lignes sur C.LEARN_MIN_TEST_DAYS jours."""
+    return len(test) >= C.LEARN_MIN_TEST_ROWS and len({r["date"] for r in test}) >= C.LEARN_MIN_TEST_DAYS
 
 
 def train_clv(rows, previous=None, boot=None):
     """Entraîne, valide hors échantillon, décide de l'adoption. `boot` : lignes historiques (boot_rows).
-    Test : sur les paris réels dès qu'il y en a assez (>= LEARN_MIN_ROWS et 2 jours), sinon sur la dernière
-    tranche de l'historique, mise de côté ; le modèle final apprend sur tout (historique + réel)."""
+    Test : sur les paris réels dès que le test est valable (voir oos_valid : >= LEARN_MIN_TEST_ROWS lignes sur >= LEARN_MIN_TEST_DAYS jours), sinon sur la
+    dernière tranche de l'historique, mise de côté ; le modèle final apprend sur tout (historique + réel). Jamais de test sur les lignes
+    d'apprentissage : sans test valable, rien n'est adopté (un ancien modèle adopté est conservé). Adoption : oos_modèle > oos_heuristique + LEARN_OOS_MARGIN et écart d'au moins LEARN_OOS_Z erreurs-types (beats).
+    Pénalité ridge = C.RIDGE_LAMBDA x nombre de variables."""
     real = [r for r in rows if r.get("clv") is not None and not r.get("boot")]
     boot = [r for r in (boot or []) if r.get("clv") is not None]
     out = {"n": len(real), "adopted": False, "trained_at": datetime.now(timezone.utc).isoformat(timespec="minutes")}
-    real_ok = len(real) >= C.LEARN_MIN_ROWS and (len({r["date"] for r in real}) >= 2 or not boot)
-    if not real_ok and len(boot) < C.BOOT_MIN_ROWS:
+    if len(real) < C.LEARN_MIN_ROWS and len(boot) < C.BOOT_MIN_ROWS:
         out["reason"] = f"pas assez de clôtures ({len(real)}/{C.LEARN_MIN_ROWS})"
         return out
+    keep = _keep_dummies(real + boot)
+    real, boot = [_bucket(r, keep) for r in real], [_bucket(r, keep) for r in boot]
     names = _feature_names(real + boot)
-    if real_ok:
-        train, test = _split(real)
-        fit, final_rows, src = boot + train, boot + real, "réel"
-    else:
-        train, test = _split(boot)
-        fit, final_rows, src = train, boot + real, "historique"
-    m = _ridge(fit, names, C.RIDGE_LAMBDA)
-    oos_model = _top_mean(test, lambda r: predict(m, r["features"]))
-    oos_heur = _top_mean(test, lambda r: r["features"]["heuristic"])
+    src = None
+    if len(real) >= C.LEARN_MIN_ROWS:
+        train, test = _split(real, C.LEARN_MIN_TEST_DAYS, C.LEARN_MIN_TRAIN_DAYS)
+        if oos_valid(test):
+            fit, final_rows, src = boot + train, boot + real, "réel"
+    if src is None and len(boot) >= C.BOOT_MIN_ROWS:
+        train, test = _split(boot, C.LEARN_MIN_TEST_DAYS, C.LEARN_MIN_TRAIN_DAYS)
+        if oos_valid(test):
+            fit, final_rows, src = train, boot + real, "historique"
+    keep_old = None
+    if previous and previous.get("adopted"):
+        keep_old = {k: previous[k] for k in ("names", "mean", "std", "w")} | {"adopted": True}
+    if src is None:
+        out["reason"] = (f"pas encore de test hors échantillon valable (il faut {C.LEARN_MIN_TEST_ROWS} lignes sur {C.LEARN_MIN_TEST_DAYS} jours "
+                         f"au moins, jamais sur les lignes d'apprentissage) : score heuristique conservé")
+        if keep_old:
+            out.update(keep_old | {"reason": "pas de test hors échantillon valable : ancien modèle conservé"})
+        return out
+    lam = C.RIDGE_LAMBDA * len(names)
+    m = _ridge(fit, names, lam)
+    better, oos_model, oos_heur, t = beats(test, lambda r: predict(m, r["features"]), lambda r: r["features"]["heuristic"])
     out.update({"oos_model": round(oos_model, 4), "oos_heuristic": round(oos_heur, 4), "test_rows": len(test),
-                "oos_source": src, "boot_n": len(boot)})
-    if oos_model >= oos_heur:
-        final = _ridge(final_rows, names, C.RIDGE_LAMBDA)        # ré-entraîné sur tout
+                "test_days": len({r["date"] for r in test}), "oos_source": src, "boot_n": len(boot), "ridge_lambda": round(lam, 2),
+                "oos_t": None if t == math.inf else round(t, 2)})
+    if better:
+        final = _ridge(final_rows, names, lam)                   # ré-entraîné sur tout
         out.update(final | {"adopted": True})
-    elif previous and previous.get("adopted") and not (src == "réel" and previous.get("oos_source") == "historique"):
-        keep = {k: previous[k] for k in ("names", "mean", "std", "w")}
-        out.update(keep | {"adopted": True, "reason": "nouveau modèle moins bon hors échantillon : ancien conservé"})
+    elif keep_old and not (src == "réel" and previous.get("oos_source") == "historique"):
+        out.update(keep_old | {"reason": "nouveau modèle moins bon hors échantillon : ancien conservé"})
     else:
-        out["reason"] = "le modèle ne bat pas l'heuristique hors échantillon : score heuristique conservé"
+        out["reason"] = "le modèle ne bat pas l'heuristique hors échantillon (marge exigée) : score heuristique conservé"
     return out
 
 
@@ -242,7 +321,40 @@ def _brier(rows, a=0.0, b=1.0):
     return sum((_sigmoid(a + b * _logit(_p_fit(r))) -(1.0 if r["result"] == "win" else 0.0)) ** 2 for r in rows) / len(rows)
 
 
+def _blocks(rows, k):
+    """`rows` (ordre chronologique) en k blocs contigus de taille voisine ; les lignes d'un même jour (champ « date », s'il existe) restent dans le même bloc."""
+    n = len(rows)
+    cuts, prev = [], 0
+    for j in range(1, k):
+        i = max(prev, round(j * n / k))
+        while 0 < i < n and rows[i].get("date") is not None and rows[i].get("date") == rows[i - 1].get("date"):
+            i += 1
+        cuts.append(min(i, n))
+        prev = cuts[-1]
+    edges = [0] + cuts + [n]
+    return [rows[a:b] for a, b in zip(edges, edges[1:]) if b > a]
+
+
+def _oos_brier(rows, k=None):
+    """(Brier brut, Brier recalibré) HORS échantillon : validation croisée par blocs de jours (chaque bloc est évalué avec un Platt ajusté sur les autres),
+    ou None si moins de 3 blocs. Les lignes sans date gardent leur ordre (tracked.json est chronologique)."""
+    k = k or C.CALIB_FOLDS
+    dated = all(r.get("date") for r in rows)
+    ordered = sorted(rows, key=lambda r: r["date"]) if dated else list(rows)
+    blocks = _blocks(ordered, k)
+    if len(blocks) < 3:
+        return None
+    raw = cal = 0.0
+    for i, test in enumerate(blocks):
+        a, b = _platt([r for j, blk in enumerate(blocks) if j != i for r in blk])
+        raw += _brier(test) * len(test)
+        cal += _brier(test, a, b) * len(test)
+    return raw / len(ordered), cal / len(ordered)
+
+
 def calibrate(rows):
+    """Platt par famille. `active` seulement si le Brier s'améliore HORS échantillon d'au moins C.CALIB_OOS_MARGIN (oos_before -> oos_after) : sur ses
+    propres lignes le Platt gagne presque toujours. brier_before / brier_after restent les valeurs sur les lignes d'ajustement (affichage)."""
     settled = [r for r in rows if r.get("result") in ("win", "loss")]
     out = {}
     fams = {}
@@ -254,8 +366,11 @@ def calibrate(rows):
             continue
         a, b = _platt(frows)
         before, after = _brier(frows), _brier(frows, a, b)
-        out[fam] = {"n": len(frows), "active": after <= before, "a": round(a, 4), "b": round(b, 4),
+        oos = _oos_brier(frows)
+        out[fam] = {"n": len(frows), "active": bool(oos and oos[1] < oos[0] - C.CALIB_OOS_MARGIN), "a": round(a, 4), "b": round(b, 4),
                     "brier_before": round(before, 4), "brier_after": round(after, 4)}
+        if oos:
+            out[fam] |= {"oos_before": round(oos[0], 4), "oos_after": round(oos[1], 4)}
     return out
 
 
@@ -322,8 +437,10 @@ def describe(model, rows, days=7):
     if slow:
         lines.append("Books les plus lents : " + ", ".join(f'{k} ({v["clv"]*100:+.1f}%, n={v["n"]})' for k, v in slow))
     cal = model.get("calibration", {})
-    active = [f"{k} ({v['n']}, Brier {v['brier_before']:.3f}→{v['brier_after']:.3f})" for k, v in cal.items() if v.get("active")]
-    waiting = [f"{k} {v['n']}/{C.CALIB_MIN_ROWS}" for k, v in cal.items() if not v.get("active")]
+    active = [f"{k} ({v['n']}, Brier hors échantillon {v.get('oos_before', v['brier_before']):.3f}→{v.get('oos_after', v['brier_after']):.3f})"
+              for k, v in cal.items() if v.get("active")]
+    waiting = [f"{k} {v['n']}/{C.CALIB_MIN_ROWS}" if v["n"] < C.CALIB_MIN_ROWS else f"{k} (pas d'amélioration hors échantillon)"
+               for k, v in cal.items() if not v.get("active")]
     if active:
         lines.append("Calibration active : " + ", ".join(active))
     if waiting:

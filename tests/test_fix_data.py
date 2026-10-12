@@ -74,10 +74,10 @@ def test_betexplorer_refresh_dates_rows():
 NOW = datetime(2026, 10, 12, 8, tzinfo=UTC)
 
 
-def row(key, name, sk, home, away, days=1, prob_book=0.5):
+def row(key, name, sk, home, away, days=1, prob_book=0.5, prob_src="pinnacle"):
     ko = (NOW - timedelta(days=days)).isoformat().replace("+00:00", "Z")
     return {"key": key, "id": key, "sport_key": sk, "group": "soccer", "home": home, "away": away, "commence": ko, "market": "h2h",
-            "name": name, "point": None, "odds": 2.1, "prob": prob_book, "prob_book": prob_book, "book": "Pinnacle", "sent": False,
+            "name": name, "point": None, "odds": 2.1, "prob": prob_book, "prob_book": prob_book, "prob_src": prob_src, "book": "Pinnacle", "sent": False,
             "closed_at": None, "clv": None, "date": ko[:10], "result": None}
 
 
@@ -90,7 +90,7 @@ class FakeFD:
 
 def test_freeclose_survives_bad_dates():
     """Une ligne BetExplorer sans date (d=None) levait TypeError : tout le remplissage s'arrêtait, football-data compris."""
-    bx_first = row("b", "Draw", "soccer_brazil_campeonato", "Santos", "Flamengo", prob_book=0.3)
+    bx_first = row("b", "Draw", "soccer_brazil_campeonato", "Santos", "Flamengo", prob_book=0.3, prob_src="consensus")
     fd_after = row("h", "Arsenal", "soccer_epl", "Arsenal", "Chelsea")
     rows = [bx_first, fd_after]
     day = bx_first["commence"][:10]
@@ -103,7 +103,7 @@ def test_freeclose_survives_bad_dates():
     assert freeclose.fill(rows, NOW, FakeFD(), bx) == 2
     assert bx_first["close_src"] == "betexplorer" and fd_after["close_src"] == "football-data/ps"
     # que des lignes cassées : rien de rempli côté BetExplorer, mais football-data passe quand même
-    rows = [row("b2", "Draw", "soccer_brazil_campeonato", "Santos", "Flamengo"), row("h2", "Arsenal", "soccer_epl", "Arsenal", "Chelsea")]
+    rows = [row("b2", "Draw", "soccer_brazil_campeonato", "Santos", "Flamengo", prob_src="consensus"), row("h2", "Arsenal", "soccer_epl", "Arsenal", "Chelsea")]
     bx = {"leagues": {"soccer_brazil_campeonato": {"matches": [{"d": None, "home": "Santos", "away": "Flamengo", "o1": 2, "ox": 3, "o2": 4}]}}}
     assert freeclose.fill(rows, NOW, FakeFD(), bx) == 1 and rows[0]["clv"] is None and rows[1]["clv"] is not None
 

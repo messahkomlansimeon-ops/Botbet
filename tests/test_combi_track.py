@@ -449,12 +449,12 @@ def test_settle_and_bilan():
     rows = fair.load_combos()
     assert [c["result"] for c in rows] == ["win", "win"], rows
     mine = next(c for c in rows if c.get("custom"))
-    assert abs(money.gain(mine) - 500 * (1.55 ** 4 - 1)) < 1e-6, money.gain(mine)
+    assert abs(money.gain(mine) - 500 * (mine["played"]["odds"] - 1)) < 1e-6, money.gain(mine)          # toutes gagnées : la cote notée (arrondie à 2 décimales par 1xBet) est payée telle quelle
     n, total, staked = money.result({"combos": []}, [], rows)
-    assert n == 1 and abs(total - 500 * (1.55 ** 4 - 1)) < 1e-6 and staked == 500, (n, total, staked)          # le combiné du matin n'est pas noté : hors compte
+    assert n == 1 and abs(total - 500 * (mine["played"]["odds"] - 1)) < 1e-6 and staked == 500, (n, total, staked)          # le combiné du matin n'est pas noté : hors compte
     # le résultat du matin nomme le combi sur mesure et donne son gain ; la fiabilité des combinés du matin ne le compte pas
     text = str(msgs[0])
-    assert "✅ Combi sur mesure (cote 5) gagné</b> · +2 386 FCFA" in text and "✅ Combiné aux cotes 1xBet (cote 5,77) gagné</b>" in text, text
+    assert "✅ Combi sur mesure (cote 5) gagné</b> · +2 385 FCFA" in text and "✅ Combiné aux cotes 1xBet (cote 5,77) gagné</b>" in text, text
     assert "(cote 5,77) gagné</b> ·" not in text, "le combiné du matin n'est pas noté : aucun montant"
     assert "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (le résultat en argent ne compte que ceux que tu as notés)." in text, text
     summary = "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (le résultat en argent ne compte que ceux que tu as notés)."
@@ -463,7 +463,7 @@ def test_settle_and_bilan():
     # le bilan compte le combi sur mesure (argent) même quand il est le seul réglé
     store.save(fair.COMBOS_FILE, [mine])
     bilan = str(settle.bilan({"picks": [], "combos": []}, rows=[]))
-    assert "Aucun pari réglé" not in bilan and "Tes paris notés" in bilan and "+2 386 FCFA sur 1 pari" in bilan, bilan
+    assert "Aucun pari réglé" not in bilan and "Tes paris notés" in bilan and "+2 385 FCFA sur 1 pari" in bilan, bilan
     assert "Combinés à vérifier chez 1xBet" not in bilan
     # perdu : une jambe à 3-1
     reset()
@@ -482,7 +482,7 @@ def test_settle_and_bilan():
     with Scores({}):
         app.fair_combos_report(after)
     row = fair.load_combos()[0]
-    gain = 2000 * (6.0 * (1.55 ** 4) / row["min_odds"] - 1)
+    gain = 2000 * (6.0 - 1)                                             # toutes gagnées : la cote notée est payée telle quelle (plus de ratio sur la cote mini arrondie)
     assert row["result"] == "win" and abs(bankroll.played_gain(row) - gain) < 1e-6 and abs(money.gain(row) - gain) < 1e-6 and row["counted"], row
     assert bankroll.load()["bankroll"] == 100.0 and row["cur"] == "FCFA", bankroll.load()
     assert "1 gagné sur 1" in played.summary_lines({"combos": []}, [], [row])[0]
@@ -502,7 +502,7 @@ def test_settle_real_picks_and_unknown():
     assert row["src"] == "picks" and played.is_real(row) and [l["market"] for l in row["legs"]] == ["h2h"] * 4, row
     with Scores({}, default=(2, 0)):                                 # l'équipe à domicile gagne
         rows, _ = settle.settle_fair_combos(at(8, day=2))
-    assert rows[0]["result"] == "win" and abs(money.gain(rows[0]) - rows[0]["stake"] * (XB ** 4 - 1)) < 1e-6, rows[0]
+    assert rows[0]["result"] == "win" and abs(money.gain(rows[0]) - rows[0]["stake"] * (rows[0]["min_odds"] - 1)) < 1e-6, rows[0]          # toutes gagnées : la cote notée (le total arrondi à 2 décimales) est payée telle quelle
     # un pari que le règlement gratuit ne connaît pas : « non vérifiable », jamais gagné ni plantage
     reset()
     money.set_daily(5000)

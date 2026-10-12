@@ -204,9 +204,11 @@ def test_real_combo_gain():
     mini = fair_row(xodds=None)
     assert not played.is_real(mini) and money.gain(mini) is None
     mini["played"] = {"odds": mini["min_odds"], "stake": 1000}
-    assert abs(money.gain(mini) - 1000 * (1.6 * 1.55 * 1.55 - 1)) < 1e-6
+    assert abs(money.gain(mini) - 1000 * (mini["min_odds"] - 1)) < 1e-6                 # toutes gagnées : la cote notée est payée telle quelle (plus d'écart d'arrondi de la cote mini)
     mini["played"] = {"odds": 4.5, "stake": 1000}
-    assert abs(bankroll.played_gain(mini) - 1000 * (4.5 * (1.6 * 1.55 * 1.55) / mini["min_odds"] - 1)) < 1e-6
+    assert abs(bankroll.played_gain(mini) - 1000 * (4.5 - 1)) < 1e-6
+    mini_void = dict(mini, legs=[dict(mini["legs"][0], result="void")] + [dict(l, result="win") for l in mini["legs"][1:]])        # jambe annulée : cote recalculée sur les cotes exactes des jambes
+    assert abs(bankroll.played_gain(mini_void) - 1000 * (4.5 * (1.55 * 1.55) / (1.6 * 1.55 * 1.55) - 1)) < 1e-6
     # bilan en unités d'un combiné de bets.json noté : à la cote notée (E12)
     assert settle._gain({"stake": 2, "result": "win", "odds": 6.0, "played": {"odds": 5.0, "stake": 4}}) == 16.0
     assert settle._gain({"stake": 2, "result": "win", "odds": 6.0}) == 10.0

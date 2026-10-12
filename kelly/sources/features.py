@@ -45,8 +45,12 @@ def _p(name, mod):
             return have
     try:
         data = mod.profiles() or {}
-    except Exception:
-        data = {}
+    except Exception:                                   # noqa: BLE001 - une source en panne ne bloque pas les autres
+        data = None
+    if data is None or (doc and doc in store._unreadable):
+        # lecture ratée (exception, base illisible) : JAMAIS gardée en mémoire — la source reviendrait vide jusqu'à la prochaine écriture du document ;
+        # on rend les derniers bons profils s'il y en a, et on retente au prochain contrôle (RECHECK_SECONDS)
+        return have if have is not None else {}
     _cache[name] = data
     _sig[name] = (id(data), sig)
     return data

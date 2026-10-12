@@ -6,7 +6,10 @@ totale tombe dans la fourchette (programmation dynamique sur le log des cotes, u
 
 Plancher de qualité (config.LEG_*) : une jambe sans raison n'entre dans aucun combiné.
   valeur : proba x cote typique - 1 >= LEG_MIN_EDGE x (1 + FEW_BOOKS / nb de books)
-  stats  : le modèle d'avant-match (c["pm"]) voit au moins LEG_PM_GAP de proba de plus que les books
+  stats  : le modèle d'avant-match (c["pm"]) voit au moins LEG_PM_GAP de proba de plus que les books. Jamais sur une famille où l'ensemble
+           décide (config.ENSEMBLE_ACTIVE_FAMILIES : buts, 1N2, double chance, les 2 marquent, buts d'une équipe), sauf si l'ensemble valide
+           lui aussi le pari (ensemble.value) : les paris où le modèle s'écarte du marché y perdent 9 à 16 % ; jamais non plus sur un pari de
+           buts / 1N2 d'une ligue où le modèle mesuré ne vaut pas le marché (prematch.goal_weight = 0)
   sûr    : proba >= LEG_SAFE_PROB
 Réutilisation d'un match dans plusieurs combinés du jour : jambe sûre jusqu'à LEG_REUSE_MAX combinés, jambe risquée une fois.
 Espérance (proba x cote) : la marge du bookmaker se multiplie à chaque jambe. Un combiné sous C.COMBO_MIN_EV est rebâti avec les
@@ -14,8 +17,8 @@ seules jambes de valeur positive (espérance du produit >= 1) ; s'il n'y en a pa
 """
 import math
 
-from . import config as C, odds as O
-from .prematch import CARDS, CORNERS, mispriced
+from . import config as C, ensemble, odds as O
+from .prematch import CARDS, CORNERS, goal_weight, mispriced
 
 NEG = float("-inf")
 EPS = 1e-4                  # à probabilité égale, on préfère moins de jambes
@@ -42,6 +45,9 @@ def is_safe(c):
     return c["prob"] >= C.LEG_SAFE_PROB
 
 
+GOAL_PM_KINDS = ("goals", "btts", "h2h")            # c["pm"]["kind"] issus du modèle de buts (celui que tune.py mesure face au marché)
+
+
 def stats_signal(c):
     """Le modèle d'avant-match soutient le pari : écart de proba positif, ou avantage de buts attendus au 1N2."""
     pm = c.get("pm") or {}
@@ -50,17 +56,37 @@ def stats_signal(c):
     return pm.get("kind") == "h2h" and c.get("name") != "Draw" and (pm.get("xgd") or 0) >= C.LEG_XGD
 
 
+def stats_allowed(c):
+    """La raison « stats » est-elle recevable pour `c` ? Faux pour un pari de buts / 1N2 dont le modèle de buts est mesuré sans valeur dans sa ligue
+    (poids 0 : tune.py), et pour un pari d'une famille que l'ensemble décide, sauf si l'ensemble le valide aussi à la cote 1xBet (ensemble.value :
+    proba retenue x cote >= 1 + marge, sans veto) : c'est le désaccord modèle-marché qui perd, pas le signal."""
+    pm = c.get("pm") or {}
+    if pm.get("kind") in GOAL_PM_KINDS and goal_weight(c) <= 0:
+        return False
+    if ensemble.is_active(c["market"]):
+        if not c.get("xodds"):
+            return False
+        try:
+            return bool(ensemble.value(c)["ok"])
+        except Exception:                           # noqa: BLE001 - avis incomplets : l'ensemble ne valide pas
+            return False
+    return True
+
+
 def leg_reason(c):
     """« value » | « stats » | « safe » : la raison d'être de la jambe ; None si elle n'en a aucune (ou si un garde-fou la
     refuse : cote trop mal payée, modèle d'avant-match contre)."""
     # Garde-fou de marge : une jambe sûre a une petite cote, où la marge du bookmaker pèse plus lourd en pourcentage
     # (1,35 au lieu de 1,44 juste = -6 %) ; elle a donc droit à un plancher plus bas que les autres.
-    floor = C.LEG_SAFE_EDGE_FLOOR if is_safe(c) else C.LEG_EDGE_FLOOR
-    if c.get("edge", 0) < floor or (c.get("pm") or {}).get("pgap", 0) <= -C.LEG_PM_GAP:
+    edge = c.get("edge")
+    if edge is None:                                # pas de valeur calculée : pas de jambe (jamais un 0 inventé)
         return None
-    if c["edge"] >= C.LEG_MIN_EDGE * O.few_books_factor(c.get("n_books", 10)):
+    floor = C.LEG_SAFE_EDGE_FLOOR if is_safe(c) else C.LEG_EDGE_FLOOR
+    if edge < floor or (c.get("pm") or {}).get("pgap", 0) <= -C.LEG_PM_GAP:
+        return None
+    if edge >= C.LEG_MIN_EDGE * O.few_books_factor(c.get("n_books", 10)):
         return "value"
-    if stats_signal(c):
+    if stats_signal(c) and stats_allowed(c):
         return "stats"
     if is_safe(c):
         return "safe"

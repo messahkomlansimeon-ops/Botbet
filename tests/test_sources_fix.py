@@ -929,7 +929,7 @@ def test_free_close_uses_the_same_devig_as_the_take_probability():
         take = odds.shin_probs(prices)                                             # ce que build_picks met dans prob_book (consensus de books Shin)
         for k, name in enumerate(("Arsenal", "Draw", "Chelsea")):
             row = {"key": "r", "sport_key": "soccer_epl", "group": "soccer", "home": "Arsenal", "away": "Chelsea", "market": "h2h", "name": name,
-                   "point": None, "commence": "2026-10-11T15:00:00Z", "prob": take[k], "prob_book": take[k], "sent": False, "closed_at": None,
+                   "point": None, "commence": "2026-10-11T15:00:00Z", "prob": take[k], "prob_book": take[k], "prob_src": "pinnacle", "sent": False, "closed_at": None,
                    "clv": None, "result": None}
 
             class FD:

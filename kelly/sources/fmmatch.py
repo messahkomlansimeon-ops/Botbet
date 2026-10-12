@@ -36,6 +36,12 @@ NEVER_ZERO = ("throws", "shots")             # 0-0 sur ces stats = non suivie pa
 R_DAY, R_HOME, R_STATS = 0, 1, 2
 SOON_DAYS = 3                                # une équipe qui rejoue dans ce délai passe avant les autres
 _settle_pages = {"n": 0}
+# Réglages de ce module (config.py n'est pas touché ; chacun a sa variable d'environnement)
+RETRIES = http.env("FM_RETRIES", 3)                    # essais d'une page en échec ou sans statistiques encore publiées avant de la marquer « vue » pour de bon
+RETRY_GAP_H = http.env("FM_RETRY_GAP_H", 3.0)          # ... et écart minimal entre deux essais de la même page (heures)
+FRESH_DAYS = 1                                         # un match d'hier ou d'aujourd'hui sans statistiques est réessayé (elles se publient parfois avec retard) ; plus vieux : vu tout de suite
+RETRY_KEEP_DAYS = 4                                    # une marque d'essai plus vieille que ça est oubliée
+_neg = set()                                           # pages sans statistiques ou en échec déjà essayées DANS CE PROCESSUS : jamais retéléchargées (~1 Mo chacune)
 
 
 def _today():
@@ -109,6 +115,8 @@ def parse_match(html):
         st["cards"] = [raw["yc"][0] + (raw.get("rc") or [0, 0])[0], raw["yc"][1] + (raw.get("rc") or [0, 0])[1]]
     if len(st) == 1:
         return None
+    if not any(sum(st[k]) > 0 for k in ("shots", "sot", "corners", "fouls", "throws", "offsides") if k in st):      # que des zéros : match non suivi
+        return None
     return {"id": str(g.get("matchId") or ""), "d": str(g.get("matchTimeUTCDate") or "")[:10], "home": teams[0].get("name"),
             "away": teams[1].get("name"), "hid": str(teams[0].get("id")), "aid": str(teams[1].get("id")), "s": st}
 
@@ -135,7 +143,7 @@ def league_matches(sport_key):
 def load():
     d = store.load(FILE, {})
     d = d if isinstance(d, dict) else {}
-    for k in ("teams", "seen", "recent"):
+    for k in ("teams", "seen", "recent", "retry"):
         if not isinstance(d.get(k), dict):
             d[k] = {}
     return d
@@ -151,12 +159,37 @@ def save(d):
     d["seen"] = {k: v for k, v in d["seen"].items() if v >= floor}
     rcut = str(today - timedelta(days=C.FM_RECENT_DAYS))
     d["recent"] = {k: v for k, v in d["recent"].items() if v.get("d", "0") >= rcut}
+    old = state.clock() - RETRY_KEEP_DAYS * 86400
+    d["retry"] = {k: v for k, v in d["retry"].items() if isinstance(v, list) and len(v) == 2 and v[1] >= old}
     d["v"] = 1
     store.save(FILE, d, compact=True)
 
 
 def n_matches(t):
     return len((t or {}).get("m") or [])
+
+
+def mark_retry(d, mid, day, clock=None, failure=False):
+    """Une page lue sans statistiques (pas encore publiées) ou en échec : réessayée jusqu'à RETRIES fois, espacées de RETRY_GAP_H heures
+    (d["retry"][id] = [essais, instant]) ; au-delà, marquée « vue » pour de bon. Sans statistiques, seul un match d'hier / d'aujourd'hui est réessayé
+    (FRESH_DAYS : les chiffres se publient parfois avec retard), un plus ancien est vu tout de suite. `failure` : page en échec (réseau, HTTP, page
+    illisible) : réessayée quel que soit l'âge du match. -> True si marquée « vue »."""
+    clock = state.clock() if clock is None else clock
+    n = (d["retry"].get(mid) or [0, 0])[0] + 1
+    fresh = failure or str(day or "") >= str(_today() - timedelta(days=FRESH_DAYS))
+    if fresh and n < RETRIES:
+        d["retry"][mid] = [n, clock]
+        return False
+    d["seen"][mid] = _d2i(day or str(_today()))
+    d["retry"][mid] = [RETRIES, clock]                # marque gardée RETRY_KEEP_DAYS jours : match_stats (règlement) ne retélécharge pas une page sans statistiques
+    return True
+
+
+def waiting(d, mid, clock=None):
+    """La page du match `mid` a-t-elle été essayée (échec, ou sans statistiques) il y a moins de RETRY_GAP_H heures ? Alors on ne la retélécharge pas."""
+    clock = state.clock() if clock is None else clock
+    r = d["retry"].get(mid)
+    return bool(r and clock - r[1] < (RETRY_KEEP_DAYS * 86400 if r[0] >= RETRIES else RETRY_GAP_H * 3600))
 
 
 def record(d, m, sport_key):
@@ -240,7 +273,7 @@ def candidates(d, today=None):
         for m in done:
             for t in (m["hid"], m["aid"]):
                 per_team[t] = per_team.get(t, 0) + 1
-            if m["id"] in d["seen"] or m["id"] in ids:          # un match de coupe peut figurer dans deux ligues
+            if m["id"] in d["seen"] or m["id"] in ids or waiting(d, m["id"]):          # un match de coupe peut figurer dans deux ligues ; une page qui vient d'échouer attend
                 continue
             fresh = [t for t in (m["hid"], m["aid"]) if per_team[t] <= C.FM_KEEP_MATCHES]
             if not fresh:
@@ -291,7 +324,7 @@ def fill(max_pages=None, seconds=None):
         return rep | {"off": True}
     max_pages = C.FM_PAGES_PER_RUN if max_pages is None else max_pages
     deadline = time.monotonic() + (C.FM_SECONDS if seconds is None else seconds)
-    got_pages = []                                   # (clé de ligue, match, page lue | None si sans statistiques)
+    got_pages, failed_pages = [], []                 # (clé de ligue, match, page lue | None si sans statistiques) ; (match, nature de l'échec)
     try:
         with _locked():
             todo = candidates(load())
@@ -303,6 +336,7 @@ def fill(max_pages=None, seconds=None):
             got, err = _read_page(m["url"])
             if err:
                 rep["errors"].append(err)
+                failed_pages.append((m, http.failure_kind(err)))
                 if len(rep["errors"]) >= 3:
                     break
                 continue
@@ -311,23 +345,28 @@ def fill(max_pages=None, seconds=None):
     except store.LockTimeout:
         rep["errors"].append("verrou des données occupé : passage reporté")
     except Exception as e:                            # noqa: BLE001 - facultatif
-        rep["errors"].append(f"erreur interne ({type(e).__name__}: {e})")
+        rep["errors"].append(f"erreur interne ({http.err(e)})")
     d = None
-    if got_pages:                                     # rien de lu : rien à écrire (et pas d'attente du verrou pour rien)
+    # une page en échec (HTTP 4xx, illisible) ou une panne générale seulement si d'autres pages ont répondu : mémorisée, espacée, mise de côté après RETRIES essais
+    marks = [m for m, kind in failed_pages if kind == "specific" or (kind == "systemic" and got_pages)]
+    if got_pages or marks:                            # rien de lu, rien d'à retenir : rien à écrire (et pas d'attente du verrou pour rien)
         try:
             with _locked():
                 d = load()                            # rechargé : les commandes Telegram ont pu écrire entre-temps
                 for sk, m, got in got_pages:
-                    if got is None:                  # page sans statistiques : notée « vue » pour ne pas la relire
-                        d["seen"][m["id"]] = _d2i(m["d"] or str(_today()))
+                    if got is None:                  # page sans statistiques : réessayée si le match est d'hier / d'aujourd'hui (RETRIES essais), puis « vue »
+                        mark_retry(d, m["id"], m["d"])
                         continue
                     got["id"] = got["id"] or m["id"]
                     rep["added"] += record(d, got, sk)
+                    d["retry"].pop(m["id"], None)
+                for m in marks:
+                    mark_retry(d, m["id"], m["d"], failure=True)
                 save(d)
         except store.LockTimeout:
             rep["errors"].append(f"verrou des données occupé : {len(got_pages)} page(s) lue(s) perdue(s), relues au prochain passage")
         except Exception as e:                        # noqa: BLE001
-            rep["errors"].append(f"erreur interne ({type(e).__name__}: {e})")
+            rep["errors"].append(f"erreur interne ({http.err(e)})")
     return rep | summary(d or load())
 
 
@@ -357,21 +396,28 @@ def _find_recent(d, b):
 def match_stats(b):
     """Totaux du match d'un pari (touches, hors-jeu, fautes, corners, tirs, cartons), au format de stats.fixture_stats (« side » : par
     équipe) ; None si FotMob ne l'a pas. Lit d'abord les matchs déjà accumulés, sinon télécharge la page du match (au plus
-    FM_SETTLE_PAGES par passage, ligue mappée seulement)."""
+    FM_SETTLE_PAGES par passage, ligue mappée seulement). Une page sans statistiques (ou en échec) n'est PAS retéléchargée pour chaque pari ni à
+    chaque exécution : mémoire du processus (_neg) et marque durable dans le document (d["retry"], RETRIES essais espacés de RETRY_GAP_H heures,
+    puis « vue »)."""
     d = load()
     r = _find_recent(d, b)
     if r is None and _settle_pages["n"] < C.FM_SETTLE_PAGES:
         m = next((m for m in league_matches(b.get("sport_key", "")) if m["done"] and _same(m["home"], b["home"])
                   and _same(m["away"], b["away"]) and abs((datetime.fromisoformat(m["d"]) -
                                                             datetime.fromisoformat(b["commence"][:10])).days) <= 1), None)
-        if m:
+        if m and m["id"] not in _neg and not waiting(d, m["id"]):
             _settle_pages["n"] += 1
-            got, _ = _read_page(m["url"])
+            _neg.add(m["id"])
+            got, err = _read_page(m["url"])
             if got:
                 got["id"] = got["id"] or m["id"]
                 record(d, got, b.get("sport_key", ""))
+                d["retry"].pop(m["id"], None)
                 save(d)
                 r = d["recent"].get(got["id"])
+            elif not err or http.failure_kind(err) == "specific":      # page lue sans statistiques, ou page en échec propre au match : on s'en souvient
+                mark_retry(d, m["id"], m["d"], failure=bool(err))
+                save(d)
     if not r:
         return None
     s = r["s"]

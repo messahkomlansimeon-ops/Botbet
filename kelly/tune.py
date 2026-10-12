@@ -5,11 +5,14 @@ Deux paramètres écrits à la main sont mesurés ici, ligue par ligue (python b
 1. Demi-vie du modèle de force (strength.HALF_LIFE = 110 j). Pour chaque candidate de config.TUNE_HALF_LIVES, évaluation
    pas à pas (strength.walk : le modèle est réajusté sur le passé seulement) sur la dernière saison ; score = moyenne des
    log-loss du 1N2 et du plus de 2,5 buts, sur les matchs prédits par TOUTES les candidates (comparaison appariée). On garde
-   110 j sauf si une candidate fait mieux d'au moins config.TUNE_MARGIN (anti-bruit).
+   110 j sauf si une candidate fait mieux d'au moins config.TUNE_MARGIN (anti-bruit). La demi-vie se CHOISIT sur le début de la fenêtre de
+   test (config.TUNE_HL_SHARE, la moitié) ; le poids des buts (2.) se MESURE sur le reste, avec la demi-vie retenue : jamais les deux sur les mêmes
+   matchs (sinon le poids est optimiste, la demi-vie ayant déjà été choisie parce qu'elle allait bien sur ces matchs).
 2. Poids des buts face aux books (config.MODEL_WEIGHT["goals"] = 0,2). Proba mélangée = (1 - w) x books + w x modèle, avec
    la cote d'OUVERTURE du CSV (Pinnacle, sinon moyenne) sans marge (proportionnelle) comme proba des books et la proba du
    modèle walk-forward ; w de la grille 0, 0,05 ... 0,5 qui minimise le log-loss (1N2 + plus de 2,5 buts). Mesuré par ligue
-   puis rétréci vers le poids global (tous matchs confondus) selon le nombre de matchs. Corners et cartons : AUCUNE cote
+   puis rétréci vers le poids global (tous matchs confondus) selon le nombre de matchs. Ce poids est celui des BUTS (plus/moins) : il ne
+   s'applique ni aux 2 marquent (aucune cote historique de ce marché : poids de config, prematch.btts_weight) ni aux corners et cartons. Corners et cartons : AUCUNE cote
    historique dans les CSV, leurs poids de config sont inchangés (impossible à mesurer ici).
 
 Résultat dans data/tuning.json : {built, half_life: {div: jours}, goal_weight: {div: w, "_global": w}, report: {div: {...}}}.
@@ -193,15 +196,17 @@ def tune_div(div, matches, deadline=None):
         recs = {h: evaluate(ms, tf.isoformat(), h, deadline, div=div) for h in cands}
     finally:
         strength._names.clear()                                   # noms d'équipes résolus : propres à cette ligue
-    table = score_table(recs)
-    n = table[strength.HALF_LIFE]["n"]
+    size = min(len(r) for r in recs.values())
+    cut = max(1, min(size - 1, round(size * C.TUNE_HL_SHARE)))     # début du test : choix de la demi-vie ; fin : mesure du poids des buts
+    table = score_table({h: r[:cut] for h, r in recs.items()})
+    n = score_table(recs)[strength.HALF_LIFE]["n"]                # matchs prédits par toutes les demi-vies, test entier
     if n < C.TUNE_MIN_TEST:
         return {"skipped": f"trop peu de matchs de test prédits ({n} < {C.TUNE_MIN_TEST})"}
     chosen, gain, best = pick_half_life(table)
-    return {"n": n, "test_from": tf.isoformat(), "chosen": chosen, "gain": round(gain, 5), "best": best,
+    return {"n": n, "n_hl": table[strength.HALF_LIFE]["n"], "test_from": tf.isoformat(), "chosen": chosen, "gain": round(gain, 5), "best": best,
             "gain_best": round(table[strength.HALF_LIFE]["ll"] - table[best]["ll"], 5),
             "hl": {str(h): {k: round(v, 5) if k != "n" else v for k, v in t.items() if k != "n"} for h, t in table.items()},
-            "gw": weight_curves(recs[chosen]), "secs": round(clock() - t0, 1)}
+            "gw": weight_curves(recs[chosen][cut:]), "secs": round(clock() - t0, 1)}
 
 
 def _stamp():

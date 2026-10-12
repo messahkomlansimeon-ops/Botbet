@@ -25,12 +25,14 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from . import calib, combos as CB, config as C, fmt, odds as O, store, strength
-from .sources import xbet
+from .sources import http, xbet
 from .telegram import Html
 
 JOURNAL = "live.json"           # [{key, id, date, tranche, minute, score, home, away, sport_key, commence, market, name, point, p0, prob, px, xodds, result...}]
 CALIB_FILE = "live_calib.json"  # {"<famille>|<tranche>": [n, gagnés, somme des probas brutes]}
-KEEP_DAYS = 30
+KEEP_DAYS = 30                  # lignes réglées gardées N jours
+UNRESOLVED_DAYS = http.env("LIVE_UNRESOLVED_DAYS", 4)      # ligne sans résultat gardée N jours (le règlement du lendemain matin la règle ; settle l'« annule » après WAIT_DAYS = 3 jours)
+MAX_ROWS = http.env("LIVE_MAX_ROWS", 20000)                # plafond du journal (les plus anciennes lignes d'abord) : ~5 000 lignes par jour de relevés
 FIRST_HALF, SECOND_HALF = 0.45, 0.55          # part des buts d'un match par mi-temps
 HALF_1_LEN, HALF_2_LEN = 47.0, 49.0           # minutes jouées, temps additionnel compris
 RED_SELF, RED_OTHER = 0.70, 1.20              # buts attendus d'une équipe réduite à 10 (par carton rouge), et de son adversaire
@@ -77,7 +79,7 @@ def fetch(get=None):
         except xbet.XbetError as e:
             return [], str(e)
         except Exception as e:                      # noqa: BLE001
-            return [], f"{type(e).__name__}: {e}"
+            return [], http.err(e)
         finally:
             ses.close("liste live")
     value = data.get("Value") if isinstance(data, dict) else None
@@ -164,7 +166,7 @@ def model(m, key):
             return {"pred": {"lh": lh, "la": la, "n": n, "q": round(0.6 * min(1.0, min(n) / 10), 3), "src": "profils"}}
     if livedata.cup(m["league"]):                  # coupe / amical : des résultats de championnats différents ne se comparent pas
         return None
-    pred = livedata.pred_for(m["home"], m["away"], start=m.get("start"))
+    pred = livedata.pred_for(m["home"], m["away"], start=m.get("start"), league=m["league"])
     return {"pred": pred} if pred else None
 
 
@@ -293,15 +295,27 @@ def legs(raw, now=None, data=None, model_for=None):
 
 # ---------- journal et apprentissage à part ----------
 
+def prune(log, now):
+    """Journal sans les lignes réglées de plus de KEEP_DAYS jours, sans les lignes SANS résultat de plus de UNRESOLVED_DAYS jours (jamais réglées : match
+    introuvable, règlement en panne) ni le surplus au-delà de MAX_ROWS (les plus anciennes d'abord). -> nouvelle liste (la même si rien à retirer)."""
+    cut_done, cut_open = str((now - timedelta(days=KEEP_DAYS)).date()), str((now - timedelta(days=UNRESOLVED_DAYS)).date())
+    keep = [r for r in log if str(r.get("date")) >= (cut_open if r.get("result") is None else cut_done)]
+    if len(keep) > MAX_ROWS:
+        keep = sorted(keep, key=lambda r: str(r.get("date")))[-MAX_ROWS:]
+    return keep if len(keep) != len(log) else log
+
+
 def record(rows, now=None):
-    """Note les paris live évalués (un par match, marché, ligne, côté et tranche, une fois par jour) pour l'apprentissage live. -> nombre ajouté."""
+    """Note les paris live évalués (un par match, marché, ligne, côté et tranche, une fois par jour) pour l'apprentissage live. -> nombre ajouté.
+    Le journal est élagué (prune) et n'est réécrit que si une ligne est ajoutée ou retirée : un relevé qui n'apporte rien ne réécrit plus tout le fichier."""
     now = now or _now()
     day = str(now.date())
     log = store.load(JOURNAL, [])
     log = log if isinstance(log, list) else []
     have = {(r.get("date"), r.get("key"), r.get("tranche")) for r in log}
-    cut = str((now - timedelta(days=KEEP_DAYS)).date())
-    log = [r for r in log if str(r.get("date")) >= cut or r.get("result") is None]
+    before = len(log)
+    log = prune(log, now)
+    changed = len(log) != before
     n = 0
     for r in rows:
         k = (day, r["key"], r["tranche"])
@@ -311,14 +325,14 @@ def record(rows, now=None):
         log.append({x: r.get(x) for x in ("key", "id", "tranche", "minute", "score", "home", "away", "sport_key", "commence", "market", "name",
                                           "point", "who", "group", "p0", "prob", "px", "xodds", "src")} | {"date": day})
         n += 1
-    if n:
+    if n or changed:
         store.save(JOURNAL, log, compact=True)
     return n
 
 
 def settle(now=None, fdata=None, stats_for=None):
     """Règle le journal live (comme un pronostic : score final) et cumule la fiabilité par famille et par tranche dans live_calib.json, à part de
-    l'avant-match. -> (réglés, appris)."""
+    l'avant-match. -> (réglés, appris). Le journal n'est réécrit que si une ligne a changé (réglée, apprise ou élaguée)."""
     from . import settle as S
     now = now or _now()
     log = store.load(JOURNAL, [])
@@ -340,7 +354,9 @@ def settle(now=None, fdata=None, stats_for=None):
                 acc[2] = round(acc[2] + (r.get("p0") or r["prob"]), 4)
             r["calib"] = True
             learned += 1
-    store.save(JOURNAL, log, compact=True)
+    kept = prune(log, now)
+    if settled or learned or kept is not log:
+        store.save(JOURNAL, kept, compact=True)
     if learned:
         store.save(CALIB_FILE, data, compact=True)
     return settled, learned
@@ -375,7 +391,7 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
     try:
         record(seen, now)
     except Exception as e:                          # noqa: BLE001 - le journal ne bloque jamais la réponse
-        print(f"[live] journal non écrit : {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[live] journal non écrit : {http.err(e)}", file=sys.stderr)
     lo, hi = target, target * (1 + C.CUSTOM_TOLERANCE)
     from . import chat
     n_max, exact = nlegs or (None, False)
@@ -400,7 +416,7 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
     try:
         code = xbet.save_coupon(legs_)
     except Exception as e:                          # noqa: BLE001
-        print(f"[live] code coupon impossible : {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[live] code coupon impossible : {http.err(e)}", file=sys.stderr)
     lines = [fmt.b(f"🔴 COMBINÉ LIVE — cote {fmt.odds_txt(total)}"),
              f"🎯 {len(legs_)} paris · {fmt.pct(prob)} de chances · {fmt.expect(prob, total)}",
              fmt.stake_line(app._stake_words(stake, prob, total)), ""]

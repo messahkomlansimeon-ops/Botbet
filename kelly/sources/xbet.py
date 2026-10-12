@@ -17,6 +17,7 @@ Cartons : 1xBet ne compte que les jaunes (« Cartons jaunes ») alors que Kelly 
 import json
 import os
 import re
+from collections import namedtuple
 from contextlib import contextmanager
 import sys
 import time
@@ -30,6 +31,7 @@ SOURCE = "xbet"
 COUPON_BACKOFF = (2.0, 5.0, 10.0)   # attentes (s) avant chaque nouvel essai quand 1xBet refuse un code (refus intermittents) : 17 s au plus
 DOMAIN = "1xbet.ci"
 BASE = "https://" + DOMAIN
+http.register_source(DOMAIN, SOURCE)    # un POST (SaveCoupon) obéit aux mêmes blocages que les lectures : 403 / 429 / Cloudflare / vérification = source coupée 24 h
 FEED = BASE + "/service-api/main-line-feed/v3/"
 COMMON = {"fcountry": 96, "gr": 673, "lng": "fr", "ref": 286}
 JSON_H = {"Accept": "application/json"}
@@ -220,37 +222,50 @@ def find(ev, cands):
     return near[0] if len(near) == 1 else None
 
 
-def _cells(groups):
-    """Cellules jouables d'un gameEvents. Une cellule « blocked » (sous-match listé avant d'être ouvert, marché suspendu) a une cote
-    affichée mais n'est pas jouable dans l'appli : jamais un prix pour Kelly (pas de pari, pas de jambe de combiné, pas de coupon)."""
+def _iter_cells(groups):
+    """Toutes les cellules chiffrées (cf) d'un gameEvents -> (cellule, suspendue). Une cellule « blocked » (sous-match listé avant d'être ouvert, marché
+    SUSPENDU un moment) a une cote affichée mais n'est pas jouable dans l'appli."""
     for eg in groups if isinstance(groups, list) else []:
         for ev in (eg.get("events") if isinstance(eg, dict) else None) or []:
             for c in ev if isinstance(ev, list) else []:
-                if isinstance(c, dict) and c.get("cf") and not c.get("blocked"):
-                    yield c
+                if isinstance(c, dict) and c.get("cf"):
+                    yield c, bool(c.get("blocked"))
 
 
-def _ladder(groups, total, home, away, out, refs=None, gid=0):
+def _cells(groups):
+    """Cellules jouables d'un gameEvents : jamais un prix pour Kelly pour une cellule suspendue (pas de pari, pas de jambe de combiné, pas de coupon)."""
+    for c, blocked in _iter_cells(groups):
+        if not blocked:
+            yield c
+
+
+def _ladder(groups, total, home, away, out, refs=None, gid=0, blocked=None):
     """Plus/moins d'une famille (total du match, de l'équipe 1, de l'équipe 2) -> out[(marché, côté, ligne)] = cote.
-    `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] (GameId = sous-match statistique, pas le match)."""
-    for c in _cells(groups):
+    `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] (GameId = sous-match statistique, pas le match). `blocked` (si fourni) : ensemble
+    des clés SUSPENDUES (cote affichée, pas jouable pour l'instant)."""
+    for c, susp in _iter_cells(groups):
         side = T_TOTAL.get(c.get("type"))
         market = side and {"total": total, "home": home, "away": away}[side[0]]
         if market and c.get("parameter") is not None:
             p = float(c["parameter"])
+            if susp:
+                if blocked is not None:
+                    blocked.add((market, side[1], p))
+                continue
             out[(market, side[1], p)] = float(c["cf"])
             if refs is not None:
                 refs[(market, side[1], p)] = [gid, c.get("type"), p]
 
 
-def parse_main(data, home, away, refs=None, gid=0):
+def parse_main(data, home, away, refs=None, gid=0, blocked=None):
     """Marché principal (premier niveau de gameEvents) -> ({(marché Kelly, côté, ligne): cote}, {type de sous-match: id}).
-    `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] du pari (référence pour un ticket enregistré)."""
+    `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] du pari (référence pour un ticket enregistré). `blocked` (si fourni) : ensemble
+    des clés SUSPENDUES un moment par 1xBet (absentes du résultat, mais pas retirées de l'offre)."""
     out = {}
     names = {"home": home, "draw": "Draw", "away": away}
     dc = {"1X": f"{home} or Draw", "X2": f"Draw or {away}", "12": f"{home} or {away}"}
     groups = data.get("eventGroups") or []
-    for c in _cells(groups):
+    for c, susp in _iter_cells(groups):
         t, cf = c.get("type"), float(c["cf"])
         if t in T_1X2:
             key = ("h2h", names[T_1X2[t]], None)
@@ -260,10 +275,14 @@ def parse_main(data, home, away, refs=None, gid=0):
             key = ("btts", T_BTTS[t], None)
         else:
             continue
+        if susp:
+            if blocked is not None:
+                blocked.add(key)
+            continue
         out[key] = cf
         if refs is not None:
             refs[key] = [gid, t, 0]
-    _ladder(groups, "totals", "team_totals_home", "team_totals_away", out, refs, gid)      # buts du match, puis de chaque équipe (types 11 à 14)
+    _ladder(groups, "totals", "team_totals_home", "team_totals_away", out, refs, gid, blocked)      # buts du match, puis de chaque équipe (types 11 à 14)
     subs = {}
     for s in data.get("subGamesForMainGame") or []:
         if isinstance(s, dict) and s.get("gameTypeId") in SUBGAMES and not s.get("period") and s.get("id"):
@@ -305,19 +324,24 @@ def odds_time(gids):
     return min(ts) if ts else None
 
 
+Cell = namedtuple("Cell", "cf at blocked", defaults=(False,))      # cote, instant du relevé, cellule suspendue ; cf[0], cf[1] comme l'ancien couple
+
+
 def cached_cell(ref):
     """Cote 1xBet du pari `ref` ([GameId, Type, Param], c["xref"]) lue dans le CACHE du disque, sans aucune requête (alertes : pas de
-    données de proxy pour rien) -> (cote, instant du relevé) ; cote None = le relevé en cache ne propose plus ce pari ; None si le match
-    n'est pas en cache."""
+    données de proxy pour rien) -> Cell(cote, instant du relevé, suspendu) ; cote None = le relevé en cache ne propose plus ce pari (ABSENT) ;
+    suspendu vrai = le pari est listé mais 1xBet l'a suspendu un moment (cote affichée, pas jouable : pas « retiré ») ; None si le match n'est pas
+    en cache."""
     try:
         gid, typ, param = ref
         hit = http._read(http._key(_events_url(gid), JSON_H))
         if not hit:
             return None
-        for c in _cells(json.loads(hit[1]).get("eventGroups")):
+        at = hit[0].get("fetched_at")
+        for c, susp in _iter_cells(json.loads(hit[1]).get("eventGroups")):
             if c.get("type") == typ and float(c.get("parameter") or 0) == float(param or 0):
-                return float(c["cf"]), hit[0].get("fetched_at")
-        return None, hit[0].get("fetched_at")
+                return Cell(float(c["cf"]), at, susp)
+        return Cell(None, at, False)
     except (TypeError, ValueError, KeyError, AttributeError):
         return None
 
@@ -339,14 +363,16 @@ def prices(game, markets, home, away):
     référence 1xBet de chaque cote ([GameId, Type, Param], pour un ticket enregistré) dans game["refs"]."""
     data = _events(game["gid"])
     game["cid"] = data.get("constId")
-    out, subs = parse_main(data, home, away, refs := {}, game["gid"])
+    blocked = set()
+    out, subs = parse_main(data, home, away, refs := {}, game["gid"], blocked)
     for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}):
         if t in subs:
             try:
-                _ladder(_events(subs[t]).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t])
+                _ladder(_events(subs[t]).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t], blocked)
             except XbetError as e:                  # un sous-match (corners, tirs...) en erreur ne fait pas perdre le marché principal déjà lu
                 game.setdefault("errors", []).append(f"{home} - {away} (sous-match {SUBGAMES[t][0]}) : {e}")
     game["refs"] = refs
+    game["blocked"] = {k for k in blocked if k not in out}      # suspendus un moment : ni prix, ni « retirés » (alertes)
     return out
 
 
@@ -526,7 +552,7 @@ class _Session:
                 self.soft += 0 if hard else 1
                 http.PROXIES[DOMAIN] = nxt
                 self.trying = session_no(nxt)
-                print(f"[1xbet] proxy en panne ({e}) : essai de la session Webshare n° {self.trying}", file=sys.stderr)
+                print(f"[1xbet] proxy en panne ({http.scrub(e)}) : essai de la session Webshare n° {self.trying}", file=sys.stderr)
 
     def close(self, what):
         b, n = _save_usage(self.u, self.start, self.switched)
@@ -614,7 +640,7 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
             try:
                 px = ses.call(prices, g, (wanted or {}).get(ev["id"], ()), ev["home_team"], ev["away_team"])
                 out[ev["id"]] = {"gid": g["gid"], "px": px, "refs": g.get("refs"), "cid": g.get("cid"),
-                                 "home": g["home"], "away": g["away"]}
+                                 "home": g["home"], "away": g["away"], "blocked": g.get("blocked") or set()}
                 errors += g.get("errors") or []
                 fails = 0
             except Exception as e:                  # noqa: BLE001 - un match en échec (réseau, réponse inutilisable) ne fait perdre ni les autres ni le compte des données
@@ -662,7 +688,7 @@ def save_coupon(legs):
             else:
                 return None
     except Exception as e:                          # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
-        _coupon_fail(f"pari illisible ({type(e).__name__}: {e})", legs)
+        _coupon_fail(f"pari illisible ({http.err(e)})", legs)
         return None
     if not events:
         return None
@@ -687,30 +713,42 @@ def save_coupon(legs):
             raise XbetError(r.error)
         return r
     def attempt():
-        """Un enregistrement -> (code ou None, refus explicite de 1xBet : on peut réessayer). Raison d'un échec écrite au journal."""
+        """Un enregistrement -> (code ou None, refus passager de 1xBet : on peut réessayer). Raison d'un échec écrite au journal (avec le code HTTP)."""
         try:
             r = ses.call(post)
+            status = getattr(r, "status", None)
+            if r is not None and getattr(r, "blocked", False):
+                _coupon_fail(f"HTTP {status or '?'} {r.error or 'accès refusé'} : 1xBet coupé 24 h", legs)
+                return None, False                  # 403 / 429 / Cloudflare / vérification : la source est coupée (state.block), jamais d'insistance
             if not r or not r.ok or not r.content:
-                _coupon_fail(f"HTTP {getattr(r, 'status', '?')} {getattr(r, 'error', '') or 'réponse vide'}", legs)
+                _coupon_fail(f"HTTP {status or '?'} {getattr(r, 'error', '') or 'réponse vide'}", legs)
                 return None, False                  # coupure ou erreur réseau : le ticket a pu être créé, jamais renvoyé
-            data = json.loads(r.content)
+            try:
+                data = json.loads(r.content)
+            except ValueError:
+                _coupon_fail(f"HTTP {status or '?'} : réponse illisible (pas du JSON)", legs)
+                return None, False
+            if not isinstance(data, dict):
+                _coupon_fail(f"HTTP {status or '?'} : réponse inattendue ({type(data).__name__})", legs)
+                return None, False
             if not data.get("Success"):
                 _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
                                         ensure_ascii=False), legs)
                 attempt.why = _coupon_why(data)
-                return None, True
+                return None, data.get("ErrorCode") in COUPON_TRANSIENT      # seul un refus connu comme passager vaut un nouvel essai
             val = data.get("Value")
             if isinstance(val, str) and val.strip():
                 return val.strip(), False
             if isinstance(val, dict) and val.get("Guid"):
                 return str(val["Guid"]).strip(), False
             _coupon_fail("réponse sans code : " + str(val)[:200], legs)
-            return None, True
+            return None, False                      # Success vrai sans code : le ticket a pu être créé, jamais renvoyé
         except Exception as e:                      # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
-            _coupon_fail(f"{type(e).__name__}: {e}", legs)
+            _coupon_fail(http.err(e), legs)
         return None, False
     # refus intermittents de 1xBet (même ticket accepté quelques minutes plus tard) : nouveaux essais à attente croissante
-    # (COUPON_BACKOFF), seulement après un « non » explicite de 1xBet (Success false, réponse sans code) : aucun ticket n'a été créé
+    # (COUPON_BACKOFF), seulement après un « non » explicite ET connu comme passager (COUPON_TRANSIENT : ErrorCode 161627) : aucun ticket n'a été
+    # créé. Les autres refus (Success faux) sont définitifs, et un Success vrai n'est JAMAIS rejoué (le ticket peut exister).
     try:
         attempt.why, _notice.sent = "", False
         code, again = attempt()
@@ -730,6 +768,9 @@ def save_coupon(legs):
 
 
 COUPON_ERRORS = {161627: "panne passagère chez 1xBet"}     # ErrorCode de SaveCoupon -> raison en français (161627 : « Сбой вызова, попробуйте позже. »)
+
+
+COUPON_TRANSIENT = frozenset(COUPON_ERRORS)       # ErrorCode seuls réessayés (2, 5 puis 10 s) ; tout autre refus explicite est définitif
 
 
 def _coupon_why(data):
@@ -766,7 +807,7 @@ def _notice(text):
         _NOTICE(text)
         _notice.sent = True
     except Exception as e:                          # noqa: BLE001 - un message d'attente ne bloque jamais le code coupon
-        print(f"[1xbet] message d'attente non envoyé : {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[1xbet] message d'attente non envoyé : {http.err(e)}", file=sys.stderr)
 
 
 _notice.sent = False
@@ -775,7 +816,7 @@ _notice.sent = False
 def _coupon_fail(why, legs):
     """Journal d'un code coupon refusé par 1xBet : la raison donnée (sans identifiants du proxy) et les paris envoyés (match, type,
     ligne, cote), pour comprendre « pas de code » sans recréer de ticket. Ne lève jamais (références mal formées comprises)."""
-    why = re.sub(r"://[^@\s]*@", "://***@", str(why))[:400]
+    why = http.scrub(re.sub(r"://[^@\s]*@", "://***@", str(why)))[:400]
     try:
         refs = ", ".join(f"{(c.get('xref') or ['?'])[0]}/{(c.get('xref') or [0, '?'])[1]}/{(c.get('xref') or [0, 0, '?'])[2]}@{c.get('xodds')}"
                          for c in legs if isinstance(c, dict))

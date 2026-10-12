@@ -28,27 +28,44 @@ def real_legs(x):
     return bool(x.get("legs")) and all(leg.get("xodds") for leg in x["legs"])
 
 
+def _leg_odd(leg, real):
+    return (leg.get("xodds") or leg.get("odds")) if real else leg["min_odds"]
+
+
 def won_odds(x):
     """Cotes des jambes gagnées d'un combiné de fair_combos.json : la cote 1xBet de chacune pour un combiné réel (real_legs), sinon sa
     cote mini (le total « min_odds » est alors le produit des cotes mini)."""
     real = real_legs(x)
-    return [(leg.get("xodds") or leg.get("odds")) if real else leg["min_odds"] for leg in x["legs"] if leg.get("result") == "win"]
+    return [_leg_odd(leg, real) for leg in x["legs"] if leg.get("result") == "win"]
+
+
+def void_ratio(x):
+    """Part de la cote d'un combiné à vérifier qui survit aux jambes annulées : produit des cotes des jambes gagnées / produit des cotes de TOUTES les jambes.
+    Aucune jambe annulée (toutes gagnées) : 1 exactement. Le total x["min_odds"] est arrondi à 2 décimales (jusqu'à ~0,5 % d'écart sur la cote d'un
+    combiné gagné) : il ne sert plus que si la cote d'une jambe manque."""
+    legs = x["legs"]
+    if all(leg.get("result") == "win" for leg in legs):
+        return 1.0
+    real = real_legs(x)
+    try:
+        return math.prod(won_odds(x)) / math.prod(_leg_odd(leg, real) for leg in legs)
+    except (KeyError, TypeError, ZeroDivisionError):
+        return math.prod(won_odds(x)) / x["min_odds"]
 
 
 def played_gain(x):
     """Gain réel (FCFA : la mise notée) d'un pari noté et réglé. Jambes annulées : la cote 1xBet baisse dans la même proportion que la
     cote de référence (cote typique ; cote 1xBet des jambes gagnées pour un combiné aux cotes 1xBet, cote mini pour un combiné à
-    vérifier)."""
+    vérifier) ; sans jambe annulée, la cote notée est payée telle quelle (void_ratio)."""
     p = x["played"]
     if x["result"] == "loss":
         return -p["stake"]
     if x["result"] != "win":                        # push, void, unknown : mise rendue ou inconnue, rien ne bouge
         return 0.0
     if "legs" in x:                                 # combiné à vérifier chez 1xBet (data/fair_combos.json)
-        won = won_odds(x)
-        if not won:                                 # aucune jambe gagnée (anciennes lignes « win » à tort) : rien à payer
+        if not won_odds(x):                         # aucune jambe gagnée (anciennes lignes « win » à tort) : rien à payer
             return 0.0
-        ratio = math.prod(won) / x["min_odds"]
+        ratio = void_ratio(x)
     else:
         ratio = x.get("odds_final", x["odds"]) / x["odds"]
     return p["stake"] * (p["odds"] * ratio - 1)

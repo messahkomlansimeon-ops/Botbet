@@ -68,6 +68,12 @@ R_DAY, R_HOME, R_STATS = fmmatch.R_DAY, fmmatch.R_HOME, fmmatch.R_STATS
 MAX_ERRORS = 3                                 # erreurs d'affilée avant d'arrêter le passage
 MAX_PENDING = 1500
 RETRY_FRESH = 3                                # essais d'un match d'hier sans statistiques encore publiées
+# Réglages de ce module (config.py n'est pas touché ; chacun a sa variable d'environnement)
+GAME_FAIL_MAX = http.env("S365_GAME_FAILS", 3)            # échecs de lecture d'un même match avant de le mettre de côté (marqué « vu » : plus jamais demandé)
+GAME_FAIL_GAP_H = http.env("S365_GAME_FAIL_GAP_H", 6.0)   # ... et écart minimal entre deux essais d'un match en échec (heures)
+SEEN_DAYS = http.env("S365_SEEN_DAYS", 60)                # « vus » gardés : plus que la fenêtre de remplissage (S365_WINDOW_DAYS + 14), jamais redemandés dans l'intervalle
+MAX_SEEN = http.env("S365_MAX_SEEN", 20000)               # plafond de la liste des « vus » (les plus anciens d'abord)
+SETTLE_RESERVE = http.env("S365_SETTLE_RESERVE", 0.15)    # part du plafond mensuel (S365_MONTH_MB) gardée pour le règlement des paris : le remplissage et le live s'arrêtent avant
 
 # Clé de ligue Kelly -> id de championnat 365scores. Tous vérifiés le 9 octobre 2026 dans /search/ : sportId 1 (football), nom lu.
 COMPETITIONS = {
@@ -207,6 +213,17 @@ def _json(res):
     return d if isinstance(d, dict) else None
 
 
+def read_json(res, url=None):
+    """Objet JSON d'une réponse de http.fetch ; sinon None ET l'adresse (`url`, sinon res.url) est retirée du cache : une réponse 200 qui n'est pas du
+    JSON (page d'erreur, de vérification) ne doit pas être resservie pendant toute la durée du cache (12 h pour les listes du live)."""
+    data = _json(res) if res is not None and res.ok else None
+    if data is None and res is not None and res.ok and not getattr(res, "stale", False):
+        url = url or getattr(res, "url", None)
+        if url:
+            http.invalidate(url)
+    return data
+
+
 def _num(v):
     """Entier >= 0 d'un compte (« 15 » ; jamais « 53% » ni « 3/8 (38%) »), sinon None."""
     if isinstance(v, bool):
@@ -288,6 +305,8 @@ def parse_stats(payload, day=None):
         st["cards"] = [yc[hid] + rc.get(hid, 0), yc[aid] + rc.get(aid, 0)]
     if sum(1 for k in COUNT_KEYS if k in st) < MIN_STATS:
         return None
+    if not any(sum(st[k]) > 0 for k in COUNT_KEYS if k in st):       # que des zéros (match non suivi) : aucune moyenne ni règlement « moins de corners » ne s'en sert
+        return None
     return {"id": str(g.get("id") or ""), "d": day or str(g.get("startTime") or "")[:10], "hid": str(hid), "aid": str(aid), "s": st}
 
 
@@ -330,19 +349,24 @@ def load():
 
 
 def save(d):
-    """Écrit le fichier en oubliant les équipes non mises à jour depuis S365_KEEP_DAYS jours, les matchs « vus » trop vieux pour revenir, les
+    """Écrit le fichier en oubliant les équipes non mises à jour depuis S365_KEEP_DAYS jours, les matchs « vus » trop vieux pour revenir (SEEN_DAYS ;
+    la garantie « un match lu n'est jamais redemandé » vaut sur toute la fenêtre de remplissage, S365_WINDOW_DAYS), les
     matchs en attente plus vieux que la fenêtre (ou en trop : les plus anciens d'abord) et les listes d'un championnat qui n'est plus suivi."""
     today = _today()
     cut = str(today - timedelta(days=C.S365_KEEP_DAYS))
     d["teams"] = {k: v for k, v in d["teams"].items() if v.get("d", "0") >= cut and v.get("m")}
-    floor = _d2i(cut)
-    d["seen"] = {k: v for k, v in d["seen"].items() if v >= floor}
+    floor = _d2i(str(today - timedelta(days=max(SEEN_DAYS, C.S365_WINDOW_DAYS + 14))))
+    seen = {k: v for k, v in d["seen"].items() if v >= floor}
+    if len(seen) > MAX_SEEN:                                   # un match plus vieux que la fenêtre n'est de toute façon plus demandé
+        seen = dict(sorted(seen.items(), key=lambda kv: kv[1], reverse=True)[:MAX_SEEN])
+    d["seen"] = seen
     wcut = str(today - timedelta(days=C.S365_WINDOW_DAYS))
     pend = {k: v for k, v in d["pending"].items() if v.get("d", "0") >= wcut and k not in d["seen"]}
     if len(pend) > MAX_PENDING:
         pend = dict(sorted(pend.items(), key=lambda kv: kv[1]["d"], reverse=True)[:MAX_PENDING])
     d["pending"] = pend
     d["lists"] = {k: v for k, v in d["lists"].items() if k in COMPETITIONS}
+    d["lfail"] = {k: v for k, v in (d.get("lfail") or {}).items() if k in COMPETITIONS and state.clock() - v < 2 * GAME_FAIL_GAP_H * HOUR}
     rcut = str(today - timedelta(days=C.S365_RECENT_DAYS))
     d["recent"] = {k: v for k, v in d["recent"].items() if v.get("d", "0") >= rcut}
     d["v"] = 1
@@ -377,6 +401,7 @@ def record(d, m, key):
 def note_list(d, key, games, prev, mode, nt, now):
     """Range une liste lue (mode « first » : première page, « prev » : page plus ancienne) : état du championnat et matchs à lire."""
     L = d["lists"].setdefault(key, {})
+    d.get("lfail", {}).pop(key, None)
     days = sorted(g["d"] for g in games)
     if mode == "first":
         L["at"] = now
@@ -402,6 +427,18 @@ def _apply(d, op, today):
     """Rejoue une opération du passage sur le document `d` -> nombre de matchs neufs enregistrés."""
     if op[0] == "list":
         note_list(d, *op[1:])
+        return 0
+    if op[0] == "lfail":                                  # liste de résultats en échec : réessayée après GAME_FAIL_GAP_H heures (jamais abandonnée : le championnat en a besoin)
+        d.setdefault("lfail", {})[op[1]] = op[2]
+        return 0
+    if op[0] == "fail":                                   # lecture en échec : compteur durable ; GAME_FAIL_MAX échecs espacés = mis de côté (« vu »)
+        _, gid, clock = op
+        p = d["pending"].get(gid)
+        if p is not None:
+            p["f"], p["ft"] = p.get("f", 0) + 1, clock
+            if p["f"] >= GAME_FAIL_MAX:
+                d["seen"][gid] = _d2i(p["d"])
+                d["pending"].pop(gid, None)
         return 0
     _, gid, rec = op
     p = d["pending"].get(gid)
@@ -503,6 +540,9 @@ def due_lists(d, keys, covered=(), failed=(), clock=None):
         if key in failed:
             continue
         L = d["lists"].get(key)
+        ft = (d.get("lfail") or {}).get(key)
+        if ft is not None and clock - ft < GAME_FAIL_GAP_H * HOUR:        # liste en échec il y a peu : on passe à la suivante
+            continue
         if L is None:
             out.append(((0, 0, i), key, "first"))
         elif L.get("prev") and key not in covered and not _no_stats(L) and (L.get("old") or "") > cutoff:
@@ -512,12 +552,14 @@ def due_lists(d, keys, covered=(), failed=(), clock=None):
     return [(k, m) for _, k, m in sorted(out)]
 
 
-def targets(d, keys, covered=(), today=None, tried=()):
+def targets(d, keys, covered=(), today=None, tried=(), clock=None):
     """Matchs en attente à lire, du plus utile au moins utile. Un match est lu si l'une de ses équipes a moins de S365_TARGET_N matchs ou s'il
     date de moins de S365_FRESH_DAYS jours. Ordre : équipes sans profil utilisable (moins de APISTATS_MIN_N matchs), puis moins de
     APISTATS_GOOD_N, puis le reste ; à égalité le plus récent. Les championnats alternent (jamais un seul qui épuise le budget).
+    Un match déjà en échec n'est redemandé qu'après GAME_FAIL_GAP_H heures et passe après les autres : un match qui ne répond pas ne bloque plus la file.
     -> [id du match]."""
     today = today or _today()
+    clock = state.clock() if clock is None else clock
     cutoff = str(today - timedelta(days=C.S365_WINDOW_DAYS))
     fresh = str(today - timedelta(days=C.S365_FRESH_DAYS))
     ks = set(keys)
@@ -525,11 +567,13 @@ def targets(d, keys, covered=(), today=None, tried=()):
     for gid, p in d["pending"].items():
         if gid in d["seen"] or gid in tried or p["k"] not in ks or p["k"] in covered or p["d"] < cutoff:
             continue
+        if p.get("ft") and clock - p["ft"] < GAME_FAIL_GAP_H * HOUR:
+            continue
         low = min(n_matches(d["teams"].get(p["h"])), n_matches(d["teams"].get(p["a"])))
         if p["d"] < fresh and low >= C.S365_TARGET_N:
             continue
         bucket = 0 if low < C.APISTATS_MIN_N else (1 if low < C.APISTATS_GOOD_N else 2)
-        groups.setdefault(p["k"], []).append(((bucket, -_d2i(p["d"]), low), gid))
+        groups.setdefault(p["k"], []).append((((p.get("f") or 0) > 0, bucket, -_d2i(p["d"]), low), gid))
     order = sorted(groups, key=lambda k: min(groups[k])[0])
     for k in order:
         groups[k].sort()
@@ -583,7 +627,7 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
         seconds = C.S365_SECONDS if seconds is None else seconds
     deadline = time.monotonic() + seconds
     keys = [k for k in scope() if not leagues or k in leagues]
-    ops, failed, tried, errors = [], set(), set(), rep["errors"]
+    ops, failed, tried, errors, failed_games, failed_lists = [], set(), set(), rep["errors"], [], []
     wire0, used0, today, stop = _wire(), 0, _today(), []
     try:
         with _locked():
@@ -592,15 +636,21 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
         used0 = _used_today(work)
 
         def room():
-            """Vrai s'il reste du temps et des requêtes (passage, jour) et que rien n'a arrêté le passage."""
+            """Vrai s'il reste du temps et des requêtes (passage, jour, mois) et que rien n'a arrêté le passage."""
             made = _wire() - wire0
             if stop or time.monotonic() > deadline or state.is_blocked(NAME):
+                return False
+            if month_left() is not None and month_left() <= 0:
+                stop.append("plafond mensuel atteint")
+                errors.append("plafond mensuel atteint : passage arrêté")
                 return False
             if backfill:
                 return max_requests is None or made < max_requests
             return used0 + made < C.S365_DAILY
 
         streak = [0]                                      # erreurs D'AFFILÉE : un 504 passager de temps en temps n'arrête pas un long rattrapage
+        good = [0]                                        # lectures réussies du passage : preuve que le réseau marche (un échec « systémique » ne compte alors que pour son match)
+        last_fail = [("", None)]                          # (erreur, code HTTP) de la dernière lecture en échec
 
         def get(url, ttl):
             res = http.fetch(url, NAME, ttl)
@@ -610,8 +660,10 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
                 stop.append(res.error)
             if res.ok and not res.stale:
                 streak[0] = 0
+                good[0] += 1
                 return res
             errors.append(res.error or "réponse vide")
+            last_fail[0] = (res.error, res.status)
             streak[0] += 1
             if streak[0] >= MAX_ERRORS:
                 stop.append("trop d'erreurs")
@@ -629,13 +681,15 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
                 continue
             rep["lists"] += 1
             res = get(url, 6 * HOUR)
-            payload = _json(res) if res else None
-            if res and (payload is None or not isinstance(payload.get("games"), list)):
+            payload = read_json(res) if res else None
+            unreadable = bool(res) and (payload is None or not isinstance(payload.get("games"), list))
+            if unreadable:
                 errors.append(f"{key} : réponse illisible")
                 http.invalidate(url)
                 res = None
             if res is None:
                 failed.add(key)
+                failed_lists.append((key, "specific" if unreadable else http.failure_kind(*last_fail[0])))
                 continue
             games, prev = parse_results(payload, key)
             teams = {t for g in games for t in (g["hid"], g["aid"])}
@@ -653,12 +707,14 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
             url = stats_url(gid)
             rep["games"] += 1
             res = get(url, http.FOREVER)
-            if res is None:
+            if res is None:                               # HTTP en erreur, réponse vide : le match garde son compteur d'échecs (sinon il resterait en tête de file)
+                failed_games.append((gid, http.failure_kind(*last_fail[0])))
                 continue
             payload = _json(res)
             http.invalidate(url)                          # 7 à 20 Ko par match : le document garde le résultat, pas la réponse brute
             if payload is None or not isinstance(payload.get("statistics"), list):
                 errors.append(f"match {gid} : réponse illisible")
+                failed_games.append((gid, "specific"))
                 continue
             got = parse_stats(payload, p["d"])
             rec = None
@@ -667,11 +723,17 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
             op = ("game", gid, rec)
             ops.append(op)
             _apply(work, op, today)
+        for key, kind in failed_lists:
+            if kind == "specific" or (kind == "systemic" and good[0] > 0):
+                ops.append(("lfail", key, state.clock()))
+        for gid, kind in failed_games:                    # échec propre au match, ou panne générale seulement si le reste du passage a marché
+            if kind == "specific" or (kind == "systemic" and good[0] > 0):
+                ops.append(("fail", gid, state.clock()))
         rep["left"] = len(targets(work, keys, covered, today, tried))
     except store.LockTimeout:
         errors.append("verrou des données occupé : passage reporté")
     except Exception as e:                                # noqa: BLE001 - facultatif
-        errors.append(f"erreur interne ({type(e).__name__}: {e})")
+        errors.append(f"erreur interne ({http.err(e)})")
     rep["requests"] = _wire() - wire0
     d = None
     if ops or rep["requests"]:                            # rien de lu, aucune requête : rien à écrire (et pas d'attente du verrou pour rien)
@@ -687,8 +749,8 @@ def _fill(max_games=None, max_lists=None, seconds=None, backfill=False, max_requ
         except store.LockTimeout:
             errors.append(f"verrou des données occupé : {len(ops)} lecture(s) perdue(s), refaites au prochain passage")
         except Exception as e:                            # noqa: BLE001
-            errors.append(f"erreur interne ({type(e).__name__}: {e})")
-    if stop and stop[0] != "trop d'erreurs":
+            errors.append(f"erreur interne ({http.err(e)})")
+    if stop and stop[0] not in ("trop d'erreurs", "plafond mensuel atteint"):
         rep["blocked"] = state.is_blocked(NAME)
     return rep | summary(d or load())
 
@@ -708,8 +770,19 @@ def usage_line(u=None):
     return f"365scores via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois ({u['requests']} requêtes), plafond {C.S365_MONTH_MB:.0f} Mo"
 
 
+_BUDGET = {}      # pendant _via_proxy : {"limit": octets du mois permis à ce bloc, "base": octets déjà comptés, "wire0": WIRE au départ}
+
+
+def month_left():
+    """Octets du mois encore permis au bloc _via_proxy en cours (plafond S365_MONTH_MB, moins la réserve du règlement hors règlement), compteur
+    RELU pendant le passage ; None hors _via_proxy (aucun plafond à appliquer). <= 0 : arrêter."""
+    if not _BUDGET:
+        return None
+    return _BUDGET["limit"] - _BUDGET["base"] - (http.WIRE.get(HOST, {"bytes": 0})["bytes"] - _BUDGET["wire0"])
+
+
 @contextmanager
-def _via_proxy():
+def _via_proxy(settle=False):
     """Les requêtes 365scores de ce bloc passent par le proxy Webshare de 1xBet (même fichier XBET_PROXY, même session collante que le dernier
     relevé 1xBet qui a répondu), dans le plafond C.S365_MONTH_MB, compté dans data/s365_usage.json. Jamais de changement de session pour
     contourner un refus : un 403/429 coupe la source 24 h (http.fetch). Donne None si tout est prêt, sinon la raison de ne rien lire (proxy
@@ -725,14 +798,20 @@ def _via_proxy():
     if not url:
         yield "proxy introuvable (XBET_PROXY) : 365scores n'est pas lu en direct (S365_PROXY=0 pour la connexion directe)"
         return
-    if usage()["bytes"] >= C.S365_MONTH_MB * 1e6:
-        yield f"plafond mensuel atteint ({usage_line()}) : rien lu"
+    limit = C.S365_MONTH_MB * 1e6 * (1.0 if settle else 1.0 - SETTLE_RESERVE)      # le règlement des paris peut aller jusqu'au bout ; le reste garde sa réserve
+    used = usage()["bytes"]
+    if used >= limit:
+        yield f"plafond mensuel atteint ({usage_line()}{'' if settle else ', dont ' + format(SETTLE_RESERVE, '.0%') + ' gardés pour le règlement'}) : rien lu"
         return
     start = dict(http.WIRE.get(HOST, {"bytes": 0, "requests": 0}))
     http.PROXIES[HOST] = url
+    prev = dict(_BUDGET)
+    _BUDGET.update(limit=limit, base=used, wire0=start["bytes"])
     try:
         yield None
     finally:
+        _BUDGET.clear()
+        _BUDGET.update(prev)
         http.PROXIES.pop(HOST, None)
         http._sessions.pop(HOST, None)
         w = http.WIRE.get(HOST, {"bytes": 0, "requests": 0})
@@ -767,7 +846,7 @@ def match_stats(b):
     """_match_stats (règlement d'un pari) ; ses rares lectures passent par le proxy comme le remplissage, sinon seulement ce qui est déjà lu."""
     if not C.S365_PROXY or not enabled() or kcache.OFFLINE or state.is_blocked(NAME):
         return _match_stats(b)
-    with _via_proxy() as why:
+    with _via_proxy(settle=True) as why:
         return _match_stats(b, net=not why)
 
 
@@ -778,7 +857,7 @@ def fill_safe(**kw):
         print("[s365] " + report_line(rep) + (f" · {usage_line()}" if C.S365_PROXY else ""), file=sys.stderr)
         return rep
     except Exception as e:                                # noqa: BLE001 - facultatif
-        print(f"[s365] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[s365] ignoré : {http.err(e)}", file=sys.stderr)
         return None
 
 
@@ -825,7 +904,8 @@ def _match_stats(b, net=True):
     hors ligne, jamais source bloquée. Ne lève jamais pour une réponse illisible."""
     d = load()
     r = next((r for r in d["recent"].values() if _is(r.get("h"), r.get("a"), r.get("d"), r.get("sk"), b)), None)
-    if r is None and net and enabled() and not kcache.OFFLINE and not state.is_blocked(NAME) and _settle["n"] < C.S365_SETTLE_REQUESTS:
+    if (r is None and net and enabled() and not kcache.OFFLINE and not state.is_blocked(NAME) and _settle["n"] < C.S365_SETTLE_REQUESTS
+            and (month_left() is None or month_left() > 0)):
         for gid, p in d["pending"].items():
             if not _is(p.get("hn"), p.get("an"), p.get("d"), p.get("k"), b):
                 continue
@@ -833,7 +913,7 @@ def _match_stats(b, net=True):
             url = stats_url(gid)
             res = http.fetch(url, NAME, http.FOREVER)
             http.invalidate(url)
-            payload = _json(res) if res.ok and not res.stale else None
+            payload = read_json(res) if res.ok and not res.stale else None
             got = parse_stats(payload, p["d"]) if payload else None
             if got and got["id"] == gid and got["hid"] == p["h"] and got["aid"] == p["a"]:
                 record(d, got | {"k": p["k"], "hn": p["hn"], "an": p["an"], "hl": p.get("hl"), "al": p.get("al")}, p["k"])

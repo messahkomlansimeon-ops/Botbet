@@ -90,9 +90,10 @@ def _chunks(text, size=4000):
 
 
 class TelegramError(Exception):
-    def __init__(self, msg, code=None):
+    def __init__(self, msg, code=None, maybe_sent=False):
         super().__init__(msg)
         self.code = code
+        self.maybe_sent = maybe_sent        # envoi dont l'issue est INCONNUE (délai de lecture, coupure en route) : Telegram a peut-être déjà livré le message
 
 
 def creds():
@@ -133,7 +134,8 @@ def api(method, http_timeout=40, **payload):
                 r = _session.post(f"https://api.telegram.org/bot{token}/{method}", json=payload,
                                   timeout=(CONNECT_TIMEOUT, http_timeout))
         except requests.RequestException as e:
-            raise TelegramError(f"réseau : {_scrub(e)}") from None
+            # un envoi (send*) qui a pu partir avant l'erreur (délai de lecture, coupure en route) a peut-être été livré : jamais remis en attente ni renvoyé
+            raise TelegramError(f"réseau : {_scrub(e)}", maybe_sent=method.startswith("send") and not _not_sent(e)) from None
         try:
             body = r.json()
         except ValueError:
@@ -149,7 +151,11 @@ def api(method, http_timeout=40, **payload):
 
 
 def _transient(e):
-    """Panne passagère (réseau, 429, 5xx) : le message vaut d'être remis plus tard. Un 400 (message mal formé, chat inconnu) ne passera jamais."""
+    """Panne passagère (réseau, 429, 5xx) : le message vaut d'être remis plus tard. Un 400 (message mal formé, chat inconnu) ne passera jamais. Un envoi
+    dont l'issue est inconnue (e.maybe_sent : délai de lecture sur sendMessage) n'est PAS rejouable : le message est peut-être déjà chez toi, le remettre
+    en attente le doublerait (le message du matin deux fois)."""
+    if getattr(e, "maybe_sent", False):
+        return False
     return e.code is None or e.code == 429 or e.code >= 500
 
 
@@ -204,7 +210,12 @@ def _send_one(text, chat_id=None, queue=True):
         except TelegramError as e:
             LAST_ERROR = f"{e} (code {e.code})" if e.code else str(e)
             print(f"[telegram] envoi échoué : {LAST_ERROR}", file=sys.stderr)
-            if queue and _transient(e):
+            if e.maybe_sent:                                      # issue inconnue : ce morceau n'est pas remis en attente (doublon possible), les suivants le sont
+                print("[telegram] délai sans réponse : le message a peut-être été livré, il n'est pas renvoyé", file=sys.stderr)
+                if queue and parts[i + 1:]:
+                    _last_fail[0] = time.monotonic()
+                    _enqueue(parts[i + 1:], is_html, markup, explicit)
+            elif queue and _transient(e):
                 _last_fail[0] = time.monotonic()
                 _enqueue(parts[i:], is_html, markup, explicit)
             return False
@@ -243,6 +254,11 @@ def flush_outbox():
                 raise TelegramError("TELEGRAM_CHAT_ID absent")
             _deliver(text, e.get("html"), e.get("markup"), target)
         except TelegramError as err:
+            if err.maybe_sent:                       # issue inconnue : abandonné plutôt que doublé (note sur stderr), la suite continue
+                print(f"[telegram] message en attente sans réponse (peut-être livré), abandonné : {err}", file=sys.stderr)
+                _last_fail[0] = time.monotonic()
+                keep.pop(0)
+                continue
             if _transient(err) or not target:
                 _last_fail[0] = time.monotonic()
                 print(f"[telegram] renvoi des messages en attente échoué : {err}", file=sys.stderr)

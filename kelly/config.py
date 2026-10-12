@@ -347,6 +347,7 @@ TUNE_MARGIN = _float("TUNE_MARGIN", 0.002)        # gain de log-loss (moyenne 1N
 TUNE_WEIGHT_STEP = 0.05                           # grille du poids des buts : 0, 0,05 ... 0,5
 TUNE_WEIGHT_MAX = 0.5
 TUNE_WEIGHT_ON = (os.environ.get("TUNE_WEIGHT_ON") or "ou25").strip().lower()   # marchés qui fixent le poids : ou25 (le mélange ne sert qu'aux buts), both (1N2 + plus de 2,5), 1x2
+TUNE_HL_SHARE = min(0.9, max(0.1, _float("TUNE_HL_SHARE", 0.5)))   # part (début) de la fenêtre de test qui CHOISIT la demi-vie ; le poids des buts se mesure sur le reste (pas de double usage)
 TUNE_SHRINK_N = _float("TUNE_SHRINK_N", 600)      # matchs à partir desquels le poids d'une ligue pèse autant que le poids global
 PLAYER_MINUTES = 85        # minutes attendues d'un titulaire régulier (tirs/90 -> tirs du match)
 SOT_RATIO = 0.35           # tirs cadrés ~ 35 % des tirs, si seul le nombre de tirs est connu (FBref bloqué)
@@ -398,7 +399,7 @@ LIVE_PREP_SECONDS = _int("LIVE_PREP_SECONDS", 420)  # durée maximale de la pré
 LIVE_PREP_AHEAD_H = _float("LIVE_PREP_AHEAD_H", 4)  # matchs commencés depuis moins de 2 h ou qui commencent dans les N prochaines heures
 LIVE_PREP_LIST_H = _float("LIVE_PREP_LIST_H", 6)    # la liste des matchs du jour (~180 Ko) est relue au plus toutes les N heures
 LIVE_PREP_GAMES = _int("LIVE_PREP_GAMES", 10)       # derniers matchs d'une équipe utilisés pour ses buts attendus
-LIVE_PREP_HISTORY = _int("LIVE_PREP_HISTORY", 40)   # matchs gardés EN BASE par équipe (historique cumulé à chaque lecture, jamais effacé)
+LIVE_PREP_HISTORY = _int("LIVE_PREP_HISTORY", 40)   # matchs gardés EN BASE par équipe (historique cumulé à chaque lecture ; équipe purgée après LIVE_PREP_PURGE_DAYS jours sans relecture)
 LIVE_MATCH_MIN = _int("LIVE_MATCH_MIN", 20)         # un match 1xBet et un match 365scores sont le même si leurs coups d'envoi sont à N min près (et les noms plausibles)
 LIVE_PREP_KEEP_DAYS = _int("LIVE_PREP_KEEP_DAYS", 3)   # une équipe préparée n'est pas relue avant N jours (son historique reste en base)
 MAX_LEGS = _int("MAX_LEGS", 25)            # simple borne de sécurité, pas un réglage de jeu
@@ -487,10 +488,20 @@ CLOSE_WINDOW_MIN = 90      # relevé de clôture : matchs qui démarrent dans le
 TRACK_KEEP_DAYS = _int("TRACK_KEEP_DAYS", 180)   # jours gardés dans tracked.json (réglés plus anciens : data/archive/tracked-AAAA.json)
 TRACK_TOP = 50             # paris fantômes suivis par jour (en plus des envoyés)
 LEARN_MIN_ROWS = 40        # lignes avec clôture avant d'entraîner un modèle
+# Porte d'adoption du modèle CLV (learn.train_clv) : test hors échantillon seulement (jamais sur les lignes d'apprentissage), assez gros pour ne pas
+# être un coup de chance, et un modèle qui bat l'heuristique d'une MARGE (en CLV : 0,002 = 0,2 point), pas d'un cheveu.
+LEARN_MIN_TEST_ROWS = _int("LEARN_MIN_TEST_ROWS", 30)      # lignes de test au minimum
+LEARN_MIN_TRAIN_DAYS = _int("LEARN_MIN_TRAIN_DAYS", 3)     # jours d'apprentissage au minimum avant le test
+LEARN_MIN_TEST_DAYS = _int("LEARN_MIN_TEST_DAYS", 5)       # jours distincts de test au minimum (les lignes d'un même jour sont corrélées)
+LEARN_OOS_MARGIN = _float("LEARN_OOS_MARGIN", 0.002)       # oos_modèle doit dépasser oos_heuristique de cette marge
+LEARN_OOS_Z = _float("LEARN_OOS_Z", 1.5)                   # ... et d'au moins N erreurs-types (écarts quotidiens du test) : 5 jours de test ne séparent pas un écart de bruit
+LEARN_RARE_MIN = _int("LEARN_RARE_MIN", 5)                 # marché / bookmaker / groupe vu moins de N fois : regroupé dans « other »
 FREE_CLOSE_DAYS = 10       # cote finale gratuite (football-data, BetExplorer) des paris fantômes : matchs des 10 derniers jours
 FREE_CLOSE_WEIGHT = 0.6    # poids d'une cote finale gratuite dans l'apprentissage, face à un vrai relevé de clôture (1)
 CALIB_MIN_ROWS = 300       # résultats réglés par famille avant de calibrer
-RIDGE_LAMBDA = 1.0
+RIDGE_LAMBDA = 1.0         # pénalité ridge PAR variable : lambda = RIDGE_LAMBDA x nombre de variables (30 variables sur 32 lignes ne s'interpolent plus)
+CALIB_FOLDS = _int("CALIB_FOLDS", 5)                       # calibration : validation croisée par blocs de jours (hors échantillon) avant d'activer
+CALIB_OOS_MARGIN = _float("CALIB_OOS_MARGIN", 0.0005)      # gain de Brier hors échantillon exigé pour activer la correction
 TOP_BOOKS = 12             # bookmakers encodés individuellement
 # Amorçage de l'apprentissage par l'historique football-data (cotes d'ouverture vs clôture, kelly/bootstrap.py).
 BOOT_SEASONS = _int("BOOT_SEASONS", 3)   # saisons passées en plus de la saison en cours
@@ -540,7 +551,7 @@ STATS_NEG_MINUTES = _float("STATS_NEG_MINUTES", 20)
 #   ENSEMBLE_ACTIVE_FAMILIES   familles où l'ensemble décide (« goals,h2h,dc,btts » ; « none » : aucune, mode fantôme seulement)
 #   ENSEMBLE_LOG=0             plus de journal des avis ni d'apprentissage (décisions et affichage inchangés)
 ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", True)
-ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts"))
+ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts", "team_goals"))   # team_goals = buts d'une équipe (Poisson seul : jamais décidé par le modèle seul)
 ENSEMBLE_LOG = _bool("ENSEMBLE_LOG", True)
 ENSEMBLE_MARGIN = _float("ENSEMBLE_MARGIN", 0.03)             # valeur : cote 1xBet x proba retenue >= 1 + marge
 ENSEMBLE_REQUIRE_MARKET = _bool("ENSEMBLE_REQUIRE_MARKET", True)  # vrai : pas de valeur sans AU MOINS un avis de marché (sharp ou 1xBet sans marge), dans toutes les familles
@@ -548,7 +559,7 @@ ENSEMBLE_MAX_DISAGREE = _float("ENSEMBLE_MAX_DISAGREE", 0.12)  # veto : |proba d
 ENSEMBLE_VETO_WEIGHT = _float("ENSEMBLE_VETO_WEIGHT", 0.7)    # le veto vaut quand le poids du marché est >= à ce seuil
 # Poids a priori du MODÈLE face au marché, par famille (calib.family) : buts / 1N2 / les 2 marquent / double chance : le marché pèse 85 à 90 % ;
 # corners, cartons, tirs, fautes, touches, hors-jeu : aucune mesure fiable, moitié-moitié avec la cote 1xBet. « ENSEMBLE_PRIOR_MODEL=goals=0.1,... »
-ENSEMBLE_PRIOR_MODEL = {k: min(1.0, v) for k, v in _shares("ENSEMBLE_PRIOR_MODEL", {"goals": 0.12, "btts": 0.12, "dc": 0.12, "h2h": 0.12}).items()}
+ENSEMBLE_PRIOR_MODEL = {k: min(1.0, v) for k, v in _shares("ENSEMBLE_PRIOR_MODEL", {"goals": 0.12, "btts": 0.12, "dc": 0.12, "h2h": 0.12, "team_goals": 0.12}).items()}
 ENSEMBLE_PRIOR_OTHER = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_OTHER", 0.5)))   # famille sans a priori propre
 ENSEMBLE_PRIOR_SHARP = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_SHARP", 0.75)))  # part du « sharp » dans l'avis du marché quand sharp ET 1xBet existent
 ENSEMBLE_SHARP_MAX_AGE_MIN = _int("ENSEMBLE_SHARP_MAX_AGE_MIN", 180)   # une proba sharp plus vieille (min) n'entre plus dans l'ensemble ; âge inconnu : acceptée
@@ -556,13 +567,15 @@ ENSEMBLE_X_MARGIN = _float("ENSEMBLE_X_MARGIN", 0.05)         # marge supposée 
 # Apprentissage (par famille) : posterior bayésien sur une grille de poids, a priori Beta centré sur le poids a priori et d'écart-type
 # ENSEMBLE_PRIOR_SD (petit = rappel fort : buts / 1N2 / 2 marquent / double chance, où l'audit a mesuré ; grand : familles non mesurées). Rien ne
 # bouge avant ENSEMBLE_MIN_N pronostics réglés (avec les deux avis) ; le passage est progressif sur ENSEMBLE_MIN_N de plus.
-ENSEMBLE_PRIOR_SD = {k: max(0.01, v) for k, v in _shares("ENSEMBLE_PRIOR_SD", {"goals": 0.07, "btts": 0.07, "dc": 0.07, "h2h": 0.07}).items()}
+ENSEMBLE_PRIOR_SD = {k: max(0.01, v) for k, v in _shares("ENSEMBLE_PRIOR_SD", {"goals": 0.07, "btts": 0.07, "dc": 0.07, "h2h": 0.07, "team_goals": 0.07}).items()}
 ENSEMBLE_PRIOR_SD_OTHER = max(0.01, _float("ENSEMBLE_PRIOR_SD_OTHER", 0.20))   # écart-type a priori du poids du modèle ailleurs
 ENSEMBLE_PRIOR_SD_SHARP = max(0.01, _float("ENSEMBLE_PRIOR_SD_SHARP", 0.15))   # écart-type a priori de la part du sharp (ws)
 ENSEMBLE_MIN_N = _float("ENSEMBLE_MIN_N", 100)
 ENSEMBLE_HALF_LIFE = _float("ENSEMBLE_HALF_LIFE", 2000)       # oubli exponentiel : un résultat compte moitié moins après autant de résultats
 ENSEMBLE_TEMP = _float("ENSEMBLE_TEMP", 0.5)                  # vraisemblance atténuée : lignes d'un même match corrélées, choix non aléatoire
 ENSEMBLE_LOG_DAYS = _int("ENSEMBLE_LOG_DAYS", 10)             # jours gardés dans data/ensemble_log.json (avis en attente de règlement)
+ENSEMBLE_LOG_LEARNED_DAYS = _int("ENSEMBLE_LOG_LEARNED_DAYS", 2)   # une ligne réglée ET apprise ne reste que N jours dans le journal (le cumul de data/ensemble.json la résume)
+ENSEMBLE_LOG_MAX_ROWS = _int("ENSEMBLE_LOG_MAX_ROWS", 4000)    # plafond de lignes du journal : les apprises, puis les réglées, puis les plus vieilles partent d'abord
 # Écarts « sharp » (kelly/sharpgap.py) : cote 1xBet payée au-dessus de la cote juste des books de référence.
 SHARPGAP_EDGE = _float("SHARPGAP_EDGE", 0.03)                 # écart minimal : cote 1xBet x proba sharp - 1
 SHARPGAP_MAX_EDGE = _float("SHARPGAP_MAX_EDGE", 0.25)         # au-delà : donnée suspecte (cote en retard, mauvais pari), écartée

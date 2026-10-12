@@ -339,12 +339,12 @@ def test_attach_and_log():
     log = store.load(E.LOG_FILE, [])
     assert len(log) == 1 and all(k in log[0] for k in fair.ROW) and log[0]["pm"] == 0.6 and log[0]["px"] == 0.52 and log[0]["ps"] == 0.5
     assert log[0]["result"] is None and log[0]["date"] == "2026-10-09" and log[0]["prob"] == 0.6
-    prono["xp"], prono["xodds"] = 0.50, 2.0                                        # relevé plus récent avant le match : mis à jour, pas ajouté
-    assert E.record([prono], "2026-10-09", NOW) == 0
+    prono["xp"], prono["xodds"] = 0.50, 2.0                                        # relevé plus récent avant le match : ajouté à part (« late »), la lecture de la décision reste
+    assert E.record([prono], "2026-10-09", NOW + timedelta(hours=1)) == 0
     log = store.load(E.LOG_FILE, [])
-    assert len(log) == 1 and log[0]["px"] == 0.5 and log[0]["xodds"] == 2.0
+    assert len(log) == 1 and log[0]["px"] == 0.52 and log[0]["ps"] == 0.5 and log[0]["late"]["px"] == 0.5 and "xodds" not in log[0]["late"], log[0]
     prono["xp"] = 0.4                                                              # match commencé : le journal n'est plus touché
-    assert E.record([prono], "2026-10-09", future + timedelta(minutes=5)) == 0 and store.load(E.LOG_FILE, [])[0]["px"] == 0.5
+    assert E.record([prono], "2026-10-09", future + timedelta(minutes=5)) == 0 and store.load(E.LOG_FILE, [])[0]["late"]["px"] == 0.5
     # les lignes de plus de ENSEMBLE_LOG_DAYS jours sortent
     E.record([prono | {"key": "e9|totals||2.5|Over", "xp": 0.5}], "2026-10-25", NOW)
     assert [r["key"] for r in store.load(E.LOG_FILE, [])] == ["e9|totals||2.5|Over"]

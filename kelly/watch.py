@@ -121,7 +121,7 @@ def _day_games(s365, now, net=True):
     if net and s365 is not None:
         for day in (now.date() - timedelta(days=1), now.date()):
             livedata._day_list(s365, ld, datetime(day.year, day.month, day.day), now)
-        store.save(livedata.FILE, ld, compact=True)
+        livedata.save_lists(ld)                           # seulement si une liste a été relue, et sans toucher aux équipes préparées
     out = {}
     for lst in ld.get("lists", {}).values():
         for g in lst.get("games") or []:
@@ -136,7 +136,7 @@ def _live(s365, ids, now):
     fmt_d = lambda d: d.strftime("%d/%m/%Y")              # noqa: E731
     res = http.fetch(s365._url("/games/", games=",".join(map(str, sorted(ids))), startDate=fmt_d(now - timedelta(days=1)), endDate=fmt_d(now)),
                      s365.NAME, 120)
-    return {g.get("id"): _status(g) for g in (((s365._json(res) or {}).get("games") or []) if res.ok else [])}
+    return {g.get("id"): _status(g) for g in (((s365.read_json(res) or {}).get("games") or []) if res.ok else [])}
 
 
 def _status(g):
@@ -175,7 +175,7 @@ def find(leg, games):
 def _stats(s365, g):
     """Stats du match (en direct ou fini) -> {clé: (domicile, extérieur)} ; {} si illisible."""
     res = http.fetch(s365._url("/game/stats/", games=g["id"]), s365.NAME, 240)
-    data = s365._json(res) if res.ok else None
+    data = s365.read_json(res)
     out = {}
     for st in (data or {}).get("statistics") or []:
         key = s365.STAT_NAMES.get(str(st.get("name") or "").lower())
@@ -194,7 +194,7 @@ def _stats(s365, g):
 def _final(s365, g):
     """Score final d'un match terminé, par les derniers résultats de l'équipe à domicile -> (h, a) ou None s'il n'y est pas encore."""
     res = http.fetch(s365._url("/games/results/", competitors=g["home"]["id"]), s365.NAME, 600)
-    data = s365._json(res) if res.ok else None
+    data = s365.read_json(res)
     for x in (data or {}).get("games") or []:
         if x.get("id") == g["id"]:
             hs, as_ = (x.get("homeCompetitor") or {}).get("score"), (x.get("awayCompetitor") or {}).get("score")
@@ -325,7 +325,7 @@ def opportunity(now=None, current=None, get=None):
             if why:
                 return None
             res = http.fetch(s365._url("/games/current/", sports=1), s365.NAME, 240)
-            current = ((s365._json(res) or {}).get("games") or []) if res.ok else []
+            current = ((s365.read_json(res) or {}).get("games") or []) if res.ok else []
     window = [g for g in current if g.get("statusGroup") == 3 and C.LIVE_MIN_MINUTE <= int(g.get("gameTime") or 0) <= C.LIVE_MAX_MINUTE]
     if len(window) < C.LIVE_OPP_GATE:
         return None
@@ -360,4 +360,4 @@ def tick(now=None):
                 quiet.send(msg, now)
                 print(f"[suivi] {name} : message envoyé", file=sys.stderr)
         except Exception as e:                      # noqa: BLE001 - une partie en panne n'empêche pas les autres
-            print(f"[suivi] {name} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+            print(f"[suivi] {name} ignoré : {http.err(e)}", file=sys.stderr)

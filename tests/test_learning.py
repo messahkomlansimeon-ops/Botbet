@@ -18,7 +18,7 @@ NOW = datetime(2026, 10, 12, 8, tzinfo=timezone.utc)
 def row(key, market, name, sk="soccer_epl", home="Arsenal", away="Chelsea", point=None, prob_book=0.5, days=1, **kw):
     ko = (NOW - timedelta(days=days)).isoformat().replace("+00:00", "Z")
     return {"key": key, "id": key, "sport_key": sk, "group": "soccer", "home": home, "away": away, "commence": ko, "market": market,
-            "name": name, "point": point, "odds": 2.1, "prob": prob_book, "prob_book": prob_book, "book": "Pinnacle", "sent": False,
+            "name": name, "point": point, "odds": 2.1, "prob": prob_book, "prob_book": prob_book, "prob_src": "pinnacle", "book": "Pinnacle", "sent": False,
             "closed_at": None, "clv": None, "date": ko[:10], "result": None} | kw
 
 
@@ -33,9 +33,9 @@ class FakeFD:
 
 def test_free_closing_odds():
     rows = [row("h", "h2h", "Arsenal", prob_book=0.5),                                   # football-data / Pinnacle
-            row("o", "totals", "Over", point=2.5, prob_book=0.52),                        # football-data / moyenne
+            row("o", "totals", "Over", point=2.5, prob_book=0.52, prob_src="consensus"),                      # football-data / moyenne
             row("o3", "totals", "Over", point=3.5),                                       # ligne absente des cotes de clôture
-            row("b", "h2h", "Draw", sk="soccer_brazil_campeonato", home="Santos", away="Flamengo", prob_book=0.3),   # BetExplorer
+            row("b", "h2h", "Draw", sk="soccer_brazil_campeonato", home="Santos", away="Flamengo", prob_book=0.3, prob_src="consensus"),   # BetExplorer
             row("s", "h2h", "Arsenal", sent=True, closed_at="2026-10-11T17:00", clv=0.02),   # déjà relevé : intact
             row("old", "h2h", "Arsenal", days=C.FREE_CLOSE_DAYS + 1),                       # trop ancien
             row("live", "h2h", "Arsenal", days=0.05)]                                         # pas encore terminé

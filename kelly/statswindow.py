@@ -216,6 +216,7 @@ def _run(now, fetch, seconds, rep):
             found = fetch(events, deadline=deadline, wanted=wanted) if fetch else xbet.fetch_day(events, deadline=deadline, wanted=wanted, live=True)
             got.update(found)
             return found
+        before = {k: copy.deepcopy(c) for k, c in jobs}         # état des copies AVANT la relecture : seuls les champs que la relecture change sont fusionnés
         u0 = xbet.usage()
         xprice.apply([c for _, c in jobs], fetch=run_fetch)
         u1 = xbet.usage()
@@ -227,7 +228,7 @@ def _run(now, fetch, seconds, rep):
                 c.pop("xat", None)
         # 3. fusion + suivi + annonces (sous le verrou)
         with locked():
-            plan = _settle(app, now, hhmm, day, picked, jobs, got, spent, rep)
+            plan = _settle(app, now, hhmm, day, picked, jobs, got, spent, rep, before)
         print(f"[stats] fenêtre : {len(picked)} match(s) à relire, {rep['read']} relu(s), {rep['priced']} pronostic(s) stats remis aux cotes 1xBet, "
               f"{rep['announced']} 💎 annoncé(s), ≈ {spent[0] / 1e3:.0f} Ko via le proxy ({spent[1]} requête(s))", file=sys.stderr)
     # 4. combiné (code coupon SANS verrou, enregistrement + envoi sous le verrou)
@@ -236,7 +237,26 @@ def _run(now, fetch, seconds, rep):
     return rep
 
 
-def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep):
+def merge_read(cur, before, after):
+    """Fusionne dans le pronostic rechargé `cur` (today.json, sous le verrou) les SEULS champs que la relecture 1xBet a changés : ceux qui différaient entre la copie
+    d'avant (`before`) et celle d'après (`after`), supprimés s'ils ont disparu. Tout ce qu'un autre passage a écrit entre-temps (cote du matin xodds0, lignes alts,
+    proba sharp, marques d'alerte...) reste. La cote du matin xodds0 n'est reprise que si la ligne a changé ou si `cur` n'en a pas. -> `cur`."""
+    gone = object()
+    moved = any(before.get(k) != after.get(k) for k in ("name", "point"))
+    for k in set(before) | set(after):
+        b, a = before.get(k, gone), after.get(k, gone)
+        if a == b:
+            continue
+        if k == "xodds0" and cur.get(k) is not None and not moved:
+            continue
+        if a is gone:
+            cur.pop(k, None)
+        else:
+            cur[k] = a
+    return cur
+
+
+def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep, before=None):
     """Sous le verrou : today.json et le suivi du jour sont RECHARGÉS, les pronostics relus (`jobs` : [(clé d'origine, copie remise à la cote)], matchs lus : `got`)
     y sont fusionnés, puis les nouveaux 💎 sont annoncés et le prochain combiné décidé. Un pronostic devenu jambe d'un combiné entre-temps (app._sent_keys) garde ses
     cotes. -> le plan du combiné (plan_combo) ou None."""
@@ -256,7 +276,11 @@ def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep):
         for key, c in jobs:
             i = index.get(key)
             if c["id"] in got and i is not None and key not in protected:       # un combiné envoyé entre-temps garde ses jambes telles quelles
-                today["pronos"][i] = c
+                cur = today["pronos"][i]
+                if before is not None and key in before:                        # fusion des seuls champs relus (ce qu'un autre passage a écrit entre-temps reste)
+                    c = merge_read(cur, before[key], c)
+                else:
+                    today["pronos"][i] = c
                 changed.append(c)
         for mid, cs in picked:
             r = doc["reads"].setdefault(mid, {})

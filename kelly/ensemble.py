@@ -43,10 +43,13 @@ actives (is_active : buts, 1N2, double chance, les 2 marquent par défaut), là 
 d'avant reste, mais les avis (1xBet, sharp, modèle, proba retenue) y sont calculés (xprice._shadow), affichés (explain_c, sans « retenu ») et
 journalisés comme partout, pour que les poids apprennent aussi dans les familles non actives avant d'y être jamais utilisés.
 
-Journal des avis (record / settle_log) : data/ensemble_log.json garde, pour chaque pronostic ou pari (montré ou non), ses avis au dernier relevé
-avant le match (« pm » modèle, « px » 1xBet, « ps » sharp) dans les MÊMES champs que data/fair.json (ROW) pour être réglé par le même code
-(settle._settle_fair_row) ; n'y entrent que les lignes ayant le modèle ET au moins un avis de marché, ou sharp ET 1xBet (les autres n'apprennent
-rien). Les proba « px » approchées (double chance sans ses 3 cotes) n'y entrent jamais.
+Journal des avis (record / settle_log) : data/ensemble_log.json garde, pour chaque pronostic ou pari (montré ou non), les avis de la LECTURE QUI A SERVI
+LA DÉCISION (la première enregistrée : « pm » modèle, « px » 1xBet, « ps » sharp, tous trois lus ensemble, heure « at ») dans les MÊMES champs que
+data/fair.json (ROW) pour être réglé par le même code (settle._settle_fair_row) ; une relecture plus tardive (cotes 1xBet du soir) ne remplace
+rien : elle va dans « late » (information seulement, jamais apprise). Les poids n'apprennent donc pas la fraîcheur des avis (Pinnacle du matin
+contre 1xBet du soir) mais leur qualité. Un avis sharp plus vieux que ENSEMBLE_SHARP_MAX_AGE_MIN minutes au moment de l'enregistrement exclut la
+ligne de l'apprentissage. N'y entrent que les lignes ayant le modèle ET au moins un avis de marché, ou sharp ET 1xBet (les autres n'apprennent
+rien). Les proba « px » approchées (double chance sans ses 3 cotes) n'y entrent jamais. Le journal reste petit : voir prune_log.
 """
 import math
 import sys
@@ -517,12 +520,51 @@ def _started(c, now):
         return False
 
 
+def _sharp_age_min(c, now):
+    """Âge (minutes) du relevé sharp du pronostic ou pari `c` à l'instant `now`, ou None s'il est inconnu : heure de sa ligne dans c["psh"]
+    (ensemble.attach) pour un pronostic, c["sharp_at"] pour un pari réel."""
+    t = None
+    hit = (c.get("psh") or {}).get(f"{_canon(c['market'], c['name'])}|{_pt(c.get('point'))}")
+    if hit and len(hit) > 3:
+        t = hit[3]
+    t = t or c.get("sharp_at")
+    try:
+        return (now - datetime.fromisoformat(str(t).replace("Z", "+00:00"))).total_seconds() / 60 if t else None
+    except (ValueError, TypeError):
+        return None
+
+
+def sharp_stale(c, now):
+    """Le sharp de `c` est-il périmé (relevé de plus de C.ENSEMBLE_SHARP_MAX_AGE_MIN minutes) ? Âge inconnu : non (acceptée, comme sharp_for)."""
+    age = _sharp_age_min(c, now)
+    return age is not None and age > C.ENSEMBLE_SHARP_MAX_AGE_MIN
+
+
+def prune_log(log, ref_day):
+    """Journal borné : ni lignes de plus de C.ENSEMBLE_LOG_DAYS jours avant `ref_day` (date), ni lignes réglées ET apprises de plus de
+    C.ENSEMBLE_LOG_LEARNED_DAYS jours (le cumul de data/ensemble.json les résume), ni plus de C.ENSEMBLE_LOG_MAX_ROWS lignes (partent d'abord les apprises,
+    puis les réglées, puis les plus vieilles en attente). Ordre des lignes conservé."""
+    cut = str(ref_day - timedelta(days=C.ENSEMBLE_LOG_DAYS))
+    learned_cut = str(ref_day - timedelta(days=C.ENSEMBLE_LOG_LEARNED_DAYS))
+    log = [r for r in log if r["date"] >= cut and not (r.get("ens") and r["date"] < learned_cut)]
+    extra = len(log) - C.ENSEMBLE_LOG_MAX_ROWS
+    if extra > 0:
+        def rank(i):
+            r = log[i]
+            return (0 if r.get("ens") else 1 if r.get("result") is not None else 2, r["date"], i)
+        drop = set(sorted(range(len(log)), key=rank)[:extra])
+        log = [r for i, r in enumerate(log) if i not in drop]
+    return log
+
+
 def record(rows, day, now=None, name=LOG_FILE):
     """Garde dans data/ensemble_log.json les avis de chaque pronostic ou pari de `rows` (montré ou non) pour apprendre quand il sera réglé :
     ses champs ROW (réglable par settle._settle_fair_row comme data/fair.json) + « pm » (modèle), « px » (1xBet sans marge), « ps » (sharp),
-    « date ». Un pronostic déjà gardé et pas encore réglé est mis à jour (dernier relevé avant le match) ; un match commencé n'est plus mis à jour.
-    N'entrent que les pronostics ayant le modèle ET un avis de marché exact (jamais une proba 1xBet approchée). Garde ENSEMBLE_LOG_DAYS jours.
-    -> nombre de lignes ajoutées."""
+    « date », « at » (heure de la lecture). Les trois avis sont ceux de la lecture qui a servi la DÉCISION : un pronostic déjà gardé n'est plus
+    modifié par une relecture (la relecture tardive va dans « late » : heure et avis, jamais appris). Une ligne dont l'avis sharp est périmé
+    (plus de C.ENSEMBLE_SHARP_MAX_AGE_MIN minutes au moment de l'enregistrement) n'entre pas : ses avis ne datent pas du même moment. Un match
+    commencé n'est plus enregistré. N'entrent que les pronostics ayant le modèle ET un avis de marché exact (jamais une proba 1xBet approchée).
+    Journal borné (prune_log). -> nombre de lignes ajoutées."""
     now = now or datetime.now(timezone.utc)
     log = store.load(name, [])
     log = log if isinstance(log, list) else []
@@ -534,25 +576,20 @@ def record(rows, day, now=None, name=LOG_FILE):
             continue
         if c.get("x_approx") or not c.get("key") or _started(c, now):
             continue
+        if ps is not None and sharp_stale(c, now):
+            continue
         old = by_key.get(c["key"])
         if old is not None:
-            if old.get("result") is None:                  # dernier relevé avant le match ; un avis absent du nouveau relevé ne ternit pas l'ancien
-                for k, v in (("pm", pm), ("px", px), ("ps", ps)):
-                    if v is not None:
-                        old[k] = round(v, 4)
-                if pm is not None:
-                    old["prob"] = round(pm, 4)
-                if c.get("xodds"):
-                    old["xodds"] = c["xodds"]
+            if old.get("result") is None:                  # la lecture de la décision reste ; la relecture tardive est gardée à part
+                old["late"] = {"at": now.isoformat(timespec="minutes")} | {k: round(v, 4) for k, v in (("pm", pm), ("px", px), ("ps", ps)) if v is not None}
             continue
         row = {k: c.get(k) for k in ROW} | {"prob": None if pm is None else round(pm, 4), "pm": None if pm is None else round(pm, 4),
                                             "px": None if px is None else round(px, 4), "ps": None if ps is None else round(ps, 4),
-                                            "date": str(day), "result": None}
+                                            "date": str(day), "at": now.isoformat(timespec="minutes"), "result": None}
         log.append(row)
         by_key[row["key"]] = row
         n += 1
-    cut = str(date.fromisoformat(str(day)) - timedelta(days=C.ENSEMBLE_LOG_DAYS))
-    store.save(name, [r for r in log if r["date"] >= cut])
+    store.save(name, prune_log(log, date.fromisoformat(str(day))))
     return n
 
 
@@ -570,5 +607,8 @@ def settle_log(settle_one, name=LOG_FILE):
             return False
     settled = [r for r in log if r.get("result") is None and safe(r)]
     learned = learn(log)
+    dates = [r["date"] for r in log if r.get("date")]
+    if dates:
+        log = prune_log(log, date.fromisoformat(max(dates)))
     store.save(name, log)
     return settled, learned

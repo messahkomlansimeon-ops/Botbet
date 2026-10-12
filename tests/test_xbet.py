@@ -415,40 +415,48 @@ def test_save_coupon():
     with patch("kelly.sources.http.post", return_value=Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", None, error="HTTP 500")):
         assert xbet.save_coupon(legs) is None
 
-    # Échec applicatif Success: false -> None
+    # Échec applicatif Success: false (refus explicite sans code connu comme passager) -> None, UN seul essai (aucune attente)
     err_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": False, "Error": "Erreur"}).encode("utf-8"), 200)
     with patch("kelly.sources.http.post", return_value=err_res) as m, patch("kelly.sources.xbet.time.sleep") as sl:
         assert xbet.save_coupon(legs) is None
-        assert m.call_count == 1 + len(xbet.COUPON_BACKOFF)          # refus : un essai par attente, pas plus
+        assert m.call_count == 1 and sl.call_count == 0, "refus définitif : pas de nouvel essai"
+    # Refus passager connu (ErrorCode 161627) : un essai par attente, pas plus
+    tmp = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon",
+                 json.dumps({"Success": False, "Error": "Сбой вызова, попробуйте позже.", "ErrorCode": 161627}).encode("utf-8"), 200)
+    with patch("kelly.sources.http.post", return_value=tmp) as m, patch("kelly.sources.xbet.time.sleep") as sl:
+        assert xbet.save_coupon(legs) is None
+        assert m.call_count == 1 + len(xbet.COUPON_BACKOFF)          # refus passager : un essai par attente, pas plus
         assert [c.args[0] for c in sl.call_args_list] == list(xbet.COUPON_BACKOFF) == sorted(xbet.COUPON_BACKOFF)    # attentes croissantes
+    # Success vrai sans code : le ticket a pu être créé, jamais rejoué
+    nocode = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": True, "Value": None}).encode("utf-8"), 200)
+    with patch("kelly.sources.http.post", return_value=nocode) as m, patch("kelly.sources.xbet.time.sleep") as sl:
+        assert xbet.save_coupon(legs) is None and m.call_count == 1 and sl.call_count == 0
 
     # Refus intermittent puis accepté : le code de la 2e tentative
     ok_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": True, "Value": "AP89E"}).encode("utf-8"), 200)
-    with patch("kelly.sources.http.post", side_effect=[err_res, err_res, ok_res]), patch("kelly.sources.xbet.time.sleep") as sl:
+    with patch("kelly.sources.http.post", side_effect=[tmp, tmp, ok_res]), patch("kelly.sources.xbet.time.sleep") as sl:
         assert xbet.save_coupon(legs) == "AP89E" and sl.call_count == 2       # accepté au 3e essai : on s'arrête là
 
-    # Pendant une commande Telegram, l'utilisateur qui attend est prévenu de chaque refus (raison de 1xBet), puis du code accepté
+    # Pendant une commande Telegram, l'utilisateur qui attend est prévenu de chaque refus passager (raison de 1xBet), puis du code accepté
     said = []
-    with patch("kelly.sources.http.post", side_effect=[err_res, err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"), \
+    with patch("kelly.sources.http.post", side_effect=[tmp, tmp, ok_res]), patch("kelly.sources.xbet.time.sleep"), \
             xbet.coupon_notice(said.append):
         assert xbet.save_coupon(legs) == "AP89E"
-    assert said == ["⏳ 1xBet a refusé le code coupon (« Erreur ») : nouvel essai dans 2 s (2/4)…",
-                    "⏳ 1xBet a refusé le code coupon (« Erreur ») : nouvel essai dans 5 s (3/4)…",
+    assert said == ["⏳ 1xBet a refusé le code coupon (« panne passagère chez 1xBet »)" + " : nouvel essai dans 2 s (2/4)…",
+                    "⏳ 1xBet a refusé le code coupon (« panne passagère chez 1xBet »)" + " : nouvel essai dans 5 s (3/4)…",
                     "✅ 1xBet a accepté le code coupon."], said
     said.clear()
-    ru = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon",
-                json.dumps({"Success": False, "Error": "Сбой вызова, попробуйте позже.", "ErrorCode": 161627}).encode("utf-8"), 200)
     ru2 = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon",
                  json.dumps({"Success": False, "Error": "Неизвестно", "ErrorCode": 99}).encode("utf-8"), 200)
-    with patch("kelly.sources.http.post", side_effect=[ru, ru2, ok_res]), patch("kelly.sources.xbet.time.sleep"), \
+    with patch("kelly.sources.http.post", side_effect=[tmp, ru2, ok_res]), patch("kelly.sources.xbet.time.sleep"), \
             xbet.coupon_notice(said.append):
-        assert xbet.save_coupon(legs) == "AP89E"
+        assert xbet.save_coupon(legs) is None, "ErrorCode 99 : refus définitif, pas de 3e essai"
     assert said[0].startswith("⏳ 1xBet a refusé le code coupon (« panne passagère chez 1xBet »)"), said      # jamais de russe
-    assert "(« erreur chez 1xBet (code 99) »)" in said[1], said
+    assert len(said) == 1, said
     said.clear()
     with patch("kelly.sources.http.post", return_value=ok_res), xbet.coupon_notice(said.append):
         assert xbet.save_coupon(legs) == "AP89E" and said == []                 # accepté du premier coup : rien à dire
-    with patch("kelly.sources.http.post", side_effect=[err_res, ok_res]), patch("kelly.sources.xbet.time.sleep"):
+    with patch("kelly.sources.http.post", side_effect=[tmp, ok_res]), patch("kelly.sources.xbet.time.sleep"):
         assert xbet.save_coupon(legs) == "AP89E" and said == []                 # relevé automatique : personne n'attend, aucun message
 
     # Entrées invalides -> None, ne lève jamais

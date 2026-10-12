@@ -196,7 +196,7 @@ def test_tune_div_and_file_roundtrip():
         assert "aucun" in tune.tune_div("E0", [])["skipped"]
         r = tune.tune_div("E0", ms)
         assert r["n"] >= 300 and r["chosen"] in (60, 110, 330) and set(r["hl"]) == {"60", "110", "330"}
-        assert r["gw"]["n1"] > 300 and r["gw"]["no"] > 300 and r["best"] in (60, 110, 330) and r["gain"] >= 0
+        assert r["gw"]["n1"] > 150 and r["gw"]["no"] > 150 and r["n_hl"] < r["n"] and r["best"] in (60, 110, 330) and r["gain"] >= 0
         assert S.HALF_LIFE == 110 and r["chosen"] == 110 or r["gain"] >= C.TUNE_MARGIN          # 110 gardé, sauf gain net
         res = tune.run(["E0", "SP1"], lambda d: ms if d == "E0" else [], seconds=600, force=True)
         assert res["done"] == ["E0"] and "SP1" in res["skipped"] and not res["pending"], res
@@ -247,7 +247,7 @@ def test_strength_and_prematch_use_tuned_values():
     a = prematch.assess(pick, f, None)
     assert a["kind"] == "goals" and close(a["w"], 0.35 * prematch.qscale(q)), a["w"]
     b = prematch.assess(dict(pick, market="btts", name="Yes", point=None), f, None)
-    assert b["kind"] == "btts" and close(b["w"], 0.35 * prematch.qscale(q))
+    assert b["kind"] == "btts" and close(b["w"], C.MODEL_WEIGHT["goals"] * prematch.qscale(q))      # les 2 marquent : poids de config, jamais celui du plus/moins de 2,5 (non mesuré)
     for sk in ("soccer_spain_la_liga", None, "soccer_unknown"):                       # ligue non mesurée / inconnue / sans clé : config
         assert close(prematch.assess(dict(pick, sport_key=sk), f, None)["w"], C.MODEL_WEIGHT["goals"] * prematch.qscale(q))
     prematch.apply(pick, a)

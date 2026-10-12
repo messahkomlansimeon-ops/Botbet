@@ -51,7 +51,7 @@ def reset():
     E.reset()
     chat.forget_taps()
     C.ENSEMBLE_ENABLED, C.ENSEMBLE_LOG, C.SHARPGAP_ENABLED = True, True, True
-    C.ENSEMBLE_ACTIVE_FAMILIES = frozenset({"goals", "h2h", "dc", "btts"})
+    C.ENSEMBLE_ACTIVE_FAMILIES = frozenset({"goals", "h2h", "dc", "btts", "team_goals"})
     C.XALERTS_ENABLED, C.XALERT_LIVE_MAX = True, 3
     C.SHARPGAP_MAX_SHOWN, C.SHARPGAP_MAX_DAY = 3, 6
 
@@ -137,7 +137,7 @@ SHADOW = {"p_model", "p_x", "p_sharp", "p_ens", "ew", "esrc"}
 def test_flags_and_environment():
     reset()
     assert C.ENSEMBLE_ENABLED and C.ENSEMBLE_LOG and C.SHARPGAP_ENABLED
-    assert C.ENSEMBLE_ACTIVE_FAMILIES == frozenset({"goals", "h2h", "dc", "btts"})
+    assert C.ENSEMBLE_ACTIVE_FAMILIES == frozenset({"goals", "h2h", "dc", "btts", "team_goals"})
     for m in ("totals", "h2h", "double_chance", "btts"):
         assert E.is_active(m), m
     for m in ("alternate_totals_corners", "alternate_totals_cards", "team_shots_total", "team_sot_home", "team_fouls_away", "team_throws_total",
@@ -438,23 +438,24 @@ def test_journal_settlement_and_learning():
     assert g["pm"] == 0.76 and g["ps"] == 0.72 and g["px"] is not None and g["result"] is None and g["date"] == DAY and all(k in g for k in fair.ROW)
     c = next(r for r in log if r["market"] == "alternate_totals_corners")
     assert c["pm"] == 0.70 and c["px"] is not None and c["ps"] is None
-    # relevé de 15:00 : mêmes clés, dernier relevé gardé ; un match commencé n'est plus touché
+    # relevé de 15:00 : mêmes clés ; la lecture qui a servi la décision reste (px d'origine), la relecture tardive va dans « late » ; un match commencé n'est plus touché
+    px0 = g["px"]
     pronos[0]["p_x"] = 0.6
     with Quiet():
         assert app.log_opinions(pronos, DAY, at(14)) == 0
     g = next(r for r in store.load(E.LOG_FILE, []) if r["market"] == "totals")
-    assert g["px"] == 0.6 and g["ps"] == 0.72 and g["pm"] == 0.76 and len(store.load(E.LOG_FILE, [])) == 2
-    # un avis absent du nouveau relevé (1xBet muet, Pinnacle encore là) ne ternit pas l'ancien
+    assert g["px"] == px0 and g["ps"] == 0.72 and g["pm"] == 0.76 and g["late"]["px"] == 0.6 and len(store.load(E.LOG_FILE, [])) == 2, g
+    # un avis absent de la nouvelle lecture (1xBet muet, Pinnacle encore là) ne ternit pas l'ancien
     pronos[0].pop("p_x")
     pronos[0]["xp"] = None
     with Quiet():
         assert app.log_opinions(pronos, DAY, at(15)) == 0
     g = next(r for r in store.load(E.LOG_FILE, []) if r["market"] == "totals")
-    assert g["px"] == 0.6 and g["ps"] == 0.72, g
+    assert g["px"] == px0 and g["ps"] == 0.72, g
     pronos[0]["p_x"] = 0.3
     with Quiet():
         assert app.log_opinions([pronos[0]], DAY, datetime(2030, 1, 1, 19, 30, tzinfo=UTC)) == 0
-    assert next(r for r in store.load(E.LOG_FILE, []) if r["market"] == "totals")["px"] == 0.6, "match commencé : journal figé"
+    assert next(r for r in store.load(E.LOG_FILE, []) if r["market"] == "totals")["px"] == px0, "match commencé : journal figé"
     pronos[0]["p_x"] = 0.6
     # règlement gratuit le lendemain, apprentissage, idempotence
     old_fd = settle.FootballData
@@ -569,7 +570,7 @@ def test_closing_measures_the_edge_against_pinnacle():
     p_free = E.devig([2.0, 3.6, 4.0])[0]
     assert r2["gap_close_src"] == "pinnacle" and abs(r2["gap_edge_close"] - (2.4 * p_free - 1)) < 1e-3
     # moyenne de football-data (pas Pinnacle) : la ligne est clôturée mais ne compte pas comme « contre Pinnacle »
-    r3 = dict(r2) | {"key": "x3", "clv": None, "closed_at": None, "close_prob": None}
+    r3 = dict(r2) | {"key": "x3", "clv": None, "closed_at": None, "close_prob": None, "prob_src": "consensus"}     # pris au consensus : comparable à la moyenne de clôture
     r3.pop("gap_edge_close", None), r3.pop("gap_close_src", None)
 
     class FDavg:

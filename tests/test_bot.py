@@ -756,26 +756,28 @@ def test_bootstrap_training():
     tr, te = learn._split(boot)
     assert m["adopted"] and m["oos_source"] == "historique" and m["n"] == 0 and m["boot_n"] == len(boot), m
     assert m["test_rows"] == len(te) > 20 and max(r["date"] for r in tr) < min(r["date"] for r in te)
-    assert m["oos_model"] >= m["oos_heuristic"] and "bootstrap" in m["names"] and "gap_goals" in m["names"]
+    assert m["oos_model"] > m["oos_heuristic"] + C.LEARN_OOS_MARGIN and "bootstrap" in m["names"] and "gap_goals" in m["names"]
     assert learn.predict(m, boot[0]["features"]) is not None
     # 2) ni réel ni assez d'historique : pas de modèle
     few = learn.train_clv([], None, boot[:C.BOOT_MIN_ROWS - 1])
     assert not few["adopted"] and "pas assez de clôtures" in few["reason"]
     assert not learn.train_clv([], None, [])["adopted"]
-    # 3) assez de paris réels (>= 40 sur >= 2 jours) : le test se fait sur les paris réels, pas sur l'historique
+    # 3) assez de paris réels ET un test valable (>= 30 lignes sur >= 5 jours, ici 14 jours de 12 paris) : le test se fait sur les paris réels, pas sur l'historique
     random.seed(4)
     real = []
-    for d in range(6):
+    for d in range(14):
         for i in range(12):
             edge = random.uniform(0, 0.25)
             real.append({"date": f"2026-09-{10 + d}", "clv": round(0.5 * edge + random.gauss(0, 0.02), 4), "sent": False,
-                         "features": {"edge": edge, "heuristic": edge * 0.8, "log_odds": 0.7, "market=h2h": 1.0, "group=soccer": 1.0}})
+                         "features": {"edge": edge, "heuristic": edge * 0.8 + random.gauss(0, 0.08), "log_odds": 0.7, "market=h2h": 1.0, "group=soccer": 1.0}})
     r = learn.train_clv(real, None, boot)
-    assert r["oos_source"] == "réel" and r["n"] == 72 and r["test_rows"] == 24 and r["boot_n"] == len(boot), r
-    assert r["adopted"] and r["oos_model"] >= r["oos_heuristic"]
-    # une seule journée de paris réels : pas de vrai test hors échantillon possible -> tranche historique
+    assert r["oos_source"] == "réel" and r["n"] == 168 and r["test_rows"] == 60 and r["test_days"] == 5 and r["boot_n"] == len(boot), r
+    assert r["adopted"] and r["oos_model"] > r["oos_heuristic"]
+    # une seule journée de paris réels, ou trop peu de jours pour un test valable (6 jours : 24 lignes de test) : pas de vrai test hors échantillon -> tranche historique
     one = learn.train_clv([dict(x, date="2026-09-10") for x in real], None, boot)
-    assert one["oos_source"] == "historique" and one["n"] == 72
+    assert one["oos_source"] == "historique" and one["n"] == 168
+    short = learn.train_clv([x for x in real if x["date"] < "2026-09-16"], None, boot)
+    assert short["oos_source"] == "historique" and short["n"] == 72, short
     # sans historique, comportement d'avant (test sur les paris réels)
     assert learn.train_clv(real)["oos_source"] == "réel" and learn.train_clv(real[:30])["reason"].startswith("pas assez")
     # 4) un modèle adopté sur l'historique ne survit pas à un test réel perdu ; un modèle adopté sur du réel, si
@@ -1544,10 +1546,12 @@ def test_quality_floor():
     assert CB.leg_reason(mkleg(4, 1.39, 0.70, edge=-0.03)) == "safe"
     assert CB.leg_reason(mkleg(5, 1.39, 0.70, edge=-0.10)) is None     # sûr, mais payé trop cher (marge > 9 %)
     assert CB.leg_reason(mkleg(5, 1.35, 0.70, edge=-0.055)) == "safe"   # sûr à petite cote : la marge seule ne l'exclut pas
-    assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, pm={"kind": "goals", "pgap": 0.07})) == "stats"
+    assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, market="alternate_totals_corners", pm={"kind": "corners", "pgap": 0.07})) == "stats"
+    # buts / 1N2 : l'ensemble décide (le marché a raison quand le modèle s'écarte) : « stats » n'est plus une raison d'entrer (lot modèle, point 4)
+    assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, pm={"kind": "goals", "pgap": 0.07})) is None
     assert CB.leg_reason(mkleg(7, 1.74, 0.55, edge=-0.04, pm={"kind": "goals", "pgap": -0.07})) is None   # le modèle est contre
     assert CB.leg_reason(mkleg(8, 1.49, 0.72, edge=0.0, pm={"kind": "goals", "pgap": -0.06})) is None     # même une jambe sûre
-    assert CB.leg_reason(mkleg(9, 1.9, 0.5, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Home")) == "stats"
+    assert CB.leg_reason(mkleg(9, 1.9, 0.5, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Home")) is None        # 1N2 : famille décidée par l'ensemble
     assert CB.leg_reason(mkleg(10, 4.4, 0.23, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Draw")) is None
     # peu de books : l'écart de valeur exigé est plus grand
     thin = mkleg(11, 2.2, 0.47, edge=0.04, n_books=4)
@@ -2586,10 +2590,10 @@ def main():
     assert sum(1 for r in rows if r["closed_at"] == "missed") == 0
 
     # --- Apprentissage : on fabrique plusieurs jours en dupliquant avec bruit
-    #     (pas assez de lignes avec une seule journée) puis on entraîne.
+    #     (pas assez de lignes avec une seule journée ; 20 jours : le test hors échantillon exige 5 jours après 3 jours d'apprentissage) puis on entraîne.
     synth = []
     random.seed(11)
-    for d in range(1, 9):
+    for d in range(1, 21):
         for r in closed:
             s = copy.deepcopy(r)
             s["key"] += f"|d{d}"; s["date"] = str(day - timedelta(days=d)); s["sent"] = random.random() < 0.3

@@ -73,6 +73,13 @@ def _x_now(m, c):
     return (px[key], (m.get("refs") or {}).get(key)) if key else (None, None)
 
 
+def _suspended(m, c):
+    """Le pari `c` est-il listé mais SUSPENDU un moment chez 1xBet dans la lecture `m` (cote affichée, pas jouable pour l'instant) ? Un marché suspendu
+    n'est pas « retiré » : pas d'alerte « n'est plus jouable »."""
+    blocked = (m or {}).get("blocked")
+    return bool(blocked) and xbet.resolve({k: 1 for k in blocked}, c["market"], c["name"], c["point"]) is not None
+
+
 def _item(kind, key, odds, text, rank=0.0, coupon=None, buttons=(), **extra):
     """Une alerte : `odds` = dernière cote alertée (dédoublonnage), `coupon` = pari seul à enregistrer chez 1xBet ({xref, xodds}). `extra` : données propres
     au type (« 💰 gap » : le pari et son candidat, voir gap_items)."""
@@ -110,7 +117,8 @@ class Prices:
         self.reader, self.now, self.memo = reader, now, {}
 
     def get(self, c):
-        """-> ("ok", cote, référence, "HH:MM") | ("gone", None, None, None) : 1xBet ne propose plus le pari | None : inconnu."""
+        """-> ("ok", cote, référence, "HH:MM") | ("gone", None, None, None) : 1xBet ne propose plus le pari | None : inconnu (ou marché suspendu un
+        moment : pas une disparition, donc aucune alerte)."""
         if c["key"] not in self.memo:
             self.memo[c["key"]] = self._read(c)
         return self.memo[c["key"]]
@@ -118,11 +126,15 @@ class Prices:
     def _read(self, c):
         hit = xbet.cached_cell(c["xref"]) if c.get("xref") else None
         if hit and state.clock() - (hit[1] or 0) <= C.XBET_COMBI_FRESH_MIN * 60:
+            if getattr(hit, "blocked", False):
+                return None
             return ("ok", hit[0], c["xref"], _clock(hit[1])) if hit[0] else ("gone", None, None, None)
         m = self.reader.get(c)
         if not m:
             return None
         x, ref = _x_now(m, c)
+        if not x and _suspended(m, c):
+            return None
         return ("ok", x, ref, _read_time(ref, self.now)) if x else ("gone", None, None, None)
 
 
@@ -394,10 +406,17 @@ def _fresh(sent, it):
     return last is None or (abs(it["odds"] / last - 1) >= thr if last else bool(it["odds"]))
 
 
+PERISHABLE = ("lag", "rise")      # « joue maintenant » et « c'est le moment » : périmées au réveil, jamais gardées pour la fin des heures calmes
+
+
 def send(items, day, now):
     """Dédoublonne (data/alerts_sent.json), classe (💰, ⚠️, 📈, ✅), garde C.XALERT_MAX_ITEMS alertes, crée le code coupon des paris seuls à
-    jouer et envoie UN message. -> le message envoyé, ou None."""
+    jouer et envoie UN message. Pendant les heures calmes (quiet.is_quiet), les alertes qui ne valent que sur le moment (💰 « joue maintenant »,
+    📈 « c'est le moment ») sont ABANDONNÉES (sans être retenues comme envoyées : au réveil, un passage les recalcule avec les cotes du moment) ;
+    les autres sont gardées pour le réveil. -> le message envoyé, ou None."""
     sent = _load(day)
+    if quiet.is_quiet(now):
+        items = [it for it in items if it["type"] not in PERISHABLE]
     items = sorted((it for it in items if _fresh(sent, it)), key=lambda it: (TYPES.index(it["type"]), -it["rank"]))
     shown, more = items[:C.XALERT_MAX_ITEMS], len(items) - C.XALERT_MAX_ITEMS
     if not shown:
@@ -438,7 +457,7 @@ def send(items, day, now):
     for it in shown:                                # retenues avant l'envoi : un message mis en attente (réseau) ne sera pas doublé
         sent["items"][f"{it['key']}|{it['type']}"] = it["odds"]
     store.save(FILE, sent)
-    quiet.send(msg)                                 # heures calmes : gardé pour le réveil
+    quiet.send(msg, now)                            # heures calmes : gardé pour le réveil
     return msg
 
 

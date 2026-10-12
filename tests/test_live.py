@@ -141,7 +141,7 @@ def test_light_teams():
     assert livedata.pred_for("Metalul Buzau", "Tiny FC", {"teams": teams, "lists": {}}) is None, "moins de 4 matchs : rien"
     assert livedata.pred_for("Unknown", "Targu Mures", {"teams": teams, "lists": {}}) is None
     old = livedata.pred_for
-    livedata.pred_for = lambda h, a, data=None, start=None: {"lh": 3.0, "la": 0.3, "q": 0.5, "n": [10, 10], "src": "365scores"}
+    livedata.pred_for = lambda h, a, data=None, start=None, league=None: {"lh": 3.0, "la": 0.3, "q": 0.5, "n": [10, 10], "src": "365scores"}
     try:
         g = game(9, 60, score=(0, 0), league="Romania. Liga 2", home="Metalul Buzau", away="Targu Mures")
         keep, seen, count = live.legs([g, game(8, 60, league="Australia Cup", home="A", away="B")], now=NOW, data={})
