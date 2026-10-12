@@ -20,7 +20,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import fmt, money, played, progress, store, telegram, track
+from . import config as C, fmt, money, played, progress, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
@@ -488,13 +488,16 @@ def kinds_help(unknown):
 
 
 def quick(text):
-    """« état » (/etat, progression, avancement) : où en est le passage du matin, et « status » (/status, statut, santé : kelly/status.py), répondus
-    par le serveur SANS le verrou des données
+    """« état » (/etat, progression, avancement) : où en est le passage du matin, « status » (/status, statut, santé : kelly/status.py) et « backup »
+    (/backup, sauvegarde : app.send_backup, copie cohérente de la base), répondus par le serveur SANS le verrou des données
     (telegram.poll `quick`) ; None pour tout autre message. Ne touche pas à la question en cours."""
     from . import status
     t = played.norm((text or "").split("@")[0]).strip(" ?!.")
     if WORDS_ALONE.get(t.lstrip("/")) == "/status":   # « status » : services, sources et API (kelly/status.py), sans le verrou non plus
         return status.quick(text)
+    if WORDS_ALONE.get(t.lstrip("/")) == "/backup":   # « backup » : copie cohérente de kelly.db envoyée SANS le verrou (app.send_backup), jusqu'à 300 s d'envoi
+        from . import app
+        return app.send_backup() or "✅ Sauvegarde envoyée."
     return progress.describe() if WORDS_ALONE.get(t.lstrip("/")) == "/etat" else None
 
 
@@ -549,6 +552,11 @@ def route(text):
 
 # ---------- appuis sur les boutons ----------
 
+def _dur(minutes):
+    """180 -> « 3 h », 90 -> « 90 min »."""
+    return f"{minutes // 60} h" if minutes >= 120 and minutes % 60 == 0 else f"{minutes} min"
+
+
 def _ask(t):
     """La question posée après « ✅ Je l'ai joué » / « ✏️ Autre cote » sur le pari `t` (played.find). Cote 1xBet CONNUE (t.known) et pas encore
     noté : jamais la cote, seulement la mise (on_callback a noté tout de suite quand une mise est conseillée). Sinon la cote, et la mise quand
@@ -558,6 +566,14 @@ def _ask(t):
     if prev:
         return (f"À quelle cote as-tu finalement joué le {t.label} chez 1xBet ?\nRéponds juste la nouvelle cote, par exemple {ex} (ta mise reste "
                 f"{money.money(prev['stake'], t.item.get('cur'))}), ou {ex} 2000 pour changer aussi la mise.")
+    if t.known and played.is_stale(t):               # cote lue il y a trop longtemps : jamais notée telle quelle
+        since = f" à {played.read_note(t)}" if played.read_note(t) else ""
+        old = (f"⏱️ La dernière cote 1xBet lue par Kelly ({fmt.odds_txt(t.ref)}{since}) date de plus de {_dur(C.XBET_COMBI_FRESH_MIN)} : elle a pu bouger.\n")
+        if t.stake > 0:
+            return old + (f"À quelle cote as-tu joué le {t.label} chez 1xBet ?\nRéponds juste la cote, par exemple {ex} : ta mise sera de "
+                          f"{money.money(t.stake)} (ou {ex} 2000 pour une autre mise).")
+        return old + (f"À quelle cote et avec quelle mise en FCFA ? (le {t.label} chez 1xBet)\n"
+                      f"Réponds la cote et la mise, par exemple {ex} 1 000.")
     if t.known:
         return (f"{played.NEED_STAKE} {STAKE_HELP} : le {t.label} sera noté à la cote 1xBet {fmt.odds_txt(t.ref)} lue par Kelly dès que tu donnes ta mise. "
                 f"Si 1xBet t'a payé autre chose, réponds la cote et la mise : {ex} 1 000.")
@@ -581,9 +597,9 @@ def on_callback(data, message_id=None):
             return f"Le {t.label} est déjà réglé : trop tard pour le noter."
         if t.item.get("played") and _double_tap(what, day, message_id):      # le même appui, deux fois de suite : rien de plus (aucune question ouverte)
             return ""                                # réponse vide : rien n'est envoyé (telegram._handle)
-        if t.known and not t.item.get("played"):     # cote 1xBet connue : jamais demandée
+        if t.known and not t.item.get("played") and not played.is_stale(t):     # cote 1xBet connue ET récente : jamais demandée (trop vieille : « à quelle cote ? »)
             if t.stake > 0:                          # et mise conseillée : noté tout de suite (« ✏️ Autre cote » / « ↩️ Annuler » corrigent)
-                reply = played.note(t, t.ref, t.stake) + played.overlap_suffix(what, t.item.get("date") or day)
+                reply = played.note(t, t.ref, t.stake, ref_at=played.read_note(t)) + played.overlap_suffix(what, t.item.get("date") or day)
                 clear_pending_for(what, day)
                 if message_id:
                     _TAPS[(what, day, message_id)] = time.monotonic()

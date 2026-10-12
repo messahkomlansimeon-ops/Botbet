@@ -179,9 +179,10 @@ def test_update_keeps_note_on_rounding():
     fair.record_custom(custom._row(cid, DAY, custom._load(DAY)["items"][cid]), DAY)
     rows = fair.load_combos()
     rows[0]["played"] = {"odds": 50.0, "stake": 500, "at": "x"}
+    rows[0]["skipped"] = True       # note retirée du bilan : plus protégée (un combiné sur mesure NOTÉ n'est jamais modifié, voir tests/test_review_fixes.py)
     fair.update_combo(rows[0], (legs, total, 0.05), "15:30", "ABC")
     assert rows[0].get("played"), "mêmes paris, mêmes cotes : la note reste (arrondi double 3 puis 2 décimales)"
-    # une vraie différence de cote fait toujours tomber la note d'un combiné pas ticket
+    # une vraie différence de cote fait toujours tomber la note d'un combiné non protégé
     fair.update_combo(rows[0], (legs, total * 1.2, 0.05), "15:45", "ABC")
     assert "played" not in rows[0]
     print("ok  2 update_combo : tolérance d'arrondi (3 puis 2 décimales), la note ne tombe que pour un vrai changement")

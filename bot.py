@@ -2,6 +2,8 @@
 
   python bot.py --daily      matin : actualise les stats gratuites, règle hier, bilan, combinés du jour (Telegram)
                              déjà fait aujourd'hui = ignoré ; --force le refait. Code 1 si aucun message n'a pu partir (en attente)
+                             Prend lui-même le verrou des données pendant tout le passage (les commandes Telegram de --serve attendent : « Kelly est en plein
+                             travail ») ; --no-lock s'il est déjà lancé sous `flock` (unité systemd), sinon inter-blocage
   python bot.py --track      toutes les heures de matchs : clôture des paris envoyés + alertes de cote, puis la fenêtre des stats (paris tirs / fautes / touches
                              chez 1xBet des matchs qui commencent dans 45 min à 4 h : relus, remis à la cote, « 🧮 COMBINÉ STATS » + 💎 ; STATS_WINDOW_ENABLED=0 l'éteint),
                              puis stats de match FotMob
@@ -26,7 +28,8 @@
                              aucun combiné envoyé (« combi N » les bâtit). Prend lui-même le verrou des données ; --no-lock s'il est déjà lancé sous `flock`
   python bot.py --watch      toutes les 10 min : suivi de tes tickets pendant les matchs (⚽ buts, ✅/❌ paris décidés, 🏆 ticket gagné), 🔴 opportunités live,
                              alertes gardées pendant les heures calmes (QUIET_HOURS) ; ne prend pas le verrou des données (documents à part)
-  python bot.py --export     copie lisible de la base (data/kelly.db) en JSON dans data/sauvegarde/ (la sauvegarde de 23:00 la commite)
+  python bot.py --export     copie lisible de la base (data/kelly.db) en JSON dans data/sauvegarde/ (la sauvegarde de 23:00 la commite) ;
+                             --own-lock : prend lui-même le verrou des données (Termux, sans `flock`)
   python bot.py --import [dossier]  restaure la base depuis une copie JSON (data/sauvegarde/ par défaut) ; sous le verrou des données
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
 """
@@ -109,9 +112,17 @@ def main(argv):
         app.run_commands(serve=True)
     elif "--commands" in argv:
         app.run_commands()
-    elif "--export" in argv:                # lancé sous flock par kelly-backup : pas de data_lock ici (inter-blocage)
+    elif "--export" in argv:                # lancé sous flock par kelly-backup : pas de data_lock par défaut (inter-blocage) ; --own-lock (Termux, sans flock) le prend
         from kelly import store
-        print(f"{store.export()} document(s) copié(s) dans {store.backup_dir()}")
+        if "--own-lock" in argv:
+            try:
+                with store.data_lock(wait=600, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):
+                    print(f"{store.export()} document(s) copié(s) dans {store.backup_dir()}")
+            except store.LockTimeout:
+                print("Kelly travaille depuis plus de 10 minutes : sauvegarde abandonnée", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print(f"{store.export()} document(s) copié(s) dans {store.backup_dir()}")
     elif "--import" in argv:
         from kelly import store
         i = argv.index("--import")
@@ -119,7 +130,17 @@ def main(argv):
         with store.data_lock(wait=900, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):
             print(f"{store.import_dir(src)} document(s) restauré(s) depuis {src or store.backup_dir()}")
     else:
-        sys.exit(app.daily_entry(sample, force="--force" in argv))
+        force = "--force" in argv
+        if sample or "--no-lock" in argv:       # --sample : dossier temporaire, aucun verrou ; --no-lock : déjà sous `flock` (unité systemd), en reprendre un bloquerait
+            sys.exit(app.daily_entry(sample, force=force))
+        from kelly import store
+        try:                                    # tout le matin (~30 min) sous le verrou des données : sans lui, un « Je l'ai joué » ou un budget traité par --serve
+            with store.data_lock(wait=1800, reentrant=True, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):   # pendant ce temps était écrasé et perdu
+                code = app.daily_entry(sample, force=force)
+        except store.LockTimeout:
+            print("Kelly travaille depuis plus de 30 minutes : passage du matin abandonné", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(code)
 
 
 if __name__ == "__main__":

@@ -545,6 +545,7 @@ def test_refresh_custom():
     money.set_daily(5000)
     keep_custom(pronos(4), stake=250, cur="FCFA", at="09:30")
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos(7)})
+    played.command(["vm1", "0"], DAY)               # pas noté : un combi sur mesure NOTÉ n'est jamais remplacé (tests/test_review_fixes.py)
     with Fakes(code="NEWC1", drop=("m1",)) as f:
         out = app.refresh_combo("m1", DAY, now=at(13, 30))
     assert f.sent[0].startswith("⏳ Je vérifie ce combiné chez 1xBet"), f.sent
@@ -554,8 +555,8 @@ def test_refresh_custom():
     assert row["coupon"] == "NEWC1" and row["at"] == "13:30" and row["updated"] == "13:30" and "m1|totals||3.5|Under" not in row["keys"], row
     assert 5.0 <= row["min_odds"] <= 6.25 and row["custom"] and row["stake"] == 250 and row["cur"] == "FCFA" and row["target"] == 5.0, row
     assert store.load(app.COMBO_UPDATES, {})["tiers"]["m1"]["keys"] == row["keys"]
-    # un pari remplacé = un autre ticket : la note « joué à … » de l'ancienne version tombe, « ✅ Je l'ai joué » (mise conseillée) est remis
-    assert "played" not in row and "Ta note « joué à … » de l'ancienne version est retirée" in out, (row, out)
+    # pas noté : « ✅ Je l'ai joué » (mise conseillée) est proposé pour la nouvelle version
+    assert "played" not in row and "Ta note « joué à … »" not in out, (row, out)
     assert buttons(out) == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"] and out.markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué — 250 FCFA", buttons(out)
     assert "250 FCFA" in out and "🎟️ <code>NEWC1</code>" in str(played.todo(DAY))
     # un match a commencé : plus touché
@@ -581,6 +582,7 @@ def test_refresh_real_picks():
     with Fakes():
         app.custom_combo(picks, [], 5.0, DAY, when="09:30")
         custom.track("m1", DAY)
+    played.command(["vm1", "0"], DAY)               # pas noté : un combi sur mesure NOTÉ n'est jamais remplacé (tests/test_review_fixes.py)
     before = fair.load_combos()[0]
     keys = list(before["keys"])
     assert chat.refresh_button("vm1", DAY) == ("🎟️ Vérifier ce combiné", f"xmaj|m1|{DAY}")
@@ -595,7 +597,7 @@ def test_refresh_real_picks():
     row = fair.load_combos()[0]
     assert row["keys"] == keys and row["coupon"] == "VERIF1" and row["at"] == "13:00" and row["stake"] == before["stake"], row
     assert abs(row["min_odds"] - 1.2 * 1.45 * XB * XB) < 0.006 and {l["id"]: l["xodds"] for l in row["legs"]} == {"e1": 1.2, "e2": 1.45, "e3": XB, "e4": XB}, row
-    assert buttons(out) == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"] and "played" not in row, buttons(out)      # la cote totale a changé : la note tombe
+    assert buttons(out) == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"] and "played" not in row, buttons(out)      # la cote totale a changé (pas noté)
     # 1xBet ne propose plus un pari : plus jouable tel quel, rien n'est modifié
     gone = {k: v for k, v in now.items() if k != "e2"} | {"e2": {("btts", "Yes", None): 1.8}}
     saved = fair.load_combos()[0]

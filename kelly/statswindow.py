@@ -323,7 +323,7 @@ def announce_list(today, doc, now):
 def plan_combo(app, today, doc, rows, now):
     """Prochain « 🧮 COMBINÉ STATS » de la fenêtre : {"tier", "legs", "total", "prob", "when", "keys"} ou None (plafond du jour atteint, pas assez de jambes à cote fraîche, mêmes
     jambes qu'un combiné déjà envoyé). Jambes : pronostics stats de la fenêtre à cote 1xBet fraîche ET référence de pari (pour le code coupon), réutilisation des matchs
-    selon les règles du matin (Usage de tous les combinés du jour). Fourchette de cote C.STATS_WINDOW_COMBO, un pari par match."""
+    selon les règles du matin (app.day_usage : Usage de tous les tickets du jour, toutes familles). Fourchette de cote C.STATS_WINDOW_COMBO, un pari par match."""
     day = today["day"]
     if C.STATS_WINDOW_MAX_COMBOS <= 0 or len(doc["combos"]) >= C.STATS_WINDOW_MAX_COMBOS:
         return None
@@ -331,7 +331,7 @@ def plan_combo(app, today, doc, rows, now):
     tier = next((CB.window_tier(n) for n in range(1, C.STATS_WINDOW_MAX_COMBOS + 1) if CB.window_tier(n) not in used), None)
     if tier is None:
         return None
-    usage = app._others_usage(rows, None, day, app._load_updates(day))
+    usage = app.day_usage(day, rows)                 # un seul Usage pour tous les tickets du jour (combinés réels, à vérifier, stats, pari du jour, écarts sharp)
     combo = CB.fair_stats_window(app.upcoming(today["pronos"], now), usage=usage, accept=lambda c: in_window(c, now) and fresh(c, now))
     if not combo:
         return None

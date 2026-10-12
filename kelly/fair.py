@@ -495,17 +495,23 @@ ODDS_TOLERANCE = 0.011        # écart de cote totale toléré avant de parler d
 def is_ticket(row):
     """Combiné du matin que l'utilisateur a NOTÉ joué (« ✅ Je l'ai joué », /joue) et pas retiré : le ticket est placé chez 1xBet, ses paris, sa note
     et son règlement ne changent plus jamais (Kelly relit et prévient, voir app._watch_ticket). Les combinés sur mesure (« custom ») ne sont pas
-    concernés : ils ont leur propre bouton « Vérifier »."""
+    concernés ici (ils sont aussi protégés, voir is_noted : « 🎟️ Vérifier ce combiné » les relit et le dit, sans jamais toucher à la note ni aux paris)."""
     return bool(row.get("played")) and not row.get("skipped") and not row.get("custom")
+
+
+def is_noted(row):
+    """Combiné (du matin OU sur mesure) que l'utilisateur a NOTÉ joué et pas retiré : sa note et ses paris ne tombent jamais d'une vérification.
+    is_ticket en est la partie « du matin » ; un combiné sur mesure noté (« ✅ Je le joue », /joue) est protégé de la même façon."""
+    return bool(row.get("played")) and not row.get("skipped")
 
 
 def update_combo(row, combo, hhmm, coupon=None):
     """Combiné du matin renvoyé à jour : la ligne de suivi prend la nouvelle version (jambes, clés, cote, proba, code coupon `coupon`) ; la
     mise et la devise restent, les clés du matin sont gardées une fois (« orig_keys »), « updated » note l'heure. Un combiné déclaré mort qui revit
     redevient un combiné normal. Si les paris changent, ou si la cote totale change de plus que l'arrondi (ODDS_TOLERANCE), la note « joué à … »
-    (/joue) de l'ancienne version tombe : c'est un autre ticket, l'utilisateur note la nouvelle version. Un combiné NOTÉ du matin (is_ticket)
-    n'est JAMAIS remplacé : la ligne est rendue telle quelle."""
-    if is_ticket(row):
+    (/joue) de l'ancienne version tombe : c'est un autre ticket, l'utilisateur note la nouvelle version. Un combiné NOTÉ (is_ticket, ou sur mesure
+    noté : is_noted) n'est JAMAIS remplacé ni dépouillé de sa note : la ligne est rendue telle quelle."""
+    if is_ticket(row) or is_noted(row):
         return row
     legs, min_total, prob = combo
     if (set(row.get("keys") or []) != {c["key"] for c in legs}
@@ -555,10 +561,12 @@ def _keep(rows, cut):
     return out
 
 
-def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
+def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None, replace=False):
     """Enregistre les combinés à cote juste envoyés [(palier, combiné)], un seul par palier et par jour (le premier, comme
     settle.record_combos), garde C.FAIR_COMBO_KEEP_DAYS jours (sauf un combiné NOTÉ : il reste, le bilan « depuis le début » en a besoin).
-    `stakes` : {palier: mise sur le budget du jour}, `coupons` : {palier: code coupon envoyé}, `at` : heure « HH:MM » du relevé 1xBet. -> nombre ajouté. Fichier à part de bets.json (pas de bankroll)."""
+    `stakes` : {palier: mise sur le budget du jour}, `coupons` : {palier: code coupon envoyé}, `at` : heure « HH:MM » du relevé 1xBet. -> nombre ajouté.
+    Fichier à part de bets.json (pas de bankroll). Relance du matin (`replace`, run_daily) : comme settle.record_combos, un palier déjà enregistré avec les
+    mêmes paris (renvoyé tel quel) garde sa ligne et prend la mise du nouvel envoi ; avec d'autres paris il la REMPLACE, sauf si elle est notée ou réglée."""
     from datetime import date, timedelta
     rows = load_combos()
     n = 0
@@ -566,9 +574,17 @@ def record_combos(sent, day, stakes=None, cur=None, coupons=None, at=None):
         if not combo:                                # palier non bâti (fair_plan_all rend aussi les paliers vides)
             continue
         row = combo_row(target, combo, day, (stakes or {}).get(target), cur, (coupons or {}).get(target), at)
-        if not any(r["date"] == row["date"] and r["tier"] == target for r in rows):      # relance du matin : un seul combiné par palier et par jour (le premier)
+        old = next((r for r in rows if r["date"] == row["date"] and r["tier"] == target), None)      # relance du matin : un seul combiné par palier et par jour (le premier)
+        if old is None:
             rows.append(row)
             n += 1
+        elif replace and not (old.get("played") or old.get("result") is not None):
+            if set(old.get("keys") or []) == set(row["keys"]):
+                for k in ("stake", "cur"):
+                    old.pop(k, None)
+                old.update({k: row[k] for k in ("stake", "cur") if k in row})
+            else:
+                rows[rows.index(old)] = row
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
     store.save(COMBOS_FILE, _keep(rows, cut))      # un combiné noté reste : « depuis le début » (money.result) le compte
     return n

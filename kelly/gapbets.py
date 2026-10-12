@@ -34,11 +34,10 @@ def coupon(pick, x):
         return None
 
 
-def stake_txt(stake):
-    """La mise conseillée d'un pari, en mots : « 500 FCFA », ou « pas de mise (trop petite pour ton budget) » ; None sans budget du jour."""
-    if stake is None:
-        return None
-    return money.money(stake) if stake else "pas de mise (trop petite pour ton budget)"
+def stake_txt(stake, x=None):
+    """La mise conseillée d'un pari, en mots : « 500 FCFA », ou « pas de mise (trop petite pour ton budget) » ; None sans budget du jour. `x` : le
+    candidat (sharpgap) : sans espérance positive à sa proba sharp, « Kelly ne conseille pas de miser dessus »."""
+    return money.stake_words(stake, x["p_sharp"] if x else None, x["xodds"] if x else None)
 
 
 def message(cands, picks, day, now, via, stakes=None, when=None):
@@ -57,7 +56,7 @@ def message(cands, picks, day, now, via, stakes=None, when=None):
             pick = by_key[x["key"]]
             st = stake_alone(x) if stakes is None else stakes.get(x["key"], stake_alone(x))
             code = coupon(pick, x)
-            blocks.append(fmt.gap_block(k if len(got) > 1 else None, x, sharpgap.describe(x), code, stake_txt(st)))
+            blocks.append(fmt.gap_block(k if len(got) > 1 else None, x, sharpgap.describe(x), code, stake_txt(st, x)))
             rec.append((pick, x, st, code))
             items.append((f"g{x['n']}", played.short_pick(pick), st or 0, None))
         markup = chat.gap_markup(items, day)

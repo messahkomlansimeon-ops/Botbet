@@ -18,8 +18,8 @@ Sur Android/Termux, `systemd` et `crond` ne sont pas disponibles par défaut.
 L'orchestrateur centralisé en Python ([`termux_runner.py`](termux_runner.py)) remplace systemd et pilote l'ensemble des tâches en boucle continue :
 
 1. **Écoute Telegram continue (`bot.py --serve`)** :
-   - Lancé en sous-processus d'arrière-plan dès le démarrage.
-   - Surveillé en permanence : si le processus s'interrompt pour une raison quelconque, il est relancé automatiquement.
+   - Lancé en sous-processus d'arrière-plan dès le démarrage ; surveillé en permanence par un fil dédié, **même pendant un passage long** (le matin dure ~30 min).
+   - Relancé automatiquement s'il s'arrête. Arrêts rapprochés (< 2 min de vie) : attente croissante 15 s, 30 s, 1 min... plafonnée à 15 min, avec une ligne claire dans `logs/termux.log` (un `bot.py` cassé par un `git pull` ne boucle plus toutes les 15 s).
 2. **Suivi des tickets en direct (`--watch`)** :
    - Déclenché toutes les 10 minutes.
    - Lit les matchs en cours via 365scores pour mettre à jour les tickets et envoyer les alertes en direct.
@@ -27,13 +27,20 @@ L'orchestrateur centralisé en Python ([`termux_runner.py`](termux_runner.py)) r
    - Exécuté chaque heure à la 5e minute (ex: 11:05, 12:05... UTC).
    - Effectue la clôture des cotes, ouvre la fenêtre des stats 1xBet et actualise FotMob.
 4. **Passage du matin (`--daily`)** :
-   - Exécuté chaque jour à 04:00 UTC (04h00 Abidjan).
+   - Exécuté chaque jour dès 04:00 UTC (04h00 Abidjan), **avec rattrapage** : téléphone éteint ou runner relancé à 05:00 -> le matin part dès que le runner est de retour (jusqu'à 20:00 UTC, 3 essais espacés de 30 min en cas d'échec). Un matin déjà fait (même à la main) est ignoré par `bot.py` lui-même (`data/daily_done.json`) : jamais de doublon.
+   - Tient le verrou des données pendant tout le passage : un « Je l'ai joué » ou un budget envoyé pendant ce temps reçoit « Kelly est en plein travail » et est traité à la fin (plus d'écrasement).
    - Règle les paris de la veille, télécharge les sources gratuites, analyse les matchs du monde, génère les pronostics et combinés du matin.
-5. **Relevé de l'après-midi (`--xbet`)** :
-   - Exécuté chaque jour à 15:00 UTC.
-   - Met à jour les cotes 1xBet des matchs à venir.
-6. **Relevé du soir (`--evening`)** :
-   - Exécuté chaque jour à 18:00 UTC.
+5. **Relevé de l'après-midi (`--xbet`)** : chaque jour à 15:00 UTC (cotes 1xBet des matchs à venir).
+6. **Relevé du soir (`--evening`)** : chaque jour à 18:00 UTC.
+7. **Sauvegarde (`--export --own-lock`)** : chaque jour à 23:00 UTC, copie lisible de la base dans `data/sauvegarde/`.
+8. **Réglage hebdomadaire (`--tune`)** : chaque dimanche entre 02:00 et 04:00 UTC (avant le matin).
+
+**Robustesse du runner** :
+- **Une seule instance** : verrou `logs/runner.lock` ; un second `termux_runner.py` refuse de démarrer. Au démarrage, un ancien `bot.py --serve` resté orphelin (runner tué brutalement, `logs/serve.pid`) est arrêté avant d'en lancer un autre (sinon conflits Telegram 409).
+- **Arrêt propre** : SIGTERM, SIGHUP (session fermée, sauf sous `nohup`) et Ctrl+C arrêtent `--serve` et le passage en cours.
+- **Délais maximaux** par passage (watch 9 min, track/xbet/evening 25 min, export 15 min, tune 40 min, daily 90 min) : un appel réseau figé ne bloque plus le reste.
+- **Chemins absolus** : `termux_runner.py` peut être lancé depuis n'importe quel dossier (il travaille dans le dépôt).
+- L'avancement du planning est gardé dans `logs/runner_state.json` (pas de relance en double d'un `--xbet` ou `--export` après un redémarrage). `logs/` est ignoré par git.
 
 ---
 

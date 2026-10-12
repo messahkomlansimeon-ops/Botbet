@@ -60,6 +60,80 @@ def day_stakes(top, built, built_fair, gaps=()):
     return dict(zip(keys, stakes)), spent, kept, poor
 
 
+def morning_plan(picks, gaps=()):
+    """Plan commun des paris RÉELS du matin -> (paris de qualité, pari du jour, écart sharp du pari du jour, écarts sharp montrés, plan [(titre, combiné | None)],
+    titres écartés pour l'espérance, Usage). L'Usage est celui de TOUTE la journée : les combinés réels le remplissent d'abord, puis le pari du jour et les
+    écarts sharp (des paris seuls) y sont comptés, enfin les combinés à vérifier (fair_plan_all) et ceux de la fenêtre des stats (statswindow, day_usage) le
+    reprennent : une jambe sûre (proba >= C.LEG_SAFE_PROB) sert dans C.LEG_REUSE_MAX tickets au plus, une jambe risquée dans un seul, toutes familles confondues."""
+    quality = CB.make_pool(picks)
+    top = max(quality, key=lambda c: c["score"]) if quality else None
+    top_gap = [g for g in (gaps or []) if top and g["key"] == top["key"]]
+    shown = [g for g in (gaps or []) if not (top and g["key"] == top["key"])][:C.SHARPGAP_MAX_SHOWN]      # le pari du jour a déjà son message et son bouton
+    usage, rejected = CB.Usage(), []
+    plan = CB.plan(picks, usage=usage, rejected=rejected) if quality else [(t, None) for t, _, _ in C.COMBOS]
+    by_key = {c["key"]: c for c in picks}
+    usage.add(([top] if top else []) + [by_key[g["key"]] for g in shown if g["key"] in by_key])
+    return quality, top, top_gap, shown, plan, rejected, usage
+
+
+def _recorded_real(day):
+    """Combinés réels déjà enregistrés pour le jour `day` (bets.json) : {titre du palier: ligne}. Une relance du matin les renvoie tels quels."""
+    return {c["tier"]: c for c in store.load_doc("bets.json", {"combos": []})["combos"] if str(c.get("date")) == str(day)}
+
+
+def _resend_real(plan, again, picks):
+    """RELANCE du matin (interruption avant l'envoi complet, --force) : un palier déjà enregistré pour le jour est RENVOYÉ tel quel (mêmes paris, mêmes
+    cotes 1xBet lues, même code coupon) et non reconstruit : le suivi, les notes et le règlement restent ceux du combiné envoyé. Une jambe disparue (match
+    commencé, plus de pari) : le palier est reconstruit ; s'il est déjà noté ou réglé, il n'est pas renvoyé (le ticket joué reste le suivi), sinon la ligne de
+    suivi prend la nouvelle version (settle.record_combos, replace). -> (plan, {titre: ligne enregistrée} des paliers renvoyés tels quels)."""
+    by_key, out, resent = {c["key"]: c for c in picks}, [], {}
+    for title, combo in plan:
+        old = again.get(title)
+        if old is None:
+            out.append((title, combo))
+            continue
+        xl = {x["key"]: x for x in old.get("xlegs") or []}
+        legs = [by_key.get(k) for k in old.get("keys") or []]
+        if legs and all(legs):
+            legs = [c | ({"xodds": xl[c["key"]]["xodds"], "odds": xl[c["key"]]["xodds"]} | ({"xref": xl[c["key"]]["xref"]} if xl[c["key"]].get("xref") else {})
+                         if c["key"] in xl else {}) for c in legs]
+            out.append((title, (legs, old["odds"], old["prob"])))
+            resent[title] = old
+        elif combo and not (old.get("played") or old.get("result") is not None):
+            out.append((title, combo))
+        else:
+            out.append((title, None))              # noté / réglé et illisible aujourd'hui : rien de nouveau (record_combos garde la ligne)
+    return out, resent
+
+
+def _resend_fair(pronos, again, fair_combos):
+    """Comme _resend_real pour les combinés à vérifier / aux cotes 1xBet (fair_combos.json, paliers du matin) : `again` = {palier: ligne du jour}. Les jambes sont
+    relues dans `pronos` par leur clé et gardent leur cote 1xBet et leur référence ENREGISTRÉES. -> fair_combos avec les paliers déjà enregistrés renvoyés tels quels."""
+    by_key, out = {c["key"]: c for c in pronos}, []
+    for target, combo in fair_combos:
+        old = again.get(str(target))
+        if old is None:
+            out.append((target, combo))
+            continue
+        legs = []
+        for k, l in zip(old.get("keys") or [], old.get("legs") or []):
+            c = by_key.get(k)
+            legs.append(c and c | {f: l[f] for f in ("xodds", "xref", "odds", "min_odds") if l.get(f) is not None})
+        if legs and all(legs):
+            out.append((target, (legs, old["min_odds"], old["prob"])))
+        elif combo and not (old.get("played") or old.get("result") is not None):
+            out.append((target, combo))
+        else:
+            out.append((target, None))
+    return out
+
+
+def _recorded_fair(day):
+    """Combinés à cote juste du matin déjà enregistrés pour le jour `day` (fair_combos.json) : {palier: ligne}, sans les combis sur mesure ni ceux de la
+    fenêtre des stats (envoyés dans la journée, jamais rebâtis le matin)."""
+    return {str(r["tier"]): r for r in fair.load_combos() if str(r.get("date")) == str(day) and not r.get("custom") and CB.window_no(r["tier"]) is None}
+
+
 RETRY_BUTTON = "touche « 🎟️ Vérifier ce combiné »"        # sous un combiné qui devait avoir son code coupon et ne l'a pas eu (fmt.coupon_block)
 
 
@@ -74,25 +148,23 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     `odds_time` : heure « HH:MM » du relevé 1xBet, rappelée sous les combinés et les pronostics aux cotes 1xBet. `gaps` : écarts sharp du jour (sharpgap.find) ->
     le message « 💰 1xBet paie plus que le marché » (au plus C.SHARPGAP_MAX_SHOWN, jamais le pari du jour), mises prises sur le budget du jour comme les autres
     paris ; `gap_out` (liste) reçoit [(pari, candidat numéroté, mise, code)] à suivre (track.record_gap, APRÈS track.record)."""
-    quality = CB.make_pool(picks)
     stats_note = statswindow.morning_note(pronos)
     n_events = len({c["id"] for c in picks})
     messages, sent_picks, sent_combos = [], [], []
-    top = max(quality, key=lambda c: c["score"]) if quality else None
-    rejected = []
-    plan = CB.plan(picks, rejected=rejected) if quality else [(t, None) for t, _, _ in C.COMBOS]
+    quality, top, top_gap, gaps, plan, rejected, _ = morning_plan(picks, gaps)
+    again = _recorded_real(day)
+    plan, resent = _resend_real(plan, again, picks)          # relance du même jour : les combinés déjà enregistrés sont renvoyés tels quels
+    again_fair = _recorded_fair(day)
     built = [(t, c) for t, c in plan if c]
-    missing = [t for t, c in plan if not c and t not in rejected]
+    missing = [t for t, c in plan if not c and t not in rejected and t not in again]
     built_fair = [(t, c) for t, c in fair_combos if c]
-    top_gap = [g for g in (gaps or []) if top and g["key"] == top["key"]]
-    gaps = [g for g in (gaps or []) if not (top and g["key"] == top["key"])][:C.SHARPGAP_MAX_SHOWN]      # le pari du jour a déjà son message et son bouton
     if top_gap and gap_out is not None:                  # ... mais il reste un écart sharp : marqué dans le suivi pour mesurer sa clôture contre Pinnacle
         gap_out.append((top, top_gap[0], None, None))
     stakes, spent, kept, poor = day_stakes(top, built, built_fair, gaps)
     cur = money.cur()
     if fair_stakes is not None:
         fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple) and k[0] == "fair")})   # 0 compris
-    mise = lambda st: (money.money(st) if st else "pas de mise (trop petite pour ton budget)") if money.active() else None    # noqa: E731
+    mise = lambda st, prob=None, odds=None: money.stake_words(st, prob, odds) if money.active() else None    # noqa: E731
     if picks:
         n_world = monde.total(world) if world else 0
         seen = (f"{n_world} matchs analysés dans le monde, {n_events} avec des cotes réelles" if n_world
@@ -145,7 +217,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
             top["coupon"] = xbet.save_coupon([top])
         if top.get("xodds") and odds_time:
             top["xat"] = odds_time                  # heure de la cote 1xBet (« Mes paris »)
-        messages.append(chat.with_played_button(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari")),
+        messages.append(chat.with_played_button(fmt.single(top, CB.leg_reason(top), stake_txt=mise(stakes.get("pari"), top["prob"], top["odds"]),
                                                            coupon=top.get("coupon"), when=odds_time,
                                                            retry=RETRY_BUTTON if xtop and not top.get("coupon") else None),
                                                 "pari", day, stake=stakes.get("pari"), xrefresh=xtop, code=top.get("coupon")))
@@ -154,24 +226,29 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         picks_, odds_, prob = combo
         st = stakes.get(title, 0) if money.active() else None      # mise conseillée en FCFA (0 : trop petite pour le budget) ; None sans budget
         xcombo = all(c.get("xref") and c.get("xodds") for c in picks_)
-        coupon = xbet.save_coupon(picks_) if xcombo else None      # combiné aux cotes 1xBet
+        old = resent.get(title) or {}                              # relance : même code coupon et même heure de cotes que le combiné déjà envoyé
+        when = old.get("at") or odds_time if title in resent else odds_time
+        coupon = (old.get("coupon") if title in resent and old.get("coupon") else xbet.save_coupon(picks_)) if xcombo else None      # combiné aux cotes 1xBet
         messages.append(chat.with_played_button(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
-                                                          stake_txt=mise(st), coupon=coupon, when=odds_time,
+                                                          stake_txt=mise(st, prob, odds_), coupon=coupon, when=when,
                                                           retry=RETRY_BUTTON if xcombo and not coupon else None),
                                                 played.norm(fmt.tier_word(title)), day, stake=st, xrefresh=xcombo, code=coupon))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
                             "stake": st} | ({"cur": cur} if money.active() and st else {})
                            | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
-                               "coupon": coupon, "at": odds_time} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
+                               "coupon": coupon, "at": when} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
     for target, (legs, min_total, prob) in built_fair:
         xfair = all(c.get("xref") and c.get("xodds") for c in legs)
-        coupon = xbet.save_coupon(legs) if xfair else None
+        old = again_fair.get(str(target)) or {}
+        old = old if set(old.get("keys") or []) == {c["key"] for c in legs} else {}      # relance : mêmes paris = même code coupon et même heure de cotes que l'envoi d'origine
+        when = old.get("at") or odds_time if old else odds_time
+        coupon = (old.get("coupon") if old.get("coupon") else xbet.save_coupon(legs)) if xfair else None
         if fair_coupons is not None and coupon:
             fair_coupons[target] = coupon
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                               stake_txt=mise(stakes.get(("fair", target))),
-                                                               title=CB.shots_title(target), coupon=coupon, when=odds_time,
+                                                               stake_txt=mise(stakes.get(("fair", target)), prob, min_total),
+                                                               title=CB.shots_title(target), coupon=coupon, when=when,
                                                                retry=RETRY_BUTTON if xfair and not coupon else None),
                                                 f"v{target}", day, stake=stakes.get(("fair", target)),
                                                 refresh=target if all(c.get("xodds") for c in legs) else None, code=coupon))
@@ -632,7 +709,7 @@ def run_daily(sample=False):
             why = "budget de cotes du jour épuisé" if why else None
     if pronos:
         try:
-            fair_combos = fair_plan_all(pronos)
+            fair_combos = _resend_fair(pronos, _recorded_fair(day), fair_plan_all(pronos, picks, gaps))
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
     fair_stakes, fair_coupons, gap_rows = {}, {}, []
@@ -644,9 +721,9 @@ def run_daily(sample=False):
             track.record_gap(gap_rows, day, now, read_at=odds_at)
         except Exception as e:                      # noqa: BLE001 - le suivi neuf ne bloque pas le matin
             print(f"[sharp] suivi des écarts ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-    settle.record_combos(sent_combos, day)
+    settle.record_combos(sent_combos, day, replace=True)       # relance du même jour : voir _resend_real
     fair.record_combos([(t, c) for t, c in fair_combos if c], day, fair_stakes, money.cur() if fair_stakes else None,
-                       coupons=fair_coupons, at=odds_at)
+                       coupons=fair_coupons, at=odds_at, replace=True)
     keep = keep_pronos(pronos, fair_combos)         # /top, /match, /combi et le relevé de 15:00 les relisent
     # xbet_at : heure du dernier relevé 1xBet des pronostics (relevés de l'après-midi compris), picks_at : celle des paris réels (le matin) ;
     # affichées avec les cotes 1xBet (/top, /match, /analyse)
@@ -675,10 +752,11 @@ def deliver_morning(messages, day, now, sample=False):
         store.save(DAILY_FILE, {"day": str(day), "at": now.isoformat()})
 
 
-def fair_plan_all(pronos):
-    """Tous les combinés à cote juste du matin (paliers 5 / 12 / 25 puis « tirs cadrés », « tirs vers le but », « stats ») avec UN SEUL Usage : un match n'est jamais repris dans deux
-    combinés au-delà des règles de réutilisation (une jambe risquée une seule fois, sûre LEG_REUSE_MAX fois)."""
-    usage = CB.Usage()
+def fair_plan_all(pronos, picks=None, gaps=()):
+    """Tous les combinés à cote juste du matin (paliers 5 / 12 / 25 puis « tirs cadrés », « tirs vers le but », « stats ») avec UN SEUL Usage, celui de toute la
+    journée : avec `picks` (paris réels du matin), il part de ce que les combinés réels, le pari du jour et les écarts sharp `gaps` ont déjà pris (morning_plan) ; un
+    match n'est jamais repris dans plusieurs tickets au-delà des règles de réutilisation (une jambe risquée une seule fois, sûre LEG_REUSE_MAX fois)."""
+    usage = morning_plan(picks, gaps)[6] if picks else CB.Usage()
     return CB.fair_plan(pronos, usage=usage) + CB.fair_shots_plan(pronos, usage=usage)
 
 
@@ -1007,13 +1085,19 @@ def _stake_txt(row):
     if not money.active():
         return None
     st = money.suggested(row)
-    return money.money(st) if st else "pas de mise (trop petite pour ton budget)"
+    if st:
+        return money.money(st)
+    it = money.row_item(row) or {}
+    return money.no_stake_txt(it.get("prob"), it.get("odds"))
 
 
 def _record_version(sent, row, rows, combo, hhmm, coupon=None):
     """Nouvelle version envoyée d'un combiné : retenue dans COMBO_UPDATES (base des prochaines vérifications et du bouton « Vérifier ce
     combiné ») et dans sa ligne de suivi fair_combos.json (règlement et bilan comptent la version envoyée en dernier, avec la mise du
-    matin ; « Mes paris » y lit ses cotes et son code coupon `coupon`). -> la note « joué à … » de l'ancienne version est-elle tombée ?"""
+    matin ; « Mes paris » y lit ses cotes et son code coupon `coupon`). -> la note « joué à … » de l'ancienne version est-elle tombée ?
+    Un combiné NOTÉ (fair.is_noted, sur mesure compris) n'est jamais modifié : rien n'est écrit, la note reste."""
+    if fair.is_noted(row):
+        return False
     legs, total, prob = combo
     sent["tiers"][str(row["tier"])] = {"keys": [c["key"] for c in legs], "total": round(total, 3),
                                         "legs": [fair.combo_leg(c) for c in legs]}
@@ -1027,15 +1111,32 @@ def _record_version(sent, row, rows, combo, hhmm, coupon=None):
 DROPPED_NOTE = " Ta note « joué à … » de l'ancienne version est retirée : note la nouvelle (✅ / ✏️) si tu la joues."
 
 
-def _others_usage(rows, row, day, sent):
-    """Usage (CB.Usage) des AUTRES combinés du matin du jour `day` (leur dernière version envoyée) : un remplaçant n'est repris dans `row` que si les
-    règles de réutilisation le permettent (une jambe risquée une seule fois). Les combis sur mesure (« combi N ») n'y comptent pas : ils ne sont pas
-    soumis à ces règles. Un combiné déclaré mort n'en fait pas partie."""
-    usage = CB.Usage()
+def day_usage(day, rows=None, row=None, sent=None):
+    """Usage (CB.Usage) de TOUS les tickets du jour `day`, toutes familles confondues : combinés réels envoyés (bets.json), combinés à vérifier / aux cotes 1xBet
+    et ceux de la fenêtre des stats (fair_combos.json : leur dernière version envoyée), pari du jour et paris « 1xBet paie plus que le marché » (tracked.json).
+    Une jambe sûre (proba >= C.LEG_SAFE_PROB) sert dans C.LEG_REUSE_MAX tickets au plus, une jambe risquée dans un seul (CB.Usage). `row` : le combiné à
+    refaire, exclu (il ne se compte pas lui-même). Les combis sur mesure (« combi N ») n'y comptent pas : ils ne sont pas soumis à ces règles, ni un combiné
+    déclaré mort. Une jambe d'un combiné réel introuvable dans today.json est comptée risquée (CB.Usage.from_sent)."""
+    day = str(day)[:10]
+    rows = fair.load_combos() if rows is None else rows
+    sent = _load_updates(day) if sent is None else sent
+    today = store.load("today.json", {})
+    picks = today.get("picks") or [] if today.get("day") == day else []
+    combos = [c for c in store.load_doc("bets.json", {"combos": []})["combos"] if str(c.get("date")) == day]
+    usage = CB.Usage.from_sent(combos, picks)
     for r in rows:
         if r is not row and r.get("date") == day and not played.is_custom(r) and not r.get("dead"):
             usage.add(_base_legs(sent, r))
+    for r in track.load():                          # paris seuls du jour : le pari du jour et les écarts sharp annoncés
+        if r.get("date") == day and r.get("sent") and (r.get("single") is True or r.get("sharpgap")):
+            usage.add([{"id": r.get("id") or str(r.get("key")).split("|")[0], "prob": r.get("prob") or 0.0}])
     return usage
+
+
+def _others_usage(rows, row, day, sent):
+    """Usage (day_usage) des AUTRES tickets du jour `day` : un remplaçant n'est repris dans `row` que si les règles de réutilisation le permettent (une jambe
+    risquée une seule fois, toutes familles confondues)."""
+    return day_usage(day, rows, row, sent)
 
 
 def _ticket_problems(legs, pool, fresh_ids, now):
@@ -1686,6 +1787,42 @@ def _todays_usage(day, picks):
     return CB.Usage.from_sent(combos, picks), len(combos)
 
 
+def send_backup():
+    """/backup : envoie kelly.db (zippé) sur Telegram -> None si c'est parti, sinon le message d'erreur. Copie COHÉRENTE de la base avec l'API de sauvegarde de
+    SQLite (d'autres processus peuvent écrire pendant ce temps : copier le fichier brut donnerait une base abîmée), dans un dossier temporaire PROPRE À CET
+    APPEL (tempfile : deux sauvegardes en même temps ne se marchent pas dessus), zippée, puis le zip est envoyé (jusqu'à 300 s) ; tout est effacé quoi qu'il arrive.
+    N'a besoin d'AUCUN verrou des données (la copie est cohérente à elle seule) : le serveur la lance sans le verrou (chat.quick), l'envoi ne bloque donc ni le
+    passage du matin ni les messages."""
+    import shutil
+    import sqlite3
+    import tempfile
+    import zipfile
+    from contextlib import closing
+    db_file = store.db_path()
+    if not os.path.exists(db_file):
+        return "⚠️ Base de données introuvable."
+    tmp = tempfile.mkdtemp(prefix="kelly-backup-")
+    try:
+        fd, snap = tempfile.mkstemp(prefix="kelly-", suffix=".db", dir=tmp)
+        os.close(fd)
+        with closing(sqlite3.connect(db_file, timeout=60)) as src, closing(sqlite3.connect(snap)) as dst:
+            src.backup(dst)
+        orig_mb = os.path.getsize(snap) / (1024 * 1024)
+        zip_path = os.path.join(tmp, "kelly_backup.zip")
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(snap, arcname="kelly.db")
+        zip_mb = os.path.getsize(zip_path) / (1024 * 1024)
+        caption = f"💾 Sauvegarde Kelly ({zip_mb:.1f} Mo, compressée depuis {orig_mb:.1f} Mo) — {now_utc().strftime('%d/%m/%Y %H:%M UTC')}"
+        telegram.send_document(zip_path, caption=caption)
+    except telegram.TelegramError as e:
+        return f"⚠️ Échec de la sauvegarde : {e}"
+    except (OSError, sqlite3.Error, zipfile.BadZipFile) as e:
+        return f"⚠️ Échec de la sauvegarde : {type(e).__name__}: {e}"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return None
+
+
 def handle_command(text):
     """Répond à une commande Telegram. Hors ligne par construction : aucune requête réseau (cotes payantes ou non,
     API-Football, sources), seulement les données du matin dans data/."""
@@ -1724,28 +1861,7 @@ def _handle_command(text):
         from . import status
         return status.report()
     if cmd in ("/backup", "/sauvegarde"):
-        import tempfile
-        import zipfile
-        db_file = store.db_path()
-        if not os.path.exists(db_file):
-            return "⚠️ Base de données introuvable."
-        orig_mb = os.path.getsize(db_file) / (1024 * 1024)
-        zip_path = os.path.join(tempfile.gettempdir(), "kelly_backup.zip")
-        try:
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                zf.write(db_file, arcname="kelly.db")
-            zip_mb = os.path.getsize(zip_path) / (1024 * 1024)
-            caption = f"💾 Sauvegarde Kelly ({zip_mb:.1f} Mo, compressée depuis {orig_mb:.1f} Mo) — {now_utc().strftime('%d/%m/%Y %H:%M UTC')}"
-            telegram.send_document(zip_path, caption=caption)
-        except telegram.TelegramError as e:
-            return f"⚠️ Échec de la sauvegarde : {e}"
-        finally:
-            if os.path.exists(zip_path):
-                try:
-                    os.remove(zip_path)
-                except OSError:
-                    pass
-        return None
+        return send_backup()
     if cmd == "/bank":
         return ("💰 Kelly ne suit plus de bankroll en unités : elle travaille en FCFA, avec ton budget du jour (« 💰 Mon budget » ou écris "
                 "« budget 5000 ») pour les mises conseillées. Seuls les paris que tu notes comptent dans tes résultats (« 📊 Mes résultats »).")
@@ -1865,16 +1981,15 @@ def _budget_stake(prob, odds, kind="fair", tier=None):
     return money.allocate([{"kind": kind, "tier": odds if tier is None else tier, "prob": prob, "odds": odds}])[0][0]
 
 
-def _stake_words(st):
-    """La mise `st` (_budget_stake) en mots pour le message : « 1 500 FCFA (sur ton budget du jour) » ; None sans budget."""
-    if st is None:
-        return None
-    return money.money(st) + " (sur ton budget du jour)" if st else "pas de mise (trop petite pour ton budget)"
+def _stake_words(st, prob=None, odds=None):
+    """La mise `st` (_budget_stake) en mots pour le message : « 1 500 FCFA (sur ton budget du jour) » ; None sans budget. Mise 0 : « pas de mise (trop
+    petite pour ton budget) », ou, si `prob` et `odds` montrent une espérance négative, « Kelly ne conseille pas de miser dessus » (money.no_stake_txt)."""
+    return money.stake_words(st, prob, odds, " (sur ton budget du jour)")
 
 
 def _budget_stake_txt(prob, odds):
     """Mise conseillée d'un combiné demandé à la main (« combi 20 ») sur le budget du jour ; None sans budget (le message dit de le régler)."""
-    return _stake_words(_budget_stake(prob, odds))
+    return _stake_words(_budget_stake(prob, odds), prob, odds)
 
 
 def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, when=None, code=..., retry=None, stale=False, budget=False,
@@ -1891,7 +2006,7 @@ def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, w
     stake = None
     if budget and stake_txt is None:
         stake = _budget_stake(prob, min_total)
-        stake_txt = _stake_words(stake)
+        stake_txt = _stake_words(stake, prob, min_total)
     expected = coupon and bool(retry) and all(c.get("xref") and c.get("xodds") for c in legs) and not code
     top = "\n".join(x for x in (fmt.esc(head).strip("\n"), changes) if x)
     msg = Html((top + "\n\n" if top.strip() else "")
@@ -2003,7 +2118,8 @@ def refresh_combo(tier, day, now=None, check=None, fetch=None):
     remplacé : ses matchs sont relus et Kelly dit si un de ses paris n'y est plus ou paie moins (_check_ticket) ; pour une version à jour, « ↩️ Annuler »
     d'abord. Combiné sur mesure suivi (« m<n> », kelly/custom.py) : même
     chose dans SA fourchette de cote (celle de « combi N ») ; construit sur des paris réels, il est relu comme un combiné réel
-    (_refresh_picks : paris non remplacés). `fetch` : relevé 1xBet de ce dernier cas, injectable pour les tests."""
+    (_refresh_picks : paris non remplacés). Un combiné sur mesure NOTÉ joué est protégé comme un ticket du matin : sa note et ses paris
+    ne tombent jamais (relu et dit seulement). `fetch` : relevé 1xBet de ce dernier cas, injectable pour les tests."""
     now = now or now_utc()
     rows = fair.load_combos()
     row = next((r for r in rows if r["date"] == str(day) and str(r["tier"]) == str(tier)), None)
@@ -2019,8 +2135,8 @@ def refresh_combo(tier, day, now=None, check=None, fetch=None):
     if mine and not played.is_real(row):
         return "Ce combiné est à la cote mini de Kelly, pas aux cotes de 1xBet : il n'y a rien à revérifier, compare chaque cote dans l'appli."
     if mine and row.get("src") == "picks":
-        return _refresh_picks(row, rows, sent, str(day), now, fetch)
-    if fair.is_ticket(row):                         # noté joué : le ticket est placé, on le relit et on le dit, sans jamais le remplacer
+        return _refresh_picks(row, rows, sent, str(day), now, fetch)        # noté : relu et affiché, jamais remplacé (fair.is_noted)
+    if fair.is_ticket(row) or fair.is_noted(row):   # noté joué (combiné du matin ou sur mesure) : le ticket est placé, on le relit et on le dit, sans jamais le remplacer
         return _check_ticket(row, base, str(day), str(tier), now, check)
     telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False)
     res, hhmm, ok = _live_fair(base, lo, hi, prefix, now, check, usage=None if mine else _others_usage(rows, row, str(day), sent))
@@ -2085,9 +2201,12 @@ def _refresh_picks(row, rows, sent, day, now, fetch=None):
                                       "tous les paris »."))
     total, prob = math.prod(c["odds"] for c in new), math.prod(c["prob"] for c in new)
     code = _coupon(new)
-    dropped = _record_version(sent, row, rows, (new, total, prob), hhmm, code)
+    dropped = _record_version(sent, row, rows, (new, total, prob), hhmm, code)      # noté : rien n'est écrit (la note et les paris restent)
     head = f"🔄 Combi sur mesure remis aux cotes 1xBet de {hhmm}" + ("." if changes else " : aucun changement.") + (DROPPED_NOTE if dropped else "")
-    body = fmt.combo(f"🔄 COMBI SUR MESURE À JOUR {hhmm}", new, total, prob, reasons={c["key"]: CB.leg_reason(c) for c in new},
+    if fair.is_noted(row):                          # ticket placé : on montre les cotes du moment, ta note « joué à … » et tes paris ne changent pas
+        head = (f"🎟️ Ton ticket (combi sur mesure joué à {fmt.odds_txt(row['played']['odds'])}) relu chez 1xBet à {hhmm}" + ("." if changes else " : aucun changement.")
+                + " Ta note et ses paris ne changent pas ; voici les cotes du moment.")
+    body = fmt.combo(f"🎟️ COTES DU MOMENT {hhmm}" if fair.is_noted(row) else f"🔄 COMBI SUR MESURE À JOUR {hhmm}", new, total, prob, reasons={c["key"]: CB.leg_reason(c) for c in new},
                      stake_txt=_stake_txt(row), coupon=code, when=hhmm, retry=RETRY_BUTTON)
     return chat.with_played_button(Html(fmt.esc(head) + ("\n" + "\n".join(changes) if changes else "") + "\n\n" + body),
                                    f"v{row['tier']}", day, refresh=str(row["tier"]), lookup=True, code=code)
@@ -2205,7 +2324,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
             picks_, odds_, prob = combo
             if money.active():
                 st = _budget_stake(prob, odds_, "combo", "🎯")
-                txt = _stake_words(st)
+                txt = _stake_words(st, prob, odds_)
             else:
                 st, txt = None, None                # pas de budget du jour : aucune mise conseillée (le message dit de le régler)
             xcombo = all(c.get("xref") and c.get("xodds") for c in picks_)
@@ -2217,7 +2336,9 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
                                                 "avant de jouer, la cote totale chez lui peut être plus basse."))
             if CB.ev(combo) < C.COMBO_MIN_EV:
                 msg = Html(msg + "\n\n" + fmt.i(f"⚠️ Espérance négative : à ces cotes, ce combiné rend en moyenne "
-                                                f"{fmt.pct(1 - CB.ev(combo))} de moins que la mise. Mise petit, ou vise une autre cote."))
+                                                f"{fmt.pct(1 - CB.ev(combo))} de moins que la mise. "
+                                                + ("Kelly ne conseille pas d'y miser : vise une autre cote." if money.active() and not money.has_edge(prob, odds_)
+                                                   else "Mise petit, ou vise une autre cote.")))
             if note or _shared_note(day, picks_):
                 msg = Html(msg + "\n\n" + fmt.i(fmt.esc((note + _shared_note(day, picks_)).strip())))
             if n_sent:
@@ -2478,12 +2599,14 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
             continue
         weak = [c for c in combo[0] if c["key"] not in solid]
         many = len(weak) > 1
+        sure_loss = money.active() and not money.has_edge(combo[2], combo[1])      # espérance négative : Kelly ne conseille aucune mise (money.allocate)
+        small = "Kelly ne conseille pas d'y miser" if sure_loss else "mise petite"
         if fill:                                    # au moins N : les N paris d'abord, les moins sûrs comblent le trou
             head = (f"🧩 {len(combo[0])} paris (au moins {mn_} demandés)"
                     + (f" : en {mn_} paris, même les plus sûrs, la cote ne descend pas sous {fmt.trim(over, 1)} (pas {t}) ; voici le plus sûr à partir de là." if over else ".")
-                    + f"\n🎲 {_chances(combo[2])} de chances, mise petite.")
+                    + f"\n🎲 {_chances(combo[2])} de chances, {small}.")
         else:
-            head = f"🎲 Ticket de loterie : {_chances(combo[2])} de chances, mise très petite."
+            head = f"🎲 Ticket de loterie : {_chances(combo[2])} de chances, {small if sure_loss else 'mise très petite'}."
         head += ((f" Espérance {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}." if CB.ev(combo) < 1 else "")
                  + (f"\n⚠️ {len(weak)} pari{'s' if many else ''} moins sûr{'s' if many else ''}{' pour compléter' if fill else ''} : "
                     + ", ".join(f"{c['home']} – {c['away']} ({fmt.pct(c['prob'])}{', mal payé' if underpaid(c) else ''})" for c in weak)
@@ -2497,7 +2620,7 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
         st = _budget_stake(combo[2], combo[1], "combo", "🎯") if money.active() else None
         code = xbet.save_coupon(combo[0]) if all(c.get("xref") for c in combo[0]) else None
         msg = Html(fmt.esc(head) + "\n\n" + fmt.combo(title + (f" · {only.upper()}" if only else ""), combo[0], combo[1], combo[2],
-                                                        reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st), coupon=code,
+                                                        reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st, combo[2], combo[1]), coupon=code,
                                                         when=when) + ("\n" + fmt.esc(foot.strip("\n")) if foot.strip() else ""))
         cid = custom.remember(day, target, lo, hi, combo, st, money.cur() if st is not None else None, code, when, src="picks",
                               kinds=kinds if prefix else None, nlegs=nlegs)

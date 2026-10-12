@@ -9,3 +9,12 @@ data/strength_*.json
 sofa.env
 data/sofa.env
 probe/
+
+# Fichiers d'exécution (base SQLite, verrous, temporaires, journaux) : jamais dans git
+data/kelly.db*
+data/.kelly.lock
+data/*.tmp
+data/**/*.tmp
+logs/
+nohup.out
+*.log

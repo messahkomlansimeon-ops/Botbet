@@ -60,6 +60,19 @@ def units(x):
 NO_BUDGET = "règle ton budget du jour avec « 💰 Mon budget »"      # à la place d'une mise, quand il n'y a pas de budget du jour (jamais d'unités)
 
 
+NO_EDGE = "Kelly ne conseille pas de miser dessus (espérance négative)"      # à la place d'une mise, quand le pari perd en moyenne à sa cote
+
+
+def stake_line(stake_txt, suffix=""):
+    """Ligne de mise d'un message : « 💰 Mise : 1 500 FCFA » (`suffix` en italique après), « 💰 Kelly ne conseille pas de miser dessus (espérance
+    négative). » (NO_EDGE : aucune ligne « Mise : ») ou, sans mise (`stake_txt` vide : pas de budget du jour), de quoi régler le budget."""
+    if stake_txt == NO_EDGE:
+        return i("💰 " + esc(NO_EDGE) + ".")
+    if not stake_txt:
+        return no_stake_line()
+    return f"💰 Mise : {b(esc(stake_txt))}" + (f" {i(suffix)}" if suffix else "")
+
+
 def no_stake_line():
     """Une ligne (une fois par message) à la place de la mise conseillée quand il n'y a pas de budget du jour."""
     return i("💰 Mise : " + esc(NO_BUDGET))
@@ -286,7 +299,7 @@ def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=No
     reasons = reasons or {}
     head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
             f"🎯 {len(picks)} paris · {pct(prob)} de chances · {expect(prob, odds_total)}",
-            f"💰 Mise : {b(esc(stake_txt))}" if stake_txt else no_stake_line()]
+            stake_line(stake_txt)]
     legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
     return Html("\n".join(head) + "\n\n" + "\n".join(legs) + coupon_block(coupon, retry) + xbet_note(picks, when))
 
@@ -295,7 +308,7 @@ def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None
     """Pari du jour : une seule jambe (et sa mise conseillée sur le budget du jour, `stake_txt`, sinon la ligne « règle ton budget »).
     `coupon` / `when` / `retry` : voir combo."""
     head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances",
-            f"💰 Mise : {b(esc(stake_txt))}" if stake_txt else no_stake_line()]
+            stake_line(stake_txt)]
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + coupon_block(coupon, retry) + xbet_note([c], when))
 
 
@@ -361,7 +374,9 @@ def gap_block(n, x, d, coupon=None, stake_txt=None):
     """Un pari « 1xBet paie plus que le marché » : le match, le pari avec la cote 1xBet et la cote juste, l'âge du relevé, la mise conseillée (`stake_txt`, FCFA)
     et son code coupon en <code>. `x` : candidat de sharpgap, `d` : sharpgap.describe(x), `n` : numéro affiché dans le message (None : sans)."""
     lines = [_match_line(n, x), f"👉 {esc(d['title'])} — {esc(d['line'])}", i(f"   {esc(d['age'])}")]
-    if stake_txt:
+    if stake_txt == NO_EDGE:
+        lines.append(i("💰 " + esc(NO_EDGE) + "."))
+    elif stake_txt:
         lines.append(f"💰 Mise conseillée : {b(esc(stake_txt))}")
     if coupon:
         lines.append(f"🎟️ Code coupon 1xBet : {code(coupon)}")
@@ -406,7 +421,7 @@ def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, c
     name = title or ("💎 COMBINÉ" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")
     head = [b(f"{name} — {'cote' if real else 'cote mini'} {odds_txt(min_total)}" + (" · " + tail if old or (title and not real) else "")),
             f"🎯 {len(picks)} paris · {pct(prob)} de chances",
-            (f"💰 Mise : {b(esc(stake_txt))}" + ("" if real else f" {i('(si 1xBet paie la cote mini)')}") if stake_txt else no_stake_line())]
+            stake_line(stake_txt, "" if real else "(si 1xBet paie la cote mini)")]
     foot = i(f"🕒 Cotes du dernier relevé ({esc(when)}) : 1xBet ne répond pas, vérifie-les avant de valider." if old and when else
              "🕒 Cotes du dernier relevé : 1xBet ne répond pas, vérifie-les avant de valider." if old else
              f"🕒 Cotes 1xBet de {esc(when)} : vérifie-les avant de valider." if real and when else

@@ -410,8 +410,13 @@ def test_resend_played_and_labels():
     snap = dict(row)
     fair.update_combo(row, (new, 1.55 ** 4, 0.72 ** 4), "14:00", "NEW")
     assert row == snap and row["played"] and "coupon" not in row, "autres paris : un combiné noté reste le ticket joué"
-    # combiné sur mesure noté (son bouton « Vérifier » est une action explicite) : la note tombe avec la nouvelle version
+    # combiné sur mesure noté : comme un ticket du matin, sa note et ses paris ne tombent jamais d'une vérification (fair.is_noted)
     row = fair.combo_row(5, (legs, 1.55 ** 4, 0.72 ** 4), DAY) | {"custom": True, "played": {"odds": 5.5, "stake": 1}}
+    snap = dict(row)
+    fair.update_combo(row, (new, 1.55 ** 4, 0.72 ** 4), "14:00", "NEW")
+    assert row == snap and row["played"], "autres paris : un combi sur mesure noté reste le ticket joué"
+    # note retirée du bilan (skipped) : plus protégée, la nouvelle version remplace l'ancienne et la note tombe
+    row["skipped"] = True
     fair.update_combo(row, (new, 1.55 ** 4, 0.72 ** 4), "14:00", "NEW")
     assert "played" not in row and row["coupon"] == "NEW" and row["at"] == "14:00", "autres paris : l'utilisateur note la nouvelle version"
     row["played"] = {"odds": 5.5, "stake": 1}

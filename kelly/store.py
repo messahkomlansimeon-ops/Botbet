@@ -10,6 +10,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import time
 from contextlib import closing, contextmanager
 
@@ -328,13 +329,26 @@ def lock_path():
     return os.path.join(run, "kelly.lock") if run else os.path.join(DATA_DIR, ".kelly.lock")
 
 
+_held = threading.local()           # verrou tenu PAR CE FIL avec reentrant=True (le matin) : les data_lock imbriqués du même fil passent ; un autre fil ou processus reste en conflit
+
+
 @contextmanager
-def data_lock(wait=None, on_busy=None):
+def data_lock(wait=None, on_busy=None, reentrant=False):
     """Verrou exclusif sur les données (bets.json, tracked.json...) : le bot Telegram écrit pendant que le matin ou le relevé horaire
     tournent, et l'un écraserait l'autre (mise à jour perdue : lire, modifier, réécrire tout le document). `wait` : secondes
     d'attente au plus (None = sans limite, 0 = ne pas attendre) ; dépassé -> LockTimeout. `on_busy()` est appelé une fois si le
     verrou est déjà pris, avant d'attendre. Le verrou se libère en sortant (et si le processus meurt). Ne l'utilise pas autour d'un
-    code déjà lancé sous `flock` : inter-blocage. Verrou impossible (dossier, fichier, erreur flock) : travail sans verrou plutôt que bloquer."""
+    code déjà lancé sous `flock` : inter-blocage. Verrou impossible (dossier, fichier, erreur flock) : travail sans verrou plutôt que bloquer.
+    `reentrant=True` (bot.py --daily, qui tient le verrou pendant tout le matin) : les data_lock pris ensuite par le MÊME fil (fmmatch / statswindow
+    en mode --own-lock, par exemple) passent au lieu de s'attendre eux-mêmes (inter-blocage ou LockTimeout) ; un autre fil ou processus reste en conflit.
+    Sans `reentrant` (le défaut) un verrou imbriqué se comporte comme avant."""
+    if getattr(_held, "n", 0):
+        _held.n += 1
+        try:
+            yield
+        finally:
+            _held.n -= 1
+        return
     try:
         os.makedirs(os.path.dirname(lock_path()), exist_ok=True)
         f = open(lock_path(), "a")
@@ -366,6 +380,10 @@ def data_lock(wait=None, on_busy=None):
             print(f"[store] verrou indisponible ({e}) : travail sans verrou", file=sys.stderr)
             yield
             return
-        yield
+        _held.n = 1 if reentrant else 0
+        try:
+            yield
+        finally:
+            _held.n = 0
     finally:
         f.close()                                   # libère le verrou

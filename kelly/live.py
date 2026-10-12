@@ -7,6 +7,8 @@ l'avant-match : 1N2, double chance, total de buts, les 2 marquent).
 Probabilités : seulement les matchs des championnats où Kelly a son modèle de force (strength.market_grid, données de qualité suffisante) ; les
 buts attendus d'avant-match de chaque équipe sont ramenés au temps qui reste (part des buts d'un match encore à jouer, 45 % en 1re mi-temps,
 55 % en 2e, temps additionnel compris), corrigés des cartons rouges, puis combinés au score du moment (loi de Poisson du reste du match).
+Totaux de buts : seulement les lignes en .5 (odds.half_line) ; les lignes entières (remboursement) et les quarts asiatiques (2,25 ; 2,75 : demi-gain
+ou demi-perte) sont ignorés, la loi de Poisson ne les chiffre pas.
 Un pari est candidat avec au moins C.LIVE_MIN_P de chances, une espérance d'au moins C.LIVE_MIN_EV à la cote 1xBet, une cote d'au moins
 C.LIVE_MIN_ODDS, et jamais plus de C.LIVE_MAX_GAP d'écart avec la probabilité de 1xBet (au-delà, c'est presque toujours une information que le
 modèle n'a pas : blessure, domination, changement tactique). Le combiné est le plus probable dont la cote tombe dans la fourchette demandée
@@ -22,7 +24,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
-from . import calib, combos as CB, config as C, fmt, store, strength
+from . import calib, combos as CB, config as C, fmt, odds as O, store, strength
 from .sources import xbet
 from .telegram import Html
 
@@ -126,7 +128,7 @@ def parse(g):
         elif t in xbet.T_DC:
             name = {"1X": f"{home} or Draw", "12": f"{home} or {away}", "X2": f"Draw or {away}"}[xbet.T_DC[t]]
             odds[("double_chance", name, None)] = (cf, t, 0)
-        elif t in (9, 10) and p is not None and float(p) % 1:
+        elif t in (9, 10) and O.half_line(p):         # seulement les lignes en .5 : pas de remboursement (entières) ni de quarts asiatiques (2,25 ; 2,75)
             odds[("totals", xbet.T_TOTAL[t][1], float(p))] = (cf, t, float(p))
         elif t in xbet.T_BTTS:
             odds[("btts", xbet.T_BTTS[t], None)] = (cf, t, 0)
@@ -209,7 +211,7 @@ def probs(m, pred, data=None):
            ("double_chance", f"{home} or Draw", None): ph + pd, ("double_chance", f"{home} or {away}", None): ph + pa,
            ("double_chance", f"Draw or {away}", None): pd + pa, ("btts", "Yes", None): pboth, ("btts", "No", None): 1 - pboth}
     for (mk, side, point) in m["odds"]:
-        if mk == "totals":
+        if mk == "totals" and O.half_line(point):
             need = point - (h0 + a0)                       # buts encore nécessaires au-dessus de la ligne
             over = sum(x for k, x in enumerate(tot) if k > need)
             out[("totals", "Over", point)], out[("totals", "Under", point)] = over, 1 - over
@@ -401,7 +403,7 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
         print(f"[live] code coupon impossible : {type(e).__name__}: {e}", file=sys.stderr)
     lines = [fmt.b(f"🔴 COMBINÉ LIVE — cote {fmt.odds_txt(total)}"),
              f"🎯 {len(legs_)} paris · {fmt.pct(prob)} de chances · {fmt.expect(prob, total)}",
-             (f"💰 Mise : {fmt.b(fmt.esc(app._stake_words(stake)))}" if stake is not None else fmt.no_stake_line()), ""]
+             fmt.stake_line(app._stake_words(stake, prob, total)), ""]
     for i, c in enumerate(legs_, 1):
         light = {"profils": " ⚠️ données moyennes", "365scores": " ⚠️ données légères"}.get(c.get("src"), "")
         lines += [fmt.b(f"{i}. {fmt.esc(c['home'] + ' – ' + c['away'])}") + f" · {c['score']}, {c['minute']}e" + fmt.i(fmt.esc(light)),

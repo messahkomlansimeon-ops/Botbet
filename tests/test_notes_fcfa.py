@@ -170,8 +170,8 @@ def test_default_stake_with_budget():
     assert "mise 1 000 FCFA" in played.command(["sur", "5,10"], DAY) and store.load("bets.json", {})["combos"][0]["played"]["odds"] == 5.1
     assert "mise 2 000 FCFA" in played.command(["sur", "5,10", "2000"], DAY)
     # budget fixé après le matin (pas de mise du matin) : la mise conseillée est calculée sur le budget d'aujourd'hui
-    store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0)]})
-    want = money.allocate([{"kind": "combo", "tier": SUR, "prob": 0.2, "odds": 5.0}])[0][0]
+    store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, prob=0.25)]})      # espérance positive (+25 %) : à 0 %, Kelly ne conseille aucune mise
+    want = money.allocate([{"kind": "combo", "tier": SUR, "prob": 0.25, "odds": 5.0}])[0][0]
     assert want > 0 and played.find("sur", DAY).stake == want, (want, played.find("sur", DAY).stake)
     assert f"mise {money.money(want)}" in played.command(["sur", "5,40"], DAY)
     # mise du matin jugée trop petite (0) : pas de mise conseillée, Kelly la demande

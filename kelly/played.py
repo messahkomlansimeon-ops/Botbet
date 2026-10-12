@@ -134,8 +134,39 @@ class Target:
     sauver. `known` : la cote 1xBet du pari est CONNUE (price_info : cote 1xBet de la version en cours, pas une cote mini ni une cote de
     référence d'un autre bookmaker) : Kelly ne la demande alors jamais, `ref` est la cote jouée."""
 
-    def __init__(self, item, ref, stake, label, save, ref_word, known=False):
+    def __init__(self, item, ref, stake, label, save, ref_word, known=False, read_at=None):
         self.item, self.ref, self.stake, self.label, self.save, self.ref_word, self.known = item, ref, stake, label, save, ref_word, known
+        self.read_at = read_at                       # heure « HH:MM » (UTC) de la lecture de la cote 1xBet `ref` ; None : inconnue
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def read_age(t, now=None):
+    """Âge en minutes de la cote 1xBet `t.ref` (heure de lecture `t.read_at` « HH:MM » le jour du pari) ; None si l'heure est inconnue."""
+    m = re.fullmatch(r"(\d\d):(\d\d)", str(t.read_at or ""))
+    if not m:
+        return None
+    now = now or _now()
+    try:
+        day = datetime.fromisoformat(str(t.item.get("date") or now.date())[:10])
+        at = day.replace(hour=int(m[1]), minute=int(m[2]), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return max(0.0, (now - at).total_seconds() / 60)
+
+
+def is_stale(t, now=None):
+    """La cote 1xBet lue par Kelly (`t.ref`) date-t-elle de plus de C.XBET_COMBI_FRESH_MIN ? Alors « ✅ Je l'ai joué » ne la note PAS telle quelle
+    (elle a pu bouger depuis le relevé du matin) : Kelly demande la cote obtenue. Heure de lecture inconnue (ancienne ligne) : pas périmée."""
+    age = read_age(t, now)
+    return age is not None and age > C.XBET_COMBI_FRESH_MIN
+
+
+def read_note(t):
+    """« 09h30 » : l'heure de lecture de la cote de référence, pour la confirmation d'une note ; '' si inconnue."""
+    return fmt.hhmm(t.read_at) if t.read_at and re.fullmatch(r"\d\d:\d\d", str(t.read_at)) else ""
 
 
 def find(word, day):
@@ -149,7 +180,7 @@ def find(word, day):
             return f"Pas de combiné {fmt.tier_word(tiers[w])} à noter (ni aujourd'hui ni en attente de résultat)."
         px = price_info(w, c)
         return Target(c, px["odds"], M.suggested(c), f"{fmt.tier_word(c['tier'])} du {fmt.fr_day(c['date'])}",
-                      lambda: store.save("bets.json", bets), "cote 1xBet" if px["real"] else "cote typique", _known(px))
+                      lambda: store.save("bets.json", bets), "cote 1xBet" if px["real"] else "cote typique", _known(px), px["at"])
     if w in ("pari", "jour", "single"):
         rows = track.load()
         r = _pick(single_rows(rows, store.load_doc("bets.json", {"combos": []}).get("combos", [])), day)
@@ -157,7 +188,7 @@ def find(word, day):
             return "Pas de pari du jour à noter (ni aujourd'hui ni en attente de résultat)."
         px = price_info("pari", r)
         return Target(r, px["odds"], M.suggested(r), f"pari du jour du {fmt.fr_day(r['date'])} ({r['pick']})", lambda: track.save(rows),
-                      "cote 1xBet" if px["real"] else "cote typique", _known(px))
+                      "cote 1xBet" if px["real"] else "cote typique", _known(px), px["at"])
     if is_gap(w):                                     # g1, g2... : paris « 💰 1xBet paie plus que le marché » du jour
         rows = track.load()
         r = _pick([r for r in gap_rows(rows) if r["gap_n"] == int(w[1:])], day)
@@ -165,7 +196,7 @@ def find(word, day):
             return f"Pas de pari « {w} » à noter (ni aujourd'hui ni en attente de résultat)."
         px = price_info(w, r)
         return Target(r, px["odds"], M.suggested(r), f"pari « 1xBet paie plus que le marché » du {fmt.fr_day(r['date'])} ({r['pick']})",
-                      lambda: track.save(rows), "cote 1xBet" if px["real"] else "cote typique", _known(px))
+                      lambda: track.save(rows), "cote 1xBet" if px["real"] else "cote typique", _known(px), px["at"])
     if w.startswith("v") and len(w) > 1:              # v5, v12, v25 ; vtc5 / vtv5 : combinés « spécial tirs » ; vm1, vm2... : combis sur mesure
         rows = fair.load_combos()
         c = _pick([c for c in rows if str(c["tier"]) == w[1:]], day)
@@ -179,7 +210,7 @@ def find(word, day):
                 else f"combiné à vérifier (cote mini {fmt.odds_txt(c['min_odds'])})")
         return Target(c, c["min_odds"], M.suggested(c),
                       f"{what} du {fmt.fr_day(c['date'])}", lambda: store.save(fair.COMBOS_FILE, rows),
-                      "cote 1xBet" if is_real(c) else "cote mini", is_real(c))
+                      "cote 1xBet" if is_real(c) else "cote mini", is_real(c), price_info(w, c)["at"])
     return None
 
 
@@ -212,15 +243,16 @@ def price_info(what, x):
       cotes 1xBet « cote 1xBet 5,60 (HH:MM) » et son code coupon, sinon « cote mini 5,00 » ;
     - combiné réel (bets.json, « xlegs ») ou pari du jour (« xodds ») aux cotes 1xBet : la dernière vérification (x["xnow"], voir
       app.refresh_real) ou celle du matin ; un combiné devenu injouable est signalé ;
-    - sinon « cote de référence 1,60 (pas 1xBet) » : la cote typique des autres bookmakers."""
+    - sinon « cote de référence 1,60 (pas 1xBet) » : la cote typique des autres bookmakers.
+    "at" : l'heure « HH:MM » de lecture de la cote 1xBet (None si inconnue ou si ce n'est pas une cote 1xBet)."""
     if "legs" in x:
         real = is_real(x)
         odds = x["min_odds"]
         if real:
             at = x.get("updated") or x.get("at")
-            return {"odds": odds, "real": True, "coupon": x.get("coupon"),
+            return {"odds": odds, "real": True, "coupon": x.get("coupon"), "at": at,
                     "label": f"cote 1xBet {fmt.odds_txt(odds)}" + (f" ({at})" if at else "")}
-        return {"odds": odds, "real": False, "coupon": None, "label": f"cote mini {fmt.odds_txt(odds)}"}
+        return {"odds": odds, "real": False, "coupon": None, "at": None, "label": f"cote mini {fmt.odds_txt(odds)}"}
     now = x.get("xnow") or {}
     if x.get("xlegs") or x.get("xodds"):
         odds = now.get("odds") or (x["odds"] if x.get("xlegs") else x["xodds"])
@@ -228,9 +260,9 @@ def price_info(what, x):
         label = f"cote 1xBet {fmt.odds_txt(odds)}" + (f" ({at})" if at else "")
         if now.get("dead"):
             label = f"plus jouable chez 1xBet (vérifié à {now['at']})"
-        return {"odds": odds, "real": True, "dead": bool(now.get("dead")), "label": label,
+        return {"odds": odds, "real": True, "dead": bool(now.get("dead")), "label": label, "at": at,
                 "coupon": None if now.get("dead") else (now.get("coupon") if now else x.get("coupon"))}
-    return {"odds": x["odds"], "real": False, "coupon": None, "label": f"cote de référence {fmt.odds_txt(x['odds'])} (pas 1xBet)"}
+    return {"odds": x["odds"], "real": False, "coupon": None, "at": None, "label": f"cote de référence {fmt.odds_txt(x['odds'])} (pas 1xBet)"}
 
 
 def _fair_name(tier, real=False, row=None):
@@ -301,10 +333,11 @@ def overlap_suffix(what, day):
     return "\n" + w if w else ""
 
 
-def note(t, odds, stake, now=None):
+def note(t, odds, stake, now=None, ref_at=None):
     """Note le pari `t` (find) joué à `odds` pour `stake` FCFA : x["played"] = {odds, stake, at} et la devise de la mise (x["cur"]). Une ligne
     sans devise (ancienne mise en unités, jamais affichée) prend la mise conseillée du moment si Kelly en donne une (money.suggested) : le « stake »
-    d'une ligne avec devise est toujours une mise conseillée en FCFA. Sauvegarde la ligne. -> « ✅ Noté : … »."""
+    d'une ligne avec devise est toujours une mise conseillée en FCFA. Sauvegarde la ligne. `ref_at` : la cote notée est celle que Kelly a lue
+    (« ✅ Je l'ai joué » sans cote donnée) : son heure de lecture est dite dans la confirmation, pour que tu la corriges si elle a bougé. -> « ✅ Noté : … »."""
     x = t.item
     x["played"] = {"odds": round(odds, 2), "stake": round(stake, 2), "at": (now or datetime.now(timezone.utc)).isoformat(timespec="minutes")}
     x.pop("skipped", None)
@@ -317,7 +350,10 @@ def note(t, odds, stake, now=None):
     t.save()
     gap = _gap(odds, t.ref)
     lines = [f"✅ Noté : {t.label}, joué à {fmt.odds_txt(odds)} chez 1xBet, mise {M.money(stake, x['cur'])} "
-             f"({t.ref_word} {fmt.odds_txt(t.ref)} : {fmt.signed(gap * 100, ' %')})."]
+             f"({t.ref_word} {fmt.odds_txt(t.ref)}"
+             + (f", lue à {ref_at}" if ref_at else "") + f" : {fmt.signed(gap * 100, ' %')})."]
+    if ref_at:
+        lines.append(f"🕒 Cote lue par Kelly à {ref_at} : si 1xBet t'a payé autre chose, touche « ✏️ Autre cote ».")
     if t.ref_word == "cote mini" and odds < t.ref:
         lines.append("⚠️ 1xBet paie moins que la cote mini : Kelly conseillait de passer ton chemin.")
     elif gap < -0.15:

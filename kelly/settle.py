@@ -361,12 +361,28 @@ def settle_fair_combos(now=None, stats_for=None):
     return rows, settled
 
 
-def record_combos(combos_sent, day):
+def _locked_in(c):
+    """Combiné que la suite ne doit plus changer : noté joué (le ticket est placé) ou déjà réglé."""
+    return bool(c.get("played")) or c.get("result") is not None
+
+
+def record_combos(combos_sent, day, replace=False):
+    """Enregistre les combinés réels envoyés (bets.json), un seul par palier et par jour. Relance du matin (`replace`, run_daily) : un palier déjà
+    enregistré dont les paris sont les mêmes (renvoyé tel quel, voir app._resend_real) garde sa ligne, avec la mise du nouvel envoi si le combiné n'est pas noté ;
+    un palier reconstruit avec d'autres paris REMPLACE la ligne seulement si elle n'est ni notée ni réglée (le suivi, les notes et le règlement restent ceux du
+    combiné effectivement envoyé en dernier). Sans `replace`, le premier envoyé reste."""
     bets = store.load_doc("bets.json", {"picks": [], "combos": []})
     for combo in combos_sent:
-        if any(c["date"] == str(day) and c["tier"] == combo["tier"] for c in bets["combos"]):
-            continue                                # relance du matin : un seul combiné par palier et par jour (le premier envoyé)
-        bets["combos"].append(combo | {"date": str(day), "result": None})
+        old = next((c for c in bets["combos"] if c["date"] == str(day) and c["tier"] == combo["tier"]), None)
+        if old is None:
+            bets["combos"].append(combo | {"date": str(day), "result": None})
+        elif replace and not _locked_in(old):
+            if set(old.get("keys") or []) == set(combo["keys"]):
+                for k in ("stake", "cur"):
+                    old.pop(k, None)
+                old.update({k: combo[k] for k in ("stake", "cur") if k in combo})
+            else:
+                bets["combos"][bets["combos"].index(old)] = combo | {"date": str(day), "result": None}
     store.save("bets.json", bets)
 
 

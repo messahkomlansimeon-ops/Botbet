@@ -5,7 +5,8 @@ x["played"] = {odds, stake, at}) comptent dans tes résultats, au bilan et pour 
 cote obtenue et « ↩️ Annuler » retire la note. Sans budget, Kelly ne donne aucune mise conseillée (jamais d'unités).
 
 Répartition (allocate) : chaque pari a une part maximale du budget selon son palier (SHARE), multipliée par sa confiance =
-espérance (proba x cote - 1) rapportée à CONF_FULL, bornée à [CONF_MIN, 1]. Journée riche (la somme dépasse le budget) : tout est
+espérance (proba x cote - 1) rapportée à CONF_FULL, bornée à [CONF_MIN, 1] ; espérance nulle ou négative : AUCUNE mise (Kelly ne conseille
+jamais de miser sur un pari perdant en moyenne, le plancher CONF_MIN ne vaut que pour une espérance positive). Journée riche (la somme dépasse le budget) : tout est
 réduit dans la même proportion, le budget est entièrement misé. Journée pauvre : Kelly mise moins et garde le reste. Mises arrondies
 (round_step) ; une mise plus petite que l'arrondi est abandonnée.
 
@@ -97,8 +98,24 @@ def _share(kind, tier):
     return SHARE.get("pari" if kind == "pari" else next((k for k in SHARE if str(tier).startswith(k)), "🎯"), 0.15)
 
 
+def edge(prob, odds):
+    """Espérance (proba x cote - 1) d'un pari ; 0 si illisible."""
+    try:
+        v = float(prob) * float(odds) - 1
+    except (TypeError, ValueError):
+        return 0.0
+    return v if math.isfinite(v) else 0.0
+
+
+def has_edge(prob, odds):
+    """Vrai si le pari a une espérance POSITIVE : sinon Kelly ne conseille aucune mise (allocate rend 0)."""
+    return edge(prob, odds) > 0
+
+
 def _confidence(prob, odds):
-    return max(CONF_MIN, min(1.0, (prob * odds - 1) / CONF_FULL))
+    """Confiance dans [CONF_MIN, 1] ; 0 (aucune mise) si l'espérance est nulle ou négative."""
+    ev = edge(prob, odds)
+    return max(CONF_MIN, min(1.0, ev / CONF_FULL)) if ev > 0 else 0.0
 
 
 def _raw(it):
@@ -160,7 +177,23 @@ def suggested(x):
     return allocate([item])[0][0] if item else 0
 
 
+NO_EDGE = fmt.NO_EDGE                      # à la place d'une mise, quand l'espérance est négative : Kelly ne conseille pas de miser
 NO_BUDGET = fmt.NO_BUDGET                  # à la place d'une mise, quand il n'y a pas de budget du jour
+
+
+def no_stake_txt(prob=None, odds=None):
+    """Mise 0 en mots : « Kelly ne conseille pas de miser dessus (espérance négative) » si le pari n'a pas d'espérance positive (`prob` et `odds`
+    connus), sinon « pas de mise (trop petite pour ton budget) » (la part est plus petite que l'arrondi)."""
+    if prob is not None and odds is not None and not has_edge(prob, odds):
+        return NO_EDGE
+    return "pas de mise (trop petite pour ton budget)"
+
+
+def stake_words(st, prob=None, odds=None, suffix=""):
+    """Mise `st` (allocate) en mots ; None sans budget du jour. 0 : voir no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant."""
+    if st is None:
+        return None
+    return money(st) + suffix if st else no_stake_txt(prob, odds)
 
 
 def budget_line(spent, kept, poor=None):
