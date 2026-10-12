@@ -329,7 +329,7 @@ def settle_fair(now=None, stats_for=None):
     rows = fair.load()
     fdata = FootballData()
     settled = [b for b in rows if _settle_fair_row(b, now, fdata, stats_for)]
-    calib.add(rows)                                 # cumul par famille, gardé pour toujours (fair.json : 10 jours)
+    calib.add(rows, now.date())                     # cumul par famille, sens et tranche, vieilli avec le temps (fair.json : 10 jours)
     store.save(fair.FILE, rows)
     return rows, settled
 
@@ -379,6 +379,7 @@ def settle_fair_combos(now=None, stats_for=None):
             c["result"] = UNKNOWN if UNKNOWN in results else ("win" if "win" in results else "void")   # sans jambe gagnée : rien à payer
         if c.get("result"):
             settled.append(c)
+    calib.add_combo_legs([leg for c in rows for leg in c.get("legs") or []], now.date())     # prudence par jambe des combinés (combos.leg_discount)
     store.save(fair.COMBOS_FILE, rows)
     return rows, settled
 
@@ -593,8 +594,12 @@ def _bilan_detail(bets, days, rows, picks, combos):
         lines += [f"• {x}" for x in el]
     cl = calib.lines(detail=True)
     if cl:
-        lines.append("Fiabilité par marché (pronostics sans cote, depuis le début) :")
+        lines.append("Fiabilité par marché (pronostics sans cote, les résultats récents comptent plus) :")
         lines += [f"• {x}" for x in cl]
+    xl = calib.cell_lines()
+    if xl:
+        lines.append("Fiabilité par sens du pari et niveau de chances :")
+        lines += [f"• {x}" for x in xl]
     ll = calib.league_lines()
     if ll:
         lines.append("Fiabilité par championnat (du plus fiable au moins fiable) :")

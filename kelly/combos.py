@@ -201,8 +201,28 @@ def _rebuild(choices, kdim, k, b, weights):
     return out
 
 
+def leg_discount(data=None):
+    """Prudence par jambe d'un combiné : réussite / proba annoncée des jambes de combinés réglées (calib.json « _combo », vieilli), rapprochée de
+    C.COMBO_LEG_K[1] (0,99) tant qu'elles sont peu nombreuses (n / (n + C.COMBO_LEG_PRIOR)), bornée à C.COMBO_LEG_K. L'optimiseur choisit les jambes
+    que Kelly juge les meilleures, donc celles qu'elle surestime le plus souvent : la correction par marché (calib) ne voit pas cet écart-là."""
+    from . import calib
+    lo, hi = C.COMBO_LEG_K
+    acc = (data if data is not None else calib.load()).get("_combo")
+    d = hi
+    if acc and acc[0] > 0 and acc[2] > 0:
+        n = acc[0]
+        d = hi + (acc[1] / acc[2] - hi) * n / (n + C.COMBO_LEG_PRIOR)
+    return max(lo, min(hi, d))
+
+
+def combo_prob(legs, d=None):
+    """Proba d'un combiné : produit des probas des jambes x leg_discount() par jambe (au moins 1 % de prudence par jambe : les erreurs se multiplient)."""
+    d = leg_discount() if d is None else d
+    return math.prod(c["prob"] for c in legs) * d ** len(legs)
+
+
 def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs=None):
-    """Combiné de cote totale dans [min_odds, max_odds] qui maximise la probabilité (produit des probas), au plus une
+    """Combiné de cote totale dans [min_odds, max_odds] qui maximise la probabilité (combo_prob : produit des probas, prudence par jambe), au plus une
     jambe par match, au moins 2 jambes ; `max_legs` (C.MAX_LEGS par défaut, une borne de sécurité ; ou le nombre de paris choisi : « combi 20 max 4 »)
     et `min_legs` (« combi 20 pile 4 » : min = max) bornent le nombre de jambes. -> (jambes triées par heure, cote, proba) ou None. Optimisation exacte à
     la discrétisation près (pas `step` en log-cote), puis vérification de la vraie cote : jamais de combiné hors fourchette."""
@@ -221,7 +241,8 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs
     slack = max(2, int(0.02 / step))                 # marge de discrétisation, vérifiée ensuite sur les vraies cotes
     bmax = int(hi_l / step) + slack
     weights = [max(1, round(math.log(c["odds"]) / step)) for c in legs]
-    lps = [math.log(c["prob"]) - EPS for c in legs]
+    d = leg_discount()
+    lps = [math.log(c["prob"]) + math.log(d) - EPS for c in legs]      # prudence par jambe : à cote égale, moins de jambes (le nombre imposé reste respecté)
     by_event = {}
     for j, c in enumerate(legs):
         by_event.setdefault(c["id"], []).append(j)
@@ -236,7 +257,7 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs
                 continue
             odds = math.prod(legs[j]["odds"] for j in idx)
             if min_odds <= odds <= max_odds:
-                return [legs[j] for j in idx], odds, math.prod(legs[j]["prob"] for j in idx)
+                return [legs[j] for j in idx], odds, combo_prob([legs[j] for j in idx], d)
         return None
 
     dp, choices = _dp(items, weights, lps, bmax, 3, True)
@@ -399,7 +420,7 @@ def data_ok(c):
     from . import calib
     if c.get("conf", 1.0) < C.VIABLE_MIN_Q or (c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N):
         return False
-    return calib.factor(c["market"], sport_key=c.get("sport_key")) >= C.VIABLE_MIN_K
+    return calib.factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0")) >= C.VIABLE_MIN_K
 
 
 def best_per_match(pronos):
@@ -478,7 +499,7 @@ def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None, usage=None):
             changed.append((l, c))
     total = math.prod(c["odds"] for c in keep) if keep else 1.0
     if fresh_ids is not None and not fresh_ids:                 # rien relu : rien à juger
-        return keep, total, math.prod(c["prob"] for c in keep), [], [], []
+        return keep, total, combo_prob(keep), [], [], []
     added = []
     if not keep or total < lo or len(keep) < 2:             # un combiné a toujours au moins 2 jambes : un survivant isolé est complété (ou abandonné)
         used = {c["id"] for c in keep}
@@ -493,7 +514,7 @@ def patch_combo(legs, pool, lo, hi, fresh_ids=None, prefix=None, usage=None):
         added = extra[0]
         keep += added
         total = math.prod(c["odds"] for c in keep)
-    return keep, total, math.prod(c["prob"] for c in keep), removed, added, changed
+    return keep, total, combo_prob(keep), removed, added, changed
 
 
 def fair_stake(min_total):

@@ -1645,7 +1645,7 @@ def test_fixed_odds_optimiser():
     safe = [mkleg(i, 1.30, 0.80) for i in range(14)]
     combo = CB.best_combo(safe, 12.0, 20.0)
     assert combo and 12.0 <= combo[1] <= 20.0 and len(combo[0]) >= 9, (len(combo[0]) if combo else None)
-    assert abs(combo[2] - math.prod(c["prob"] for c in combo[0])) < 1e-12
+    assert abs(combo[2] - CB.combo_prob(combo[0])) < 1e-12 and combo[2] < math.prod(c["prob"] for c in combo[0])     # prudence par jambe
     # peu de jambes à grosse cote
     big = [mkleg(100 + i, o, 0.9 / o) for i, o in enumerate((2.5, 2.6, 3.0, 1.2))]
     c3 = CB.best_combo(big, 12.0, 20.0)
@@ -1672,7 +1672,7 @@ def test_fixed_odds_optimiser():
                     continue
                 o = math.prod(c["odds"] for c in cb)
                 if lo <= o <= hi:
-                    pr = math.prod(c["prob"] for c in cb)
+                    pr = CB.combo_prob(cb)                  # produit des probas x prudence par jambe : ce que l'optimiseur maximise
                     best = pr if best is None or pr > best else best
         got = CB.best_combo(legs, lo, hi, max_legs=6)
         assert (got is None) == (best is None), (lo, hi, got and got[1], best)
@@ -2048,7 +2048,7 @@ def test_fair_combos():
     for target, (cl, total, prob) in built:
         lo, hi = next((lo, hi) for t, lo, hi in C.FAIR_COMBO_TIERS if t == target)
         assert lo <= total <= hi and abs(total - math.prod(c["min_odds"] for c in cl)) < 1e-9, (target, total)
-        assert abs(prob - math.prod(c["prob"] for c in cl)) < 1e-9 and len({c["id"] for c in cl}) == len(cl) >= 2   # un match une fois
+        assert abs(prob - CB.combo_prob(cl)) < 1e-9 and len({c["id"] for c in cl}) == len(cl) >= 2   # un match une fois
         assert all(c["prob"] >= C.FAIR_COMBO_MIN_P for c in cl)
     # messages : titre « à vérifier chez 1xBet — cote mini », jambes « joue si ≥ X », mise conseillée du budget (sinon la ligne « règle ton budget »)
     for target, (cl, total, prob) in built:
@@ -2466,7 +2466,7 @@ def test_combo_expectation():
     C.COMBO_MIN_EV = old
     assert combo and CB.ev(combo) < 1                                   # 0 = filtre désactivé
     msg = fmt.combo(tiers[0][0], combo[0], combo[1], combo[2], 2.0)
-    assert "espérance −6,2 %" in msg and "Joué chez 1xBet ? Note-le" not in msg, msg
+    assert "espérance −9 %" in msg and "Joué chez 1xBet ? Note-le" not in msg, msg     # −6,2 % sans la prudence de 1 % par jambe (3 jambes)
     print("espérance des combinés : OK")
 
 

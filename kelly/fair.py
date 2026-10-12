@@ -285,7 +285,8 @@ def side_name(market, ev):
 
 def make_pick(ev, market, name, point, p, tag, src):
     """Pronostic d'un match ; `p` : proba brute (rapprochée de 50 %), corrigée par la fiabilité mesurée du marché (calib)."""
-    p0, p = p, calib.calibrate(market, p, sport_key=ev.get("sport_key"))
+    sd = calib.side({"name": name, "market": market, "home": ev.get("home_team"), "away": ev.get("away_team")})
+    p0, p = p, calib.calibrate(market, p, sport_key=ev.get("sport_key"), side=sd)
     home, away = ev["home_team"], ev["away_team"]
     who = side_name(market, ev)
     return {"key": f'{ev["id"]}|{market}||{point if point is not None else ""}|{name}', "id": ev["id"],
@@ -302,7 +303,7 @@ def _with_base(c, base, q):
     x (0,5 + 0,5 x qualité) ; ajoute c["base"] (référence rapprochée) et c["conf"] (qualité des données)."""
     if base is None:
         return c
-    b = calib.calibrate(c["market"], shrink(base), sport_key=c.get("sport_key"))
+    b = calib.calibrate(c["market"], shrink(base), sport_key=c.get("sport_key"), side=calib.side(c))
     w = weight(c["market"])
     c["base"], c["conf"] = round(b, 4), round(q or 0.0, 2)
     c["score"] = ((c["prob"] - 0.5) + (c["prob"] - b)) / 2 * w * (0.5 + 0.5 * (q or 0.0))

@@ -206,17 +206,38 @@ def _top_mean(rows, key, k=15):
     return sum(vals) / len(vals) if vals else 0.0
 
 
-def beats(test, key_model, key_heur):
-    """(modèle bat l'heuristique ?, oos modèle, oos heuristique, t) sur le test : écart moyen des CLV des meilleurs paris, jour par jour. Il faut un écart > C.LEARN_OOS_MARGIN ET
-    un écart > C.LEARN_OOS_Z erreurs-types (écart-type des écarts quotidiens / racine du nombre de jours) : avec 5 jours de test, un écart de quelques millièmes
-    est du bruit."""
-    a, b = _top_by_day(test, key_model), _top_by_day(test, key_heur)
+def _judge(a, b):
+    """(a bat b ?, moyenne a, moyenne b, t) sur des CLV moyens par jour {jour: CLV} : écart moyen > C.LEARN_OOS_MARGIN ET > C.LEARN_OOS_Z erreurs-types
+    (écart-type des écarts quotidiens / racine du nombre de jours)."""
     diffs = [a[d] - b[d] for d in a]
     n = len(diffs)
     mean = sum(diffs) / n if n else 0.0
     sd = math.sqrt(sum((x - mean) ** 2 for x in diffs) / (n - 1)) if n > 1 else 0.0
     t = mean / (sd / math.sqrt(n)) if sd > 0 else (math.inf if mean > 0 else 0.0)
     return mean > C.LEARN_OOS_MARGIN and t >= C.LEARN_OOS_Z, sum(a.values()) / n if n else 0.0, sum(b.values()) / n if n else 0.0, t
+
+
+def beats(test, key_model, key_heur):
+    """(modèle bat l'heuristique ?, oos modèle, oos heuristique, t) sur le test : écart moyen des CLV des meilleurs paris, jour par jour. Il faut un écart > C.LEARN_OOS_MARGIN ET
+    un écart > C.LEARN_OOS_Z erreurs-types (écart-type des écarts quotidiens / racine du nombre de jours) : avec 5 jours de test, un écart de quelques millièmes
+    est du bruit."""
+    return _judge(_top_by_day(test, key_model), _top_by_day(test, key_heur))
+
+
+def _folds(rows, k, min_days=0, min_train_days=1):
+    """k coupes successives dans le temps, à la fin de la période, sans chevauchement : [(apprentissage, test)], chaque test sur des jours qui suivent
+    TOUT son apprentissage (jamais le futur). Chaque test a au moins `min_days` jours (et environ 20 % des jours / k) ; [] s'il n'y a pas assez de jours
+    pour k tests et `min_train_days` jours d'apprentissage avant le premier."""
+    days = sorted({r["date"] for r in rows})
+    w = max(1, min_days, int(len(days) * 0.2 / k)) if k else 0
+    if k < 2 or len(days) - k * w < max(1, min_train_days):
+        return []
+    out = []
+    for i in range(k):
+        lo, hi = len(days) - (k - i) * w, len(days) - (k - 1 - i) * w
+        first, last = days[lo], days[hi - 1]
+        out.append(([r for r in rows if r["date"] < first], [r for r in rows if first <= r["date"] <= last]))
+    return out
 
 
 def _split(rows, min_days=0, min_train_days=1):
@@ -239,7 +260,8 @@ def train_clv(rows, previous=None, boot=None):
     """Entraîne, valide hors échantillon, décide de l'adoption. `boot` : lignes historiques (boot_rows).
     Test : sur les paris réels dès que le test est valable (voir oos_valid : >= LEARN_MIN_TEST_ROWS lignes sur >= LEARN_MIN_TEST_DAYS jours), sinon sur la
     dernière tranche de l'historique, mise de côté ; le modèle final apprend sur tout (historique + réel). Jamais de test sur les lignes
-    d'apprentissage : sans test valable, rien n'est adopté (un ancien modèle adopté est conservé). Adoption : oos_modèle > oos_heuristique + LEARN_OOS_MARGIN et écart d'au moins LEARN_OOS_Z erreurs-types (beats).
+    d'apprentissage : sans test valable, rien n'est adopté (un ancien modèle adopté est conservé). Adoption : oos_modèle > oos_heuristique + LEARN_OOS_MARGIN et écart d'au moins LEARN_OOS_Z erreurs-types (beats) ;
+    avec assez de jours, sur C.LEARN_FOLDS coupes successives (_folds) : mieux que l'heuristique sur la majorité ET le même critère sur l'ensemble de leurs jours de test.
     Pénalité ridge = C.RIDGE_LAMBDA x nombre de variables."""
     real = [r for r in rows if r.get("clv") is not None and not r.get("boot")]
     boot = [r for r in (boot or []) if r.get("clv") is not None]
@@ -269,11 +291,33 @@ def train_clv(rows, previous=None, boot=None):
             out.update(keep_old | {"reason": "pas de test hors échantillon valable : ancien modèle conservé"})
         return out
     lam = C.RIDGE_LAMBDA * len(names)
-    m = _ridge(fit, names, lam)
-    better, oos_model, oos_heur, t = beats(test, lambda r: predict(m, r["features"]), lambda r: r["features"]["heuristic"])
+    heur = lambda r: r["features"]["heuristic"]           # noqa: E731
+    # plusieurs coupes successives quand il y a assez de jours (C.LEARN_FOLDS, toutes valables) : le modèle doit faire mieux que l'heuristique sur la
+    # majorité d'entre elles (écart moyen > 0 : les premières apprennent sur peu de jours) ET la battre sur l'ensemble de leurs jours de test (marge
+    # C.LEARN_OOS_MARGIN et seuil d'erreurs-types C.LEARN_OOS_Z, comme une coupe unique) ; sinon, la coupe unique ci-dessus
+    base_rows, extra = (real, boot) if src == "réel" else (boot, [])
+    folds = _folds(base_rows, C.LEARN_FOLDS, C.LEARN_MIN_TEST_DAYS, C.LEARN_MIN_TRAIN_DAYS)
+    if len(folds) < C.LEARN_FOLDS or not all(oos_valid(te) for _, te in folds):
+        folds = []
+    report = []
+    if folds:
+        a_all, b_all = {}, {}
+        for i, (tr, te) in enumerate(folds):
+            m = _ridge(extra + tr, names, lam)
+            a, b = _top_by_day(te, lambda r, m=m: predict(m, r["features"])), _top_by_day(te, heur)
+            gap = sum(a[d] - b[d] for d in a) / len(a)
+            report.append({"days": len({r["date"] for r in te}), "rows": len(te), "gap": round(gap, 4), "win": gap > 0})
+            a_all.update({(i, d): v for d, v in a.items()})
+            b_all.update({(i, d): v for d, v in b.items()})
+        pooled, oos_model, oos_heur, t = _judge(a_all, b_all)
+        better = pooled and sum(f["win"] for f in report) * 2 > len(report)
+        test = [r for _, te in folds for r in te]
+    else:
+        m = _ridge(fit, names, lam)
+        better, oos_model, oos_heur, t = beats(test, lambda r: predict(m, r["features"]), heur)
     out.update({"oos_model": round(oos_model, 4), "oos_heuristic": round(oos_heur, 4), "test_rows": len(test),
                 "test_days": len({r["date"] for r in test}), "oos_source": src, "boot_n": len(boot), "ridge_lambda": round(lam, 2),
-                "oos_t": None if t == math.inf else round(t, 2)})
+                "oos_t": None if t == math.inf else round(t, 2)} | ({"folds": report} if report else {}))
     if better:
         final = _ridge(final_rows, names, lam)                   # ré-entraîné sur tout
         out.update(final | {"adopted": True})
@@ -430,6 +474,10 @@ def describe(model, rows, days=7):
                      f"vs heuristique {model['oos_heuristic']*100:+.1f}%")
     else:
         lines.append("Modèle : " + model.get("reason", "pas encore"))
+    if model.get("folds"):
+        f = model["folds"]
+        lines.append(f"Coupes successives : mieux que l'heuristique sur {sum(x['win'] for x in f)} sur {len(f)} ("
+                     + ", ".join(f"{x['gap'] * 100:+.1f}%" for x in f) + ")")
     if model.get("boot_n"):
         lines.append(f"📚 Historique football-data : {model['boot_n']} lignes (cotes d'ouverture vs clôture) "
                      f"en appoint de l'apprentissage")

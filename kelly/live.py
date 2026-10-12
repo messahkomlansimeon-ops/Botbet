@@ -37,7 +37,7 @@ from .sources import http, xbet
 from .telegram import Html
 
 JOURNAL = "live.json"           # [{key, id, date, tranche, minute, score, home, away, sport_key, commence, market, name, point, pk, p0, prob, px, xodds, v, result...}]
-CALIB_FILE = "live_calib.json"  # {"v": 2, "k": {"<famille>|<tranche>": [n, gagnés, somme des probas avant correction]}}
+CALIB_FILE = "live_calib.json"  # {"v": 2, "k": {"<famille>|<tranche>": [n, gagnés, somme des probas avant correction]}, "t": date du dernier vieillissement}
 CALIB_VERSION = 2               # journal ET calibration : seules les lignes « v » = 2 (paris retenus, un côté par marché) apprennent ; l'ancien format est ignoré
 KEEP_DAYS = 30                  # lignes réglées gardées N jours
 UNRESOLVED_DAYS = http.env("LIVE_UNRESOLVED_DAYS", 4)      # ligne sans résultat gardée N jours (le règlement du lendemain matin la règle ; settle l'« annule » après WAIT_DAYS = 3 jours)
@@ -377,6 +377,9 @@ def settle(now=None, fdata=None, stats_for=None):
     data = calib_data()
     settled = learned = 0
     dirty = False
+    stamp = raw.get("t") if isinstance(raw, dict) else None
+    if any(r.get("result") in ("win", "loss") and not r.get("calib") and r.get("v") == CALIB_VERSION for r in log):
+        stamp = calib.aged(data, stamp, now.date())   # mémoire qui vieillit (C.CALIB_HALF_LIFE), comme l'avant-match
     for r in log:
         new = r.get("v") == CALIB_VERSION
         if r.get("result") is None and new:
@@ -385,8 +388,8 @@ def settle(now=None, fdata=None, stats_for=None):
         if r.get("result") in ("win", "loss") and not r.get("calib"):
             if new:
                 acc = data.setdefault(f"{calib.family(r['market'])}|{r['tranche']}", [0, 0, 0.0])
-                acc[0] += 1
-                acc[1] += r["result"] == "win"
+                acc[0] = round(acc[0] + 1, 4)
+                acc[1] = round(acc[1] + (r["result"] == "win"), 4)
                 acc[2] = round(acc[2] + (r.get("p0") or r["prob"]), 4)
                 learned += 1
             r["calib"] = True                       # ancien format : marqué sans être compté
@@ -395,7 +398,7 @@ def settle(now=None, fdata=None, stats_for=None):
     if settled or dirty or kept is not log:
         store.save(JOURNAL, kept, compact=True)
     if learned or (raw and not (isinstance(raw, dict) and raw.get("v") == CALIB_VERSION)):      # ancien fichier : remplacé (remise à zéro)
-        store.save(CALIB_FILE, {"v": CALIB_VERSION, "k": data}, compact=True)
+        store.save(CALIB_FILE, {"v": CALIB_VERSION, "k": data} | ({"t": stamp} if stamp else {}), compact=True)
     return settled, learned
 
 

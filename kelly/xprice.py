@@ -60,8 +60,9 @@ def _ens_line(c, px, name, point, p0, base, price, data):
     """Décision de l'ensemble sur une ligne du pronostic `c` à la cote `price` -> (décision ensemble.value_of, proba du modèle corrigée, référence
     corrigée ou None). La proba 1xBet sans marge vient des cotes `px` du match, la proba sharp de c["psh"] (ensemble.attach)."""
     from datetime import datetime, timezone
-    pm = calib.calibrate(c["market"], p0, sport_key=c.get("sport_key"))
-    b = None if base is None else calib.calibrate(c["market"], base, sport_key=c.get("sport_key"))
+    sd = calib.side(c | {"name": name})
+    pm = calib.calibrate(c["market"], p0, sport_key=c.get("sport_key"), side=sd)
+    b = None if base is None else calib.calibrate(c["market"], base, sport_key=c.get("sport_key"), side=sd)
     v = ensemble.value_of(c["market"], pm, ensemble.x_fair(px, c["market"], name, point, c.get("home"), c.get("away")),
                           ensemble.sharp_for(c, name, point, datetime.now(timezone.utc)), price, data=data)
     return v, pm, b
@@ -105,8 +106,9 @@ def choose(c, px):
         price = xbet.lookup(px, c["market"], name, point)
         if not price:
             continue
-        p = calib.calibrate(c["market"], p0, sport_key=c.get("sport_key"))
-        b = None if base is None else calib.calibrate(c["market"], base, sport_key=c.get("sport_key"))
+        sd = calib.side(c | {"name": name})
+        p = calib.calibrate(c["market"], p0, sport_key=c.get("sport_key"), side=sd)
+        b = None if base is None else calib.calibrate(c["market"], base, sport_key=c.get("sport_key"), side=sd)
         if p < C.VIABLE_MIN_P or (b is not None and p < b) or price < round(1 / p * (1 + C.FAIR_MARGIN), 2):
             continue
         ev = p * price - 1
@@ -121,8 +123,9 @@ def _weak(c):
     celle d'un match moyen."""
     cur = next((a for a in c.get("alts") or [] if (a[0], a[1]) == (c["name"], c["point"])), None)
     if cur:
-        p = calib.calibrate(c["market"], cur[2], sport_key=c.get("sport_key"))
-        b = None if cur[3] is None else calib.calibrate(c["market"], cur[3], sport_key=c.get("sport_key"))
+        sd = calib.side(c | {"name": cur[0]})
+        p = calib.calibrate(c["market"], cur[2], sport_key=c.get("sport_key"), side=sd)
+        b = None if cur[3] is None else calib.calibrate(c["market"], cur[3], sport_key=c.get("sport_key"), side=sd)
     else:                                           # prob et base du pronostic sont déjà corrigées
         p, b = c["prob"], c.get("base")
     return p < C.VIABLE_MIN_P or (b is not None and p < b)

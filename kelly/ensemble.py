@@ -271,7 +271,7 @@ def attach(pronos, picks, history=None):
         for a in c.get("alts") or [[c["name"], c["point"], c.get("p0", c.get("p_model", c.get("prob"))), None]]:
             kid = _kid(c, a[0], a[1])
             if a[2] is not None:
-                model[kid] = calib.calibrate(c["market"], a[2], sport_key=c.get("sport_key"))
+                model[kid] = calib.calibrate(c["market"], a[2], sport_key=c.get("sport_key"), side=calib.side(c | {"name": a[0]}))
             if kid in sharp:
                 psh[f"{kid[2]}|{kid[3]}"] = [round(sharp[kid][0], 4), sharp[kid][1], sharp[kid][2], sharp[kid][3]]
         if psh:

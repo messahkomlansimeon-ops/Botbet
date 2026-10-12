@@ -34,6 +34,7 @@ def _family_lines(data):
     out = []
     for fam, acc in sorted(((f, a) for f, a in data.items() if not f.startswith("_")), key=lambda kv: -kv[1][0]):
         n, w, s = acc
+        n_txt = calib.count(n)
         if n < calib.SHOW_MIN:
             continue
         real, said = w / n, s / n
@@ -41,11 +42,11 @@ def _family_lines(data):
         if said - real > FAIR_GAP:
             k = calib.factor(next((m for m, f in calib.FAMILIES.items() if f == fam), f"team_{fam}_total"), data)
             fix = " → Kelly baisse ses probabilités et exige des cotes plus hautes" if k < 1 else " → correction dès 60 pronostics"
-            out.append(f"⚠️ {label} : trop optimiste, {_pct(real)} réalisés pour {_pct(said)} annoncés ({n}){fix}")
+            out.append(f"⚠️ {label} : trop optimiste, {_pct(real)} réalisés pour {_pct(said)} annoncés ({n_txt}){fix}")
         elif real - said > FAIR_GAP:
-            out.append(f"👍 {label} : prudente, {_pct(real)} réalisés pour {_pct(said)} annoncés ({n})")
+            out.append(f"👍 {label} : prudente, {_pct(real)} réalisés pour {_pct(said)} annoncés ({n_txt})")
         else:
-            out.append(f"✅ {label} : fiable, {_pct(real)} réalisés pour {_pct(said)} annoncés ({n})")
+            out.append(f"✅ {label} : fiable, {_pct(real)} réalisés pour {_pct(said)} annoncés ({n_txt})")
     return out
 
 
@@ -89,7 +90,7 @@ def message(now=None):
     data = calib.load()
     fam = _family_lines(data)
     if fam:
-        blocks.append(["📏 <b>Fiabilité par marché</b> " + fmt.i("(depuis le début)")] + [fmt.esc(x) for x in fam])
+        blocks.append(["📏 <b>Fiabilité par marché</b> " + fmt.i("(les résultats récents comptent plus)")] + [fmt.esc(x) for x in fam])
     el = ensemble.lines()
     if el:
         blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(appris sur les résultats : son poids face au marché, Pinnacle face à 1xBet)")]
@@ -98,8 +99,8 @@ def message(now=None):
     if len(lg) >= 2:
         best, worst = lg[0], lg[-1]
         blocks.append(["🏟 <b>Par championnat</b>",
-                       f"• Le plus fiable : {fmt.esc(best[0])} ({_pct(best[2])} réalisés pour {_pct(best[3])} annoncés, {best[1]})",
-                       f"• Le moins fiable : {fmt.esc(worst[0])} ({_pct(worst[2])} réalisés pour {_pct(worst[3])} annoncés, {worst[1]})"])
+                       f"• Le plus fiable : {fmt.esc(best[0])} ({_pct(best[2])} réalisés pour {_pct(best[3])} annoncés, {calib.count(best[1])})",
+                       f"• Le moins fiable : {fmt.esc(worst[0])} ({_pct(worst[2])} réalisés pour {_pct(worst[3])} annoncés, {calib.count(worst[1])})"])
     if not blocks:
         return None
     model = learn.load()

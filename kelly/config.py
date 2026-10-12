@@ -197,6 +197,10 @@ FAIR_CALIB_MIN = _int("FAIR_CALIB_MIN", 60)                               # pron
 FAIR_CALIB_PRIOR = _int("FAIR_CALIB_PRIOR", 200)                            # la correction monte progressivement : n / (n + 200)
 FAIR_CALIB_MIN_PROPS = _int("FAIR_CALIB_MIN_PROPS", 30)                    # marchés stats/props (tirs, fautes...) : calibrés plus tôt (dès 30 résultats)
 FAIR_CALIB_PRIOR_PROPS = _int("FAIR_CALIB_PRIOR_PROPS", 60)
+CALIB_HALF_LIFE = _float("CALIB_HALF_LIFE", 120)          # jours : un résultat de fiabilité vieux de 120 j compte moitié moins (0 = jamais d'oubli)
+CALIB_BANDS = (0.60, 0.70)                                 # tranches de proba brute de la correction fine (<60 %, 60-70 %, >= 70 %)
+COMBO_LEG_K = (0.90, 0.99)                                 # prudence par jambe d'un combiné (mesurée sur les jambes réglées), bornée ; 0,99 = 1 % au moins
+COMBO_LEG_PRIOR = _int("COMBO_LEG_PRIOR", 200)              # la prudence mesurée remplace progressivement 0,99 : n / (n + 200)
 FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe
 FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'est du hasard, au-dessus la cote juste est < 1.25
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
@@ -506,6 +510,7 @@ LEARN_MIN_TRAIN_DAYS = _int("LEARN_MIN_TRAIN_DAYS", 3)     # jours d'apprentissa
 LEARN_MIN_TEST_DAYS = _int("LEARN_MIN_TEST_DAYS", 5)       # jours distincts de test au minimum (les lignes d'un même jour sont corrélées)
 LEARN_OOS_MARGIN = _float("LEARN_OOS_MARGIN", 0.002)       # oos_modèle doit dépasser oos_heuristique de cette marge
 LEARN_OOS_Z = _float("LEARN_OOS_Z", 1.5)                   # ... et d'au moins N erreurs-types (écarts quotidiens du test) : 5 jours de test ne séparent pas un écart de bruit
+LEARN_FOLDS = _int("LEARN_FOLDS", 3)                         # coupes successives dans le temps : le modèle doit en gagner la majorité (moins de coupes valables : une seule)
 LEARN_RARE_MIN = _int("LEARN_RARE_MIN", 5)                 # marché / bookmaker / groupe vu moins de N fois : regroupé dans « other »
 FREE_CLOSE_DAYS = 10       # cote finale gratuite (football-data, BetExplorer) des paris fantômes : matchs des 10 derniers jours
 FREE_CLOSE_WEIGHT = 0.6    # poids d'une cote finale gratuite dans l'apprentissage, face à un vrai relevé de clôture (1)

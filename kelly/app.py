@@ -2254,7 +2254,7 @@ def _refresh_picks(row, rows, sent, day, now, fetch=None):
         return Html(fmt.esc(f"🔄 Ce combiné vérifié chez 1xBet à {hhmm} : il n'est plus jouable tel quel.") + "\n" + "\n".join(changes)
                     + "\n\n" + fmt.i("Un pari n'est plus proposé par 1xBet. Demande un nouveau « combi » sur mesure, ou touche « 🔄 Mettre à jour "
                                       "tous les paris »."))
-    total, prob = math.prod(c["odds"] for c in new), math.prod(c["prob"] for c in new)
+    total, prob = math.prod(c["odds"] for c in new), CB.combo_prob(new)
     code = _coupon(new)
     dropped = _record_version(sent, row, rows, (new, total, prob), hhmm, code)      # noté : rien n'est écrit (la note et les paris restent)
     head = f"🔄 Combi sur mesure remis aux cotes 1xBet de {hhmm}" + ("." if changes else " : aucun changement.") + (DROPPED_NOTE if dropped else "")
@@ -2304,7 +2304,7 @@ def refresh_real(what, day, now=None, fetch=None):
         return Html(fmt.esc(f"🔄 Ce {label} vérifié chez 1xBet à {hhmm} : il n'est plus jouable tel quel.") + "\n" + "\n".join(changes)
                     + "\n\n" + fmt.i("Un pari n'est plus proposé par 1xBet. Demande un « combi » sur mesure, ou touche « 🔄 Mettre à jour "
                                       "tous les paris »."))
-    total, prob = math.prod(c["odds"] for c in new), math.prod(c["prob"] for c in new)
+    total, prob = math.prod(c["odds"] for c in new), CB.combo_prob(new)
     code = _coupon(new)
     x["xnow"] = {"at": hhmm, "odds": round(total, 3)} | ({"coupon": code} if code else {})
     t.save()

@@ -134,7 +134,7 @@ def api_lines():
 
 def _state(n, w, s, need, k=None):
     """« 22/60 · 76 % gagnés pour 66 % annoncés · trop prudente, correction dans 38 résultats »."""
-    won, said = w / n, s / n
+    won, said, n = w / n, s / n, int(round(n))           # cumul vieilli : nombre effectif, décimal
     mood = "trop confiante" if won < said - 0.05 else "trop prudente" if won > said + 0.05 else "juste"
     when = f"correction dans {need - n} résultat{'s' if need - n > 1 else ''}" if n < need else (
         f"correction active (×{k:.2f})".replace(".", ",") if k is not None else "correction active")
