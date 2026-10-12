@@ -449,10 +449,10 @@ def send_document(filepath, caption=None, chat_id=None):
         raise TelegramError("TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID manquant")
     with open(filepath, "rb") as f:
         try:
-            r = _session.post(f"https://api.telegram.org/bot{token}/sendDocument",
+            r = requests.post(f"https://api.telegram.org/bot{token}/sendDocument",
                               data={"chat_id": chat_id, "caption": caption or ""},
-                              files={"document": f},
-                              timeout=(CONNECT_TIMEOUT, 60))
+                              files={"document": (os.path.basename(filepath), f)},
+                              timeout=(30, 300))
         except requests.RequestException as e:
             raise TelegramError(f"réseau : {_scrub(e)}") from None
     try:

@@ -1724,15 +1724,27 @@ def _handle_command(text):
         from . import status
         return status.report()
     if cmd in ("/backup", "/sauvegarde"):
+        import tempfile
+        import zipfile
         db_file = store.db_path()
         if not os.path.exists(db_file):
             return "⚠️ Base de données introuvable."
-        size_mb = os.path.getsize(db_file) / (1024 * 1024)
-        caption = f"💾 Sauvegarde Kelly ({size_mb:.1f} Mo) — {now_utc().strftime('%d/%m/%Y %H:%M UTC')}"
+        orig_mb = os.path.getsize(db_file) / (1024 * 1024)
+        zip_path = os.path.join(tempfile.gettempdir(), "kelly_backup.zip")
         try:
-            telegram.send_document(db_file, caption=caption)
+            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                zf.write(db_file, arcname="kelly.db")
+            zip_mb = os.path.getsize(zip_path) / (1024 * 1024)
+            caption = f"💾 Sauvegarde Kelly ({zip_mb:.1f} Mo, compressée depuis {orig_mb:.1f} Mo) — {now_utc().strftime('%d/%m/%Y %H:%M UTC')}"
+            telegram.send_document(zip_path, caption=caption)
         except telegram.TelegramError as e:
             return f"⚠️ Échec de la sauvegarde : {e}"
+        finally:
+            if os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                except OSError:
+                    pass
         return None
     if cmd == "/bank":
         return ("💰 Kelly ne suit plus de bankroll en unités : elle travaille en FCFA, avec ton budget du jour (« 💰 Mon budget » ou écris "

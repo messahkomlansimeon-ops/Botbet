@@ -1084,8 +1084,8 @@ def test_backup_command():
     try:
         # /backup et synonymes
         assert app.handle_command("/backup") is None
-        assert len(sent) == 1 and sent[0][0] == store.db_path()
-        assert "Sauvegarde Kelly" in sent[0][1] and "Mo)" in sent[0][1]
+        assert len(sent) == 1 and sent[0][0].endswith("kelly_backup.zip")
+        assert "Sauvegarde Kelly" in sent[0][1] and "Mo" in sent[0][1]
         assert app.handle_command("sauvegarde") is None
         assert len(sent) == 2
         assert app.handle_command("backup") is None
