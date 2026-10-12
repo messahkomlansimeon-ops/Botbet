@@ -1846,20 +1846,23 @@ def test_messages_human():
     assert L("player_shots_on_target", "Over", 1.5, "Mbappé", "soccer") == "Mbappé : 2 tirs cadrés ou plus"
     assert L("player_shots_on_target", "Over", 0.5, "Mbappé", "soccer") == "Mbappé : 1 tir cadré ou plus"
     assert L("h2h", "Flamengo", None, None, "soccer") == "Flamengo gagne" and L("h2h", "Draw", None, None, "soccer") == "Match nul"
-    # un combiné : titre + cote, chances / espérance et mise, jambes numérotées compactes (une ligne par information, pas de ligne vide entre elles)
+    # un combiné : titre + cote, chances / espérance (et mise si c'est un montant), puis les jambes numérotées séparées par une ligne vide : drapeau du pays,
+    # heure et ligue ; le match ; icône du marché, pari et cote ; pastille et chances ; la raison. Pied : séparateur et mise à régler.
     legs = [mkleg(1, 1.55, 0.7, edge=0.0, home="Flamengo", away="Vasco & Fils", league="Brasileirão", pick="Flamengo gagne",
-                  why="", start="21:00"),
-            mkleg(2, 1.90, 0.53, edge=0.07, home="Santos", away="Gremio", pick="Plus de 2,5 buts", start="22:30",
+                  why="", start="21:00", sport_key="soccer_brazil_campeonato"),
+            mkleg(2, 1.90, 0.53, edge=0.07, home="Santos", away="Gremio", pick="Plus de 2,5 buts", start="22:30", market="totals",
                   why="cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)", best_odds=2.05, book="Betfair")]
     msg = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"})
     assert isinstance(msg, telegram.Html) and msg.startswith(
-        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances · espérance +9,4 %\n"
-        "<i>💰 Mise : règle ton budget du jour avec « 💰 Mon budget »</i>\n\n"
-        "<b>1. Flamengo – Vasco &amp; Fils</b>  <i>21h00 · Brasileirão</i>"), msg           # sans budget du jour : aucune mise en unités
+        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances · espérance +9,4 %\n\n"
+        "🇧🇷 <i>21h00 · Brasileirão</i>\n<b>1. Flamengo – Vasco &amp; Fils</b>\n🏆 Flamengo gagne · <b>1,55</b>\n🟢 <i>Kelly 70 %</i>\n"
+        "💡 <i>Très probable : 70 % de chances</i>\n\n🌍 <i>22h30 · L</i>\n<b>2. Santos – Gremio</b>\n"), msg
+    assert msg.endswith("\n━━━━━━━━━━━━\n<i>💰 Mise : règle ton budget du jour avec « 💰 Mon budget »</i>"), msg     # sans budget du jour : aucune mise en unités
     with_budget = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"}, stake_txt="1 500 FCFA")
-    assert "espérance +9,4 %\n💰 Mise : <b>1 500 FCFA</b>\n\n<b>1. Flamengo" in with_budget and "Mise conseillée" not in with_budget, with_budget
-    assert "\n   Flamengo gagne · <b>1,55</b>\n   <i>Kelly 70 %</i>\n   💡 <i>Très probable : 70 % de chances</i>\n<b>2. Santos – Gremio</b>  <i>22h30" in msg, msg
-    assert "<b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n   <i>Kelly 53 %</i>\n   💡 <i>Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)</i>" in msg, msg
+    assert "espérance +9,4 %\n💰 Mise : <b>1 500 FCFA</b>\n\n🇧🇷" in with_budget and "Mon budget" not in with_budget, with_budget
+    assert "Mise conseillée" not in with_budget and "🟠" not in with_budget and "solide" not in with_budget, with_budget     # aucun pari moins sûr : pas de légende
+    assert ("⚽ Plus de 2,5 buts · <b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n🟢 <i>Kelly 53 %</i>\n"
+            "💡 <i>Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)</i>") in msg, msg
     # résultats du lendemain
     rows = fake_rows_for_results()
     won = {"tier": C.COMBOS[0][0], "keys": ["k1", "k2"], "odds": 6.12, "stake": 2.0, "result": "win", "odds_final": 6.12, "date": "2026-10-07"}

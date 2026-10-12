@@ -309,12 +309,12 @@ def test_display_lines_and_legend():
     assert E.explain_c(both) == "1xBet : 49 % · Sharp : 52 % · Kelly : 71 % · retenu : 61 %"
     # jambes d'un combiné à cote juste (💎) et d'un combiné réel, pari du jour, /top
     fl = fmt.fair_combo(3.0, [act, ina | {"id": "m9"}], 0.3, 0.5)
-    assert "   <i>Kelly 61 % · 1xBet 49 %</i>" in fl and "   <i>Kelly 71 % · 1xBet 41 %</i>" in fl and "📊" not in fl, fl
+    assert "🟢 <i>Kelly 61 % · 1xBet 49 % (+12)</i>" in fl and "🟢 <i>Kelly 71 % · 1xBet 41 % (+30)</i>" in fl and "📊" not in fl, fl
     real = {"key": "e1|h2h||Home1", "id": "e1", "sport_key": "soccer_epl", "group": "soccer", "event": "Home1 - Away1", "home": "Home1", "away": "Away1",
             "league": "EPL", "start": "19:00", "commence": KO, "market": "h2h", "who": None, "point": None, "name": "Home1", "pick": "Home1 gagne",
             "prob": 0.5, "prob_book": 0.5, "prob_src": "pinnacle", "n_sharp": 1, "odds": 2.1, "xodds": 2.1, "best_odds": 2.1, "book": "1xBet", "edge": 0.05,
             "spread": 0, "steam": 0, "weight": 1.0, "n_books": 10, "score": 0.1, "why": "", "p_x": 0.46, "p_sharp": 0.5}
-    assert "<i>Kelly 50 % · 1xBet 46 %</i>" in str(fmt.single(real, "value")) and "<i>Kelly 50 % · 1xBet 46 %</i>" in str(fmt.combo("🛡️ SÛR", [real, real | {"key": "k2", "id": "e2"}], 4.4, 0.25))
+    assert "<i>Kelly 50 % · 1xBet 46 % (+4)</i>" in str(fmt.single(real, "value")) and "<i>Kelly 50 % · 1xBet 46 % (+4)</i>" in str(fmt.combo("🛡️ SÛR", [real, real | {"key": "k2", "id": "e2"}], 4.4, 0.25))
     top = str(app.top_reply([real], [act | {"id": "m7"}, ina | {"id": "m8"}], "09:10", "09:10"))
     assert top.count(" · 1xBet ") == 3 and "📊" not in top, top
     # l'affichage ne dépend plus de l'interrupteur de l'ensemble : jamais de « 📊 » ni de « retenu », mêmes lignes de chances

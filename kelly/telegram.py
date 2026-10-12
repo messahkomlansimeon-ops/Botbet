@@ -401,6 +401,30 @@ def _busy():
     return BUSY_MORNING.format(suffix) if suffix else BUSY
 
 
+POLL_MARGIN = 15                 # s d'attente HTTP au-delà du long polling de getUpdates
+POLL_PAUSE_MAX = 15              # s : pause maximale entre deux essais pendant une coupure (2, 4, 8, 15, 15…)
+OUTAGE_REMIND = 10               # pendant une longue coupure : un rappel dans le journal tous les N échecs
+_outage = {"n": 0, "t0": None}   # coupure en cours : nombre d'échecs de suite, début (monotonic)
+
+
+def _outage_failed(e):
+    """Échec de getUpdates : une ligne au premier échec d'une coupure, puis un rappel tous les OUTAGE_REMIND échecs (plus une ligne toutes les 2 s)."""
+    _outage["n"] += 1
+    if _outage["n"] == 1:
+        _outage["t0"] = time.monotonic()
+        print(f"[telegram] lecture des commandes échouée : {e}", file=sys.stderr)
+    elif _outage["n"] % OUTAGE_REMIND == 0:
+        print(f"[telegram] connexion toujours coupée : {_outage['n']} échecs depuis {round(time.monotonic() - _outage['t0'])} s ({e})", file=sys.stderr)
+
+
+def _outage_back():
+    """getUpdates a répondu : fin de la coupure en cours, s'il y en avait une (« connexion rétablie après N échec(s) (X s) »)."""
+    if _outage["n"]:
+        n, dur = _outage["n"], round(time.monotonic() - _outage["t0"])
+        print(f"[telegram] connexion rétablie après {n} échec{'s' if n > 1 else ''} ({dur} s)", file=sys.stderr)
+    _outage.update(n=0, t0=None)
+
+
 def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=False):
     """Lit les nouveaux messages et appuis sur les boutons (une passe) et répond. Ne répond qu'au chat configuré : personne
     d'autre ne peut piloter le bot. `on_callback(donnée, id du message)` : réponse à un appui sur un bouton (None = rien à dire).
@@ -414,14 +438,16 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
     state = store.load("telegram.json", {"offset": 0})
     start = state["offset"]
     try:
-        # attente Telegram `timeout` s ; une connexion coupée en silence est détectée 5 s après (sinon 40 s de silence pour l'utilisateur)
-        updates = api("getUpdates", http_timeout=timeout + 5, offset=state["offset"], timeout=timeout,
+        # attente Telegram `timeout` s ; une connexion coupée en silence est détectée POLL_MARGIN s après. Marge large : sur réseau mobile
+        # (téléphone qui sort de veille), 5 s ne suffisaient pas et chaque réponse un peu lente comptait comme une coupure.
+        updates = api("getUpdates", http_timeout=timeout + POLL_MARGIN, offset=state["offset"], timeout=timeout,
                       allowed_updates=["message", "callback_query"]) or []
     except TelegramError as e:
-        print(f"[telegram] lecture des commandes échouée : {e}", file=sys.stderr)
-        if timeout:
-            time.sleep(2)                           # mode serveur : courte pause, puis on se reconnecte
+        _outage_failed(e)
+        if timeout:                                 # mode serveur : pause de plus en plus longue pendant une coupure, puis on se reconnecte
+            time.sleep(min(2 * 2 ** min(_outage["n"] - 1, 4), POLL_PAUSE_MAX))
         return 0
+    _outage_back()
     for u in updates:
         state["offset"] = u["update_id"] + 1
         cq = u.get("callback_query")

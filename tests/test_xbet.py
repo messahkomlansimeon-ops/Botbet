@@ -276,7 +276,7 @@ def test_apply_and_messages():
     assert "<a href" not in text, "pas de lien : la cote seulement"
     assert "· mini <b>" not in text and "« mini »" not in text, "le pronostic sans cote 1xBet n'est pas montré"
     real = fmt.fair_combo(3.96, [pronos[0], pronos[0] | {"id": "x"}], 0.36, 0.5)
-    assert real.startswith("<b>💎 COMBINÉ — cote 3,96</b>\n🎯 2 paris · ") and real.count("   Plus de 9,5 corners · <b>1,99</b>") == 2, real
+    assert real.startswith("<b>💎 COMBINÉ — cote 3,96</b>\n🎯 2 paris · ") and real.count("🚩 Plus de 9,5 corners · <b>1,99</b>") == 2, real
     assert "<a href" not in real
     mixed = fmt.fair_combo(3.0, [pronos[0], pronos[1]], 0.4, 0.5)
     assert "À VÉRIFIER CHEZ 1XBET — cote mini 3" in mixed and " · <b>1,99</b>" in mixed and " · joue si ≥ <b>" in mixed and "⚠️ Joue seulement si chaque pari atteint sa cote mini" in mixed, mixed

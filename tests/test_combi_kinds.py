@@ -2,11 +2,17 @@
 chat.parse_kinds, app.kinds_picker) ; le combiné ne prend que ces types, les garde une fois suivi (nom dans « Mes paris », « Vérifier ce combiné »
 ne remplace un pari que par un du même type) et dit quand des types ne se mélangent pas (paris réels / pronostics). Hors ligne.
 Lancer : python -m tests.test_combi_kinds"""
+import re
 from tests import test_combi_track as T     # noqa: I001 - fixe DATA_DIR et les faux réseaux avant d'importer kelly
 from kelly import app, chat, combos as CB, custom, fair, fmt, played, store, telegram, xprice  # noqa: E402
 from kelly.sources import xbet  # noqa: E402
 
 DAY = T.DAY
+
+
+def weak_legs(out):
+    """Matchs (« FH12 – FA12 ») des jambes marquées 🟠 (moins sûres) dans un message de combiné, dans l'ordre du message."""
+    return re.findall(r"<b>\d+\. ([^<]+)</b>[^\n]*\n[^\n]*\n🟠 ", str(out))
 
 
 def fouls(i, **kw):
@@ -301,9 +307,11 @@ def test_bold():
     assert ("🎲 Plus risqué, même cote", "cplus|30|f") in zip(texts, T.buttons(out)) and sum(d.startswith("cplus|") for d in T.buttons(out)) == 1, (texts, T.buttons(out))
     with Fakes():
         out = chat.on_callback("cplus|30|f", 9)
-    assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out and "🎯 Paris choisis : fautes" in out, out
-    assert "⚠️ 3 paris moins sûrs : FH12 – FA12 (55 %), FH11 – FA11 (55 %), FH10 – FA10 (55 %)" in out, out     # les paris moins solides nommés
-    assert out.startswith("🎲 Ticket de loterie : ") and "de chances, mise très petite." in out and T.buttons(out)[0].startswith("cjoue|"), out
+    assert out.startswith("<b>🎲 COMBINÉ AUDACIEUX — cote ") and "🎯 Paris choisis : fautes" in out, out
+    # les paris moins solides : comptés sous le titre, marqués 🟠 dans la liste (plus nommés en tête), légende en pied
+    assert "\n🎲 Ticket de loterie, mise très petite.\n🟠 3 paris moins sûrs pour atteindre la cote\n" in out, out
+    assert sorted(weak_legs(out)) == ["FH10 – FA10", "FH11 – FA11", "FH12 – FA12"] and "<i>🟢 solide · 🟠 moins sûr</i>" in out, out
+    assert T.buttons(out)[0].startswith("cjoue|"), out
     item = store.load(custom.FILE, {})["items"]["m1"]
     assert item["kinds"] == ["f"] and 30.0 <= item["total"] <= 37.5, item
     with Fakes():
@@ -319,7 +327,8 @@ def test_bold():
     store.save("today.json", {"day": DAY, "picks": [], "pronos": world() + fill})
     with Fakes():
         out = app.custom_combo([], world() + fill, 2.0, DAY, kinds=["f"], nlegs=(n, "min"))
-    assert f"🧩 {n} paris (au moins {n} demandés)" in str(out) and "⚠️ 2 paris moins sûrs pour compléter : " in str(out) and "(62 %, mal payé)" in str(out), out
+    assert f"🧩 {n} paris (au moins {n} demandés)" in str(out) and "🟠 2 paris moins sûrs pour compléter" in str(out), out
+    assert len(weak_legs(out)) == 2 and str(out).count("🟠 <i>Kelly 62 %") == 2 and str(out).count(" · mal payé</i>") == 2, out
     items = store.load(custom.FILE, {})["items"]
     assert len(items[max(items, key=lambda k: int(k[1:]))]["legs"]) == n
     assert app._chances(0.0005) == "0,05 % (environ 1 chance sur 2 000)" and app._chances(0.2) == "20 %"
@@ -327,7 +336,7 @@ def test_bold():
     thin = [fouls(20 + i, id=f"t{i}", key=f"t{i}|team_fouls_total||22.5|Over", prob=0.68, xodds=2.9, conf=0.2, n_min=3) for i in range(4)]
     mine, _ = app._bold_pools([], world() + thin, CB.kinds_prefix(["f"]))
     assert not {c["id"] for c in mine} & {"t0", "t1", "t2", "t3"} and {c["id"] for c in mine} >= {"f0", "f1"}, [c["id"] for c in mine]
-    print("ok  « 🎲 Aller plus loin quand même » : paris moins solides nommés, chances et loterie dites, suivi comme un combi")
+    print("ok  « 🎲 Aller plus loin quand même » : paris moins solides marqués 🟠, chances et loterie dites, suivi comme un combi")
 
 
 def test_force_and_proches():
@@ -343,7 +352,7 @@ def test_force_and_proches():
     with Fakes():
         out = app.handle_command("combi 30 fautes forcer")
     assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out and "🎯 Paris choisis : fautes" in out, out
-    assert "⚠️ 3 paris moins sûrs : FH12 – FA12 (55 %), FH11 – FA11 (55 %), FH10 – FA10 (55 %)" in out, out
+    assert sorted(weak_legs(out)) == ["FH10 – FA10", "FH11 – FA11", "FH12 – FA12"] and "🟠 3 paris moins sûrs pour atteindre la cote" in out, out
     with Fakes():
         out2 = chat.on_callback("cforce|30|f", 9)
     assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out2, out2

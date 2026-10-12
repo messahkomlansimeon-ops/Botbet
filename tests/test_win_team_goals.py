@@ -43,7 +43,7 @@ def test_underpaid():
     n = len(solid) + 2
     with K.Fakes():
         out = str(app.custom_combo([], pool, 2.0, K.DAY, kinds=["f"], nlegs=(n, "min")))
-    assert f"🧩 {n} paris" in out and "(63 %, mal payé)" in out, out
+    assert f"🧩 {n} paris" in out and out.count("🟠 <i>Kelly 63 %") == 2 and out.count(" · mal payé</i>") == 2, out
     kept = {c["key"] for c in app.keep_pronos(pool + [K.fouls(60 + i, id=f"z{i}", key=f"z{i}|x", prob=0.4) for i in range(80)])}
     assert {"u0|team_fouls_total||22.5|Over", "u1|team_fouls_total||22.5|Over"} <= kept, "gardés dans today.json pour compléter"
     print("ok  probables mais mal payés : montrés à part, jamais seuls, bouche-trous signalés d'un « min N », gardés pour la journée")

@@ -216,10 +216,72 @@ def event_name(c):
     return f"{esc(c['home'])} – {esc(c['away'])}" if c.get("home") and c.get("away") else esc(c.get("event", ""))
 
 
-def _match_line(n, c):
-    """« <b>1. PSG – Lyon</b>  <i>14h00 · Ligue 1</i> » : le match d'une jambe, son heure et sa ligue."""
+# ---------- repères visuels : drapeau du pays de la ligue, icône du marché, pastille solide / moins sûr ----------
+
+# pays lu dans la clé de compétition (« soccer_spain_la_liga », « soccer_xb_argentina_2 ») ; les plus longs d'abord (costa_rica avant…)
+FLAGS = {"argentina": "🇦🇷", "australia": "🇦🇺", "austria": "🇦🇹", "belgium": "🇧🇪", "brazil": "🇧🇷", "chile": "🇨🇱", "china": "🇨🇳",
+         "colombia": "🇨🇴", "costa_rica": "🇨🇷", "denmark": "🇩🇰", "ecuador": "🇪🇨", "england": "🏴\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f",
+         "epl": "🏴\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f", "efl": "🏴\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f",
+         "fa_cup": "🏴\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f", "finland": "🇫🇮", "france": "🇫🇷", "germany": "🇩🇪",
+         "greece": "🇬🇷", "italy": "🇮🇹", "japan": "🇯🇵", "korea": "🇰🇷", "league_of_ireland": "🇮🇪", "ireland": "🇮🇪", "mexico": "🇲🇽",
+         "netherlands": "🇳🇱", "norway": "🇳🇴", "paraguay": "🇵🇾", "peru": "🇵🇪", "poland": "🇵🇱", "portugal": "🇵🇹", "qatar": "🇶🇦",
+         "russia": "🇷🇺", "saudi": "🇸🇦", "spain": "🇪🇸", "spl": "🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f",
+         "scotland": "🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f", "sweden": "🇸🇪", "switzerland": "🇨🇭", "turkey": "🇹🇷",
+         "uae": "🇦🇪", "uruguay": "🇺🇾", "usa": "🇺🇸", "usl": "🇺🇸", "algeria": "🇩🇿", "bolivia": "🇧🇴", "bulgaria": "🇧🇬", "canada": "🇨🇦",
+         "croatia": "🇭🇷", "cyprus": "🇨🇾", "czech": "🇨🇿", "guatemala": "🇬🇹", "hungary": "🇭🇺", "indonesia": "🇮🇩", "iran": "🇮🇷",
+         "israel": "🇮🇱", "northern_ireland": "🇬🇧", "romania": "🇷🇴", "serbia": "🇷🇸", "slovakia": "🇸🇰", "slovenia": "🇸🇮", "ukraine": "🇺🇦",
+         "venezuela": "🇻🇪", "egypt": "🇪🇬", "morocco": "🇲🇦", "tunisia": "🇹🇳", "nigeria": "🇳🇬", "south_africa": "🇿🇦", "ivory_coast": "🇨🇮",
+         "wales": "🏴\U000e0067\U000e0062\U000e0077\U000e006c\U000e0073\U000e007f", "iceland": "🇮🇸", "estonia": "🇪🇪", "latvia": "🇱🇻",
+         "lithuania": "🇱🇹", "india": "🇮🇳", "thailand": "🇹🇭", "vietnam": "🇻🇳", "honduras": "🇭🇳", "el_salvador": "🇸🇻", "panama": "🇵🇦"}
+WORLD = "🌍"                                   # coupes d'Europe, sélections, compétition inconnue
+
+
+def flag(c):
+    """Drapeau du pays de la ligue d'un pari (« 🇪🇸 »), d'après sa clé de compétition ; 🌍 pour une coupe internationale ou une clé inconnue."""
+    key = str(c.get("sport_key") or "")
+    rest = key.split("_", 1)[1] if "_" in key else ""
+    rest = rest[3:] if rest.startswith("xb_") else rest
+    for name in sorted(FLAGS, key=len, reverse=True):
+        if rest == name or rest.startswith(name + "_"):
+            return FLAGS[name]
+    return WORLD
+
+
+# préfixes de marché -> icône (mêmes familles que combos.KINDS) ; le premier préfixe qui correspond l'emporte
+ICONS = (("alternate_totals_corners", "🚩"), ("team_corners_", "🚩"), ("alternate_totals_cards", "🟨"), ("team_yellow_", "🟨"),
+         ("team_offsides_", "🏁"), ("team_shots_", "🎯"), ("team_sot_", "🎯"), ("team_fouls_", "🛑"), ("team_throws_", "🙌"),
+         ("player_", "👤"), ("double_chance", "🛡️"), ("h2h", "🏆"), ("spreads", "🏆"), ("totals", "⚽"), ("team_totals", "⚽"),
+         ("alternate_totals", "⚽"), ("btts", "⚽"))
+SOLID, WEAK, SHARED = "🟢", "🟠", "🔗"
+
+
+def market_icon(c):
+    """Icône du type de pari : 🚩 corners, 🟨 cartons, 🏁 hors-jeu, 🎯 tirs, 🛑 fautes, 🙌 touches, ⚽ buts, 🛡️ double chance, 🏆 résultat ; 👉 sinon."""
+    m = str(c.get("market") or "")
+    return next((ic for p, ic in ICONS if m.startswith(p)), "👉")
+
+
+def legend(weak=False, shared=False):
+    """Légende des repères d'un combiné (« 🟢 solide · 🟠 moins sûr · 🔗 déjà dans tes tickets »), en italique ; '' quand il n'y a rien à expliquer."""
+    parts = ([f"{SOLID} solide", f"{WEAK} moins sûr"] if weak else []) + ([f"{SHARED} déjà dans N de tes tickets"] if shared else [])
+    return i(" · ".join(parts)) if parts else ""
+
+
+RULE = "━━━━━━━━━━━━"                         # séparateur court : ne déborde pas sur un écran de téléphone
+
+
+def _match_line(n, c, mark=""):
+    """« 🇫🇷 <i>14h00 · Ligue 1</i> » puis « <b>1. PSG – Lyon</b> » : le pays, l'heure et la ligue d'une jambe, puis le match. `mark` : repère
+    ajouté après le match (« · 🔗3 » : déjà dans 3 de tes tickets)."""
     when = " · ".join(x for x in (hhmm(c.get("start")), esc(c.get("league") or "")) if x)
-    return b(f"{'' if n is None else f'{n}. '}{event_name(c)}") + (f"  {i(when)}" if when else "")
+    name = b(f"{'' if n is None else f'{n}. '}{event_name(c)}") + mark
+    return f"{flag(c)} {i(when)}\n{name}" if when else f"{flag(c)} {name}"
+
+
+def _shared_mark(c, shared):
+    """« · 🔗3 » quand le match de `c` est déjà dans 3 de tes tickets joués (`shared` : {id du match: nombre}) ; '' sinon."""
+    k = (shared or {}).get(c.get("id"))
+    return f" · {SHARED}{k}" if k else ""
 
 
 def price_txt(c, real=False, when=None):
@@ -249,21 +311,27 @@ def x_prob(c):
     return next((c[k] for k in ("p_x", "xp", "px") if c.get(k) is not None), None)
 
 
-def chances_line(c):
-    """« Kelly 67 % · 1xBet 48 % » (en italique, indentée) : les chances retenues par Kelly et, si on la connaît, celle de 1xBet sans marge."""
+def chances_line(c, weak=False, extra=""):
+    """« 🟢 <i>Kelly 67 % · 1xBet 48 % (+19)</i> » : pastille (🟢 solide, 🟠 moins sûr : `weak`), les chances retenues par Kelly et, si on la connaît,
+    celle de 1xBet sans marge, avec l'écart en points dès 3 points. `extra` : précision ajoutée en fin de ligne (« mal payé »)."""
     px = x_prob(c)
-    return "   " + i(f"Kelly {pct(c['prob'])}" + (f" · 1xBet {pct(px)}" if px is not None else ""))
+    gap = round((c["prob"] - px) * 100) if px is not None else 0
+    txt = (f"Kelly {pct(c['prob'])}" + (f" · 1xBet {pct(px)}" if px is not None else "")
+           + (f" ({'+' if gap > 0 else '−'}{abs(gap)})" if abs(gap) >= 3 else "") + (f" · {extra}" if extra else ""))
+    return f"{WEAK if weak else SOLID} {i(esc(txt))}"
 
 
-def leg(n, c, reason=None, price=None):
-    """Bloc compact d'une jambe : le match ; le pari et sa cote ; les chances (Kelly / 1xBet) ; la raison s'il y en a une. `price` : libellé de la
-    cote (price_txt) à la place de la cote en gras."""
+def leg(n, c, reason=None, price=None, weak=False, shared=None, extra=""):
+    """Bloc d'une jambe : pays, heure et ligue ; le match ; l'icône du marché, le pari et sa cote ; la pastille et les chances (Kelly / 1xBet) ;
+    la raison s'il y en a une. `price` : libellé de la cote (price_txt) à la place de la cote en gras. `weak` : pari moins sûr (🟠),
+    `shared` : {id du match: nombre de tes tickets où il est déjà}, `extra` : voir chances_line."""
     note = best_note(c)
-    lines = [_match_line(n, c), f"   {esc(c['pick'])} · {price or b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else ""),
-             chances_line(c)]
+    lines = [_match_line(n, c, _shared_mark(c, shared)),
+             f"{market_icon(c)} {esc(c['pick'])} · {price or b(odds_txt(c['odds']))}" + (f" {i('(' + note + ')')}" if note else ""),
+             chances_line(c, weak, extra)]
     why = why_line(c, reason)
     if why:
-        lines.append(f"   💡 {i(esc(why))}")
+        lines.append(f"💡 {i(esc(why))}")
     return "\n".join(lines)
 
 
@@ -292,25 +360,54 @@ def xbet_note(legs, when=None):
     return "\n" + i(f"🕒 Cotes 1xBet de {esc(when)} : vérifie-les avant de valider." if when else "🕒 Cotes 1xBet : vérifie-les avant de valider.")
 
 
-def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=None, coupon=None, when=None, retry=None):
-    """Message d'un combiné : titre et cote ; chances, espérance et mise sur deux lignes ; puis les jambes, séparées par une ligne
-    vide. `stake_txt` : la mise conseillée sur le budget du jour (« 1 500 FCFA ») ; sans elle (pas de budget du jour), une ligne dit de régler
-    le budget (jamais de mise en unités ; `stake`, ancienne mise en unités, est ignoré). `coupon` : code coupon 1xBet (toutes les jambes
-    aux cotes 1xBet), `when` : heure « HH:MM » de ces cotes, `retry` : voir coupon_block."""
-    reasons = reasons or {}
-    head = [b(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}"),
-            f"🎯 {len(picks)} paris · {pct(prob)} de chances · {expect(prob, odds_total)}",
-            stake_line(stake_txt)]
-    legs = [leg(k, c, reasons.get(c["key"])) for k, c in enumerate(picks, 1)]
-    return Html("\n".join(head) + "\n\n" + "\n".join(legs) + coupon_block(coupon, retry) + xbet_note(picks, when))
+def coupon_top(coupon):
+    """Ligne du code coupon en haut d'un message (« 🎟️ SKU6L touche pour copier ») ; '' sans code. Le code est aussi rappelé en bas (coupon_block)."""
+    return f"🎟️ {code(coupon)}  " + i("touche pour copier") if coupon else ""
+
+
+def _foot(stake, weak, shared, tail):
+    """Pied d'un combiné : séparateur, légende des repères, ligne de mise (quand elle n'est pas un montant : budget à régler, pas de mise) et `tail`."""
+    rows = [x for x in (legend(weak, shared), stake) if x]
+    return "\n\n" + RULE + "".join("\n" + x for x in rows) + ("\n" + tail.lstrip("\n") if tail.strip() else "")
+
+
+def _header(title, chances, stake, note, coupon):
+    """En-tête d'un combiné : le titre en gras (avec sa cote), les chances, la mise quand c'est un montant, `note` (lignes courtes déjà en HTML),
+    le code coupon. -> (texte, ligne de mise à mettre dans le pied ou '')."""
+    amount = stake if stake.startswith("💰 Mise : <b>") else ""
+    head = [b(title), chances] + ([amount] if amount else []) + ([note] if note else []) + ([coupon_top(coupon)] if coupon else [])
+    return "\n".join(head), ("" if amount else stake)
+
+
+def _shared_ids(shared):
+    return bool(shared) and any(shared.values())
+
+
+def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=None, coupon=None, when=None, retry=None, weak=None, shared=None, note="",
+          extra=None):
+    """Message d'un combiné : titre et cote ; nombre de paris, chances et espérance ; la mise (montant) ; `note` ; le code coupon ; puis les jambes,
+    séparées par une ligne vide (drapeau, icône du marché, pastille) ; un pied (légende, mise à régler, heure des cotes, code). `stake_txt` : la mise
+    conseillée sur le budget du jour (« 1 500 FCFA ») ; sans elle (pas de budget du jour), une ligne dit de régler le budget (jamais de mise en unités ;
+    `stake`, ancienne mise en unités, est ignoré). `coupon` : code coupon 1xBet (toutes les jambes aux cotes 1xBet), `when` : heure « HH:MM » de ces
+    cotes, `retry` : voir coupon_block. `weak` : clés des paris moins sûrs (🟠), `shared` : {id du match: nombre de tes tickets où il est déjà},
+    `extra` : {clé: précision en fin de ligne de chances}."""
+    reasons, weak, extra = reasons or {}, set(weak or ()), extra or {}
+    head, stake_foot = _header(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}", f"🎯 {len(picks)} paris · {pct(prob)} de chances · "
+                               f"{expect(prob, odds_total)}", stake_line(stake_txt), note, coupon)
+    legs = [leg(k, c, reasons.get(c["key"]), weak=c.get("key") in weak, shared=shared, extra=extra.get(c.get("key"), "")) for k, c in enumerate(picks, 1)]
+    return Html(head + "\n\n" + "\n\n".join(legs)
+                + _foot(stake_foot, bool(weak), _shared_ids(shared), coupon_block(coupon, retry) + xbet_note(picks, when)))
 
 
 def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None, when=None, retry=None):
     """Pari du jour : une seule jambe (et sa mise conseillée sur le budget du jour, `stake_txt`, sinon la ligne « règle ton budget »).
     `coupon` / `when` / `retry` : voir combo."""
-    head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances",
-            stake_line(stake_txt)]
-    return Html("\n".join(head) + "\n\n" + leg(None, c, reason) + coupon_block(coupon, retry) + xbet_note([c], when))
+    stake = stake_line(stake_txt)
+    amount = stake if stake.startswith("💰 Mise : <b>") else ""
+    head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances"] + ([amount] if amount else []) \
+        + ([coupon_top(coupon)] if coupon else [])
+    return Html("\n".join(head) + "\n\n" + leg(None, c, reason)
+                + _foot("" if amount else stake, False, False, coupon_block(coupon, retry) + xbet_note([c], when)))
 
 
 def _legend():
@@ -409,32 +506,35 @@ def combo_changes(removed, added, changed=()):
     return "\n".join(lines)
 
 
-def fair_leg(n, c):
-    """Jambe compacte d'un combiné à cote juste : le match ; le pari et sa cote 1xBet (ou la cote mini à exiger) ; les chances (Kelly / 1xBet)."""
+def fair_leg(n, c, weak=False, shared=None, extra=""):
+    """Jambe d'un combiné à cote juste : pays, heure et ligue ; le match ; l'icône du marché, le pari et sa cote 1xBet (ou la cote mini à exiger) ;
+    la pastille et les chances (Kelly / 1xBet). `weak` / `shared` / `extra` : voir leg."""
     price = b(num(c["xodds"])) if c.get("xodds") else f"joue si ≥ {b(num(c['min_odds']))}"
-    return "\n".join([_match_line(n, c), f"   {esc(c['pick'])} · {price}", chances_line(c)])
+    return "\n".join([_match_line(n, c, _shared_mark(c, shared)), f"{market_icon(c)} {esc(c['pick'])} · {price}", chances_line(c, weak, extra)])
 
 
-def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, coupon=None, when=None, retry=None, stale=False):
+def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, coupon=None, when=None, retry=None, stale=False, weak=None, shared=None,
+               note="", extra=None):
     """Message d'un combiné à cote juste : toujours clairement annoncé « à vérifier chez 1xBet », chaque jambe avec sa cote minimale ;
     la mise conseillée vient du budget du jour (`stake_txt`), sinon une ligne dit de régler le budget (jamais d'unités ; `stake`, ancienne
     mise indicative en unités, est ignoré). `title` : combinés « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »).
     `when` : heure « HH:MM » du relevé des cotes 1xBet (combiné réel), rappelée en bas du message ; `retry` : voir coupon_block ;
     `stale` : cotes du DERNIER relevé (1xBet injoignable à l'instant) : le titre et le pied le disent, avec l'heure `when` du relevé si on
-    la connaît."""
+    la connaît. `weak` / `shared` / `note` / `extra` : voir combo."""
+    weak, extra = set(weak or ()), extra or {}
     real = all(c.get("xodds") for c in picks)          # toutes les cotes relevées chez 1xBet par Kelly : la cote totale est réelle
     tail = "COTES 1XBET" if real else "À VÉRIFIER CHEZ 1XBET"
     old = real and stale
     if old:                                          # jamais le titre « aux cotes 1xBet » sans dire de quand elles datent
         tail = "COTES 1XBET DU DERNIER RELEVÉ" + (f" ({when})" if when else "")
     name = title or ("💎 COMBINÉ" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")
-    head = [b(f"{name} — {'cote' if real else 'cote mini'} {odds_txt(min_total)}" + (" · " + tail if old or (title and not real) else "")),
-            f"🎯 {len(picks)} paris · {pct(prob)} de chances",
-            stake_line(stake_txt, "" if real else "(si 1xBet paie la cote mini)")]
+    head, stake_foot = _header(f"{name} — {'cote' if real else 'cote mini'} {odds_txt(min_total)}" + (" · " + tail if old or (title and not real) else ""),
+                               f"🎯 {len(picks)} paris · {pct(prob)} de chances", stake_line(stake_txt, "" if real else "(si 1xBet paie la cote mini)"),
+                               note, coupon)
     foot = i(f"🕒 Cotes du dernier relevé ({esc(when)}) : 1xBet ne répond pas, vérifie-les avant de valider." if old and when else
              "🕒 Cotes du dernier relevé : 1xBet ne répond pas, vérifie-les avant de valider." if old else
              f"🕒 Cotes 1xBet de {esc(when)} : vérifie-les avant de valider." if real and when else
              "🕒 Cotes 1xBet : vérifie-les avant de valider." if real else
              f"⚠️ Joue seulement si chaque pari atteint sa cote mini (au total, au moins {odds_txt(min_total)}).")
-    return Html("\n".join(head) + "\n\n" + "\n".join(fair_leg(k, c) for k, c in enumerate(picks, 1))
-                + coupon_block(coupon, retry) + "\n" + foot)
+    legs = [fair_leg(k, c, c.get("key") in weak, shared, extra.get(c.get("key"), "")) for k, c in enumerate(picks, 1)]
+    return Html(head + "\n\n" + "\n\n".join(legs) + _foot(stake_foot, bool(weak), _shared_ids(shared), coupon_block(coupon, retry) + "\n" + foot))

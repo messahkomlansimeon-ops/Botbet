@@ -57,8 +57,15 @@ case "$1" in
             grep -q "wake-lock demandé" "$LOG" && echo "✅ Wake-lock demandé au démarrage" || echo "⚠️ Wake-lock non demandé au dernier démarrage : kelly restart"
             last=$(grep -E "matin|--daily" "$LOG" | tail -n 1)
             [ -n "$last" ] && echo "🕓 Dernier passage du matin dans le journal : ${last:0:120}" || echo "🕓 Aucun passage du matin dans le journal actuel"
-            n=$(tail -n 2000 "$LOG" | grep -c "Read timed out")
-            if [ "$n" -gt 20 ]; then echo "⚠️ $n coupures Telegram récentes : le téléphone met sans doute Termux en veille (voir les réglages ci-dessous)"; else echo "✅ $n coupure(s) Telegram récente(s) : normal"; fi
+            # une ligne « échouée » par coupure (pas par essai) ; « rétablie après N échec(s) (X s) » donne sa durée
+            n=$(tail -n 2000 "$LOG" | grep -c "lecture des commandes échouée")
+            long=$(tail -n 2000 "$LOG" | sed -n 's/.*connexion rétablie après .* (\([0-9]*\) s).*/\1/p' | sort -n | tail -n 1)
+            long=${long:-0}
+            if [ "$n" -gt 20 ] || [ "$long" -gt 600 ]; then
+                echo "⚠️ $n coupure(s) Telegram récente(s), la plus longue : $long s. Le téléphone coupe sans doute le réseau de Termux (voir les réglages ci-dessous)"
+            else
+                echo "✅ $n coupure(s) Telegram récente(s), la plus longue : $long s : normal sur un téléphone"
+            fi
         else
             echo "⚠️ Pas encore de journal ($LOG)"
         fi

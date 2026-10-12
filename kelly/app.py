@@ -2047,13 +2047,14 @@ def _budget_stake_txt(prob, odds):
 
 
 def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, when=None, code=..., retry=None, stale=False, budget=False,
-                keep=None, tail=""):
+                keep=None, tail="", weak=None, shared=None, note="", extra=None):
     """Réponse « combiné à cote juste » de custom_combo : phrase d'introduction, paris remplacés, combiné, et code coupon 1xBet quand
     toutes les jambes ont leur référence 1xBet (_coupon ; échec = pas de code, une ligne le dit avec `retry`). `code` : code déjà
     enregistré (None : échec), sinon calculé ici. `stake_txt` : la mise du budget du jour (combiné du matin renvoyé), `budget` : la
     calculer sur le budget du jour (combiné demandé à la main), `when` : l'heure « HH:MM » des cotes 1xBet, `stale` : cotes du dernier
     relevé (1xBet injoignable), voir fmt.fair_combo. `keep` ({"day", "target", "lo", "hi"} : combiné demandé à la main) : le combiné est
-    gardé en mémoire avec sa mise, son code et l'heure de ses cotes (custom.remember) et part avec le bouton « ✅ Je le joue »."""
+    gardé en mémoire avec sa mise, son code et l'heure de ses cotes (custom.remember) et part avec le bouton « ✅ Je le joue ».
+    `weak` / `shared` / `note` / `extra` : repères des jambes et lignes sous le titre, voir fmt.combo."""
     legs, min_total, prob = fc
     if code is ...:
         code = _coupon(legs) if coupon else None
@@ -2066,7 +2067,7 @@ def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, w
     top = "\n".join(x for x in (fmt.esc(head).strip("\n"), changes) if x)
     msg = Html((top + "\n\n" if top.strip() else "")
                + fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total), stake_txt=stake_txt, coupon=code, title=title,
-                                when=when, retry=retry if expected else None, stale=stale)
+                                when=when, retry=retry if expected else None, stale=stale, weak=weak, shared=shared, note=note, extra=extra)
                + ("\n" + fmt.esc(tail.strip("\n")) if tail.strip() else ""))      # avertissements courts, une ligne chacun, sous le combiné
     if keep:                                        # gardé en mémoire avec la mise conseillée du message (budget du jour ; None sans budget)
         cid = custom.remember(keep["day"], keep["target"], keep["lo"], keep["hi"], fc, stake, None if stake is None else money.cur(), code, when,
@@ -2128,9 +2129,8 @@ def _live_reply(fc, lo, hi, now=None, check=None, keep=None, usage=None, avoid=N
     when, stale = _when_note(legs)
     when = when or hhmm
     only = CB.kinds_label((keep or {}).get("kinds"))
-    return _fair_reply((legs, total, prob), "", tail=(f"\n🎯 Paris choisis : {only}" if only else "") + stale + _note(keep)
-                                            + _shared_note((keep or {}).get("day"), legs),
-                       changes=fmt.combo_changes(removed, added, changed), when=when, retry="redemande le combi", budget=True, keep=keep)
+    return _fair_reply((legs, total, prob), "", tail=(f"\n🎯 Paris choisis : {only}" if only else "") + stale + _note(keep),
+                       shared=_shared_counts((keep or {}).get("day"), legs), changes=fmt.combo_changes(removed, added, changed), when=when, retry="redemande le combi", budget=True, keep=keep)
 
 
 def _tier_range(tier):
@@ -2332,7 +2332,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     sur les pronostics, soit sur les paris réels, jamais les deux : des types pris des deux côtés sont dits « pas mélangeables » s'il échoue.
     Types stats (tirs, fautes...) : les matchs de la fenêtre des stats que 1xBet n'avait pas encore chiffrés sont d'abord relus en direct (_open_stats).
     `bold` (« 🎲 Aller plus loin quand même », « combi 1900 tirs audacieux ») : complété avec des paris moins solides (_bold_combo).
-    Tes tickets joués du jour (kelly/exposure.py) ne retirent rien : le message signale les matchs qui y sont déjà (_shared_note).
+    Tes tickets joués du jour (kelly/exposure.py) ne retirent rien : chaque match qui y est déjà porte « 🔗N » (_shared_counts).
     `avoid` (« 🔀 Un autre sans mes matchs ») : ids de matchs exclus, jusque dans la vérification en direct (_live_reply) ; `again` : le combi dont on a
     touché « 🔀 » (un échec propose « 🔀 Cote X sans mes matchs » au plus haut atteignable, et « 🎯 Cote N avec mes matchs »). `nlegs` : (N, exact) —
     au plus N paris (« combi 20 max 4 », case « ≤ 4 »), ou exactement N (« combi 20 pile 4 ») ; un échec dit la plus haute cote en N paris et propose
@@ -2348,7 +2348,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
         pronos = _open_stats(pronos, prefix, now)
     if avoid:                                       # « 🔀 Un autre sans mes matchs » : ni tes matchs joués ni ceux du combiné affiché
         pronos, picks = [c for c in pronos if c["id"] not in avoid], [c for c in picks if c["id"] not in avoid]
-    # tes tickets joués du jour ne retirent rien (les meilleurs paris restent proposés) : le message dit seulement lesquels y sont déjà (_shared_note)
+    # tes tickets joués du jour ne retirent rien (les meilleurs paris restent proposés) : le message dit seulement lesquels y sont déjà (_shared_counts)
     left = (f"🔀 Sans {'le match' if len(avoid) == 1 else f'les {len(avoid)} matchs'} de tes tickets du jour et du combiné précédent."
             if avoid else "")
     if bold:
@@ -2370,7 +2370,8 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
         if fc:
             why = real if not picks else "Kelly n'a vu aucune cote de 1xBet aujourd'hui"
             return _fair_reply(fc, f"{why} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier "
-                                   "chez 1xBet." + _note(keep) + _shared_note(day, fc[0]), budget=True, keep=keep)
+                                   "chez 1xBet." + _note(keep), budget=True, keep=keep,
+                               shared=_shared_counts(day, fc[0]))
     if picks and (xk or not xp):                    # paris réels : à leur prix 1xBet s'il existe, sinon cotes de référence (annoncées)
         usage, n_sent = _todays_usage(day, picks)
         combo = CB.custom(picks, target, usage, prefix=prefix, **lim)
@@ -2385,7 +2386,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
             xcombo = all(c.get("xref") and c.get("xodds") for c in picks_)
             code = xbet.save_coupon(picks_) if xcombo else None
             msg = fmt.combo("🎯 COMBINÉ SUR MESURE" + (f" · {only.upper()}" if only else ""), picks_, odds_, prob, reasons={c["key"]: CB.leg_reason(c) for c in picks_}, stake_txt=txt,
-                            coupon=code, when=when, retry="redemande le combi" if xcombo and not code else None)
+                            coupon=code, when=when, retry="redemande le combi" if xcombo and not code else None, shared=_shared_counts(day, picks_))
             if not xk:                              # ni 1xBet ni code : les cotes affichées sont celles des autres bookmakers
                 msg = Html(msg + "\n\n" + fmt.i("⚠️ Ce sont des cotes de référence (pas celles de 1xBet) : vérifie chaque cote chez 1xBet "
                                                 "avant de jouer, la cote totale chez lui peut être plus basse."))
@@ -2394,8 +2395,8 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
                                                 f"{fmt.pct(1 - CB.ev(combo))} de moins que la mise. "
                                                 + ("Kelly ne conseille pas d'y miser : vise une autre cote." if money.active() and not money.has_edge(prob, odds_)
                                                    else "Mise petit, ou vise une autre cote.")))
-            if note or _shared_note(day, picks_):
-                msg = Html(msg + "\n\n" + fmt.i(fmt.esc((note + _shared_note(day, picks_)).strip())))
+            if note:
+                msg = Html(msg + "\n\n" + fmt.i(fmt.esc(note.strip())))
             if n_sent:
                 msg = Html(msg + "\n\n" + fmt.i(f"Les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs "
                                                 f"({fmt.pct(C.LEG_SAFE_PROB)} de chances ou plus, {C.LEG_REUSE_MAX} combinés au plus)."))
@@ -2611,7 +2612,7 @@ def _chances(p):
 
 def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nlegs=None, fill=False):
     """« 🎲 Aller plus loin quand même » : combiné à la cote visée avec les paris chiffrés chez 1xBet des types choisis, solides ou non (_bold_pools) ;
-    l'optimiseur prend d'abord les plus probables. Les paris moins solides (hors combos.fair_legs / make_pool) sont nommés, les chances et l'espérance
+    l'optimiseur prend d'abord les plus probables. Les paris moins solides (hors combos.fair_legs / make_pool) portent 🟠 (fmt.leg), les chances et l'espérance
     dites, la mise conseillée vient du budget (petite). Pronostics d'abord, puis paris réels ; jamais les deux mélangés. Gardé comme un « combi »
     (« ✅ Je le joue »). `fill` (« combi 100 min 15 » sans assez de paris solides) : les N paris sont toujours là — le trou est comblé avec les
     plus probables après les solides, et si N paris dépassent déjà la cote, c'est la plus proche au-dessus ; -> None si même ainsi c'est impossible."""
@@ -2656,27 +2657,31 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
         many = len(weak) > 1
         sure_loss = money.active() and not money.has_edge(combo[2], combo[1])      # espérance négative : Kelly ne conseille aucune mise (money.allocate)
         small = "Kelly ne conseille pas d'y miser" if sure_loss else "mise petite"
+        # sous le titre, en quelques mots : les paris moins sûrs ne sont plus nommés, ils portent 🟠 dans la liste (« mal payé » sur leur ligne)
+        rare = f" Environ 1 chance sur {int(round(1 / combo[2], -1 if combo[2] > 0.001 else -2)):,}.".replace(",", " ") if combo[2] < 0.01 else ""
         if fill:                                    # au moins N : les N paris d'abord, les moins sûrs comblent le trou
-            head = (f"🧩 {len(combo[0])} paris (au moins {mn_} demandés)"
-                    + (f" : en {mn_} paris, même les plus sûrs, la cote ne descend pas sous {fmt.trim(over, 1)} (pas {t}) ; voici le plus sûr à partir de là." if over else ".")
-                    + f"\n🎲 {_chances(combo[2])} de chances, {small}.")
+            lines = [f"🧩 {len(combo[0])} paris (au moins {mn_} demandés)"
+                     + (f" : en {mn_} paris, même les plus sûrs, la cote ne descend pas sous {fmt.trim(over, 1)} (pas {t}) ; voici le plus sûr à partir de là." if over else "."),
+                     f"🎲 {small[0].upper() + small[1:]}.{rare}"]
         else:
-            head = f"🎲 Ticket de loterie : {_chances(combo[2])} de chances, {small if sure_loss else 'mise très petite'}."
-        head += ((f" Espérance {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}." if CB.ev(combo) < 1 else "")
-                 + (f"\n⚠️ {len(weak)} pari{'s' if many else ''} moins sûr{'s' if many else ''}{' pour compléter' if fill else ''} : "
-                    + ", ".join(f"{c['home']} – {c['away']} ({fmt.pct(c['prob'])}{', mal payé' if underpaid(c) else ''})" for c in weak)
-                    if weak else "\n✅ Tous ses paris sont solides."))
-        foot = (f"\n🎯 Paris choisis : {only}" if only else "") + (f"\n{note}" if note else "") + _shared_note(day, combo[0])
+            lines = [f"🎲 Ticket de loterie, {small if sure_loss else 'mise très petite'}.{rare}"]
+        if src == "pronos" and CB.ev(combo) < 1:     # le combiné à cote juste n'affiche pas l'espérance dans son en-tête
+            lines[-1] += f" Espérance {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}."
+        lines.append(f"{fmt.WEAK} {len(weak)} pari{'s' if many else ''} moins sûr{'s' if many else ''} {'pour compléter' if fill else 'pour atteindre la cote'}"
+                     if weak else "✅ Tous ses paris sont solides.")
+        head = fmt.esc("\n".join(lines))
+        marks = {"weak": {c["key"] for c in weak}, "extra": {c["key"]: "mal payé" for c in weak if underpaid(c)}, "shared": _shared_counts(day, combo[0])}
+        foot = (f"\n🎯 Paris choisis : {only}" if only else "") + (f"\n{note}" if note else "")
         when, stale = _when_note(combo[0])
         when = when or store.load("today.json", {}).get("xbet_at")
         foot += stale
         if src == "pronos":
-            return _fair_reply(combo, head, title=title, when=when, retry="redemande le combi", budget=True, keep=keep, tail=foot)
+            return _fair_reply(combo, "", title=title, when=when, retry="redemande le combi", budget=True, keep=keep, tail=foot, note=head, **marks)
         st = _budget_stake(combo[2], combo[1], "combo", "🎯") if money.active() else None
         code = xbet.save_coupon(combo[0]) if all(c.get("xref") for c in combo[0]) else None
-        msg = Html(fmt.esc(head) + "\n\n" + fmt.combo(title + (f" · {only.upper()}" if only else ""), combo[0], combo[1], combo[2],
-                                                        reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st, combo[2], combo[1]), coupon=code,
-                                                        when=when) + ("\n" + fmt.esc(foot.strip("\n")) if foot.strip() else ""))
+        msg = Html(fmt.combo(title + (f" · {only.upper()}" if only else ""), combo[0], combo[1], combo[2],
+                             reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st, combo[2], combo[1]), coupon=code,
+                             when=when, note=head, **marks) + ("\n" + fmt.esc(foot.strip("\n")) if foot.strip() else ""))
         cid = custom.remember(day, target, lo, hi, combo, st, money.cur() if st is not None else None, code, when, src="picks",
                               kinds=kinds if prefix else None, nlegs=nlegs)
         return custom.with_button(msg, cid, day, code)
@@ -2752,24 +2757,17 @@ def _min_legs_failure(picks, pronos, target, prefix, n, codes):
     return telegram.with_buttons("\n".join(lines), telegram.inline(rows))
 
 
-def _shared_note(day, legs):
-    """« 🔗 Déjà dans tes tickets : Lorient – Paris FC (6), Brest – Angers (5) +2 » : les matchs de ce combi qui sont déjà dans tes tickets
-    joués (exposure), précédé d'un saut de ligne ; '' s'il n'y en a pas. Rien n'est retiré : c'est un avertissement."""
+def _shared_counts(day, legs):
+    """{id du match: nombre de tes tickets joués du jour (exposure) où il est déjà} pour les matchs de `legs` qui y sont ; {} sinon. Rien n'est
+    retiré : chaque jambe concernée porte « 🔗N » dans le message (fmt.leg) et le pied l'explique."""
     if not day:
-        return ""
+        return {}
+    ids = {c.get("id") for c in legs}
     count = {}
     for t in exposure.tickets(day):
-        for i in {l.get("id") for l in t["legs"]}:
+        for i in {l.get("id") for l in t["legs"]} & ids:
             count[i] = count.get(i, 0) + 1
-    seen, shared = set(), []
-    for c in legs:
-        if count.get(c.get("id")) and c["id"] not in seen:
-            seen.add(c["id"])
-            shared.append(f"{c.get('home', '')} – {c.get('away', '')} ({count[c['id']]})")
-    if not shared:
-        return ""
-    more = f" +{len(shared) - 3}" if len(shared) > 3 else ""
-    return f"\n🔗 Déjà dans tes tickets : {', '.join(shared[:3])}{more}"
+    return count
 
 
 def another_combo(cid, day, target=None):

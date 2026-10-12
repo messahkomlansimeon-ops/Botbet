@@ -60,12 +60,12 @@ def test_combi_warns_played():
         out = app.handle_command("combi 5 fautes")
     item = store.load(custom.FILE, {})["items"]["m2"]
     assert {l["id"] for l in item["legs"]} & {"f0", "f1", "f2", "f3"}, "rien n'est retiré"
-    assert "🔗 Déjà dans tes tickets : FH" in out and "(1)" in out and "🔀 Un autre sans mes matchs" in str(out.markup), out
+    assert "</b> · 🔗1\n" in out and "<i>🔗 déjà dans N de tes tickets</i>" in out and "🔀 Un autre sans mes matchs" in str(out.markup), out
     assert "Laissés de côté" not in out and "cnew|m2|" in str(out.markup)
     setup()
     with K.Fakes():
         out = app.handle_command("combi 5 fautes")
-    assert "Déjà dans tes tickets" not in out, "aucun ticket joué : pas d'avertissement"
+    assert "🔗" not in out, "aucun ticket joué : pas d'avertissement"
     print("ok  combi : les meilleurs paris restent proposés, ceux déjà dans tes tickets sont signalés")
 
 
