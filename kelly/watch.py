@@ -25,8 +25,11 @@ FILE = "ticket_watch.json"      # {"legs": {"<ticket>|<pari>": {"state", "score"
 FINISH_MIN = 115                # un match sorti de la liste « en cours » est fini s'il a commencé il y a au moins N minutes
 GIVE_UP_H = 8                   # au-delà, plus de recherche de résultat (le règlement du matin s'en charge)
 STATS = {"team_shots": "shots", "team_sot": "sot", "team_fouls": "fouls", "team_throws": "throws", "team_offsides": "offsides"}
-WORD = {"shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu", "corners": "corners", "cards": "cartons"}
-ONE = {"shots": "tir", "sot": "tir cadré", "fouls": "faute", "throws": "touche", "offsides": "hors-jeu", "corners": "corner", "cards": "carton"}
+WORD = {"shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu", "corners": "corners", "cards": "cartons",
+        "yellow": "cartons jaunes"}
+ONE = {"shots": "tir", "sot": "tir cadré", "fouls": "faute", "throws": "touche", "offsides": "hors-jeu", "corners": "corner", "cards": "carton",
+       "yellow": "carton jaune"}
+GOAL_MARKETS = ("totals", "btts", "h2h", "double_chance", "team_totals_home", "team_totals_away")
 # statusText 365scores d'un match du groupe 4 qui n'est PAS fini : suspendu (incident, météo), reporté, abandonné, annulé... (le 10/10 : Rayo – Bilbao
 # « Suspended » à la 25e, pris pour terminé : paris tranchés et 2 tickets déclarés perdus à tort)
 PAUSED = ("suspend", "susp", "postpon", "abandon", "cancel", "interrupt", "delay", "award")
@@ -56,10 +59,14 @@ def _load():
 def need(leg):
     """(statistique, côté) du pari : ("goals", None), ("corners", "total"), ("shots", "home")... ; (None, None) si Kelly ne sait pas le suivre en direct."""
     m = str(leg.get("market") or "")
-    if m in ("totals", "btts", "h2h", "double_chance", "team_totals_home", "team_totals_away"):
+    if m in GOAL_MARKETS:
         return "goals", None
     if m == "alternate_totals_corners":
         return "corners", "total"
+    if m in ("team_corners_home", "team_corners_away"):          # corners d'UNE équipe (1xBet)
+        return "corners", m.rsplit("_", 1)[1]
+    if m == "team_yellow_total":                                  # cartons jaunes seuls du match (1xBet)
+        return "yellow", "total"
     if m == "alternate_totals_cards":
         return "cards", "total"
     for pre, key in STATS.items():
@@ -102,10 +109,22 @@ def state(leg, h, a, stats, finished):
 
 
 def margin(leg, h, a):
-    """« encore 1 but de marge » / « il manque 2 buts » d'un pari de total de buts en cours ; '' sinon."""
-    if leg.get("market") != "totals" or leg.get("point") is None:
+    """Où en est un pari de buts en cours, après un but : « encore 1 but de marge » / « il manque 2 buts » (total du match ou d'une équipe),
+    « pour toi pour l'instant » / « pas pour toi pour l'instant » (1N2, double chance), « il manque un but de Leeds » (les 2 marquent) ; '' sinon."""
+    m = leg.get("market")
+    if m in ("h2h", "double_chance"):
+        res = leg.get("home") if h > a else leg.get("away") if a > h else "Draw"
+        ok = leg.get("name") == res if m == "h2h" else res in str(leg.get("name")).split(" or ")
+        return "pour toi pour l'instant" if ok else "pas pour toi pour l'instant"
+    if m == "btts":
+        if leg.get("name") == "Yes":
+            miss = [t for t, g in ((leg.get("home"), h), (leg.get("away"), a)) if g == 0]
+            return "il faut un but de chaque équipe" if len(miss) == 2 else f"il manque un but de {miss[0]}" if miss else ""
+        return "encore bon tant qu'une équipe reste à 0"
+    if m not in ("totals", "team_totals_home", "team_totals_away") or leg.get("point") is None:
         return ""
-    total, p = h + a, leg["point"]
+    total = h if m == "team_totals_home" else a if m == "team_totals_away" else h + a
+    p = leg["point"]
     if leg.get("name") == "Under":
         k = math.floor(p - total)
         return f"encore {k} but{'s' if k > 1 else ''} de marge" if k >= 1 else "plus aucun but permis"
@@ -181,13 +200,14 @@ def _stats(s365, g):
         key = s365.STAT_NAMES.get(str(st.get("name") or "").lower())
         if not key:
             continue
-        key = "cards" if key in ("yc", "rc") else key
         try:
             v = int(float(str(st.get("value") or "0").replace("%", "")))
         except ValueError:
             continue
-        h, a = out.get(key, (0, 0))
-        out[key] = (h + v, a) if st.get("competitorId") == g["home"]["id"] else (h, a + v)
+        home = st.get("competitorId") == g["home"]["id"]
+        for k in (("cards", "yellow") if key == "yc" else ("cards",) if key == "rc" else (key,)):     # cartons = jaunes + rouges ; jaunes seuls à part
+            h, a = out.get(k, (0, 0))
+            out[k] = (h + v, a) if home else (h, a + v)
     return out
 
 
@@ -246,7 +266,7 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None):
         return None
     # message : chaque pari décidé ou but UNE fois (même dans 7 tickets), puis une ligne par ticket touché (« 🎫 Combi … · 📊 1/7 gagnés, 6 en cours »)
     events, touched = {}, {}                          # ligne -> None (ordre, sans doublon) ; ticket -> t
-    with (_NoProxy() if games is not None else s365._via_proxy()) as why:
+    with (_NoProxy() if games is not None else s365._via_proxy(settle=True)) as why:     # tes tickets (~1 Ko par match) passent avant la lecture de fond
         if why:
             print(f"[suivi] tickets non suivis : {why}", file=sys.stderr)
             return None
@@ -282,7 +302,7 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None):
             match = f"{leg['home']} – {leg['away']}"
             if st in ("win", "loss"):
                 line = f"{'✅' if st == 'win' else '❌'} {match} : {leg.get('pick')} ({detail}{'' if detail == sc else ', ' + sc})"
-            elif leg.get("market") == "totals" and prev.get("score") not in (None, sc):
+            elif leg.get("market") in GOAL_MARKETS and prev.get("score") not in (None, sc):        # un but : tous les paris de buts (pas seulement plus / moins)
                 line = f"⚽ {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e{', suspendu' if paused else ''}) · {leg.get('pick')} : {margin(leg, *score)}".rstrip(" :")
             d["legs"][k] = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
             if line:

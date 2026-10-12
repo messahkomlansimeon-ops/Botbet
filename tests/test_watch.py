@@ -59,6 +59,32 @@ def test_states():
     print("ok  états des paris : buts, les 2 marquent, 1N2 / double chance à la fin, stats en direct")
 
 
+def test_more_markets():
+    """Corners d'une équipe et cartons jaunes suivis en direct (avant : jamais, et un ticket qui en avait ne pouvait pas être « 🏆 gagné ») ; après un but,
+    tous les paris de buts disent où ils en sont (avant : seulement plus / moins de buts) ; cartons jaunes lus à part des rouges."""
+    tc = {"market": "team_corners_home", "name": "Over", "point": 4.5, "home": "A", "away": "B"}
+    assert watch.need(tc) == ("corners", "home") and watch.state(tc, 0, 0, {"corners": (5, 1)}, False) == ("win", "5 corners")
+    assert watch.state(tc | {"market": "team_corners_away"}, 0, 0, {"corners": (5, 1)}, True) == ("loss", "1 corner")
+    yl = {"market": "team_yellow_total", "name": "Under", "point": 3.5, "home": "A", "away": "B"}
+    assert watch.need(yl) == ("yellow", "total") and watch.state(yl, 0, 0, {"yellow": (2, 2), "cards": (3, 2)}, False) == ("loss", "4 cartons jaunes")
+    h2h = {"market": "h2h", "name": "A", "home": "A", "away": "B"}
+    assert watch.margin(h2h, 1, 0) == "pour toi pour l'instant" and watch.margin(h2h, 0, 1) == "pas pour toi pour l'instant"
+    assert watch.margin({"market": "double_chance", "name": "Draw or B", "home": "A", "away": "B"}, 1, 1) == "pour toi pour l'instant"
+    assert watch.margin({"market": "btts", "name": "Yes", "home": "A", "away": "B"}, 1, 0) == "il manque un but de B"
+    assert watch.margin({"market": "team_totals_home", "name": "Over", "point": 1.5, "home": "A", "away": "B"}, 1, 3) == "il manque 1 but"
+    from kelly.sources import http, s365
+    payload = {"statistics": [{"name": "Yellow Cards", "competitorId": 1, "value": "2"}, {"name": "Red Cards", "competitorId": 1, "value": "1"},
+                              {"name": "Yellow Cards", "competitorId": 2, "value": "3"}, {"name": "Corners", "competitorId": 2, "value": "4"}]}
+    old = http.fetch, s365.read_json
+    http.fetch, s365.read_json = (lambda *a, **k: None), (lambda res: payload)
+    try:
+        st = watch._stats(s365, {"id": 9, "home": {"id": 1}, "away": {"id": 2}})
+    finally:
+        http.fetch, s365.read_json = old
+    assert st["yellow"] == (2, 3) and st["cards"] == (3, 3), st
+    print("ok  corners d'une équipe et jaunes suivis en direct ; après un but, tous les paris de buts disent où ils en sont")
+
+
 def setup_tickets():
     K.setup()
     store.save(watch.FILE, {})
@@ -147,6 +173,7 @@ def test_danger_only_unplayed():
 def main():
     test_quiet()
     test_states()
+    test_more_markets()
     test_follow()
     test_follow_won_after_end()
     test_opportunity()
