@@ -31,7 +31,8 @@ def test_selection():
     shown = [p("br1", "alternate_totals_corners", "soccer_brazil_campeonato", 0.9)]
     pronos = shown + [
         p("br1", "team_fouls_total", "soccer_brazil_campeonato"), p("br1", "team_throws_total", "soccer_brazil_campeonato"),   # même match : relevé de toute façon
-        p("br2", "alternate_totals_cards", "soccer_brazil_campeonato"),        # autre match brésilien, rien d'autre de suivi : il coûterait une requête
+        p("br2", "alternate_totals_cards", "soccer_brazil_campeonato"), p("br2", "team_throws_home", "soccer_brazil_campeonato"),   # lu par 365scores
+        p("xx1", "alternate_totals_cards", "soccer_xx_unknown"),               # ni CSV ni 365scores : il coûterait une requête
         p("en1", "alternate_totals_cards"), p("en1", "team_fouls_away"),
         p("en4", "team_sot_home"), p("en4", "alternate_totals_corners"),        # tirs cadrés suivis par C.FAIR_TRACK_SHOTS (API-Football) : match déjà relevé
         p("en1", "team_offsides_total"),                                         # hors-jeu : absents des CSV
@@ -43,7 +44,8 @@ def test_selection():
     k = lambda mid, m: f"{mid}|{m}||8.5|Over"                                     # noqa: E731
     assert k("br1", "team_fouls_total") in got and k("br1", "team_throws_total") in got
     assert not got[k("br1", "team_fouls_total")].get("free") and got[k("br1", "team_fouls_total")]["x"] == 1
-    assert k("br2", "alternate_totals_cards") not in got
+    assert got[k("br2", "alternate_totals_cards")].get("free") == 1 and got[k("br2", "team_throws_home")].get("free") == 1     # 365scores : touches comprises
+    assert k("xx1", "alternate_totals_cards") not in got
     for m in ("alternate_totals_cards", "team_fouls_away"):
         assert got[k("en1", m)].get("free") == 1 and got[k("en1", m)]["x"] == 1, got[k("en1", m)]
     assert not got[k("en4", "team_sot_home")].get("free") and not got[k("en4", "alternate_totals_corners")].get("free")      # relevé de toute façon
@@ -98,6 +100,15 @@ def test_free_settlement():
         assert settle.match_stats(p("en1", "alternate_totals_cards") | {"group": "soccer", "free": 1}, fdata)["cards"] == 6
         assert settle.match_stats(p("en1", "totals") | {"group": "soccer", "free": 1}, fdata) is None
         assert settle.match_stats(row, FD(None)) is None                          # CSV pas encore à jour : on attendra (WAIT_DAYS_STATS)
+        # la mémoire de 365scores (matchs lus par le passage horaire) passe d'abord, sans requête ; il lui manque la stat : les CSV
+        calls = []
+        old = settle.s365._match_stats
+        settle.s365._match_stats = lambda b, net=True: calls.append(net) or {"fouls": 21, "side": {"home": {"fouls": 9}, "away": {"fouls": 12}}}
+        try:
+            assert settle.match_stats(row, fdata)["side"]["away"]["fouls"] == 12 and calls == [False], calls
+            assert settle.match_stats(p("en1", "alternate_totals_cards") | {"group": "soccer", "free": 1}, fdata)["cards"] == 6      # pas de cartons : CSV
+        finally:
+            settle.s365._match_stats = old
     finally:
         stats.find_fixture, stats.fixture_stats, settle.fmmatch.match_stats, settle.s365.match_stats = real
     print("ok  règlement « free » : CSV football-data seuls, fautes par équipe comprises, aucune requête")

@@ -196,6 +196,15 @@ class FootballData:
         return fotmob_score(b, self._fm)
 
 
+def _has_stat(b, fst):
+    """`fst` donne-t-il la valeur dont le marché de `b` a besoin (corners / cartons du match, ou la stat d'une équipe) ?"""
+    if b["market"] in FD_MARKETS:
+        return (fst or {}).get("corners" if "corners" in b["market"] else "cards") is not None
+    if b["market"] in SHOT_MARKETS:
+        return shot_value(b["market"], fst or {}) is not None
+    return bool(fst)
+
+
 def match_stats(b, fdata, stats_for=None):
     """Totaux du match d'un pari hors buts (corners, cartons, tirs, stats joueurs) : API-Football d'abord, puis les CSV
     football-data si API-Football est absent ou son quota épuisé. None pour un marché de buts. fstats["side"] : tirs et
@@ -203,8 +212,17 @@ def match_stats(b, fdata, stats_for=None):
     if b["market"] in GOAL_MARKETS:
         return None
     soccer, fstats = b["group"] == "soccer", None
-    if b.get("free"):                                  # suivi en silence pour la fiabilité (fair.record) : CSV football-data seuls, jamais de requête
-        return (stats_for(b) if stats_for else fdata.stats(b)) if soccer else None
+    if b.get("free"):                                  # suivi en silence pour la fiabilité (fair.record) : jamais de requête
+        if not soccer:
+            return None
+        if stats_for:
+            return stats_for(b)
+        try:                                           # 365scores : seulement les matchs déjà lus par le passage horaire (frais, sans requête)
+            got = s365._match_stats(b, net=False)
+        except Exception as e:                         # noqa: BLE001 - facultatif
+            print(f"[settle] 365scores (mémoire) ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+            got = None
+        return got if got and _has_stat(b, got) else (fdata.stats(b) or got)     # sinon les CSV football-data
     if stats_for:
         fstats = stats_for(b)
     elif stats.enabled() and soccer:
