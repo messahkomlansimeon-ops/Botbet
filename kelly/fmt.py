@@ -4,6 +4,7 @@ Les messages sont du HTML Telegram (balises <b>, <i>) : tout texte venu de l'ext
 esc(). Les fonctions renvoient un `telegram.Html` (envoyé en parse_mode HTML, repli en texte brut si Telegram refuse).
 """
 import html
+import math
 import re
 from datetime import date, datetime
 
@@ -265,6 +266,13 @@ def legend(weak=False, shared=False):
     """Légende des repères d'un combiné (« 🟢 solide · 🟠 moins sûr · 🔗 déjà dans tes tickets »), en italique ; '' quand il n'y a rien à expliquer."""
     parts = ([f"{SOLID} solide", f"{WEAK} moins sûr"] if weak else []) + ([f"{SHARED} déjà dans N de tes tickets"] if shared else [])
     return i(" · ".join(parts)) if parts else ""
+
+
+def bar(part, cells=10):
+    """« ▰▰▰▰▰▰▰▰▰▱ » : jauge de `cells` cases pour une part de 0 à 1 (arrondi inférieur : une case reste vide tant qu'on n'est pas au bout)."""
+    part = max(0.0, min(1.0, part or 0.0))
+    full = min(cells, math.floor(part * cells + 1e-9))
+    return "▰" * full + "▱" * (cells - full)
 
 
 RULE = "━━━━━━━━━━━━"                         # séparateur court : ne déborde pas sur un écran de téléphone

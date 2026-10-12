@@ -586,7 +586,7 @@ def test_status_odds_is_cheap():
     try:
         odds.CREDITS.update(remaining=412, used=88)
         lines = status.api_lines()
-        assert "412 crédits" in lines[0] and calls == [], (lines, calls)
+        assert lines[0] == "✅ The Odds API ▰▱▱▱▱▱▱▱▱▱ 88/500 ce mois" and calls == [], (lines, calls)       # 88 utilisés sur 412 + 88
         odds.CREDITS.update(remaining=None, used=None)
         lines = status.api_lines()
         assert calls == ["/sports"], calls                       # UN seul appel, gratuit

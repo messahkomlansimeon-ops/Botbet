@@ -313,9 +313,7 @@ def capital_line(html=True):
 
 def _bar(part, cells=10):
     """« ▰▰▰▰▰▰▰▰▰▱ 96 % » : part (0 à 1) de la limite du jour déjà misée."""
-    part = max(0.0, min(1.0, part))
-    full = min(cells, math.floor(part * cells + 1e-9))      # arrondi inférieur : une case reste vide tant que la limite n'est pas atteinte
-    return "▰" * full + "▱" * (cells - full) + f" {round(part * 100)} %"
+    return fmt.bar(part, cells) + f" {round(max(0.0, min(1.0, part)) * 100)} %"
 
 
 def capital_card(st=None):

@@ -53,13 +53,15 @@ def test_report_and_words():
     status.api_lines = lambda: ["✅ The Odds API : 448 crédits restants (52 utilisés ce mois)", "❌ Telegram : TELEGRAM_TOKEN absent"]
     try:
         out = status.report(NOW)
-        assert out.startswith("🩺 État de Kelly — 08h30") and "⚙️ Services" in out and "📡 Sources de stats" in out and "🔌 API et quotas" in out, out
-        assert out.endswith("1 point à regarder (❌ ci-dessus)."), out
+        assert out.startswith("<b>🩺 Kelly — 08h30</b> · 1 point à regarder ❌\n\n<b>⚙️ Services</b>\n✅ Bot Telegram"), out     # le verdict en tête
+        assert "\n\n<b>📡 Sources</b>\n" in out and "\n\n<b>🔌 Quotas</b>\n" in out and "Tout va bien" not in out, out
         for w in ("status", "Status", "/status", "statut", "santé", "/status@KellyBot"):
-            assert chat.quick(w) and chat.quick(w).startswith("🩺"), w
+            assert chat.quick(w) and chat.quick(w).startswith("<b>🩺"), w
         assert chat.quick("état").startswith(("Pas encore", "⏳", "✅", "⚠️")), "« état » reste la progression du matin"
         assert chat.quick("Statut Quo") is None
-        assert app._handle_command("/status").startswith("🩺")
+        assert app._handle_command("/status").startswith("<b>🩺")
+        status.api_lines = lambda: ["✅ Telegram joignable"]
+        assert status.report(NOW).startswith("<b>🩺 Kelly — 08h30</b> · tout va bien 👍")
     finally:
         status.service_lines, status.api_lines = old
     assert status._when("Sat 2026-10-10 05:18:43 GMT", NOW) == "05h18" and status._when("", NOW) == "" and status._when("n/a", NOW) == ""
@@ -71,19 +73,51 @@ def test_learning():
     store.save(calib.FILE, {"goals": [29, 22, 19.0], "shots": [70, 30, 45.5]})
     calib._memo.clear()
     store.save(live.CALIB_FILE, {"src|365scores": [12, 9, 8.0], "goals|60-75": [5, 4, 3.5]})          # ancien format : ignoré
-    assert "Live : aucun pari live retenu et réglé" in "\n".join(status.learning_lines())
+    assert "💤 Live : rien de réglé pour l'instant" in status.learning_lines()
     store.save(live.CALIB_FILE, {"v": live.CALIB_VERSION, "k": {"h2h|45-60": [12, 9, 8.0], "goals|60-75": [5, 4, 3.5]}})
     lines = status.learning_lines()
     text = "\n".join(lines)
-    assert "• Buts : 29/60 · 76 % gagnés pour 66 % annoncés · trop prudente, correction dans 31 résultats" in text, text
-    assert "• Tirs : 70 réglés · 43 % gagnés pour 65 % annoncés · trop confiante, correction active (×" in text, text
-    assert "Ensemble (avis de Kelly face au marché) : buts 0/100" in text and "Live 1N2 45-60 : 12/60" in text and "Live buts 60-75 : 5/60" in text, text
+    assert lines[0] == "🔴 Tirs · 70 · trop confiante (43 % / 65 %) → écartés des combinés", lines        # correction sous VIABLE_MIN_K
+    assert "⏳ Buts · 29/60" in lines and "⏳ Live 1N2 45-60 · 12/60" in lines and "⏳ Live buts 60-75 · 5/60" in lines, lines
+    assert "⚖️ Avis face au marché : buts 0/100, double chance 0/100, les 2 marquent 0/100, 1N2 0/100" in lines, lines
+    store.save(calib.FILE, {"goals": [131, 93, 90.4], "dc": [106, 82, 76.3]})
+    calib._memo.clear()
+    lines = status.learning_lines()
+    assert lines[:2] == ["🟢 Buts · 131 · juste (71 % / 69 %)", "🟢 Double chance · 106 · un peu prudente (77 % / 72 %)"], lines
     assert "données légères" not in text
     print("ok  section « 🧠 Apprentissage » : avant-match, ensemble, live par famille et par tranche")
 
 
+def test_sources_and_quotas():
+    from kelly.sources import SOURCES, s365
+    fake = {"football-data": {"ok": True, "rows": 11440, "last_success": "2026-10-10T04:03:00+00:00", "blocked_until": None,
+                              "last_error": "E2 2526 : délai dépassé, téléchargement reporté au prochain passage ; E2 2425 : délai dépassé, téléchargement reporté au prochain passage"},
+            "Understat": {"ok": False, "rows": 0, "last_success": None, "blocked_until": None, "last_error": "EPL 2026 : robots.txt interdit /league/EPL/2026"},
+            "FBref": {"ok": False, "rows": 0, "last_success": None, "blocked_until": "2099-01-01T00:00:00+00:00", "last_error": "robots.txt refusé"},
+            "FotMob": {"ok": True, "rows": 1988, "last_success": "2026-10-09T04:08:00+00:00", "blocked_until": None,
+                       "last_error": "soccer_x : délai dépassé, téléchargement reporté au prochain passage"},
+            "BetExplorer": {"ok": True, "rows": 3792, "last_success": "2026-10-10T04:12:00+00:00", "blocked_until": None,
+                            "last_error": "soccer_australia_aleague : structure de la page modifiée : aucun match avec cotes"},
+            "365scores": {"ok": True, "rows": 1655, "last_success": "2026-10-10T08:10:00+00:00", "blocked_until": None, "last_error": None}}
+    old = {m: m.health for m in (*SOURCES, s365)}
+    for m in old:
+        m.health = (lambda label: lambda: fake[label])(m.LABEL)
+    try:
+        lines = status.source_lines(NOW)
+    finally:
+        for m, h in old.items():
+            m.health = h
+    assert lines == ["✅ football-data · 11 440 · 04h03", "✅ FotMob · 1 988 · 09/10 04h08", "✅ BetExplorer · 3 792 · 04h12", "✅ 365scores · 1 655 matchs · 08h10",
+                     "💤 Understat, FBref : bloqués par les sites (normal)", "⚠️ 3 téléchargements reportés au prochain passage",
+                     "⚠️ 1 page sans données (détail : python bot.py --check)"], lines
+    assert status._gauge("The Odds API", 87, 500, " ce mois") == "The Odds API ▰▱▱▱▱▱▱▱▱▱ 87/500 ce mois"
+    assert status._gauge("API-Football", 61, 100, " aujourd'hui") == "API-Football ▰▰▰▰▰▰▱▱▱▱ 61/100 aujourd'hui"
+    print("ok  sources en lignes courtes (bloquées regroupées, avertissements comptés) ; quotas en jauges")
+
+
 def main():
     test_services()
+    test_sources_and_quotas()
     test_report_and_words()
     test_learning()
     print("tests status : OK")

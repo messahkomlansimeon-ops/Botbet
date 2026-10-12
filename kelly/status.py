@@ -20,7 +20,6 @@ UNITS = (("kelly-serve", "Bot Telegram", False), ("kelly-daily", "Passage du mat
          ("kelly-tune", "Réglage du dimanche", True))
 PROPS = "ActiveState,SubState,Result,ExecMainStartTimestamp,ExecMainExitTimestamp,LoadState"
 TIMER_PROPS = "NextElapseUSecRealtime,LastTriggerUSec,LoadState"
-MAX_LINE = 170                      # une ligne de source plus longue (liste d'avertissements) est coupée : le détail est dans « bot.py --check »
 WORDS = {"status", "statut", "sante", "santé", "/status", "/statut", "/sante", "/santé"}
 
 
@@ -80,10 +79,21 @@ def service_lines(now=None):
     return lines
 
 
+def _num(n):
+    """11440 -> « 11 440 »."""
+    return f"{int(n):,}".replace(",", " ")
+
+
+def _gauge(name, used, total, unit=""):
+    """« The Odds API   ▰▰▱▱▱▱▱▱▱▱ 87/500 ce mois » : une jauge de quota (texte brut)."""
+    from . import fmt
+    return f"{name} {fmt.bar(used / total if total else 0)} {_num(used)}/{_num(total)}{unit}"
+
+
 def odds_line():
-    """The Odds API en UNE ligne, sans le tour de ligues de app._check_odds (odds.scan_today : jusqu'à 150 s cache froid, dans la boucle qui répond
-    à Telegram) : les crédits déjà connus de ce processus (odds.CREDITS, lus dans les en-têtes du dernier appel), sinon UN appel /sports (gratuit,
-    jamais hors passage : commande Telegram = hors ligne) pour les lire."""
+    """The Odds API en UNE ligne (jauge des crédits du mois), sans le tour de ligues de app._check_odds (odds.scan_today : jusqu'à 150 s cache froid,
+    dans la boucle qui répond à Telegram) : les crédits déjà connus de ce processus (odds.CREDITS, lus dans les en-têtes du dernier appel), sinon UN
+    appel /sports (gratuit, jamais hors passage : commande Telegram = hors ligne) pour les lire."""
     from . import odds
     try:
         if odds.CREDITS["remaining"] is None and os.environ.get("ODDS_API_KEY"):
@@ -93,7 +103,9 @@ def odds_line():
             return "❌ The Odds API : ODDS_API_KEY absente"
         if rem is None:
             return "✅ The Odds API : clé présente (crédits connus au prochain passage)"
-        return f"✅ The Odds API : {rem} crédits restants ({used if used is not None else '?'} utilisés ce mois)"
+        if used is None:
+            return f"✅ The Odds API : {rem} crédits restants ce mois"
+        return ("✅" if rem > 0.1 * (rem + used) else "⚠️") + " " + _gauge("The Odds API", used, rem + used, " ce mois")
     except odds.OddsError as e:
         if e.code == "OFFLINE":
             return "✅ The Odds API : clé présente (crédits connus au prochain passage)"
@@ -103,14 +115,16 @@ def odds_line():
 
 
 def api_lines():
-    """The Odds API, API-Football, données du proxy (1xBet, 365scores), Telegram : une ligne chacun."""
+    """The Odds API, API-Football, données du proxy (1xBet, 365scores) en jauges, Telegram : une ligne chacun (texte brut)."""
+    import re
     from . import app
     from .sources import s365, xbet
-    out = []
-    out.append(odds_line())
+    out = [odds_line()]
     try:
         ok, lines = app._check_stats()
-        out.append(lines[0])
+        m = re.search(r"requêtes aujourd'hui (\d+)/(\d+)", lines[0])
+        out.append(lines[0] if not m or not lines[0].startswith("✅") else
+                   ("✅" if int(m[1]) < 0.9 * int(m[2]) else "⚠️") + " " + _gauge("API-Football", int(m[1]), int(m[2]), " aujourd'hui"))
     except Exception as e:                              # noqa: BLE001
         out.append(f"⚠️ API-Football : vérification impossible ({type(e).__name__})")
     try:
@@ -119,81 +133,145 @@ def api_lines():
             out.append("❌ Proxy 1xBet : non configuré (XBET_PROXY manquant dans .env) — cotes 1xBet coupées")
         else:
             u = xbet.usage()
-            out.append(f"{'✅' if u['bytes'] < 0.9 * C.XBET_MONTH_MB * 1e6 else '⚠️'} 1xBet via proxy : {u['bytes'] / 1e6:.1f} Mo ce mois "
-                       f"sur {C.XBET_MONTH_MB:.0f} ({u['requests']} requêtes)")
-        out.append("✅ " + s365.usage_line())
+            out.append(f"{'✅' if u['bytes'] < 0.9 * C.XBET_MONTH_MB * 1e6 else '⚠️'} "
+                       + _gauge("1xBet (proxy)", round(u["bytes"] / 1e6), C.XBET_MONTH_MB, " Mo"))
+        u = s365.usage()
+        out.append(f"{'✅' if u['bytes'] < 0.9 * C.S365_MONTH_MB * 1e6 else '⚠️'} " + _gauge("365scores (proxy)", round(u["bytes"] / 1e6), C.S365_MONTH_MB, " Mo"))
     except Exception as e:                              # noqa: BLE001
         out.append(f"⚠️ Proxy : compteurs illisibles ({type(e).__name__})")
     try:
         ok, lines, _ = app._check_telegram_bot()
-        out.append(lines[0])
+        out.append("✅ Telegram joignable" if lines[0].startswith("✅") else lines[0])
     except Exception as e:                              # noqa: BLE001
         out.append(f"⚠️ Telegram : vérification impossible ({type(e).__name__})")
     return out
 
 
+def _at(iso, now):
+    """Heure d'une mise à jour : « 04h03 » aujourd'hui, « 11/10 04h03 » sinon ; '' si illisible."""
+    try:
+        dt = datetime.fromisoformat(str(iso))
+    except (TypeError, ValueError):
+        return ""
+    dt = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(timezone.utc)
+    return f"{dt:%Hh%M}" if dt.date() == now.date() else f"{dt:%d/%m %Hh%M}"
+
+
+def source_lines(now=None):
+    """Sources de stats en lignes courtes (texte brut) : « ✅ football-data · 11 440 · 04h03 » ; les sources bloquées par leur site (robots.txt,
+    blocage) regroupées sur une ligne « 💤 … (normal) » ; les avertissements comptés (« ⚠️ 3 téléchargements reportés au prochain passage ») au lieu
+    d'être listés (détail : python bot.py --check)."""
+    from .sources import SOURCES, s365
+    now = now or datetime.now(timezone.utc)
+    out, sleeping, later, odd = [], [], 0, 0
+    mods = [(m, m.LABEL, "") for m in SOURCES] + [(s365, s365.LABEL, " matchs")]
+    for m, label, unit in mods:
+        h = m.health()
+        err = h["last_error"] or ""
+        if h["blocked_until"] or ("robots.txt" in err and not h["ok"]):
+            sleeping.append(label)
+            continue
+        if not getattr(m, "enabled", lambda: True)():
+            continue
+        if h["ok"] is None:
+            if m is not s365:
+                out.append(f"⚪ {label} : pas encore lancée")
+            continue
+        if not h["ok"]:
+            first = err.split(" ; ")[0] or "échec"
+            out.append(f"⚠️ {label} : {first[:90]}")
+            continue
+        at = _at(h["last_success"], now)
+        out.append(f"✅ {label} · {_num(h['rows'])}{unit}" + (f" · {at}" if at else ""))
+        for part in (x for x in err.split(" ; ") if x.strip()):
+            if "report" in part:
+                later += 1
+            else:
+                odd += 1
+    if sleeping:
+        out.append(f"💤 {', '.join(sleeping)} : bloqué{'s' if len(sleeping) > 1 else ''} par {'les sites' if len(sleeping) > 1 else 'le site'} (normal)")
+    if later:
+        out.append(f"⚠️ {later} téléchargement{'s' if later > 1 else ''} reporté{'s' if later > 1 else ''} au prochain passage")
+    if odd:
+        out.append(f"⚠️ {odd} page{'s' if odd > 1 else ''} sans données (détail : python bot.py --check)")
+    return out
+
+
+def _mood(won, said):
+    return "trop confiante" if won < said - 0.05 else "un peu prudente" if won > said + 0.05 else "juste"
+
+
 def _state(n, w, s, need, k=None):
-    """« 22/60 · 76 % gagnés pour 66 % annoncés · trop prudente, correction dans 38 résultats »."""
-    won, said, n = w / n, s / n, int(round(n))           # cumul vieilli : nombre effectif, décimal
-    mood = "trop confiante" if won < said - 0.05 else "trop prudente" if won > said + 0.05 else "juste"
-    when = f"correction dans {need - n} résultat{'s' if need - n > 1 else ''}" if n < need else (
-        f"correction active (×{k:.2f})".replace(".", ",") if k is not None else "correction active")
+    """« 🟢 Buts · 131 · juste (71 % / 69 %) », « 🔴 Tirs · 67 · trop confiante (45 % / 65 %) → écartés des combinés », « ⏳ Corners · 49/60 » :
+    sans le libellé (ajouté par l'appelant) -> (pastille, suite)."""
     from . import fmt
-    count = f"{n}/{need}" if n < need else f"{n} réglés"
-    return f"{count} · {fmt.pct(won)} gagnés pour {fmt.pct(said)} annoncés · {mood}, {when}"
+    won, said, n = w / n, s / n, int(round(n))           # cumul vieilli : nombre effectif, décimal
+    if n < need:
+        return "⏳", f"{n}/{need}"
+    mood = _mood(won, said)
+    out = f"{n} · {mood} ({fmt.pct(won)} / {fmt.pct(said)})"
+    if k is not None and k < C.VIABLE_MIN_K:
+        out += " → écartés des combinés"
+    return ("🔴" if mood == "trop confiante" else "🟢"), out
 
 
 def learning_lines(top=6):
-    """Section « 🧠 Apprentissage » : où en est la correction de Kelly, avant-match (calib, par famille), ensemble (buts, 1N2…) et live (par famille
-    et par tranche, sur les paris retenus). [] s'il n'y a encore rien de réglé."""
+    """Section « 🧠 Ce que Kelly apprend » (texte brut) : une ligne par famille (pastille, résultats, verdict, réalisé / annoncé), l'ensemble (avis de
+    Kelly face au marché, prêt ou en attente) et le live (par famille et tranche). [] s'il n'y a encore rien de réglé."""
     from . import calib, ensemble, live
     out = []
     d = calib.load()
     fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and a[0]), key=lambda x: -x[1][0])
     for f, (n, w, s) in fams[:top]:
-        out.append(f"• {calib.LABELS.get(f, f).capitalize()} : " + _state(n, w, s, calib.min_need(f), calib._k([n, w, s], fam=f)))
+        dot, txt = _state(n, w, s, calib.min_need(f), calib._k([n, w, s], fam=f))
+        out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}")
     ens = [(f, ensemble.weights(f)) for f in ("goals", "dc", "btts", "h2h")]
-    ens_txt = ", ".join(f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in ens)
-    out.append(f"• Ensemble (avis de Kelly face au marché) : {ens_txt}")
+    ready = [calib.LABELS.get(f, f) for f, w in ens if w["n_m"] >= C.ENSEMBLE_MIN_N]
+    wait = [f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in ens if w["n_m"] < C.ENSEMBLE_MIN_N]
+    out.append("⚖️ Avis face au marché : " + " · ".join(x for x in ((", ".join(ready) + (" prêts" if len(ready) > 1 else " prêt")) if ready else "",
+                                                                    ", ".join(wait)) if x))
     ld = live.calib_data()
     tr = sorted(((k, a) for k, a in ld.items() if a[0]), key=lambda x: -x[1][0])
     for k, (n, w, s) in tr[:4]:
         fam, t = k.split("|")
-        out.append(f"• Live {calib.LABELS.get(fam, fam)} {t} : " + _state(n, w, s, C.FAIR_CALIB_MIN, calib._k([n, w, s])))
+        dot, txt = _state(n, w, s, C.FAIR_CALIB_MIN, calib._k([n, w, s]))
+        out.append(f"{dot} Live {calib.LABELS.get(fam, fam)} {t} · {txt}")
     if not tr:
-        out.append("• Live : aucun pari live retenu et réglé pour l'instant")
+        out.append("💤 Live : rien de réglé pour l'instant")
     return out if fams or ld else []
 
 
 def report(now=None):
-    """Le message « status » (texte brut)."""
-    from . import sources
+    """Le message « status » (HTML) : verdict en tête, puis services (PC), sources, apprentissage, quotas."""
+    from . import fmt
+    from .telegram import Html
     now = now or datetime.now(timezone.utc)
-    parts = [f"🩺 État de Kelly — {now:%Hh%M}"]
+    blocks = []
     try:
         st = progress.describe()
         if st.startswith(("⏳", "⚠️")):                  # passage du matin en cours ou interrompu : en premier
-            parts += ["", st]
+            blocks.append([fmt.esc(st)])
     except Exception:                                   # noqa: BLE001
         pass
     svc = service_lines(now)
     if svc:
-        parts += ["", "⚙️ Services"] + svc
+        blocks.append([fmt.b("⚙️ Services")] + [fmt.esc(x) for x in svc])
     try:
-        src = [line if len(line) <= MAX_LINE else line[:MAX_LINE - 1].rstrip() + "…" for line in sources.report().splitlines()]
-        parts += [""] + src
+        blocks.append([fmt.b("📡 Sources")] + [fmt.esc(x) for x in source_lines(now)])
     except Exception as e:                              # noqa: BLE001
-        parts += ["", f"⚠️ Sources de stats : rapport illisible ({type(e).__name__})"]
+        blocks.append([f"⚠️ Sources de stats : rapport illisible ({type(e).__name__})"])
     try:
         learn = learning_lines()
         if learn:
-            parts += ["", "🧠 Apprentissage"] + learn
+            blocks.append([fmt.b("🧠 Ce que Kelly apprend") + " " + fmt.i("(réalisé / annoncé)")] + [fmt.esc(x) for x in learn])
     except Exception as e:                              # noqa: BLE001
-        parts += ["", f"⚠️ Apprentissage : illisible ({type(e).__name__})"]
-    parts += ["", "🔌 API et quotas"] + api_lines()
-    bad = sum(1 for p in parts if p.startswith("❌"))     # ⛔ (source bloquée par son site, comme FBref) : dit, mais rien à faire de ton côté
-    parts += ["", "Tout va bien 👍" if not bad else f"{bad} point{'s' if bad > 1 else ''} à regarder (❌ ci-dessus)."]
-    return "\n".join(parts)
+        blocks.append([f"⚠️ Apprentissage : illisible ({type(e).__name__})"])
+    blocks.append([fmt.b("🔌 Quotas")] + [fmt.esc(x) for x in api_lines()])
+    bad = sum(1 for blk in blocks for line in blk if line.startswith("❌"))       # 💤 (source bloquée par son site) : dit, rien à faire de ton côté
+    verdict = "tout va bien 👍" if not bad else f"{bad} point{'s' if bad > 1 else ''} à regarder ❌"
+    head = fmt.b(f"🩺 Kelly — {now:%Hh%M}") + f" · {verdict}"
+    return Html("\n\n".join([head] + ["\n".join(blk) for blk in blocks]))
 
 
 def is_status(text):
