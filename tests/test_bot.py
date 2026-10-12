@@ -1255,7 +1255,11 @@ def test_fair_pronostics():
             stats.expected_totals, stats.left_today = real
         # suivi : au plus FAIR_TRACK par jour, sans doublon, 12 jours d'historique ; bilan de calibration
         many_p = [dict(top, key=f"k{i}", id=f"id{i}") for i in range(30)]
-        assert fair.record(many_p, WDAY) == C.FAIR_TRACK and fair.record(many_p, WDAY) == 0
+        old_stats, C.FAIR_TRACK_STATS = C.FAIR_TRACK_STATS, 0          # le suivi des stats en silence a son propre test (test_track_more_stats)
+        try:
+            assert fair.record(many_p, WDAY) == C.FAIR_TRACK and fair.record(many_p, WDAY) == 0
+        finally:
+            C.FAIR_TRACK_STATS = old_stats
         rows = fair.load()
         assert len(rows) == C.FAIR_TRACK and all(r["result"] is None and "score" not in r for r in rows)
         assert store.size("fair.json") < 5_000 and C.FAIR_TRACK * C.FAIR_KEEP_DAYS * 300 < 40_000      # data/ reste petit
@@ -1319,7 +1323,13 @@ def test_morning_always_useful():
         fair_rows = store.load("fair.json", [])
         shown_rows = [r for r in fair_rows if not r.get("x")]                     # les montrés : un pronostic viable par match
         assert shown_rows and len({r["id"] for r in shown_rows}) == len(shown_rows) and all(r["result"] is None for r in fair_rows)
-        assert all(r["market"] in fair.FREE_MARKETS or r["market"].startswith(("team_corners_", "team_yellow_")) for r in fair_rows if r.get("x")) and all("p0" in r for r in fair_rows)
+        # en silence : marchés réglés avec le score, corners d'une équipe / jaunes, et les stats (fair._stats_extra) d'un match déjà relevé ou réglées avec
+        # les seuls CSV football-data (« free ») : jamais une requête de plus
+        from kelly.sources import footballdata as fdm
+        anchor = {r["id"] for r in fair_rows if r["market"] not in fair.FREE_MARKETS and not r.get("free")}
+        assert all(r["market"] in fair.FREE_MARKETS or r["market"].startswith(("team_corners_", "team_yellow_"))
+                   or (r.get("free") and r["sport_key"] in fdm.STATS_SPORTS and r["market"].startswith(fair.FD_STATS))
+                   or (not r.get("free") and r["id"] in anchor) for r in fair_rows if r.get("x")) and all("p0" in r for r in fair_rows)
         # --- commandes lues dans le cache du matin (aucun appel réseau)
         sb.serve(lambda url, **kw: (_ for _ in ()).throw(AssertionError(f"requête inattendue : {url}")))
         m = app.handle_command("/monde")
@@ -2435,9 +2445,10 @@ def test_calibration_tracking():
         pronos = [{"key": f"p{i}", "id": f"e{i}", "sport_key": "soccer_epl", "home": "A", "away": "B", "commence": "2026-10-08T15:00:00Z",
                    "market": "alternate_totals_corners" if i % 2 else "totals", "name": "Over", "point": 2.5, "prob": 0.6, "p0": 0.6}
                   for i in range(40)]
-        assert fair.record(pronos, "2026-10-08") == C.FAIR_TRACK + 14
+        assert fair.record(pronos, "2026-10-08") == C.FAIR_TRACK + 14 + 14             # + les 14 corners restants : Premier League, réglés avec les CSV seuls
         got = fair.load()
-        assert len([r for r in got if not r.get("x")]) == C.FAIR_TRACK and all(r["market"] == "totals" for r in got if r.get("x"))
+        assert len([r for r in got if not r.get("x")]) == C.FAIR_TRACK
+        assert all(r["market"] == "totals" or (r["market"] == "alternate_totals_corners" and r.get("free")) for r in got if r.get("x"))
         text = settle.bilan({"picks": [], "combos": []}, rows=[{"result": "win", "sent": True, "odds": 2.0, "prob": 0.5,
                                                                  "date": "2026-10-08", "market": "h2h", "key": "z"}], detail=True)
         assert "Fiabilité par marché" in text and "corners : 55 % réalisés pour 70 % annoncés (100), correction k = 0.75" in text, text

@@ -24,7 +24,9 @@ Ces pronostics n'ont ni cote ni mise : « compare chez 1xBet, joue si la cote >=
 ne sont pas suivis pour la cote de clôture ; leurs résultats vont dans data/fair.json (règlement gratuit,
 settle.settle_fair) pour mesurer si les probas de Kelly sont justes : les C.FAIR_TRACK meilleurs, plus jusqu'à
 C.FAIR_TRACK_FREE pronostics de buts, 1N2, double chance et « les 2 marquent » suivis en silence (réglés avec la liste des
-matchs de la veille, déjà téléchargée : aucune requête de plus). Le cumul par famille (kelly/calib.py) corrige ensuite les
+matchs de la veille, déjà téléchargée : aucune requête de plus), et jusqu'à C.FAIR_TRACK_STATS pronostics de stats (corners, cartons, tirs,
+fautes...) : ceux des matchs dont les stats sont relevées de toute façon, puis ceux des championnats aux CSV football-data complets, réglés avec ces
+seuls CSV (« free », _stats_extra). Le cumul par famille (kelly/calib.py) corrige ensuite les
 probas des marchés où Kelly se montre trop sûre d'elle (c["p0"] = proba avant correction).
 """
 import os
@@ -43,6 +45,8 @@ FREE_MARKETS = ("totals", "btts", "double_chance", "h2h") + TEAM_GOALS      # r�
 # Réglages de ce module (config.py n'est pas touché ; chacun a sa variable d'environnement)
 NB_SMALL = os.environ.get("FAIR_NB_SMALL", "1").strip().lower() not in ("0", "false", "non", "no", "off")     # 0 : plus d'incertitude sur la moyenne des petits profils (comportement d'avant)
 ALPHA0 = {"corners": 0.03, "cards": 0.06}       # dispersion de base (binomiale négative) des corners et des cartons du modèle simple : Poisson (alpha 0) les disait trop réguliers
+# stats réglables avec les seuls CSV football-data (corners, cartons, tirs, tirs cadrés, fautes ; pas les touches ni les hors-jeu)
+FD_STATS = ("alternate_totals_corners", "alternate_totals_cards", "team_corners_", "team_yellow_", "team_shots_", "team_sot_", "team_fouls_")
 TRACK_NEW = int(os.environ.get("FAIR_TRACK_NEW", "10"))      # pronostics « corners d'une équipe » / « cartons jaunes » suivis en silence par jour (leur fiabilité se mesure comme celle des tirs)
 # Tirs et tirs cadrés : total du match, puis une équipe (le suffixe _home / _away dit laquelle) ; (clé des chiffres d'avant-match,
 # libellé, bornes plausibles de la moyenne attendue, dispersion de la binomiale négative)
@@ -473,6 +477,8 @@ def record(pronos, day, shown=None):
     extra = [c for c in rest if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
     extra += [c for c in rest if c["market"].startswith(("team_shots_", "team_sot_"))][:C.FAIR_TRACK_SHOTS]
     extra += [c for c in rest if c["market"].startswith(("team_corners_", "team_yellow_"))][:TRACK_NEW]
+    stats_extra, free = _stats_extra([c for c in rest if c not in extra], main + extra)
+    extra += stats_extra
     for c in main + extra:
         old = by_key.get(c["key"])
         if old is None:
@@ -481,7 +487,8 @@ def record(pronos, day, shown=None):
                 old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")})
                 by_key[c["key"]] = old
             elif old is None:
-                by_key[c["key"]] = row = {k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
+                by_key[c["key"]] = row = ({k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
+                                          | ({"free": 1} if c["key"] in free else {}))
                 rows.append(row)
                 n += 1
                 continue
@@ -489,9 +496,27 @@ def record(pronos, day, shown=None):
                 continue
         if c in main and old.get("result") is None:                 # suivi en silence le matin, annoncé depuis : il sort du silence
             old.pop("x", None)
+            old.pop("free", None)                                   # et se règle comme un pronostic montré (API-Football d'abord)
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_KEEP_DAYS))
     store.save(FILE, [r for r in rows if r["date"] >= cut])
     return n
+
+
+def _stats_extra(cands, taken):
+    """Pronostics de stats suivis en silence en plus (C.FAIR_TRACK_STATS par jour), sans requête de plus : tous les marchés de stats d'un match dont les
+    stats seront relevées de toute façon (un pronostic de stats de ce match est déjà suivi), puis ceux des championnats aux CSV football-data complets
+    (fd.STATS_SPORTS, marchés FD_STATS), réglés avec ces seuls CSV (« free »). D'abord le meilleur pronostic de chaque match, puis le 2e… : plus de
+    matchs différents, des résultats plus indépendants. -> (pronostics, clés réglées avec les CSV seuls)."""
+    from .sources import footballdata as fd
+    fetched = {c["id"] for c in taken if c["market"] not in FREE_MARKETS}
+    pool = [c for c in cands if c["market"] not in FREE_MARKETS and not c["market"].startswith("player_")
+            and (c["id"] in fetched or (c.get("sport_key") in fd.STATS_SPORTS and c["market"].startswith(FD_STATS)))]
+    rank, ranked = {}, []
+    for i, c in enumerate(sorted(pool, key=lambda c: -c.get("score", 0))):
+        r = rank[c["id"]] = rank.get(c["id"], -1) + 1
+        ranked.append((r, i, c))
+    out = [c for _, _, c in sorted(ranked, key=lambda t: t[:2])[:max(0, C.FAIR_TRACK_STATS)]]
+    return out, {c["key"] for c in out if c["id"] not in fetched}
 
 
 def summary(rows, days=None, today=None):

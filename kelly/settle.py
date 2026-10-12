@@ -178,7 +178,7 @@ class FootballData:
             return None
         out = fd.match_stats(m)
         side = out.setdefault("side", {"home": {}, "away": {}})
-        for key, h, a in (("corners", "hc", "ac"), ("yellow", "hy", "ay")):      # corners d'une équipe et jaunes SEULS (match_stats ne donne que les cartons jaunes + rouges)
+        for key, h, a in (("corners", "hc", "ac"), ("yellow", "hy", "ay"), ("fouls", "hf", "af")):   # corners et fautes d'une équipe, jaunes SEULS (match_stats : jaunes + rouges)
             if m.get(h) is not None and m.get(a) is not None:
                 side["home"][key], side["away"][key] = m[h], m[a]
                 if key == "yellow":
@@ -203,6 +203,8 @@ def match_stats(b, fdata, stats_for=None):
     if b["market"] in GOAL_MARKETS:
         return None
     soccer, fstats = b["group"] == "soccer", None
+    if b.get("free"):                                  # suivi en silence pour la fiabilité (fair.record) : CSV football-data seuls, jamais de requête
+        return (stats_for(b) if stats_for else fdata.stats(b)) if soccer else None
     if stats_for:
         fstats = stats_for(b)
     elif stats.enabled() and soccer:

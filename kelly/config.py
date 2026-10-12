@@ -279,6 +279,8 @@ FAIR_STATS_PAID = _bool("FAIR_STATS_PAID", True)      # 0 : les matchs payés (c
 FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0),
                     ("tv5", "team_shots_", "🎯 COMBINÉ TIRS VERS LE BUT", 5.0, 7.0)) \
     + ((("ts5", ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_"), "🧮 COMBINÉ STATS", 5.0, 7.0),) if FAIR_STATS_TIER else ())
+FAIR_TRACK_STATS = _int("FAIR_TRACK_STATS", 100)  # en plus, pronostics de stats (corners, cartons, tirs, fautes...) suivis en silence par jour, réglés sans requête de
+                                                  # plus (match déjà relevé, ou CSV football-data) : la fiabilité de ces marchés s'apprend 5 à 10 fois plus vite
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
 # Cotes 1xBet (kelly/sources/xbet.py) : le prix exact des pronostics chez le bookmaker de l'utilisateur, lu le matin (gratuit, poli)
 XBET_ENABLED = _bool("XBET_ENABLED", True)

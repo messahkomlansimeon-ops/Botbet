@@ -35,6 +35,7 @@ NEW_KEEP_DAYS = 800   # les CSV « new » (championnats en année civile) contie
                       # le réglage de tune.py (config.TUNE_MIN_SPAN_DAYS = 540 j) refusait ces ligues pour toujours : « historique trop court »
 SPORT_TO_DIV = SPORT_TO_DIV | SPORT_TO_NEW
 DIV_TO_SPORT = {v: k for k, v in SPORT_TO_DIV.items()}
+STATS_SPORTS = frozenset(k for k, v in SPORT_TO_DIV.items() if v not in NEW_DIVS)    # CSV avec corners, cartons, tirs, fautes (pas les « new »)
 SLIM_KEYS = ("goals", "corners", "cards")
 
 ALIASES = {"Home": "HomeTeam", "Away": "AwayTeam", "HG": "FTHG", "AG": "FTAG", "Res": "FTR"}

@@ -62,7 +62,11 @@ def test_shots_combos_and_buttons():
 def test_shots_tracked_and_labels():
     store.save("fair.json", [])
     pronos = [prono(i, "alternate_totals_corners") for i in range(C.FAIR_TRACK)] + [prono(50 + i, "team_shots_total") for i in range(30)]
-    fair.record(pronos, DAY)
+    old, C.FAIR_TRACK_STATS = C.FAIR_TRACK_STATS, 0                   # plafond des tirs seul (le suivi des stats en silence a son propre test)
+    try:
+        fair.record(pronos, DAY)
+    finally:
+        C.FAIR_TRACK_STATS = old
     rows = store.load("fair.json", [])
     assert sum(r["market"] == "team_shots_total" for r in rows) == C.FAIR_TRACK_SHOTS, len(rows)
     assert fmt.label("team_shots_total", "Over", 25.5, None, "soccer") == "Plus de 25,5 tirs vers le but au total"
