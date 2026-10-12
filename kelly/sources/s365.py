@@ -137,6 +137,18 @@ COMPETITIONS = {
     # Afrique
     "africa_egypt_premier_league": 552, "africa_morocco_botola_pro": 557, "soccer_xb_algeria": 560,
 }
+# Coupes et sélections (numéros vérifiés le 12/10/2026 sur /web/competitions/ : stats de match présentes, sauf les petits tours des coupes
+# nationales) : leurs matchs ne servent qu'au RÈGLEMENT (mémoire « recent »), jamais aux profils d'équipes (un club n'est pas rangé dans une coupe,
+# des adversaires d'autres championnats ne faussent pas ses moyennes) ; seuls leurs matchs récents sont lus, après ceux des championnats.
+CUPS = {
+    "soccer_uefa_champs_league": 572, "soccer_uefa_europa_league": 573, "soccer_uefa_europa_conference_league": 7685,
+    "soccer_uefa_nations_league": 7016, "soccer_uefa_euro_qualifiers": 6071, "soccer_fifa_world_cup_qualifiers_europe": 5421,
+    "soccer_fifa_world_cup_qualifiers_south_america": 613, "soccer_fifa_world_cup": 5930,
+    "soccer_conmebol_copa_libertadores": 102, "soccer_conmebol_copa_sudamericana": 389, "soccer_conmebol_copa_america": 595,
+    "soccer_concacaf_gold_cup": 589, "soccer_concacaf_leagues_cup": 7242, "soccer_africa_cup_of_nations": 167,
+    "soccer_fa_cup": 8, "soccer_england_efl_cup": 9, "soccer_spain_copa_del_rey": 13,
+}
+COMPETITIONS = COMPETITIONS | CUPS
 FD_FULL = frozenset(footballdata.SPORT_TO_DIV) - frozenset(footballdata.SPORT_TO_NEW)      # statistiques complètes déjà chez football-data
 
 
@@ -386,6 +398,8 @@ def record(d, m, key):
     d["seen"][m["id"]] = day
     d["pending"].pop(m["id"], None)
     d["recent"][m["id"]] = {"d": m["d"], "sk": key, "h": m["hn"], "a": m["an"], "s": m["s"]}
+    if key in CUPS:                                         # coupe / sélection : règlement seulement, jamais les profils d'équipes
+        return True
     for tid, name, long_, home in ((m["hid"], m["hn"], m.get("hl"), 1), (m["aid"], m["an"], m.get("al"), 0)):
         row = [day, home]
         for k in KEYS:
@@ -546,7 +560,7 @@ def due_lists(d, keys, covered=(), failed=(), clock=None):
             continue
         if L is None:
             out.append(((0, 0, i), key, "first"))
-        elif L.get("prev") and key not in covered and not _no_stats(L) and (L.get("old") or "") > cutoff:
+        elif L.get("prev") and key not in covered and key not in CUPS and not _no_stats(L) and (L.get("old") or "") > cutoff:   # coupe : jamais les pages anciennes
             out.append(((1, 0, i), key, "prev"))
         elif clock - L.get("at", 0) >= _interval(L, key in covered):
             out.append(((2, -(clock - L.get("at", 0)), i), key, "first"))
@@ -570,10 +584,15 @@ def targets(d, keys, covered=(), today=None, tried=(), clock=None):
             continue
         if p.get("ft") and clock - p["ft"] < GAME_FAIL_GAP_H * HOUR:
             continue
-        low = min(n_matches(d["teams"].get(p["h"])), n_matches(d["teams"].get(p["a"])))
-        if p["d"] < fresh and low >= C.S365_TARGET_N:
-            continue
-        bucket = 0 if low < C.APISTATS_MIN_N else (1 if low < C.APISTATS_GOOD_N else 2)
+        if p["k"] in CUPS:                                  # coupe : seulement pour régler les paris (match récent), après les championnats
+            if p["d"] < fresh:
+                continue
+            low, bucket = C.S365_TARGET_N, 3
+        else:
+            low = min(n_matches(d["teams"].get(p["h"])), n_matches(d["teams"].get(p["a"])))
+            if p["d"] < fresh and low >= C.S365_TARGET_N:
+                continue
+            bucket = 0 if low < C.APISTATS_MIN_N else (1 if low < C.APISTATS_GOOD_N else 2)
         groups.setdefault(p["k"], []).append((((p.get("f") or 0) > 0, bucket, -_d2i(p["d"]), low), gid))
     order = sorted(groups, key=lambda k: min(groups[k])[0])
     for k in order:

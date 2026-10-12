@@ -114,10 +114,35 @@ def test_free_settlement():
     print("ok  règlement « free » : CSV football-data seuls, fautes par équipe comprises, aucune requête")
 
 
+def test_cups_settlement_only():
+    from datetime import timedelta
+    from kelly.sources import s365
+    d = {"teams": {}, "seen": {}, "pending": {}, "lists": {}, "recent": {}}
+    m = {"id": 9001, "d": DAY, "hid": 1, "hn": "Paris SG", "aid": 2, "an": "Arsenal", "s": {"corners": [6, 4], "goals": [1, 0]}}
+    assert s365.record(d, m, "soccer_uefa_champs_league") and d["recent"][9001]["sk"] == "soccer_uefa_champs_league"
+    assert d["teams"] == {}, d["teams"]                                       # coupe : jamais les profils d'équipes (ni le rangement par ligue)
+    assert s365.record(d, m | {"id": 9002}, "soccer_brazil_campeonato") and set(d["teams"]) == {1, 2}      # championnat : profils comme avant
+    assert {"soccer_uefa_champs_league", "soccer_conmebol_copa_libertadores", "soccer_fa_cup"} <= set(s365.scope())
+    today = s365._today()
+    old, new = str(today - timedelta(days=C.S365_FRESH_DAYS + 3)), str(today - timedelta(days=1))
+    d = {"teams": {}, "seen": {}, "pending": {
+        "c_old": {"k": "soccer_uefa_champs_league", "d": old, "h": 1, "a": 2},
+        "c_new": {"k": "soccer_uefa_champs_league", "d": new, "h": 1, "a": 2},
+        "l_new": {"k": "soccer_brazil_campeonato", "d": new, "h": 3, "a": 4}}, "lists": {}, "recent": {}}
+    order = s365.targets(d, s365.scope())
+    assert "c_old" not in order and order.index("l_new") < order.index("c_new"), order      # coupe : récent seulement, après les championnats
+    d["lists"] = {"soccer_uefa_champs_league": {"prev": "x", "old": new, "at": 0, "n": 20, "ns": 5},
+                  "soccer_brazil_campeonato": {"prev": "x", "old": new, "at": 0, "n": 20, "ns": 5}}
+    modes = dict(s365.due_lists(d, ["soccer_uefa_champs_league", "soccer_brazil_campeonato"]))
+    assert modes == {"soccer_uefa_champs_league": "first", "soccer_brazil_campeonato": "prev"}, modes   # jamais les pages anciennes d'une coupe
+    print("ok  coupes 365scores : règlement seulement (pas les profils), matchs récents, après les championnats, pas de pages anciennes")
+
+
 def main():
     test_selection()
     test_cap_and_spread()
     test_free_settlement()
+    test_cups_settlement_only()
     print("tests suivi des stats en silence : OK")
 
 
