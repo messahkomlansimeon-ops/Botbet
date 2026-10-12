@@ -58,7 +58,7 @@ BASE = f"https://{HOST}/web"
 PARAMS = (("appTypeId", "5"), ("langId", "1"), ("timezoneName", "UTC"), ("userCountryId", "21"))
 SPORT_FOOTBALL = 1
 HOUR = 3600
-KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides")      # mêmes noms et ordre que fmmatch.KEYS (sans xG)
+KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides", "yellow")      # mêmes noms que fmmatch.KEYS (sans xG) ; yellow (jaunes seuls) à la fin
 STAT_NAMES = {"total shots": "shots", "shots on target": "sot", "corners": "corners", "fouls": "fouls", "throw-ins": "throws",
               "offsides": "offsides", "yellow cards": "yc", "red cards": "rc"}
 NEVER_ZERO = ("throws", "shots", "fouls")      # 0-0 sur ces stats = non suivie pour ce match, pas un vrai zéro
@@ -303,6 +303,7 @@ def parse_stats(payload, day=None):
     yc, rc = raw.get("yc") or {}, raw.get("rc") or {}
     if hid in yc and aid in yc:
         st["cards"] = [yc[hid] + rc.get(hid, 0), yc[aid] + rc.get(aid, 0)]
+        st["yellow"] = [yc[hid], yc[aid]]                          # jaunes seuls : le pari de 1xBet
     if sum(1 for k in COUNT_KEYS if k in st) < MIN_STATS:
         return None
     if not any(sum(st[k]) > 0 for k in COUNT_KEYS if k in st):       # que des zéros (match non suivi) : aucune moyenne ni règlement « moins de corners » ne s'en sert

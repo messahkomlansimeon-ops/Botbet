@@ -30,6 +30,9 @@ def _load(day):
     return {"day": day, "n": 0, "items": {}}
 
 
+LIVE_LEG = ("minute", "score", "px", "pk")      # combiné live : minute, score et probas de chaque pari au moment du conseil (gardés avec le combiné, puis dans son suivi)
+
+
 def remember(day, target, lo, hi, combo, stake=None, cur=None, coupon=None, at=None, src="pronos", kinds=None, nlegs=None):
     """Garde en mémoire le combiné sur mesure `combo` (jambes, cote, proba) qui vient d'être envoyé -> son identifiant « m<n> » (None sans
     jour : rien à suivre). `target` : la cote demandée, `lo` / `hi` : la fourchette de cote visée (reprise par « Vérifier ce combiné »),
@@ -43,7 +46,7 @@ def remember(day, target, lo, hi, combo, stake=None, cur=None, coupon=None, at=N
     doc = _load(day)
     doc["n"] += 1
     cid = f"m{doc['n']}"
-    doc["items"][cid] = {"legs": [fair.combo_leg(c) for c in legs], "total": round(total, 3), "prob": round(prob, 5), "target": target,
+    doc["items"][cid] = {"legs": [fair.combo_leg(c) | ({k: c[k] for k in LIVE_LEG if c.get(k) is not None} if c.get("live") else {}) for c in legs], "total": round(total, 3), "prob": round(prob, 5), "target": target,
                          "lo": round(lo, 3), "hi": round(hi, 3), "stake": stake, "cur": cur, "coupon": coupon, "at": at, "src": src} \
         | ({"kinds": list(kinds)} if kinds else {}) | ({"nmax": nlegs[0], "exact": nlegs[1] if nlegs[1] == "min" else bool(nlegs[1])} if nlegs and nlegs[0] else {})
     while len(doc["items"]) > KEEP:
@@ -74,6 +77,8 @@ def _row(cid, day, item):
                          item.get("coupon"), item.get("at"))
     if not item.get("cur"):
         row.pop("cur", None)
+    for leg, kept in zip(row["legs"], item["legs"]):          # minute et score des paris d'un combiné live
+        leg.update({k: kept[k] for k in LIVE_LEG if k in kept})
     return row | {"custom": True, "target": item["target"], "lo": item["lo"], "hi": item["hi"], "src": item.get("src") or "pronos"} \
         | ({"kinds": item["kinds"]} if item.get("kinds") else {})
 

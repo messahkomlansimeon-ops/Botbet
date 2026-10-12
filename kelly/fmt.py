@@ -115,9 +115,10 @@ SINGULAR = {"tirs cadrés": "tir cadré", "tirs": "tir", "fautes": "faute", "poi
             "passes": "passe", "paniers à 3 pts": "panier à 3 pts"}
 
 
-TEAM_MARKET = re.compile(r"^team_(shots|sot|fouls|throws|offsides)_(total|home|away)$")
+TEAM_MARKET = re.compile(r"^team_(shots|sot|fouls|throws|offsides|corners|yellow)_(total|home|away)$")
 # mots de 1xBet (« Tirs vers le but », « Tirs cadrés ») : le pari se retrouve directement chez le bookmaker
-TEAM_UNITS = {"shots": "tirs vers le but", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu"}
+TEAM_UNITS = {"shots": "tirs vers le but", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu", "corners": "corners",
+              "yellow": "cartons jaunes"}
 
 
 def label(market, name, point, who, group):

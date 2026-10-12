@@ -12,7 +12,7 @@ Un seul message par passage, seulement s'il y a du nouveau ; aucune requête s'i
 chercher. Le règlement officiel (le lendemain matin) ne change pas : ce suivi n'est qu'une information.
 
 Opportunités live : entre C.LIVE_OPP_HOURS, au plus C.LIVE_OPP_DAY par jour et une toutes les C.LIVE_OPP_GAP_H heures : un contrôle léger (365scores :
-assez de matchs en cours dans la fenêtre 30e-88e), puis la liste live de 1xBet (kelly/live.py) ; si un bon combiné live est possible, « 🔴 Opportunité
+assez de matchs en cours dans la fenêtre C.LIVE_MIN_MINUTE-C.LIVE_MAX_MINUTE, 30e-80e), puis la liste live de 1xBet (kelly/live.py) ; si un bon combiné live est possible, « 🔴 Opportunité
 live » avec des boutons de cote. Heures calmes (kelly/quiet.py) : les messages de la nuit sont gardés pour le réveil. Ne lève jamais."""
 import math
 import sys
@@ -334,11 +334,11 @@ def opportunity(now=None, current=None, get=None):
         return None
     cands, seen, count = live.legs(raw, now=now)
     try:
-        live.record(seen, now)
+        live.record(cands, now)                     # seulement les paris retenus (un côté par marché) : jamais les paris seulement évalués
     except Exception:                               # noqa: BLE001
         pass
     matches = {c["id"] for c in cands}
-    top = CB.reach(cands)
+    top = min(CB.reach(cands, C.LIVE_COMBO_MAX_LEGS), C.LIVE_COMBO_MAX_ODDS)       # combiné live : 4 paris et cote 20 au plus
     if len(matches) < C.LIVE_OPP_MATCHES or top < 3:
         return None
     opp.update(n=opp["n"] + 1, at=now.isoformat(timespec="minutes"))

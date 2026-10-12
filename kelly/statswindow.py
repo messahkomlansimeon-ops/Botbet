@@ -36,6 +36,10 @@ from datetime import datetime, timedelta
 from . import combos as CB, config as C, fair, fmt, money, quiet, store, telegram, xprice
 from .sources import fmmatch, xbet
 
+# Marchés relus par la fenêtre : ceux de config.STATS_WINDOW_PREFIX (tirs, tirs cadrés, fautes, touches, hors-jeu) + les corners d'UNE équipe et les cartons jaunes (leurs
+# sous-matchs 1xBet ouvrent eux aussi tard ; pas dans les combinés « ts5 », mais jouables seuls). STATS_WINDOW_EXTRA="" les retire.
+EXTRA_PREFIX = tuple(x.strip() for x in os.environ.get("STATS_WINDOW_EXTRA", "team_corners_,team_yellow_").split(",") if x.strip())
+PREFIX = tuple(C.STATS_WINDOW_PREFIX) + EXTRA_PREFIX
 FILE = "stats_window.json"          # {"day", "reads": {id: {n, miss, at, priced}}, "combos": [{tier, keys, at, coupon}], "announced": [id|marché], "passes", "bytes", "requests"}
 KB_PER_REQUEST = 6.4                # taille mesurée d'une réponse 1xBet (gameEvents marketType=2, compressée)
 
@@ -56,8 +60,8 @@ def locked():
 # ---------- outils purs ----------
 
 def is_stat(c):
-    """Pronostic d'un marché « stats » (tirs, tirs cadrés, fautes, touches, hors-jeu)."""
-    return str(c.get("market") or "").startswith(C.STATS_WINDOW_PREFIX)
+    """Pronostic d'un marché « stats » (tirs, tirs cadrés, fautes, touches, hors-jeu, corners d'une équipe, cartons jaunes)."""
+    return str(c.get("market") or "").startswith(PREFIX)
 
 
 def _ko(c):
@@ -330,7 +334,7 @@ def announce_list(today, doc, now):
     if C.STATS_WINDOW_ANNOUNCE <= 0:
         return []
     seen = {str(s) for s in doc["announced"]} | {str(s) for s in today.get("announced") or []}
-    done = {s.partition("|")[0] for s in seen if s.partition("|")[2].startswith(C.STATS_WINDOW_PREFIX)}      # matchs dont un 💎 stats a déjà été annoncé aujourd'hui
+    done = {s.partition("|")[0] for s in seen if s.partition("|")[2].startswith(PREFIX)}      # matchs dont un 💎 stats a déjà été annoncé aujourd'hui
     room = C.STATS_WINDOW_DAY_ANNOUNCE - len(doc["announced"])
     best = {}
     for c in today["pronos"]:

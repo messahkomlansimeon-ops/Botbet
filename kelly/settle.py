@@ -8,14 +8,21 @@ from .sources import fmmatch, footballdata as fd, fotmob, names, s365
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals", "team_totals_home", "team_totals_away")
 FD_MARKETS = ("alternate_totals_corners", "alternate_totals_cards")     # réglables avec les CSV football-data
 UNKNOWN = "unknown"                                        # match joué mais jambe invérifiable (« non vérifiable ») : ni gagné ni perdu
-SHOT_MARKETS = tuple(f"team_{k}_{s}" for k in ("shots", "sot", "fouls", "throws", "offsides") for s in ("total", "home", "away"))
+# Marchés réglés avec les statistiques d'une équipe (fstats["side"]) : tirs, tirs cadrés, fautes, touches, hors-jeu, corners d'UNE équipe (le total du match :
+# alternate_totals_corners) et cartons JAUNES du match (1xBet ne compte que les jaunes, jamais les rouges : stat « yellow » ; « yel » chez API-Football).
+SHOT_MARKETS = tuple(f"team_{k}_{s}" for k in ("shots", "sot", "fouls", "throws", "offsides") for s in ("total", "home", "away")) \
+    + ("team_corners_home", "team_corners_away", "team_yellow_total")
+ALIAS = {"yellow": "yel"}          # nom de la stat chez API-Football (stats._team_values)
 
 
 def _side_value(sd, fld):
-    """Tirs (« shots ») ou tirs cadrés (« sot ») d'une équipe d'après fstats["side"][côté] ; None si l'API les a laissés à null."""
-    if not sd or fld in (sd.get("nul") or []) or sd.get(fld) is None:
+    """Tirs (« shots »), tirs cadrés (« sot »), corners, jaunes... d'une équipe d'après fstats["side"][côté] ; None si la source ne les donne pas (null chez API-Football)."""
+    if not sd:
         return None
-    return sd[fld]
+    for k in dict.fromkeys((fld, ALIAS.get(fld))):
+        if k and k not in (sd.get("nul") or []) and sd.get(k) is not None:
+            return sd[k]
+    return None
 
 
 def shot_value(market, fstats):
@@ -161,7 +168,16 @@ class FootballData:
 
     def stats(self, b):
         m = self.match(b)
-        return fd.match_stats(m) if m else None
+        if not m:
+            return None
+        out = fd.match_stats(m)
+        side = out.setdefault("side", {"home": {}, "away": {}})
+        for key, h, a in (("corners", "hc", "ac"), ("yellow", "hy", "ay")):      # corners d'une équipe et jaunes SEULS (match_stats ne donne que les cartons jaunes + rouges)
+            if m.get(h) is not None and m.get(a) is not None:
+                side["home"][key], side["away"][key] = m[h], m[a]
+                if key == "yellow":
+                    out["yellow"] = m[h] + m[a]
+        return out
 
     def fotmob_score(self, b):
         """Score FotMob (fotmob_score) ; le fichier de profils n'est lu qu'une fois par exécution."""

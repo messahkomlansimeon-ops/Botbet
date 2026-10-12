@@ -1179,7 +1179,7 @@ def test_budget_with_many_leagues():
 
 def test_fair_pronostics():
     """Pronostics sans cote : proba du modèle, cote juste = 1/proba, vocabulaire 1xBet, aucun pronostic sans données."""
-    from kelly import fair, prematch
+    from kelly import fair, prematch, strength as S
     with Sandbox() as sb:
         C.SPORTS = list(C.LEAGUE_KEYS)
         ev = lambda i, h, a, key="soccer_efl_champ": {"id": i, "sport_key": key, "home_team": h, "away_team": a,   # noqa: E731
@@ -1197,17 +1197,19 @@ def test_fair_pronostics():
         assert pronos and {c["id"] for c in pronos} == {"m1"}, [c["event"] for c in pronos]   # pas de profil / sélection : rien d'inventé
         assert 1 <= len(pronos) <= 2 and pronos == sorted(pronos, key=lambda c: -c["score"])
         top = pronos[0]
-        exp_p = 0.5 + (prematch.over_p("Over", prematch.poisson_over(12.0, 10.5)) - 0.5) * C.FAIR_SHRINK
-        assert top["market"] == "alternate_totals_corners" and (top["name"], top["point"]) == ("Over", 10.5), top
+        # corners : binomiale négative (dispersion de base + incertitude du profil de 10 matchs, fair.alpha_eff), plus le Poisson d'avant
+        nb_over = lambda pt: S.p_over(S.nb_pmf(12.0, fair.alpha_eff(fair.ALPHA0["corners"], 12.0, 10)), pt)      # noqa: E731
+        exp_p = 0.5 + (prematch.over_p("Over", nb_over(9.5)) - 0.5) * C.FAIR_SHRINK
+        assert top["market"] == "alternate_totals_corners" and (top["name"], top["point"]) == ("Over", 9.5), top
         assert abs(top["prob"] - exp_p) < 1e-3 and top["fair"] == round(1 / top["prob"], 2)
         assert top["min_odds"] == round(1 / top["prob"] * (1 + C.FAIR_MARGIN), 2) > top["fair"]
-        assert top["pick"] == "Plus de 10,5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
-        assert top["key"] == "m1|alternate_totals_corners||10.5|Over" and top["why"].startswith("stats réelles : 12.0 corners attendus")
+        assert top["pick"] == "Plus de 9,5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
+        assert top["key"] == "m1|alternate_totals_corners||9.5|Over" and top["why"].startswith("stats réelles : 12.0 corners attendus")
         for c in pronos:                                                   # proba utile : ni hasard ni évidence
             assert C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and c["min_odds"] >= c["fair"] >= 1 / C.FAIR_P_RANGE[1] - 0.01
         text = fmt.pronos(pronos)
         assert text.startswith("<b>🎲 Pronostics Kelly</b>"), text
-        assert "<b>Alpha – Bravo</b>" in text and "👉 Plus de 10,5 corners · mini <b>" in text, text
+        assert "<b>Alpha – Bravo</b>" in text and "👉 Plus de 9,5 corners · mini <b>" in text, text
         assert f'<b>{fmt.num(top["min_odds"])}</b>' in text and "cote juste" not in text
         # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
         f = {"n_home": 10, "n_away": 10, "exp_corners": 10.2, "exp_cards": 4.9, "exp_goals_home": 1.6, "exp_goals_away": 1.3}
@@ -2169,9 +2171,15 @@ def test_replay_oct8():
         store.save("today.json", {"day": str(day), "picks": [], "pronos": [{k: c[k] for k in c if k != "score"} for c in keep]})
         reply = app.handle_command("/combi 25")
         assert reply.startswith("Pas de cotes réelles aujourd'hui : voici un combiné bâti sur les pronostics de Kelly") and "COMBINÉ À VÉRIFIER" in reply, reply
-        store.save("today.json", {"day": str(day), "picks": [], "pronos": keep[:2]})
+        solid = {}                                                          # les 2 meilleurs pronostics SOLIDES de 2 matchs différents (les cartons jaunes ajoutés doublent un match)
+        for c in keep:
+            if CB.fair_eligible(c) and CB.viable(c):
+                solid.setdefault(c["id"], c)
+        two = list(solid.values())[:2]
+        assert len(two) == 2
+        store.save("today.json", {"day": str(day), "picks": [], "pronos": two})
         out = app.handle_command("/combi 25")
-        assert out.startswith("❌ Pas de combiné à la cote 25.\n📉 Avec les bons paris du jour, la cote monte au plus à 2,2 (2 matchs)"), out   # pas assez de pronostics solides
+        assert out.startswith("❌ Pas de combiné à la cote 25.\n📉 Avec les bons paris du jour, la cote monte au plus à 2,3 (2 matchs)"), out   # pas assez de pronostics solides
         # --- /stats, /analyse : le Brésil a ses chiffres, avec la source
         st = app.handle_command("/stats Nautico")
         assert "Nautico Recife" in st and "(API-Football, Brasileirão Série B)" in st and "Tirs cadrés" in st and "Corners" in st, st

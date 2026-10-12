@@ -16,6 +16,10 @@ approfondi ou profils API-Football de kelly/apistats.py) ; les championnats afri
 traités avec les seuls profils API-Football. Chaque pronostic porte sa « confiance » (c["conf"], qualité des données de
 0 à 1) : les combinés à cote juste (combos.fair_*) n'utilisent que ceux dont la confiance et la proba sont assez hautes.
 
+Corners d'UNE équipe (sous-match corners de 1xBet) et cartons JAUNES seuls (le seul cartons que 1xBet cote) s'y ajoutent ; le repli simple utilise la
+binomiale négative pour corners et cartons, avec une dispersion élargie pour un petit profil (alpha_eff : alpha + 1 / (n x moyenne)). L'arbitre désigné
+(stats.referee_for, liste du jour d'API-Football en cache) corrige cartons, jaunes et fautes.
+
 Ces pronostics n'ont ni cote ni mise : « compare chez 1xBet, joue si la cote >= X ». Ils n'entrent dans aucun combiné et
 ne sont pas suivis pour la cote de clôture ; leurs résultats vont dans data/fair.json (règlement gratuit,
 settle.settle_fair) pour mesurer si les probas de Kelly sont justes : les C.FAIR_TRACK meilleurs, plus jusqu'à
@@ -23,6 +27,7 @@ C.FAIR_TRACK_FREE pronostics de buts, 1N2, double chance et « les 2 marquent »
 matchs de la veille, déjà téléchargée : aucune requête de plus). Le cumul par famille (kelly/calib.py) corrige ensuite les
 probas des marchés où Kelly se montre trop sûre d'elle (c["p0"] = proba avant correction).
 """
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -35,8 +40,14 @@ LINES = {"goals": (1.5, 2.5, 3.5), "corners": (7.5, 8.5, 9.5, 10.5, 11.5, 12.5),
 TEAM_GOALS = ("team_totals_home", "team_totals_away")
 FAMILIES = ("totals", "btts", "double_chance", "h2h") + TEAM_GOALS + (prematch.CORNERS, prematch.CARDS)
 FREE_MARKETS = ("totals", "btts", "double_chance", "h2h") + TEAM_GOALS      # réglés avec le seul score : suivis en nombre, gratuitement
+# Réglages de ce module (config.py n'est pas touché ; chacun a sa variable d'environnement)
+NB_SMALL = os.environ.get("FAIR_NB_SMALL", "1").strip().lower() not in ("0", "false", "non", "no", "off")     # 0 : plus d'incertitude sur la moyenne des petits profils (comportement d'avant)
+ALPHA0 = {"corners": 0.03, "cards": 0.06}       # dispersion de base (binomiale négative) des corners et des cartons du modèle simple : Poisson (alpha 0) les disait trop réguliers
+TRACK_NEW = int(os.environ.get("FAIR_TRACK_NEW", "10"))      # pronostics « corners d'une équipe » / « cartons jaunes » suivis en silence par jour (leur fiabilité se mesure comme celle des tirs)
+EXTRA_WEIGHT = {"team_corners_home": 1.5, "team_corners_away": 1.5, "team_yellow_total": 1.6}      # poids de sélection des familles ajoutées (comme corners / cartons / tirs dans config.MARKET_WEIGHT)
 # Tirs et tirs cadrés : total du match, puis une équipe (le suffixe _home / _away dit laquelle) ; (clé des chiffres d'avant-match,
 # libellé, bornes plausibles de la moyenne attendue, dispersion de la binomiale négative)
+# Corners d'UNE équipe (sous-match corners de 1xBet, types 11 à 14) et cartons JAUNES du match (1xBet ne compte que les jaunes : kelly/sources/xbet.py).
 STAT_SPECS = {"team_shots_total": ("exp_shots", "tirs", (12.0, 45.0), 0.03),
               "team_sot_total": ("exp_sot", "tirs cadrés", (3.0, 16.0), 0.04),
               "team_shots_home": ("exp_shots_home", "tirs", (4.0, 26.0), 0.05),
@@ -50,14 +61,30 @@ STAT_SPECS = {"team_shots_total": ("exp_shots", "tirs", (12.0, 45.0), 0.03),
               "team_throws_total": ("exp_throws", "touches", (20.0, 70.0), 0.03),
               "team_throws_home": ("exp_throws_home", "touches", (8.0, 40.0), 0.05),
               "team_throws_away": ("exp_throws_away", "touches", (8.0, 40.0), 0.05),
-              "team_offsides_total": ("exp_offsides", "hors-jeu", (1.0, 10.0), 0.10)}
+              "team_offsides_total": ("exp_offsides", "hors-jeu", (1.0, 10.0), 0.10),
+              "team_corners_home": ("exp_corners_home", "corners", (1.5, 12.0), 0.04), "team_corners_away": ("exp_corners_away", "corners", (1.5, 12.0), 0.04),
+              "team_yellow_total": ("exp_yellow", "cartons jaunes", (1.0, 8.0), 0.06)}
 STAT_MARKETS = tuple(STAT_SPECS)
 ALL_FAMILIES = FAMILIES + STAT_MARKETS
 EXP_KEY = {prematch.CORNERS: "exp_corners", prematch.CARDS: "exp_cards"} | {m: v[0] for m, v in STAT_SPECS.items()}
-SIDE_MARKETS = {"team_shots": "shots", "team_sot": "sot", "team_fouls": "fouls"}         # marchés par équipe de strength.lines (côté dans l["side"])
+SIDE_MARKETS = {"team_shots": "shots", "team_sot": "sot", "team_fouls": "fouls", "team_corners": "corners"}         # marchés par équipe de strength.lines (côté dans l["side"])
 DEEP_LINES = {"corners": (6.5, 13.5), "cards": (1.5, 7.5)}      # lignes de corners / cartons proposées avec le modèle approfondi
 DEEP_MIN_Q = 0.35          # qualité des données minimale pour se fier au modèle approfondi
 EVAL_MAX = 500             # matchs examinés au plus (le calcul est local, mais les profils sont cherchés par noms approchés)
+
+
+def weight(market):
+    """Poids de sélection d'un marché : config.MARKET_WEIGHT, sinon celui des familles ajoutées ici (corners d'une équipe, cartons jaunes), sinon 1."""
+    return C.MARKET_WEIGHT.get(market, EXTRA_WEIGHT.get(market, 1.0))
+
+
+def alpha_eff(alpha, mean, n):
+    """Dispersion (binomiale négative) d'un chiffre tiré d'un profil de `n` matchs : alpha + 1 / (n x moyenne). La moyenne d'un petit profil est elle-même incertaine
+    (3 matchs : un écart de 20 % est banal) ; sans ce terme la loi est trop étroite et les paris « presque sûrs » sont trop souvent perdus. Le terme
+    s'efface quand `n` grandit (10 matchs, 10 corners : +0,01). FAIR_NB_SMALL=0 le retire."""
+    if not NB_SMALL or not n or n <= 0 or not mean or mean <= 0:
+        return alpha
+    return alpha + 1.0 / (n * mean)
 
 
 def shrink(p):
@@ -148,8 +175,9 @@ def stat_n(f, market):
 
 
 def _stat_options(f, home, away, skip=(), only=None):
-    """Options sur corners, cartons (Poisson, lignes fixes), tirs et tirs cadrés (binomiale négative, lignes autour de la moyenne).
-    `skip` : marchés déjà traités ; `only` : si donné, seulement les chiffres dont la clé (exp_corners...) y figure."""
+    """Options sur corners, cartons (binomiale négative, lignes fixes), tirs, tirs cadrés, fautes, corners d'une équipe, cartons jaunes... (binomiale négative, lignes autour
+    de la moyenne attendue). La dispersion tient compte de l'incertitude de la moyenne d'un petit profil (alpha_eff). `skip` : marchés déjà traités ; `only` : si
+    donné, seulement les chiffres dont la clé (exp_corners...) y figure."""
     out = []
     note = lambda market: (f" ({stat_n(f, market)} derniers matchs seulement)"        # noqa: E731 - effectif de la source de CE chiffre
                            if f.get("aps_keys") and stat_n(f, market) < C.APISTATS_LAST else "")
@@ -159,16 +187,18 @@ def _stat_options(f, home, away, skip=(), only=None):
             continue
         if not prematch.BOUNDS[kind][0] <= exp <= prematch.BOUNDS[kind][1]:
             continue
+        pmf = strength.nb_pmf(exp, alpha_eff(ALPHA0[kind], exp, stat_n(f, market)))
         for pt in LINES[kind]:
             for name in ("Over", "Under"):
-                out.append((market, name, pt, prematch.over_p(name, prematch.poisson_over(exp, pt)),
+                out.append((market, name, pt, prematch.over_p(name, strength.p_over(pmf, pt)),
                             f"stats réelles : {exp:.1f} {unit} attendus{note(market)}"))
     for market, (key, unit, (lo, hi), alpha) in STAT_SPECS.items():
         exp = f.get(key)
         if market in skip or exp is None or not lo <= exp <= hi or (only is not None and key not in only):
             continue
-        pmf = strength.nb_pmf(exp, alpha)
-        for pt in strength._lines_near(exp, alpha, lo=1):
+        a = alpha_eff(alpha, exp, stat_n(f, market))
+        pmf = strength.nb_pmf(exp, a)
+        for pt in strength._lines_near(exp, a, lo=1):
             for name in ("Over", "Under"):
                 out.append((market, name, pt, prematch.over_p(name, strength.p_over(pmf, pt)),
                             f"stats réelles : {exp:.1f} {unit} attendus{note(market)}"))
@@ -250,7 +280,7 @@ def make_pick(ev, market, name, point, p, tag, src):
             "market": market, "name": name, "point": point, "who": who, "group": "soccer",
             "pick": odds.label(market, name, point, who, "soccer"), "prob": round(p, 4), "p0": round(p0, 4), "fair": round(1 / p, 2),
             "min_odds": round(1 / p * (1 + C.FAIR_MARGIN), 2), "why": tag, "src": src,
-            "score": (p - 0.5) * C.MARKET_WEIGHT.get(market, 1.0)} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {})
+            "score": (p - 0.5) * weight(market)} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {})
 
 
 def _with_base(c, base, q):
@@ -259,7 +289,7 @@ def _with_base(c, base, q):
     if base is None:
         return c
     b = calib.calibrate(c["market"], shrink(base), sport_key=c.get("sport_key"))
-    w = C.MARKET_WEIGHT.get(c["market"], 1.0)
+    w = weight(c["market"])
     c["base"], c["conf"] = round(b, 4), round(q or 0.0, 2)
     c["score"] = ((c["prob"] - 0.5) + (c["prob"] - b)) / 2 * w * (0.5 + 0.5 * (q or 0.0))
     return c
@@ -314,7 +344,8 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
         families = {prematch.CORNERS, prematch.CARDS, *TEAM_GOALS} - have.get(ev["id"], set()) if paid else set(ALL_FAMILIES)
         if paid and all_families and C.FAIR_STATS_PAID:        # relevé 1xBet : les championnats payés (grands championnats) sont ceux où 1xBet liste tirs, fautes, touches, hors-jeu
             families |= set(STAT_MARKETS) - have.get(ev["id"], set())      # (rejeu du 09/10 : 3 matchs payés sur 14 listés n'avaient aucun pronostic stats)
-        f = odds.match_numbers(ev["home_team"], ev["away_team"], key)
+        ref = ev.get("referee") or stats.referee_for(ev)          # arbitre désigné (liste du jour d'API-Football, en cache) : cartons, jaunes et fautes
+        f = odds.match_numbers(ev["home_team"], ev["away_team"], key, **({"referee": ref} if ref else {}))
         (opts, bases), src = _options(f, ev["home_team"], ev["away_team"]), "football-data" if key != "africa" else "API-Football"
         if not opts and not paid and api_left > 0 and day is not None and stats.left_today() > C.FAIR_API_RESERVE:
             api_left -= 1
@@ -426,6 +457,7 @@ def record(pronos, day, shown=None):
     rest = [c for c in pronos if c not in main]
     extra = [c for c in rest if c["market"] in FREE_MARKETS][:C.FAIR_TRACK_FREE]
     extra += [c for c in rest if c["market"].startswith(("team_shots_", "team_sot_"))][:C.FAIR_TRACK_SHOTS]
+    extra += [c for c in rest if c["market"].startswith(("team_corners_", "team_yellow_"))][:TRACK_NEW]
     for c in main + extra:
         old = by_key.get(c["key"])
         if old is None:

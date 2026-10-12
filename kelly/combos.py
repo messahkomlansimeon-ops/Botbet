@@ -295,7 +295,7 @@ def plan(picks, tiers=None, usage=None, rejected=None):
 # (code, libellé, préfixes de marché) : un type = des marchés qui commencent par l'un de ses préfixes ; plusieurs types = l'union. Les préfixes
 # passent tels quels aux filtres existants (patch_combo, _live_fair : « prefix ») : « Vérifier ce combiné » ne remplace un pari que par un du même type.
 KINDS = (("v", "Victoire", ("h2h",)), ("dc", "Double chance", ("double_chance",)), ("b", "Buts", ("totals", "team_totals")),
-         ("btts", "Les 2 marquent", ("btts",)), ("co", "Corners", (CORNERS,)), ("ca", "Cartons", (CARDS,)),
+         ("btts", "Les 2 marquent", ("btts",)), ("co", "Corners", (CORNERS, "team_corners_")), ("ca", "Cartons", (CARDS, "team_yellow_")),
          ("t", "Tirs vers le but", ("team_shots_",)), ("tc", "Tirs cadrés", ("team_sot_",)), ("f", "Fautes", ("team_fouls_",)),
          ("to", "Touches", ("team_throws_",)), ("hj", "Hors-jeu", ("team_offsides_",)), ("j", "Joueurs", ("player_",)))
 KIND_CODES = tuple(k for k, _, _ in KINDS)

@@ -144,9 +144,9 @@ def _state(n, w, s, need, k=None):
 
 
 def learning_lines(top=6):
-    """Section « 🧠 Apprentissage » : où en est la correction de Kelly, avant-match (calib, par famille), ensemble (buts, 1N2…) et live (par source
-    et par tranche). [] s'il n'y a encore rien de réglé."""
-    from . import calib, ensemble, live, store
+    """Section « 🧠 Apprentissage » : où en est la correction de Kelly, avant-match (calib, par famille), ensemble (buts, 1N2…) et live (par famille
+    et par tranche, sur les paris retenus). [] s'il n'y a encore rien de réglé."""
+    from . import calib, ensemble, live
     out = []
     d = calib.load()
     fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and a[0]), key=lambda x: -x[1][0])
@@ -155,14 +155,13 @@ def learning_lines(top=6):
     ens = [(f, ensemble.weights(f)) for f in ("goals", "dc", "btts", "h2h")]
     ens_txt = ", ".join(f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in ens)
     out.append(f"• Ensemble (avis de Kelly face au marché) : {ens_txt}")
-    ld = store.load(live.CALIB_FILE, {})
-    for src, name in (("365scores", "Live, données légères"), ("profils", "Live, données moyennes")):
-        a = ld.get(f"src|{src}")
-        out.append(f"• {name} : " + (_state(*a, C.FAIR_CALIB_MIN, calib._k(a)) if a and a[0] else "aucun pari live réglé pour l'instant"))
-    tr = sorted(((k, a) for k, a in ld.items() if not k.startswith("src|") and a[0]), key=lambda x: -x[1][0])
-    for k, (n, w, s) in tr[:3]:
+    ld = live.calib_data()
+    tr = sorted(((k, a) for k, a in ld.items() if a[0]), key=lambda x: -x[1][0])
+    for k, (n, w, s) in tr[:4]:
         fam, t = k.split("|")
         out.append(f"• Live {calib.LABELS.get(fam, fam)} {t} : " + _state(n, w, s, C.FAIR_CALIB_MIN, calib._k([n, w, s])))
+    if not tr:
+        out.append("• Live : aucun pari live retenu et réglé pour l'instant")
     return out if fams or ld else []
 
 

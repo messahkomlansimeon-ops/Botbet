@@ -31,7 +31,7 @@ espacées de 6,2 s tiennent en ~340 s). Un second 429 arrête l'API « pour ce p
 
 Stockage compact : data/apistats_profiles.json, < 300 Ko. Une ligne de match = [jour AAMMJJ, ligue, domicile (1/0), buts pour, contre,
 tirs pour, contre, tirs cadrés, corners, fautes, cartons, xG (chaque fois pour, contre)] ; None quand l'API n'a pas la statistique.
-Les clés ajoutées plus tard (xg) sont À LA FIN de KEYS : une ligne ancienne, plus courte, se lit avec None aux colonnes manquantes (xG
+Les clés ajoutées plus tard (xg, puis yellow : cartons jaunes seuls) sont À LA FIN de KEYS : une ligne ancienne, plus courte, se lit avec None aux colonnes manquantes (xG
 inconnu, jamais 0), et une ligne neuve sans xG est écrite sans ces deux colonnes (le fichier reste petit). Aucune migration.
 """
 import json
@@ -41,8 +41,9 @@ from datetime import datetime, timedelta, timezone
 from . import apileagues, catalogue, config as C, stats, store
 
 FILE = "apistats_profiles.json"
-KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "xg")  # ordre des paires dans une ligne de match ; nouvelles clés : toujours à la fin
-FIELD = {"shots": "shots", "sot": "sot", "corners": "corners", "fouls": "fouls", "cards": "cards", "xg": "xg"}
+KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "xg", "yellow")  # ordre des paires dans une ligne de match ; nouvelles clés : toujours à la fin
+FIELD = {"shots": "shots", "sot": "sot", "corners": "corners", "fouls": "fouls", "cards": "cards", "xg": "xg", "yellow": "yel"}
+OPTIONAL = ("xg", "yellow")                                          # colonnes de fin de ligne omises tant qu'elles sont inconnues
 FLOAT_KEYS = ("xg",)                                                 # valeurs décimales, arrondies à 2 décimales dans une ligne
 R_DAY, R_LG, R_HOME, R_STATS = 0, 1, 2, 3                            # indices d'une ligne ; les paires (pour, contre) suivent
 SEEN_DAYS = 5                                                        # un match ne reste visible que 2 jours dans les listes de l'API
@@ -134,7 +135,7 @@ def _usable(side, f):
     if f not in side:
         return False
     nul = side.get("nul") or []
-    return f not in nul or (f in ("corners", "cards") and any(k not in nul for k in ("shots", "fouls")))
+    return f not in nul or (f in ("corners", "cards", "yel") and any(k not in nul for k in ("shots", "fouls")))
 
 
 def record(d, e, st):
@@ -161,10 +162,11 @@ def record(d, e, st):
         xg = pairs[KEYS.index("xg")]
         if xg == (0, 0) and (e.get("gh") or 0) + (e.get("ga") or 0) > 0:
             pairs[KEYS.index("xg")] = (None, None)   # xG 0 - 0 alors qu'il y a des buts : non suivi par l'API pour ce match, pas un vrai zéro
-        if all(p == (None, None) for k, p in zip(KEYS[1:], pairs[1:]) if k not in FLOAT_KEYS):
-            continue                                  # match sans aucune statistique utilisable (le xG seul ne suffit pas)
+        if all(p == (None, None) for k, p in zip(KEYS[1:], pairs[1:]) if k not in FLOAT_KEYS and k != "yellow"):
+            continue                                  # match sans aucune statistique utilisable (le xG ou les jaunes seuls ne suffisent pas)
         row = [day, lgi, home] + [_num(x, 2 if k in FLOAT_KEYS else 1) for k, p in zip(KEYS, pairs) for x in p]
-        if pairs[-1] == (None, None):                 # xG (dernière clé) inconnu : colonnes omises, même lecture qu'une ligne ancienne
+        first_opt = R_STATS + 2 * min(KEYS.index(k) for k in OPTIONAL)
+        while len(row) > first_opt and row[-2:] == [None, None]:      # xG / jaunes inconnus en fin de ligne : colonnes omises, même lecture qu'une ligne ancienne
             del row[-2:]
         t = d["teams"].setdefault(str(tid), {"m": []})
         lk = e.get("lk")

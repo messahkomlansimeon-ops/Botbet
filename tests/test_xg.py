@@ -94,8 +94,9 @@ def test_record_and_settle_unchanged():
     m["id"] = "7"
     assert fmmatch.record(d, m, SK)
     row = d["teams"][m["hid"]]["m"][0]
-    assert len(row) == 2 + 2 * len(fmmatch.KEYS) and row[-4:] == [1.62, 1.6, 1.62, 1.6]
-    assert d["teams"][m["aid"]]["m"][0][-4:] == [1.6, 1.62, 1.6, 1.62]             # vue de l'équipe extérieure : inversée
+    ix = fmmatch.R_STATS + 2 * fmmatch.KEYS.index("xg")                              # xG, npxG puis les jaunes (ajoutés à la fin de KEYS)
+    assert len(row) == 2 + 2 * len(fmmatch.KEYS) and row[ix:ix + 4] == [1.62, 1.6, 1.62, 1.6]
+    assert d["teams"][m["aid"]]["m"][0][ix:ix + 4] == [1.6, 1.62, 1.6, 1.62]       # vue de l'équipe extérieure : inversée
     assert "xg" in d["recent"]["7"]["s"]
 
 
@@ -207,8 +208,9 @@ def test_xg_min_matches_respected():
     season_and_matches()
     d = fmmatch.load()
     for tid in ("2",):
+        ix = fmmatch.R_STATS + 2 * fmmatch.KEYS.index("xg")
         for r in d["teams"][tid]["m"]:
-            r[-4:] = [None] * 4
+            r[ix:ix + 4] = [None] * 4                      # xG et npxG (les jaunes, après, ne bougent pas)
     fmmatch.save(d)
     features.reload()
     table(Arsenal={"n": 10, "xg": 15.0, "xga": 10.0}, Chelsea={"n": 10, "xg": 12.0, "xga": 14.0})

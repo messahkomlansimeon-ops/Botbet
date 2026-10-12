@@ -7,17 +7,25 @@ l'avant-match : 1N2, double chance, total de buts, les 2 marquent).
 Probabilités : seulement les matchs des championnats où Kelly a son modèle de force (strength.market_grid, données de qualité suffisante) ; les
 buts attendus d'avant-match de chaque équipe sont ramenés au temps qui reste (part des buts d'un match encore à jouer, 45 % en 1re mi-temps,
 55 % en 2e, temps additionnel compris), corrigés des cartons rouges, puis combinés au score du moment (loi de Poisson du reste du match).
+ANCRAGE SUR 1XBET : en live, les cotes de 1xBet sans marge battent le modèle de Kelly (mesuré sur 6 188 paris réglés : Brier 0,1811 contre
+0,1845 ; quand Kelly voyait plus de 5 % d'espérance, 36 % gagnaient pour 47 % annoncés). La proba retenue est donc un mélange EN LOGIT de la proba
+de Kelly (poids C.LIVE_W_KELLY = 0,3 au plus, réduit pour les données moins solides : profils, 365scores) et de celle de 1xBet sans marge ; Kelly
+ne fait que décaler un peu le prix du marché. Sans proba de 1xBet pour ce pari, pas de pari.
 Totaux de buts : seulement les lignes en .5 (odds.half_line) ; les lignes entières (remboursement) et les quarts asiatiques (2,25 ; 2,75 : demi-gain
 ou demi-perte) sont ignorés, la loi de Poisson ne les chiffre pas.
-Un pari est candidat avec au moins C.LIVE_MIN_P de chances, une espérance d'au moins C.LIVE_MIN_EV à la cote 1xBet, une cote d'au moins
-C.LIVE_MIN_ODDS, et jamais plus de C.LIVE_MAX_GAP d'écart avec la probabilité de 1xBet (au-delà, c'est presque toujours une information que le
-modèle n'a pas : blessure, domination, changement tactique). Le combiné est le plus probable dont la cote tombe dans la fourchette demandée
-(combos.best_combo, un pari par match), avec son code coupon et « ✅ Je le joue » (suivi comme un combi sur mesure, src « live »).
+Un pari est candidat avec au moins C.LIVE_MIN_P de chances, une espérance d'au moins C.LIVE_MIN_EV (+2 %) à la cote 1xBet avec cette proba, une
+cote d'au moins C.LIVE_MIN_ODDS, et jamais plus de C.LIVE_MAX_GAP (8 points) d'écart avec la probabilité de 1xBet (au-delà, c'est presque toujours
+une information que le modèle n'a pas : blessure, domination, changement tactique) ; aucun pari après la C.LIVE_MAX_MINUTE (80e).
+Le combiné compte 2 à 4 paris (C.LIVE_COMBO_*), cote totale 20 au plus ; c'est le plus probable dont la cote tombe dans la fourchette demandée
+(combos.best_combo, un pari par match), avec son code coupon et « ✅ Je le joue » (suivi comme un combi sur mesure, src « live », minute et score de
+chaque pari gardés). AUCUNE MISE n'est conseillée si l'espérance calculée avec les probas de 1xBet sans marge est de 0 ou moins.
 
-Apprentissage À PART de l'avant-match : chaque pari candidat évalué est noté dans data/live.json avec sa tranche de minutes (C.LIVE_TRANCHES :
-30-45, 45-60, 60-75, 75-90+), réglé le lendemain matin comme un pronostic (settle._settle_fair_row) ; la fiabilité est cumulée par famille ET
-par tranche dans data/live_calib.json (même formule que kelly/calib.py) et corrige les probabilités live de cette famille dans cette tranche.
-Rien n'est mélangé à la calibration d'avant-match. Ne lève jamais vers l'utilisateur : une panne donne un message clair."""
+Apprentissage À PART de l'avant-match : SEULS les paris retenus sont notés dans data/live.json (un seul côté par marché, une fois par match et par
+tranche de minutes : C.LIVE_TRANCHES, 30-45, 45-60, 60-75, 75-90+), réglés le lendemain matin comme un pronostic (settle._settle_fair_row) ; la
+fiabilité est cumulée par famille ET par tranche dans data/live_calib.json (même formule que kelly/calib.py) et corrige UNE seule fois la proba
+de cette famille dans cette tranche (plus de correction par source en plus). Format versionné (CALIB_VERSION) : l'ancien fichier, qui comptait
+les deux côtés de chaque marché (jamais de correction possible), est ignoré puis remplacé. Rien n'est mélangé à la calibration d'avant-match.
+Ne lève jamais vers l'utilisateur : une panne donne un message clair."""
 import math
 import sys
 import time
@@ -28,8 +36,9 @@ from . import calib, combos as CB, config as C, fmt, odds as O, store, strength
 from .sources import http, xbet
 from .telegram import Html
 
-JOURNAL = "live.json"           # [{key, id, date, tranche, minute, score, home, away, sport_key, commence, market, name, point, p0, prob, px, xodds, result...}]
-CALIB_FILE = "live_calib.json"  # {"<famille>|<tranche>": [n, gagnés, somme des probas brutes]}
+JOURNAL = "live.json"           # [{key, id, date, tranche, minute, score, home, away, sport_key, commence, market, name, point, pk, p0, prob, px, xodds, v, result...}]
+CALIB_FILE = "live_calib.json"  # {"v": 2, "k": {"<famille>|<tranche>": [n, gagnés, somme des probas avant correction]}}
+CALIB_VERSION = 2               # journal ET calibration : seules les lignes « v » = 2 (paris retenus, un côté par marché) apprennent ; l'ancien format est ignoré
 KEEP_DAYS = 30                  # lignes réglées gardées N jours
 UNRESOLVED_DAYS = http.env("LIVE_UNRESOLVED_DAYS", 4)      # ligne sans résultat gardée N jours (le règlement du lendemain matin la règle ; settle l'« annule » après WAIT_DAYS = 3 jours)
 MAX_ROWS = http.env("LIVE_MAX_ROWS", 20000)                # plafond du journal (les plus anciennes lignes d'abord) : ~5 000 lignes par jour de relevés
@@ -147,8 +156,8 @@ def model(m, key):
     """Buts attendus d'avant-match du match live `m` -> {"pred": {lh, la, q, n, src}} ou None, de la source la plus solide à la plus légère :
     1. le modèle de force (strength.market_grid) des championnats football-data ;
     2. les profils FotMob / API-Football / 365scores des autres championnats suivis (features.match_features : exp_goals_home / away), qualité
-       au plus 0,6, avis mélangé à celui de 1xBet (C.LIVE_W_PROFILES) ;
-    3. les équipes préparées à l'avance sur 365scores (livedata.pred_for), qualité au plus 0,5, avis mélangé à moitié avec 1xBet (C.LIVE_W_LIGHT),
+       au plus 0,6, poids de Kelly réduit (C.LIVE_W_PROFILES) ;
+    3. les équipes préparées à l'avance sur 365scores (livedata.pred_for), qualité au plus 0,5, poids de Kelly réduit de moitié (C.LIVE_W_LIGHT),
        jamais en coupe ni en amical (deux divisions différentes), hors jeunes / réserves / régional.
     Aucune requête (caches seulement)."""
     from . import livedata
@@ -172,21 +181,35 @@ def model(m, key):
 
 # ---------- probabilités ----------
 
-def _acc(data, fam, tr):
-    return (data or {}).get(f"{fam}|{tr}")
+def calib_data():
+    """Cumul de fiabilité live {"<famille>|<tranche>": [n, gagnés, somme des probas]} ; {} si le fichier est absent, illisible ou de l'ANCIEN format
+    (sans "v" = 2 : il comptait les deux côtés de chaque marché, jamais utilisable)."""
+    d = store.load(CALIB_FILE, {})
+    k = d.get("k") if isinstance(d, dict) and d.get("v") == CALIB_VERSION else None
+    return k if isinstance(k, dict) else {}
 
 
-LIGHT = ("profils", "365scores")      # sources dont la fiabilité est aussi mesurée à part (« src|365scores »)
+def factor(market, tr, data=None):
+    """Correction live UNIQUE de la famille du marché dans la tranche `tr` (même formule que calib._k, cumul À PART) ; 1 sans assez de résultats."""
+    data = data if data is not None else calib_data()
+    k = calib._k((data or {}).get(f"{calib.family(market)}|{tr}"))
+    return 1.0 if k is None else max(calib.K_RANGE[0], min(calib.K_RANGE[1], k))
 
 
-def factor(market, tr, data=None, src=None):
-    """Correction live de la famille du marché dans la tranche `tr` (même formule que calib._k, cumul À PART), multipliée par celle de la
-    SOURCE des données (profils, données légères) dès qu'elle a assez de résultats ; 1 sans assez de résultats."""
-    data = data if data is not None else store.load(CALIB_FILE, {})
-    k = calib._k(_acc(data, calib.family(market), tr))
-    k = 1.0 if k is None else k
-    ks = calib._k((data or {}).get(f"src|{src}")) if src in LIGHT else None
-    return max(calib.K_RANGE[0], min(calib.K_RANGE[1], k * (ks or 1.0)))
+def _logit(p):
+    p = min(max(p, 1e-4), 1 - 1e-4)
+    return math.log(p / (1 - p))
+
+
+def blend(pk, px, w):
+    """Mélange en logit de la proba de Kelly `pk` (poids `w`, borné à [0 ; 1]) et de celle de 1xBet sans marge `px` (poids 1 - w)."""
+    w = max(0.0, min(1.0, w))
+    return 1 / (1 + math.exp(-(w * _logit(pk) + (1 - w) * _logit(px))))
+
+
+def kelly_weight(src):
+    """Poids de l'avis de Kelly dans le mélange : C.LIVE_W_KELLY, réduit des données moins solides (profils : C.LIVE_W_PROFILES, 365scores : C.LIVE_W_LIGHT)."""
+    return C.LIVE_W_KELLY * {"profils": C.LIVE_W_PROFILES, "365scores": C.LIVE_W_LIGHT}.get(src, 1.0)
 
 
 def probs(m, pred, data=None):
@@ -247,7 +270,7 @@ def legs(raw, now=None, data=None, model_for=None):
     """Paris live évaluables -> (candidats retenus, tous les paris évalués pour le journal, compte {live, fenêtre, connus}). `model_for(m, key)` :
     injectable (tests) ; par défaut strength.market_grid."""
     now = now or _now()
-    data = data if data is not None else store.load(CALIB_FILE, {})
+    data = data if data is not None else calib_data()
     keep, seen, count = [], [], {"live": 0, "window": 0, "known": 0}
     for g in raw:
         m = parse(g)
@@ -273,14 +296,12 @@ def legs(raw, now=None, data=None, model_for=None):
             if k not in p_raw:
                 continue
             mk, side, point = k
-            p0 = p_raw[k]
-            w = {"profils": C.LIVE_W_PROFILES, "365scores": C.LIVE_W_LIGHT}.get(pred.get("src"), 1.0)
-            if w < 1 and k in p_x:                  # données moins solides : l'avis de Kelly mélangé à celui du marché (comme l'ensemble d'avant-match)
-                p0 = w * p0 + (1 - w) * p_x[k]
-            p = 0.5 + (p0 - 0.5) * factor(mk, tr, data, pred.get("src"))
+            pk = p_raw[k]
+            p0 = blend(pk, p_x[k], kelly_weight(pred.get("src"))) if k in p_x else pk      # ancré sur 1xBet (sans proba de 1xBet : écarté plus bas)
+            p = 0.5 + (p0 - 0.5) * factor(mk, tr, data)         # UNE correction : famille x tranche, mesurée sur les paris retenus
             leg = {"key": f"lv{m['gid']}|{mk}||{'' if point is None else point}|{side}", "id": f"lv{m['gid']}", "home": m["home"], "away": m["away"],
                    "sport_key": key or "soccer_live_other", "league": m["league"], "commence": start.isoformat().replace("+00:00", "Z"), "start": start.strftime("%H:%M"),
-                   "market": mk, "name": side, "point": point, "who": None, "group": "soccer", "p0": round(p0, 4), "prob": round(p, 4),
+                   "market": mk, "name": side, "point": point, "who": None, "group": "soccer", "pk": round(pk, 4), "p0": round(p0, 4), "prob": round(p, 4),
                    "px": round(p_x[k], 4) if k in p_x else None, "odds": cf, "xodds": cf, "xref": [m["gid"], t, param], "xgid": m["gid"],
                    "min_odds": round(1 / max(p, 1e-6) * (1 + C.FAIR_MARGIN), 2), "pick": fmt.label(mk, side, point, None, "soccer"),
                    "minute": m["minute"], "score": f"{m['score'][0]}-{m['score'][1]}", "tranche": tr, "live": True, "conf": pred.get("q"),
@@ -290,7 +311,17 @@ def legs(raw, now=None, data=None, model_for=None):
             gap = abs(p - leg["px"]) if leg["px"] is not None else 1.0
             if (p >= C.LIVE_MIN_P and cf >= C.LIVE_MIN_ODDS and p * cf - 1 >= C.LIVE_MIN_EV and gap <= C.LIVE_MAX_GAP):
                 keep.append(leg)
-    return keep, seen, count
+    return _one_side(keep), seen, count
+
+
+def _one_side(keep):
+    """Un seul côté par match, marché et ligne : le meilleur (espérance la plus haute) s'il en reste plusieurs."""
+    best = {}
+    for c in keep:
+        k = (c["id"], c["market"], c["point"])
+        if k not in best or c["prob"] * c["odds"] > best[k]["prob"] * best[k]["odds"]:
+            best[k] = c
+    return [c for c in keep if best[(c["id"], c["market"], c["point"])] is c]
 
 
 # ---------- journal et apprentissage à part ----------
@@ -306,24 +337,25 @@ def prune(log, now):
 
 
 def record(rows, now=None):
-    """Note les paris live évalués (un par match, marché, ligne, côté et tranche, une fois par jour) pour l'apprentissage live. -> nombre ajouté.
+    """Note les paris live RETENUS (legs() -> keep : jamais les paris seulement évalués) pour l'apprentissage live : un seul côté par match, marché et
+    ligne, une fois par jour et par tranche de minutes. -> nombre ajouté.
     Le journal est élagué (prune) et n'est réécrit que si une ligne est ajoutée ou retirée : un relevé qui n'apporte rien ne réécrit plus tout le fichier."""
     now = now or _now()
     day = str(now.date())
     log = store.load(JOURNAL, [])
     log = log if isinstance(log, list) else []
-    have = {(r.get("date"), r.get("key"), r.get("tranche")) for r in log}
+    have = {(r.get("date"), r.get("id"), r.get("market"), r.get("point"), r.get("tranche")) for r in log}
     before = len(log)
     log = prune(log, now)
     changed = len(log) != before
     n = 0
     for r in rows:
-        k = (day, r["key"], r["tranche"])
+        k = (day, r["id"], r["market"], r.get("point"), r["tranche"])        # le côté n'en fait pas partie : jamais Over ET Under du même marché
         if k in have:
             continue
         have.add(k)
         log.append({x: r.get(x) for x in ("key", "id", "tranche", "minute", "score", "home", "away", "sport_key", "commence", "market", "name",
-                                          "point", "who", "group", "p0", "prob", "px", "xodds", "src")} | {"date": day})
+                                          "point", "who", "group", "pk", "p0", "prob", "px", "xodds", "src")} | {"date": day, "v": CALIB_VERSION})
         n += 1
     if n or changed:
         store.save(JOURNAL, log, compact=True)
@@ -332,45 +364,50 @@ def record(rows, now=None):
 
 def settle(now=None, fdata=None, stats_for=None):
     """Règle le journal live (comme un pronostic : score final) et cumule la fiabilité par famille et par tranche dans live_calib.json, à part de
-    l'avant-match. -> (réglés, appris). Le journal n'est réécrit que si une ligne a changé (réglée, apprise ou élaguée)."""
+    l'avant-match. -> (réglés, appris). Seules les lignes du format actuel (« v » = 2 : paris retenus) sont réglées et apprises ; les anciennes (tous
+    les côtés de tous les marchés) ne sont plus réglées et leurs résultats déjà connus ne servent plus. Le journal n'est réécrit que si une ligne a
+    changé (réglée, apprise ou élaguée)."""
     from . import settle as S
     now = now or _now()
     log = store.load(JOURNAL, [])
     if not isinstance(log, list) or not log:
         return 0, 0
     fdata = fdata or S.FootballData()
-    data = store.load(CALIB_FILE, {})
+    raw = store.load(CALIB_FILE, {})
+    data = calib_data()
     settled = learned = 0
+    dirty = False
     for r in log:
-        if r.get("result") is None:
+        new = r.get("v") == CALIB_VERSION
+        if r.get("result") is None and new:
             S._settle_fair_row(r, now, fdata, stats_for)
             settled += r.get("result") is not None
         if r.get("result") in ("win", "loss") and not r.get("calib"):
-            keys = [f"{calib.family(r['market'])}|{r['tranche']}"] + ([f"src|{r['src']}"] if r.get("src") in LIGHT else [])
-            for k in keys:                          # par famille et tranche, et par source de données (profils, données légères)
-                acc = data.setdefault(k, [0, 0, 0.0])
+            if new:
+                acc = data.setdefault(f"{calib.family(r['market'])}|{r['tranche']}", [0, 0, 0.0])
                 acc[0] += 1
                 acc[1] += r["result"] == "win"
                 acc[2] = round(acc[2] + (r.get("p0") or r["prob"]), 4)
-            r["calib"] = True
-            learned += 1
+                learned += 1
+            r["calib"] = True                       # ancien format : marqué sans être compté
+            dirty = True
     kept = prune(log, now)
-    if settled or learned or kept is not log:
+    if settled or dirty or kept is not log:
         store.save(JOURNAL, kept, compact=True)
-    if learned:
-        store.save(CALIB_FILE, data, compact=True)
+    if learned or (raw and not (isinstance(raw, dict) and raw.get("v") == CALIB_VERSION)):      # ancien fichier : remplacé (remise à zéro)
+        store.save(CALIB_FILE, {"v": CALIB_VERSION, "k": data}, compact=True)
     return settled, learned
 
 
 def calib_lines(data=None):
     """Fiabilité live par famille et tranche (bilan détaillé, status) : « buts 60-75 : 34 réglés, 71 % gagnés pour 66 % annoncés »."""
-    data = data if data is not None else store.load(CALIB_FILE, {})
+    data = data if data is not None else calib_data()
     out = []
     for k in sorted(data):
         n, w, s = data[k]
         fam, tr = k.split("|")
-        what = ({"profils": "données moyennes", "365scores": "données légères"}.get(tr, tr) if fam == "src" else f"{calib.LABELS.get(fam, fam)} {tr}")
-        out.append(f"{what} : {n} réglé{'s' if n > 1 else ''}, {w / n:.0%} gagnés pour {s / n:.0%} annoncés")
+        if n:
+            out.append(f"{calib.LABELS.get(fam, fam)} {tr} : {n} réglé{'s' if n > 1 else ''}, {w / n:.0%} gagnés pour {s / n:.0%} annoncés")
     return out
 
 
@@ -380,38 +417,63 @@ def _hms():
     return _now().strftime("%H:%M:%S")
 
 
+def combo_bounds(target, nlegs=None):
+    """(cote mini, cote maxi, paris au plus, paris au moins) d'un combiné live demandé à la cote `target`, ou (None, message) si la demande sort des
+    limites du live : cote totale C.LIVE_COMBO_MAX_ODDS au plus, C.LIVE_COMBO_MIN_LEGS à C.LIVE_COMBO_MAX_LEGS paris."""
+    from . import chat
+    cap = C.LIVE_COMBO_MAX_ODDS
+    if target > cap:
+        return None, (f"🔴 Un combiné live ne dépasse pas la cote {fmt.trim(cap, 1)} : au-delà, un seul but suffit à tout faire perdre. "
+                      f"Essaie « live {fmt.trim(cap, 1)} ».")
+    n_max, exact = nlegs or (None, False)
+    mx, mn = chat.legs_bounds(n_max, exact)
+    mx, mn = min(mx or C.LIVE_COMBO_MAX_LEGS, C.LIVE_COMBO_MAX_LEGS), max(mn or C.LIVE_COMBO_MIN_LEGS, C.LIVE_COMBO_MIN_LEGS)
+    if mn > mx:
+        return None, f"🔴 Un combiné live compte {C.LIVE_COMBO_MIN_LEGS} à {C.LIVE_COMBO_MAX_LEGS} paris : pas {chat.legs_label(n_max, exact).replace('en ', '', 1)}."
+    return (target, min(target * (1 + C.CUSTOM_TOLERANCE), cap), mx, mn), None
+
+
+def market_ev(legs_, total):
+    """Espérance du combiné AU PRIX DU MARCHÉ : cote x produit des probas de 1xBet sans marge - 1 ; None si un pari n'a pas la proba de 1xBet."""
+    pxs = [c.get("px") for c in legs_]
+    return None if not pxs or None in pxs else total * math.prod(pxs) - 1
+
+
 def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
-    """Réponse à « live <cote> » : le combiné live le plus probable dans [cote ; cote x (1 + C.CUSTOM_TOLERANCE)], ou ce qui manque."""
+    """Réponse à « live <cote> » : le combiné live le plus probable (2 à 4 paris, cote 20 au plus) dans [cote ; cote x (1 + C.CUSTOM_TOLERANCE)], ou ce
+    qui manque. Aucune mise conseillée si son espérance au prix de 1xBet sans marge (market_ev) est de 0 ou moins."""
     from . import app, custom, money
     t = fmt.trim(target, 1)
+    bounds, why_not = combo_bounds(target, nlegs)
+    if bounds is None:
+        return why_not
+    lo, hi, mx, mn = bounds
     raw, why = fetch(get)
     if why:
         return f"🔴 1xBet live injoignable en ce moment ({why}). Réessaie dans quelques minutes."
     cands, seen, count = legs(raw, now=now, model_for=model_for)
     try:
-        record(seen, now)
+        record(cands, now)
     except Exception as e:                          # noqa: BLE001 - le journal ne bloque jamais la réponse
         print(f"[live] journal non écrit : {http.err(e)}", file=sys.stderr)
-    lo, hi = target, target * (1 + C.CUSTOM_TOLERANCE)
     from . import chat
     n_max, exact = nlegs or (None, False)
-    mx, mn = chat.legs_bounds(n_max, exact)
     best = CB.best_combo(cands, lo, hi, max_legs=mx, min_legs=mn)
     win = f"entre {C.LIVE_MIN_MINUTE}e et {C.LIVE_MAX_MINUTE}e"
     if not best:
-        per = {}
-        for c in cands:
-            per[c["id"]] = max(per.get(c["id"], 1.0), c["odds"])
-        top = sorted(per.values(), reverse=True)[:mx or None]
-        reach = math.prod(top) if len(top) >= 2 else None
+        reach = CB.reach(cands, mx)
+        per = {c["id"] for c in cands}
         lab = " " + chat.legs_label(n_max, exact) if n_max else ""
         return (f"🔴 Pas de combiné live à la cote {t}{lab}.\n"
                 f"📡 {count['live']} matchs en cours · {count['window']} {win} · {count['known']} que Kelly connaît\n"
-                + (f"📉 {len(per)} avec un bon pari : au plus {fmt.trim(reach, 1)}\n" if reach else f"📉 {len(per)} avec un bon pari\n")
-                + fmt.i("🕒 Plus de choix le week-end après-midi et le soir."))
+                + (f"📉 {len(per)} avec un bon pari : au plus {fmt.trim(min(reach, C.LIVE_COMBO_MAX_ODDS), 1)}\n" if reach > 1 else f"📉 {len(per)} avec un bon pari\n")
+                + fmt.i("🕒 Le live ne garde que les paris où la cote de 1xBet est un peu en retard sur Kelly : souvent aucun. Plus de choix le week-end après-midi et le soir."))
     legs_, total, prob = best
     ev = total * prob
-    stake = app._budget_stake(prob, total) if money.active() else None
+    ev_x = market_ev(legs_, total)
+    edge = ev_x is not None and ev_x > 0           # sans espérance positive au prix du marché (1xBet sans marge) : aucune mise conseillée
+    p_stake = min(prob, math.prod(c["px"] for c in legs_)) if edge else prob           # mise calculée sur la plus prudente des deux probas
+    stake = (app._budget_stake(p_stake, total) if money.active() else None) if edge else 0
     code = None
     try:
         code = xbet.save_coupon(legs_)
@@ -419,7 +481,7 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
         print(f"[live] code coupon impossible : {http.err(e)}", file=sys.stderr)
     lines = [fmt.b(f"🔴 COMBINÉ LIVE — cote {fmt.odds_txt(total)}"),
              f"🎯 {len(legs_)} paris · {fmt.pct(prob)} de chances · {fmt.expect(prob, total)}",
-             fmt.stake_line(app._stake_words(stake, prob, total)), ""]
+             fmt.stake_line(app._stake_words(stake, p_stake, total) if edge else money.NO_EDGE), ""]
     for i, c in enumerate(legs_, 1):
         light = {"profils": " ⚠️ données moyennes", "365scores": " ⚠️ données légères"}.get(c.get("src"), "")
         lines += [fmt.b(f"{i}. {fmt.esc(c['home'] + ' – ' + c['away'])}") + f" · {c['score']}, {c['minute']}e" + fmt.i(fmt.esc(light)),
@@ -428,7 +490,8 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
     lines.append("")
     lines.append(f"🎟️ Code : {fmt.code(code)}" if code else fmt.i("🎟️ Code indisponible : ajoute ces paris à la main."))
     lines.append(fmt.i(f"⚡ Cotes de {_hms()} : elles bougent vite, valide tout de suite."
-                       + (" Espérance négative : pari au prix du marché." if ev < 1 else "")))
+                       + (" Espérance négative au prix de 1xBet sans marge : pas de mise conseillée." if not edge else "")
+                       + (" Espérance négative : pari au prix du marché." if ev < 1 and edge else "")))
     msg = Html("\n".join(lines))
     cid = custom.remember(day, target, lo, hi, best, stake, money.cur() if stake is not None else None, code, _now().strftime("%H:%M"), src="live",
                           nlegs=nlegs)

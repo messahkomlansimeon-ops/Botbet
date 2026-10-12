@@ -12,7 +12,10 @@ Chemin (sans jeton). PIÈGE : l'API refuse (HTTP 400) une adresse dont les param
      marquent) — subGamesForMainGame[0] est la 1re mi-temps, pas le match. Les sous-matchs statistiques y sont listés avec leur
      type (2 corners, 12 tirs cadrés, 95 tirs vers le but, 14 fautes, 13 hors-jeu, 55 touches) : un gameEvents de plus par
      famille donne toute l'échelle des lignes (total du match, total de chaque équipe).
-Cartons : 1xBet ne compte que les jaunes (« Cartons jaunes ») alors que Kelly compte jaunes + rouges : pas de prix (non comparable).
+Cartons : 1xBet ne compte que les jaunes (« Cartons jaunes »). Kelly modélise donc les jaunes SEULS (marché « team_yellow_total », règlement en jaunes) et
+lit leur échelle chez 1xBet ; l'ancien marché jaunes + rouges (alternate_totals_cards, The Odds API) n'a toujours pas de prix (non comparable).
+Le type de sous-match des jaunes n'est pas connu d'avance : il est reconnu à son NOM (« Cartons jaunes », « Yellow cards »), ou à son identifiant donné dans
+XBET_YELLOW_TYPES (variable d'environnement, ex. « 17,18 »). Corners : le sous-match corners porte aussi le total de CHAQUE équipe (types 11 à 14), lu comme les tirs.
 """
 import json
 import os
@@ -70,7 +73,11 @@ LEAGUES = {
 LEAGUES.update({k: x for rows in C.XB_LEAGUES.values() for k, _, x, _ in rows})      # championnats hors The Odds API (xworld)
 
 # Familles statistiques : type de sous-match 1xBet -> (marché total, marché équipe 1, marché équipe 2) de Kelly (None : pas chez Kelly)
-SUBGAMES = {2: ("alternate_totals_corners", None, None), 12: ("team_sot_total", "team_sot_home", "team_sot_away"),
+YELLOW = "yellow"        # pseudo-type du sous-match « Cartons jaunes » (reconnu à son nom, voir sub_type) ; les autres types sont les gameTypeId de 1xBet
+YELLOW_TYPES = frozenset(int(x) for x in re.findall(r"\d+", os.environ.get("XBET_YELLOW_TYPES", "")))      # gameTypeId des jaunes, si connu
+_YELLOW_NAME = re.compile(r"(?:cartons?|cards?)\s+jaunes?|yellow\s+cards?", re.I)
+_NOT_YELLOW = re.compile(r"rouges?|\bred\b|mi-temps|half|1st|2nd|1[eè]re|2[eè]me|\bhc\b", re.I)      # jaunes + rouges, ou une mi-temps : pas le match entier
+SUBGAMES = {2: ("alternate_totals_corners", "team_corners_home", "team_corners_away"), YELLOW: ("team_yellow_total", None, None), 12: ("team_sot_total", "team_sot_home", "team_sot_away"),
             95: ("team_shots_total", "team_shots_home", "team_shots_away"),
             14: ("team_fouls_total", "team_fouls_home", "team_fouls_away"),
             55: ("team_throws_total", "team_throws_home", "team_throws_away"), 13: ("team_offsides_total", None, None)}
@@ -257,6 +264,20 @@ def _ladder(groups, total, home, away, out, refs=None, gid=0, blocked=None):
                 refs[(market, side[1], p)] = [gid, c.get("type"), p]
 
 
+def sub_type(s):
+    """Famille statistique d'un sous-match 1xBet `s` (dict de subGamesForMainGame) : son gameTypeId s'il figure dans SUBGAMES, YELLOW si c'est le sous-match
+    « Cartons jaunes » (identifiant de XBET_YELLOW_TYPES, ou nom qui dit jaunes sans rouges ni mi-temps), sinon None. Jamais une mi-temps (period)."""
+    if not isinstance(s, dict) or s.get("period") or not s.get("id"):
+        return None
+    t = s.get("gameTypeId")
+    if isinstance(t, int) and t in SUBGAMES:
+        return t
+    if isinstance(t, int) and t in YELLOW_TYPES:
+        return YELLOW
+    name = str(s.get("subGameName") or s.get("name") or "")
+    return YELLOW if _YELLOW_NAME.search(name) and not _NOT_YELLOW.search(name) else None
+
+
 def parse_main(data, home, away, refs=None, gid=0, blocked=None):
     """Marché principal (premier niveau de gameEvents) -> ({(marché Kelly, côté, ligne): cote}, {type de sous-match: id}).
     `refs` (si fourni) : même clé -> [GameId 1xBet, Type, Param] du pari (référence pour un ticket enregistré). `blocked` (si fourni) : ensemble
@@ -285,8 +306,9 @@ def parse_main(data, home, away, refs=None, gid=0, blocked=None):
     _ladder(groups, "totals", "team_totals_home", "team_totals_away", out, refs, gid, blocked)      # buts du match, puis de chaque équipe (types 11 à 14)
     subs = {}
     for s in data.get("subGamesForMainGame") or []:
-        if isinstance(s, dict) and s.get("gameTypeId") in SUBGAMES and not s.get("period") and s.get("id"):
-            subs.setdefault(s["gameTypeId"], s["id"])
+        t = sub_type(s)
+        if t is not None:
+            subs.setdefault(t, s["id"])
     return out, subs
 
 
@@ -365,7 +387,7 @@ def prices(game, markets, home, away):
     game["cid"] = data.get("constId")
     blocked = set()
     out, subs = parse_main(data, home, away, refs := {}, game["gid"], blocked)
-    for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}):
+    for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}, key=str):
         if t in subs:
             try:
                 _ladder(_events(subs[t]).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t], blocked)

@@ -131,26 +131,33 @@ def test_fixture_stats_cache_and_no_extra_request():
 def test_record_row_format_and_unknown_xg():
     fresh()
     d = apistats.load()
-    assert apistats.KEYS[-1] == "xg" and apistats.KEYS[:6] == ("goals", "shots", "sot", "corners", "fouls", "cards")
-    base = apistats.R_STATS + 2 * 6                                                         # longueur d'une ligne sans xG
+    assert apistats.KEYS[-2:] == ("xg", "yellow") and apistats.KEYS[:6] == ("goals", "shots", "sot", "corners", "fouls", "cards")
+    base = apistats.R_STATS + 2 * 6                                                         # longueur d'une ligne sans xG ni jaunes
+    full = base + 4                                                                         # + xG + jaunes (« yel » : 2 chacune dans ces essais)
     row = play(d, 3, SAN, FLA, (2, 1), ("1.624", 0.8))
-    assert len(row) == base + 2 and row[-2:] == [1.62, 0.8], row
-    row = play(d, 4, SAN, FLA, (2, 1))                                                      # xG non envoyé : ligne courte, comme une ancienne
-    assert len(row) == base, row
+    assert len(row) == full and row[base:base + 2] == [1.62, 0.8] and row[-2:] == [2, 2], row
+    row = play(d, 4, SAN, FLA, (2, 1))                                                      # xG non envoyé : colonnes xG vides (jamais 0), jaunes gardés
+    assert len(row) == full and row[base:base + 2] == [None, None], row
     row = play(d, 5, SAN, FLA, (2, 1), (1.1, None))                                         # un seul côté : inconnu pour les deux (jamais 0)
-    assert len(row) == base, row
+    assert len(row) == full and row[base:base + 2] == [None, None], row
     row = play(d, 6, SAN, FLA, (2, 1), (0, 0))                                              # 0 - 0 alors qu'il y a des buts : non suivi
-    assert len(row) == base, row
+    assert len(row) == full and row[base:base + 2] == [None, None], row
     row = play(d, 7, SAN, FLA, (0, 0), (0, 0))                                              # vrai 0-0 sans occasions : zéro cru
-    assert len(row) == base + 2 and row[-2:] == [0, 0], row
+    assert len(row) == full and row[base:base + 2] == [0, 0], row
     away = d["teams"]["127"]["m"][-1]                                                      # le match d'il y a 3 jours (le plus récent)
-    assert away[-2:] == [0.8, 1.62] and away[apistats.R_HOME] == 0                          # vue de l'équipe extérieure : inversée
-    # un entrée de cache écrite avant l'ajout de l'xG (clé « xg » absente) ne donne qu'une ligne courte
+    assert away[base:base + 2] == [0.8, 1.62] and away[apistats.R_HOME] == 0                # vue de l'équipe extérieure : inversée
+    # un entrée de cache écrite avant l'ajout de l'xG (clé « xg » absente) : xG inconnu
     old_entry = {"teams": {"128": {"corners": 6.0, "cards": 2.0, "shots": 10.0, "sot": 4.0, "fouls": 11.0, "yel": 2.0, "nul": []},
                            "127": {"corners": 4.0, "cards": 2.0, "shots": 9.0, "sot": 3.0, "fouls": 12.0, "yel": 2.0, "nul": []}}}
     e = {"id": 777, "ts": 1790000000, "home": "Santos", "home_id": 128, "away": "Flamengo", "away_id": 127, "gh": 1, "ga": 1, "lk": SK}
     assert apistats.record(d, e, old_entry) == 2
     dd = apistats._d2i(datetime.fromtimestamp(1790000000, tz=timezone.utc).date().isoformat())
+    assert [r[base:base + 2] for r in d["teams"]["128"]["m"] if r[apistats.R_DAY] == dd] == [[None, None]]
+    # ni xG ni jaunes (entrée d'avant : pas de « yel ») : ligne courte, comme une ancienne
+    older = {"teams": {t: {k: v for k, v in x.items() if k != "yel"} | {"nul": ["yel"]} | {"cards": 0.0} for t, x in old_entry["teams"].items()}}
+    older["teams"]["128"]["nul"], older["teams"]["127"]["nul"] = ["yel", "shots", "sot", "fouls"], ["yel", "shots", "sot", "fouls"]
+    assert apistats.record(d, dict(e, id=779, ts=1790100000), older) == 2
+    dd = apistats._d2i(datetime.fromtimestamp(1790100000, tz=timezone.utc).date().isoformat())
     assert [len(r) for r in d["teams"]["128"]["m"] if r[apistats.R_DAY] == dd] == [base]
     # un match dont seul l'xG serait connu n'est pas ajouté (rien d'autre d'utilisable)
     only = {"teams": {"128": {"xg": 1.0, "nul": ["corners", "cards", "yel", "shots", "sot", "fouls"]},
@@ -246,8 +253,9 @@ def test_api_football_min_matches_and_regression_to_goals():
         C.XG_MIN_MATCHES = old
     # une seule des deux équipes bien fournie en xG ne suffit pas
     d = fill_history()
+    ix = apistats.R_STATS + 2 * apistats.KEYS.index("xg")
     for r in d["teams"]["127"]["m"]:
-        del r[-2:]
+        r[ix:ix + 2] = [None, None]                      # xG inconnu (les colonnes de fin, jaunes comprises, restent)
     apistats.save(d)
     features.reload()
     assert "xg_src" not in features.match_features("Santos", "Flamengo", SK)
@@ -391,8 +399,9 @@ def test_morning_pass_end_to_end():
     xi = apistats.R_STATS + 2 * 6
     rows_home = d["teams"]["3000"]["m"]
     assert len(rows_home) == 3
-    assert [len(r) for r in rows_home] == [xi + 2, xi + 2, xi], rows_home                       # 3e match : l'adversaire a un null -> xG inconnu
-    assert rows_home[0][xi:] == [1.62, 0.85] and d["teams"]["3001"]["m"][0][xi:] == [0.85, 1.62]
+    assert [len(r) for r in rows_home] == [xi + 4] * 3, rows_home                               # xG puis jaunes (ajoutés à la fin de KEYS)
+    assert [r[xi:xi + 2] for r in rows_home] == [[1.62, 0.85], [1.62, 0.85], [None, None]]       # 3e match : l'adversaire a un null -> xG inconnu (jamais 0)
+    assert d["teams"]["3001"]["m"][0][xi:xi + 2] == [0.85, 1.62]
     # les statistiques brutes du cache portent l'xG, null = clé absente
     cached = stats._stats_cache()["8100000"]["teams"]
     assert cached["3000"]["xg"] == 1.62 and cached["3001"]["xg"] == 0.85

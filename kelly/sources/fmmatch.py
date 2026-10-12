@@ -27,7 +27,7 @@ from .. import config as C, store
 from . import fotmob, http, names, state
 
 FILE = "fm_matches.json"
-KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides", "xg", "npxg")      # nouvelles clés : toujours à la fin
+KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides", "xg", "npxg", "yellow")      # nouvelles clés : toujours à la fin (yellow : jaunes seuls)
 STAT_KEYS = {"total_shots": "shots", "ShotsOnTarget": "sot", "corners": "corners", "fouls": "fouls", "player_throws": "throws",
              "Offsides": "offsides", "yellow_cards": "yc", "red_cards": "rc", "expected_goals": "xg",
              "expected_goals_non_penalty": "npxg"}
@@ -113,6 +113,14 @@ def parse_match(html):
         st["cards"] = [sum(1 for e in evs if e.get("type") == "Card" and bool(e.get("isHome")) == home) for home in (True, False)]
     elif "yc" in raw and raw["yc"] != [0, 0]:
         st["cards"] = [raw["yc"][0] + (raw.get("rc") or [0, 0])[0], raw["yc"][1] + (raw.get("rc") or [0, 0])[1]]
+    yel = None                                       # cartons jaunes SEULS (le pari de 1xBet) : la stat « Yellow cards », sinon les cartons jaunes du fil du match ; jamais 0 inventé
+    if "yc" in raw and raw["yc"] != [0, 0]:
+        yel = raw["yc"]
+    elif any(e.get("type") == "Card" and e.get("card") for e in evs):         # le fil dit la couleur : un 0 est alors un vrai zéro (un 2e jaune compte comme un jaune)
+        yel = [sum(1 for e in evs if e.get("type") == "Card" and "yellow" in str(e.get("card")).lower() and bool(e.get("isHome")) == home)
+               for home in (True, False)]
+    if yel is not None:
+        st["yellow"] = yel
     if len(st) == 1:
         return None
     if not any(sum(st[k]) > 0 for k in ("shots", "sot", "corners", "fouls", "throws", "offsides") if k in st):      # que des zéros : match non suivi

@@ -459,10 +459,19 @@ def african_league(f):
     return None
 
 
+def clean_referee(name):
+    """Nom de l'arbitre d'API-Football (« Michael Oliver, England ») sans le pays : « Michael Oliver » ; None s'il est absent ou vide."""
+    if not isinstance(name, str):
+        return None
+    name = " ".join(name.split(",")[0].split())
+    return name or None
+
+
 def _entry(f):
     """Match du jour allégé : ids, statut et buts (temps réglementaire si fourni : les paris se
     règlent sur 90 minutes, pas sur la prolongation). « lg » : ligue, seulement pour l'Afrique. « lk » / « ln » : clé du catalogue
-    et nom de la ligue quand elle vaut des statistiques pour les profils (apileagues.classify, « africa » pour l'Afrique)."""
+    et nom de la ligue quand elle vaut des statistiques pour les profils (apileagues.classify, « africa » pour l'Afrique).
+    « ref » : arbitre désigné (fixture.referee, sans le pays), seulement quand l'API le donne (clé absente = inconnu)."""
     ft = (f.get("score") or {}).get("fulltime") or {}
     goals = f.get("goals") or {}
     pick = lambda k: ft.get(k) if ft.get(k) is not None else goals.get(k)
@@ -471,6 +480,9 @@ def _entry(f):
          "home": f["teams"]["home"]["name"], "home_id": f["teams"]["home"]["id"],
          "away": f["teams"]["away"]["name"], "away_id": f["teams"]["away"]["id"],
          "gh": pick("home"), "ga": pick("away")}
+    ref = clean_referee(f["fixture"].get("referee"))
+    if ref:
+        e["ref"] = ref
     if not (isinstance(e["home"], str) and e["home"] and isinstance(e["away"], str) and e["away"]):
         raise ValueError("équipe sans nom")
     lg = african_league(f)
@@ -569,6 +581,45 @@ def left_today():
     return 0 if q.get("remaining") == 0 else max(0, _cap() - q["n"])
 
 
+def _best_fixture(lst, home, away, kts=None):
+    """Match de la liste `lst` (entrées de _entry) qui est `home` - `away` : noms approchés (seuil de confiance), horaire à ±3 h de `kts` (timestamp) si connu ;
+    le plus ressemblant, à ressemblance égale le plus proche de l'horaire. None si aucun."""
+    best, best_key = None, None
+    for f in lst:
+        sh, sa = team_sim(f["home"], home), team_sim(f["away"], away)
+        if sh < 0.8 or sa < 0.8 or sh + sa < 1.75:         # seuil de confiance
+            continue
+        gap = abs(f["ts"] - kts) if kts is not None and f.get("ts") else 0
+        if kts is not None and gap > 3 * 3600:
+            continue
+        key = (round(sh + sa, 2), -gap)
+        if best_key is None or key > best_key:
+            best, best_key = f, key
+    return best
+
+
+_ref_memo = {"sig": None, "raw": {}, "found": {}}
+
+
+def referee_for(ev):
+    """Arbitre désigné d'un match (événement Kelly : home_team, away_team, commence_time), lu dans la liste du jour d'API-Football DÉJÀ en cache
+    (_day_fixtures le télécharge : le relevé du matin et le règlement) : AUCUNE requête, jamais d'appel réseau. None si la liste manque, si le match n'y est pas, ou si l'API n'a
+    pas encore désigné l'arbitre (fixture.referee vide). Même appariement que find_fixture (noms approchés, ±3 h)."""
+    try:
+        home, away, ko = ev["home_team"], ev["away_team"], ev["commence_time"]
+        sig = store.version("fixtures_day.json")
+        if _ref_memo["sig"] != sig or sig is None:
+            _ref_memo.update(sig=sig, raw=_fx_load()[0], found={})
+        k = (home, away, str(ko))
+        if k not in _ref_memo["found"]:
+            lst = _ref_memo["raw"].get(str(ko)[:10]) or []
+            f = _best_fixture([x for x in lst if isinstance(x, dict) and x.get("home") and x.get("away")], home, away, _ts(ko))
+            _ref_memo["found"][k] = (f or {}).get("ref")
+        return _ref_memo["found"][k]
+    except Exception:                                # noqa: BLE001 - l'arbitre est facultatif : jamais bloquant
+        return None
+
+
 def find_fixture(day, home, away, kickoff=None):
     """Fixture API-Football d'un match (noms approchés, horaire ±3 h si connu).
     `kickoff` (ISO) facultatif ; sinon un `day` plus long que AAAA-MM-JJ sert d'horaire."""
@@ -582,17 +633,7 @@ def find_fixture(day, home, away, kickoff=None):
     if k in known:
         return known[k]
     kts = _ts(kickoff) if kickoff else None
-    best, best_key = None, None
-    for f in _day_fixtures(day):
-        sh, sa = team_sim(f["home"], home), team_sim(f["away"], away)
-        if sh < 0.8 or sa < 0.8 or sh + sa < 1.75:         # seuil de confiance
-            continue
-        gap = abs(f["ts"] - kts) if kts is not None and f.get("ts") else 0
-        if kts is not None and gap > 3 * 3600:
-            continue
-        key = (round(sh + sa, 2), -gap)
-        if best_key is None or key > best_key:
-            best, best_key = f, key
+    best = _best_fixture(_day_fixtures(day), home, away, kts)
     if not best:
         return None
     known[k] = {"id": best["id"], "home_id": best["home_id"], "away_id": best["away_id"],
@@ -872,7 +913,8 @@ def enrich(picks, day, max_events=8):
         a = None
         try:
             if c["id"] not in feats:
-                feats[c["id"]] = sources.match_features(c["home"], c["away"], c["sport_key"])
+                ref = referee_for({"home_team": c["home"], "away_team": c["away"], "commence_time": c.get("commence") or ""})      # arbitre désigné (liste du jour en cache)
+                feats[c["id"]] = sources.match_features(c["home"], c["away"], c["sport_key"], **({"referee": ref} if ref else {}))
             a = prematch.assess(c, feats[c["id"]], sources)
         except Exception as e:                  # noqa: BLE001 - une source cassée ne doit jamais bloquer
             _warn(f"sources ignorées pour {c.get('event', '?')} : {type(e).__name__}")

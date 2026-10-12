@@ -14,14 +14,16 @@ from kelly.sources import xbet  # noqa: E402
 NOW = datetime(2026, 10, 10, 15, 30, tzinfo=timezone.utc)
 DAY = "2026-10-10"
 PRED = {"pred": {"lh": 1.6, "la": 0.9, "q": 1.0, "n": [60, 60]}}
+# Cotes d'un match à 1-0 (63e) où 1xBet paie ~3 % de marge et voit Arsenal / « moins de 2,5 » à ~65 % quand Kelly les voit à ~80 % : l'ancienne grille
+# (cotes quasi justes d'après Kelly) ne laisse plus rien passer, l'ancrage sur 1xBet et l'espérance de +2 % exigent un vrai écart de prix.
+VALUE = [{"T": 1, "C": 1.49}, {"T": 2, "C": 4.41}, {"T": 3, "C": 7.4}, {"T": 4, "C": 1.12}, {"T": 5, "C": 1.245}, {"T": 6, "C": 2.77},
+         {"T": 9, "P": 1.5, "C": 1.77}, {"T": 10, "P": 1.5, "C": 2.16}, {"T": 9, "P": 2.5, "C": 2.77}, {"T": 10, "P": 2.5, "C": 1.49},
+         {"T": 180, "C": 3.03}, {"T": 181, "C": 1.43}]
 
 
 def game(gid, minute, score=(1, 0), league="England. Premier League", home="Arsenal", away="Leeds", reds=(0, 0), period=None, odds=None):
     """Un match du flux LiveFeed de 1xBet (champs utilisés par live.parse)."""
-    cells = odds if odds is not None else [
-        {"T": 1, "C": 1.30}, {"T": 2, "C": 4.6}, {"T": 3, "C": 11.0}, {"T": 4, "C": 1.05}, {"T": 5, "C": 1.22}, {"T": 6, "C": 3.6},
-        {"T": 9, "P": 1.5, "C": 1.55}, {"T": 10, "P": 1.5, "C": 2.40}, {"T": 9, "P": 2.5, "C": 3.10}, {"T": 10, "P": 2.5, "C": 1.36},
-        {"T": 180, "C": 3.0, "CV": "3.0"}, {"T": 181, "C": 1.38}]
+    cells = odds if odds is not None else VALUE
     return {"I": gid, "LE": league, "O1E": home, "O2E": away, "S": int(NOW.timestamp()) - minute * 60 - 900,
             "SC": {"TS": minute * 60, "CP": period or (1 if minute < 45 else 2), "FS": {"S1": score[0], "S2": score[1]},
                    "ST": [{"Key": 0, "Value": [{"ID": 71, "S1": str(reds[0]), "S2": str(reds[1]), "N": "Red card"}]}]},
@@ -34,7 +36,7 @@ def test_basics():
     assert 0 < live.remaining(80, 2) < 0.2
     m = live.parse(game(7, 63, score=(1, 0), reds=(0, 1)))
     assert m["minute"] == 63 and m["period"] == 2 and m["score"] == (1, 0) and m["reds"] == (0, 1) and m["home"] == "Arsenal"
-    assert m["odds"][("totals", "Under", 2.5)] == (1.36, 10, 2.5) and m["odds"][("double_chance", "Arsenal or Draw", None)] == (1.05, 4, 0)
+    assert m["odds"][("totals", "Under", 2.5)] == (1.49, 10, 2.5) and m["odds"][("double_chance", "Arsenal or Draw", None)] == (1.12, 4, 0)
     assert ("h2h", "Draw", None) in m["odds"] and ("btts", "Yes", None) in m["odds"]
     assert live.parse({"SC": {}, "O1E": "A", "O2E": "B"}) is None, "sans minute : ignoré"
     assert live.league_key("England. Premier League") == "soccer_epl" and live.league_key("Czech Republic. 4 Liga") is None
@@ -61,7 +63,8 @@ def test_legs_and_guards():
     raw = [game(1, 63), game(2, 20), game(3, 63, league="Czech Republic. 4 Liga"), game(4, 89)]
     keep, seen, count = live.legs(raw, now=NOW, data={}, model_for=lambda m, k: PRED if k else None)
     assert count == {"live": 4, "window": 2, "known": 1}, count                 # 20e et 89e hors fenêtre ; 4e division tchèque inconnue
-    assert keep and all(c["id"] == "lv1" and c["prob"] >= 0.6 and c["odds"] >= 1.15 and abs(c["prob"] - c["px"]) <= 0.2 for c in keep), keep
+    assert keep and all(c["id"] == "lv1" and c["prob"] >= 0.6 and c["odds"] >= 1.15 and abs(c["prob"] - c["px"]) <= 0.08
+                        and c["prob"] * c["odds"] - 1 >= 0.02 for c in keep), keep
     assert all(c["tranche"] == "60-75" and c["live"] and c["xref"][0] == 1 for c in seen)
     thin = live.legs([game(1, 63)], now=NOW, data={}, model_for=lambda m, k: {"pred": PRED["pred"] | {"q": 0.1}})
     assert thin[2]["known"] == 0, "données trop maigres : jamais"
@@ -86,35 +89,33 @@ def test_combo_and_buttons():
     assert item["src"] == "live" and 3.0 <= item["total"] <= 3.75, item
     custom.track("m1", DAY)
     assert chat.refresh_button("vm1", DAY) is None, "un combiné live ne se revérifie pas"
-    none = live.combo(50.0, DAY, get=lambda u: {"Value": [game(1, 20)]}, model_for=lambda m, k: PRED if k else None, now=NOW)
-    assert none.startswith("🔴 Pas de combiné live à la cote 50") and "1 matchs en cours" in none, none
+    none = live.combo(15.0, DAY, get=lambda u: {"Value": [game(1, 20)]}, model_for=lambda m, k: PRED if k else None, now=NOW)
+    assert none.startswith("🔴 Pas de combiné live à la cote 15") and "1 matchs en cours" in none, none
     print("ok  combiné live : cote, Kelly / 1xBet par pari, code coupon, « ✅ Je le joue » sans « 🔀 », pas de revérification")
 
 
 def test_journal_and_separate_learning():
     store.save(live.JOURNAL, [])
     store.save(calib.FILE, {})
-    _, seen, _ = live.legs([game(1, 63)], now=NOW, data={}, model_for=lambda m, k: PRED if k else None)
-    n = live.record(seen, NOW)
-    assert n == len(seen) and live.record(seen, NOW) == 0, "une fois par jour et par tranche"
+    keep, seen, _ = live.legs([game(1, 63)], now=NOW, data={}, model_for=lambda m, k: PRED if k else None)
+    n = live.record(keep, NOW)
+    assert n == len(keep) and 0 < n < len(seen) and live.record(keep, NOW) == 0, "seulement les paris retenus, une fois par jour et par tranche"
     from kelly import settle as S
     old = S._settle_fair_row
-    S._settle_fair_row = lambda r, now, fdata, stats_for=None: r.update(result="win" if r["name"] in ("Over", "Yes") else "loss")
+    S._settle_fair_row = lambda r, now, fdata, stats_for=None: r.update(result="win" if r["name"] in ("Over", "Yes", "Arsenal") else "loss")
     try:
         settled, learned = live.settle(NOW, fdata=object())
     finally:
         S._settle_fair_row = old
-    data = store.load(live.CALIB_FILE, {})
-    assert settled == learned == n and "goals|60-75" in data and "h2h|60-75" in data, data
+    data = live.calib_data()
+    assert settled == learned == n and "goals|60-75" in data and "h2h|60-75" in data and not any(k.startswith("src|") for k in data), data
+    assert store.load(live.CALIB_FILE, {})["v"] == live.CALIB_VERSION
     assert store.load(calib.FILE, {}) == {}, "l'apprentissage live ne touche jamais la calibration d'avant-match"
     assert live.settle(NOW, fdata=object()) == (0, 0)
     data["goals|60-75"] = [100, 20, 70.0]                                     # 20 % gagnés pour 70 % annoncés : trop confiante en 60-75
     assert live.factor("totals", "60-75", data) < 1 and live.factor("totals", "30-45", data) == 1.0
     assert any(line.startswith("buts 60-75 : 100 réglés") for line in live.calib_lines(data))
-    data["src|365scores"] = [200, 60, 140.0]                                  # données légères trop optimistes : leurs chances baissent encore
-    assert live.factor("totals", "30-45", data, "365scores") < 1 and live.factor("totals", "30-45", data, "modèle") == 1.0
-    assert any(line.startswith("données légères : 200 réglés") for line in live.calib_lines(data))
-    print("ok  journal live et apprentissage À PART, par famille et par tranche")
+    print("ok  journal live (paris retenus seulement) et apprentissage À PART, par famille et par tranche, une seule correction")
 
 
 def test_light_teams():
@@ -150,7 +151,8 @@ def test_light_teams():
         mp = live.market_probs(live.parse(g))
         h2h = next(c for c in seen if c["market"] == "h2h" and c["name"] == "Metalul Buzau")
         k = ("h2h", "Metalul Buzau", None)
-        assert abs(h2h["p0"] - (C.LIVE_W_LIGHT * raw[k] + (1 - C.LIVE_W_LIGHT) * mp[k])) < 1e-3 and h2h["src"] == "365scores", h2h
+        assert abs(h2h["p0"] - live.blend(raw[k], mp[k], C.LIVE_W_KELLY * C.LIVE_W_LIGHT)) < 1e-3 and h2h["src"] == "365scores", h2h
+        assert abs(h2h["pk"] - raw[k]) < 1e-3, "pk : la proba brute de Kelly, gardée à côté de la proba ancrée"
     finally:
         livedata.pred_for = old
     print("ok  équipes inconnues : jeunes / réserves / régional et coupes exclus, buts attendus légers, avis mélangé à moitié avec 1xBet")

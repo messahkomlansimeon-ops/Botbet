@@ -70,14 +70,16 @@ def test_learning():
     from kelly import calib, live, store
     store.save(calib.FILE, {"goals": [29, 22, 19.0], "shots": [70, 30, 45.5]})
     calib._memo.clear()
-    store.save(live.CALIB_FILE, {"src|365scores": [12, 9, 8.0], "goals|60-75": [5, 4, 3.5]})
+    store.save(live.CALIB_FILE, {"src|365scores": [12, 9, 8.0], "goals|60-75": [5, 4, 3.5]})          # ancien format : ignoré
+    assert "Live : aucun pari live retenu et réglé" in "\n".join(status.learning_lines())
+    store.save(live.CALIB_FILE, {"v": live.CALIB_VERSION, "k": {"h2h|45-60": [12, 9, 8.0], "goals|60-75": [5, 4, 3.5]}})
     lines = status.learning_lines()
     text = "\n".join(lines)
     assert "• Buts : 29/60 · 76 % gagnés pour 66 % annoncés · trop prudente, correction dans 31 résultats" in text, text
     assert "• Tirs : 70 réglés · 43 % gagnés pour 65 % annoncés · trop confiante, correction active (×" in text, text
-    assert "Ensemble (avis de Kelly face au marché) : buts 0/100" in text and "Live, données légères : 12/60" in text and "Live buts 60-75 : 5/60" in text, text
-    assert "Live, données moyennes : aucun pari live réglé" in text
-    print("ok  section « 🧠 Apprentissage » : avant-match, ensemble, live par source et par tranche")
+    assert "Ensemble (avis de Kelly face au marché) : buts 0/100" in text and "Live 1N2 45-60 : 12/60" in text and "Live buts 60-75 : 5/60" in text, text
+    assert "données légères" not in text
+    print("ok  section « 🧠 Apprentissage » : avant-match, ensemble, live par famille et par tranche")
 
 
 def main():

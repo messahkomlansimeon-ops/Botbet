@@ -1,7 +1,7 @@
 import time
 
 from . import betexplorer, fbref, fmmatch, footballdata, fotmob, names, s365, understat
-from .. import apistats, catalogue, config as C, store
+from .. import apistats, catalogue, config as C, stats, store
 
 MIN_N = 3
 REF_MIN_N = 3
@@ -60,6 +60,39 @@ def _r(x):
     return round(x, 2)
 
 
+def _ref_tokens(name):
+    return [t for t in names.norm(stats.clean_referee(name) or "").split() if t not in ("jr", "sr")]
+
+
+def _covers(small, big):
+    """Les mots de `small` se retrouvent tous dans `big` (un mot d'une lettre = l'initiale d'un mot de `big`), dont au moins un mot entier."""
+    used, whole = set(), 0
+    for t in small:
+        hit = next((i for i, b in enumerate(big) if i not in used and ((len(t) == 1 and len(b) > 1 and b[0] == t) or b == t)), None)
+        if hit is None:
+            return False
+        used.add(hit)
+        whole += len(t) > 1
+    return whole >= 1
+
+
+def match_referee(name, candidates):
+    """Nom d'arbitre de `candidates` (football-data : « M Oliver », « Gil Manzano », « Felix Zwayer ») qui désigne l'arbitre `name` (API-Football : « Michael
+    Oliver, England », « Jesús Gil Manzano ») : mots égaux sans accents ni pays, ou initiale + nom de famille. JAMAIS une devinette : deux candidats possibles,
+    une initiale qui ne correspond pas, ou un nom d'un seul mot qui n'est pas exactement le nom d'un candidat -> None."""
+    q = _ref_tokens(name)
+    if not q:
+        return None
+    cands = {c: _ref_tokens(c) for c in candidates}
+    exact = sorted({c for c, t in cands.items() if t == q})
+    if exact:
+        return exact[0] if len(exact) == 1 else None
+    if len(q) < 2:
+        return None
+    hits = sorted({c for c, t in cands.items() if len(t) >= 2 and (_covers(t, q) or _covers(q, t))})
+    return hits[0] if len(hits) == 1 else None
+
+
 def _view(team, venue):
     v = team.get(venue) or {}
     return v if v.get("n", 0) >= MIN_N else (team.get("all") or {})
@@ -99,12 +132,12 @@ def _football_data(out, home, away, sport_key, referee):
     ht, at = teams[h], teams[a]
     out["n_home"], out["n_away"] = (ht.get("all") or {}).get("n", 0), (at.get("all") or {}).get("n", 0)
     for stat, key in (("corners", "corners"), ("goals", "goals"), ("shots", "shots"), ("sot", "sot"),
-                      ("fouls", "fouls"), ("cards", "cards")):
+                      ("fouls", "fouls"), ("cards", "cards"), ("yellow", "yellow")):
         hv, av = _expect(ht, at, stat)
-        _put_pair(out, stat, key, hv, av, total=key in ("corners", "cards", "fouls", "goals", "shots", "sot"))
+        _put_pair(out, stat, key, hv, av, total=key in ("corners", "cards", "fouls", "goals", "shots", "sot", "yellow"))
     league = (prof.get("leagues") or {}).get(div or ht.get("div")) or {}
     refs = prof.get("referees") or {}
-    rname = names.player_match(referee, refs) if referee and refs else None
+    rname = match_referee(referee, refs) if referee and refs else None
     ref = refs.get(rname) if rname else None
     if "exp_cards" in out:
         out["exp_cards_team"] = out["exp_cards"]
@@ -116,10 +149,19 @@ def _football_data(out, home, away, sport_key, referee):
                 out["exp_cards"] = _r((1 - REF_WEIGHT) * out["exp_cards_team"] + REF_WEIGHT * ref["cards"])
             if league.get("cards"):
                 out["ref_cards_factor"] = _r(ref["cards"] / league["cards"])
+                if "exp_yellow" in out:          # les jaunes suivent l'arbitre comme les cartons (les rouges sont rares) : même mélange, sur le rapport à la ligue
+                    out["exp_yellow"] = _r(out["exp_yellow"] * ((1 - REF_WEIGHT) + REF_WEIGHT * ref["cards"] / league["cards"]))
         if "fouls" in ref:
             out["ref_fouls"] = ref["fouls"]
+            if league.get("fouls"):
+                out["ref_fouls_factor"] = _r(ref["fouls"] / league["fouls"])
             if "exp_fouls" in out:
-                out["exp_fouls"] = _r((1 - REF_WEIGHT) * out["exp_fouls"] + REF_WEIGHT * ref["fouls"])
+                before = out["exp_fouls"]
+                out["exp_fouls"] = _r((1 - REF_WEIGHT) * before + REF_WEIGHT * ref["fouls"])
+                if before:                       # le même effet sur les fautes de chaque équipe (marchés « fautes d'une équipe »)
+                    for side in ("home", "away"):
+                        if f"exp_fouls_{side}" in out:
+                            out[f"exp_fouls_{side}"] = _r(out[f"exp_fouls_{side}"] * out["exp_fouls"] / before)
     elif referee:
         out["referee_unknown"] = referee
 
@@ -263,7 +305,7 @@ def _deep(out, home, away, sport_key, referee):
     out["n_home"], out["n_away"] = pred["n"]
     out["deep"] = pred
     for stat, key in (("goals", "goals"), ("corners", "corners"), ("cards", "cards"), ("shots", "shots"), ("sot", "sot"),
-                      ("fouls", "fouls")):
+                      ("fouls", "fouls"), ("yellow", "yellow")):
         if stat in st:
             _put_pair(out, stat, key, st[stat]["h"], st[stat]["a"])
     if "cards" in st:
@@ -275,6 +317,8 @@ def _deep(out, home, away, sport_key, referee):
     rf = pred["info"].get("referee_fouls")
     if rf and "fouls" in st:
         out["ref_fouls"] = rf["avg"]
+        if rf.get("factor") is not None:
+            out["ref_fouls_factor"] = _r(rf["factor"])
 
 
 AFR_XB = frozenset(row[0] for row in C.XB_LEAGUES.get("afrique", ()))      # Égypte, Maroc, Algérie : vus par 1xBet ET listés « africa » par API-Football
@@ -311,7 +355,7 @@ def _apistats(out, home, away, sport_key):
     ht, at = prof[h], prof[a]
     tmp = {}
     for stat, key in (("corners", "corners"), ("goals", "goals"), ("shots", "shots"), ("sot", "sot"), ("fouls", "fouls"),
-                      ("cards", "cards")):
+                      ("cards", "cards"), ("yellow", "yellow")):
         hv, av = _expect(ht, at, stat)
         _put_pair(tmp, stat, key, hv, av, total=True)
     new = {k: v for k, v in tmp.items() if k not in out}
@@ -343,7 +387,7 @@ def _apistats(out, home, away, sport_key):
 
 
 GOAL_KEYS = ("exp_goals_home", "exp_goals_away", "exp_goals_total")
-FM_STATS = ("corners", "goals", "shots", "sot", "fouls", "cards", "throws", "offsides")
+FM_STATS = ("corners", "goals", "shots", "sot", "fouls", "cards", "throws", "offsides", "yellow")
 
 
 def _fm_candidates(prof, sport_key):
@@ -439,7 +483,7 @@ def _fmmatch(out, home, away, sport_key):
     out.setdefault("n_away", n_a)
 
 
-S365_STATS = ("corners", "shots", "sot", "fouls", "cards", "throws", "offsides")      # pas les buts : le modèle de buts garde ses sources
+S365_STATS = ("corners", "shots", "sot", "fouls", "cards", "throws", "offsides", "yellow")      # pas les buts : le modèle de buts garde ses sources
 S365_LABEL = "365scores"
 
 

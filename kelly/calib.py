@@ -23,7 +23,7 @@ SHOW_MIN = 20              # pronostics réglés minimum pour afficher une famil
 FAMILIES = {"totals": "goals", "btts": "btts", "double_chance": "dc", "h2h": "h2h", "team_totals_home": "team_goals", "team_totals_away": "team_goals",
             "alternate_totals_corners": "corners", "alternate_totals_cards": "cards"}
 LABELS = {"goals": "buts", "team_goals": "buts d'une équipe", "btts": "les 2 marquent", "dc": "double chance", "h2h": "1N2", "corners": "corners",
-          "cards": "cartons", "shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu",
+          "cards": "cartons", "yellow": "cartons jaunes", "shots": "tirs", "sot": "tirs cadrés", "fouls": "fautes", "throws": "touches", "offsides": "hors-jeu",
           "player": "stats joueurs"}
 
 _memo = {}

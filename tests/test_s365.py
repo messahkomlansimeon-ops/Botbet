@@ -184,11 +184,11 @@ def test_parse_stats():
     got = s365.parse_stats(fxj("stats_liga_mx_4735674.json"))
     assert got["id"] == "4735674" and (got["hid"], got["aid"]) == ("1263", "1255")
     assert got["s"] == {"goals": [2, 4], "shots": [15, 21], "sot": [6, 10], "corners": [3, 5], "fouls": [16, 6], "throws": [27, 18],
-                        "offsides": [1, 2], "cards": [3, 3]}
+                        "offsides": [1, 2], "cards": [3, 3], "yellow": [3, 3]}
     # championnat « léger » (Uruguay) : pas de fautes ; la date de la liste prime sur l'heure (au décalage faux) de /game/stats/
     got = s365.parse_stats(fxj("stats_uruguay_4856756.json"), day="2026-09-30")
     assert got["d"] == "2026-09-30" and "fouls" not in got["s"]
-    assert got["s"] == {"goals": [1, 1], "shots": [11, 4], "sot": [4, 2], "corners": [0, 5], "throws": [23, 27], "offsides": [2, 0], "cards": [1, 3]}
+    assert got["s"] == {"goals": [1, 1], "shots": [11, 4], "sot": [4, 2], "corners": [0, 5], "throws": [23, 27], "offsides": [2, 0], "cards": [1, 3], "yellow": [1, 3]}
     assert s365.parse_stats(fxj("stats_uruguay_4856756.json"))["d"] == "2026-09-30"        # sans la liste : jour lu dans l'heure du match
     # Écosse 2 : ni touches ni hors-jeu
     got = s365.parse_stats(fxj("stats_scotland_4741091.json"))
@@ -321,8 +321,8 @@ def test_record_rows_and_dedup():
     m = game(1, "2026-10-01", 1, 2, stats_of(fo=None))
     assert s365.record(d, m, UR) and not s365.record(d, m, UR) and not s365.record(d, {}, UR) and not s365.record(d, None, UR)
     home, away = d["teams"]["1"], d["teams"]["2"]
-    assert home["m"] == [[261001, 1, 1, 1, 14, 10, 5, 3, 6, 4, None, None, 2, 3, 22, 25, 2, 1]]       # domicile : (pour, contre)
-    assert away["m"] == [[261001, 0, 1, 1, 10, 14, 3, 5, 4, 6, None, None, 3, 2, 25, 22, 1, 2]]       # extérieur : renversé ; fautes absentes
+    assert home["m"] == [[261001, 1, 1, 1, 14, 10, 5, 3, 6, 4, None, None, 2, 3, 22, 25, 2, 1, None, None]]       # domicile : (pour, contre) ; jaunes inconnus en fin de ligne
+    assert away["m"] == [[261001, 0, 1, 1, 10, 14, 3, 5, 4, 6, None, None, 3, 2, 25, 22, 1, 2, None, None]]       # extérieur : renversé ; fautes absentes
     assert d["seen"]["1"] == 261001 and home["sk"] == [UR] and home["nm"] == "Team 1"
     # plus de S365_KEEP_MATCHES matchs : les plus anciens sont oubliés ; un nom long est gardé
     C.S365_KEEP_MATCHES = 3

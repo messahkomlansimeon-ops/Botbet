@@ -310,12 +310,12 @@ FEATURED = {"soccer": "h2h,totals", "basketball": "h2h,spreads,totals", "tennis"
 # Marchés détaillés : 1 appel par match et par marché (1 crédit chacun et par région), DANS CET
 # ORDRE de priorité (marchés mal pricés d'abord : si le budget manque, on coupe la fin).
 # Indisponible (HTTP 422) = ignoré. Clés vérifiées dans la doc « additional markets »
-# de The Odds API ; player_fouls n'y figure pas (il reste compris par le règlement et
-# les libellés, mais n'est plus demandé).
+# de The Odds API. Plus aucun marché joueur (player_*) : ses sources par 90 min (Understat, FBref) sont bloquées, il n'a jamais
+# donné un seul pari et chaque demande coûtait des crédits. Le règlement et les libellés des player_* restent compris (le jour où une
+# source revient : PROP_MARKETS=...,player_shots_on_target,player_shots).
 PROP_MARKETS = {
-    "soccer": _list("PROP_MARKETS", "alternate_totals_corners,alternate_totals_cards,btts,"
-                                    "player_shots_on_target,player_shots,double_chance"),
-    "basketball": ["player_points", "player_rebounds", "player_assists", "player_threes"],
+    "soccer": _list("PROP_MARKETS", "alternate_totals_corners,alternate_totals_cards,btts,double_chance"),
+    "basketball": [],
     "tennis": [],
 }
 
@@ -374,16 +374,20 @@ COMBI_FILL_MIN_EV = _float("COMBI_FILL_MIN_EV", -0.08)   # ... et 1xBet ne paie 
 COMBI_BOLD_FRESH_MIN = _int("COMBI_BOLD_FRESH_MIN", 30)   # ... cotes de ses paris lues il y a plus de N min : relues en direct avant de répondre
 # Combinés LIVE (kelly/live.py, « 🔴 Live ») : à la demande, matchs en cours dans la fenêtre de minutes, apprentissage à part par tranche
 LIVE_MIN_MINUTE = _int("LIVE_MIN_MINUTE", 30)       # avant : le match n'a encore rien montré
-LIVE_MAX_MINUTE = _int("LIVE_MAX_MINUTE", 88)       # après : 1xBet suspend presque sans arrêt, les cotes ne tiennent pas le temps de valider
+LIVE_MAX_MINUTE = _int("LIVE_MAX_MINUTE", 80)       # aucun pari live après cette minute (après la 80e : 1xBet suspend presque sans arrêt, les cotes ne tiennent pas le temps de valider)
 LIVE_TRANCHES = ((30, 45), (45, 60), (60, 75), (75, 999))   # tranches de minutes de l'apprentissage live (75-90+ : temps additionnel compris)
 LIVE_MIN_P = _float("LIVE_MIN_P", 0.60)             # chances minimales d'un pari live
-LIVE_MIN_EV = _float("LIVE_MIN_EV", -0.05)          # espérance minimale à la cote 1xBet (la marge live est plus forte : un peu sous l'équilibre admis)
+LIVE_MIN_EV = _float("LIVE_MIN_EV", 0.02)           # espérance minimale à la cote 1xBet, calculée avec la proba ancrée sur 1xBet (live.py) : jamais sous l'équilibre
 LIVE_MIN_ODDS = _float("LIVE_MIN_ODDS", 1.15)       # pas de pari déjà presque joué
-LIVE_MAX_GAP = _float("LIVE_MAX_GAP", 0.20)         # écart maximal avec la proba de 1xBet : au-delà, 1xBet sait quelque chose que le modèle ignore
+LIVE_MAX_GAP = _float("LIVE_MAX_GAP", 0.08)         # écart maximal (proba retenue, déjà ancrée) avec la proba de 1xBet sans marge : au-delà, 1xBet sait quelque chose que le modèle ignore
+LIVE_W_KELLY = _float("LIVE_W_KELLY", 0.3)          # poids de l'avis de Kelly dans le mélange en logit avec la proba 1xBet sans marge (0,3 au plus conseillé : 1xBet est plus juste que Kelly en live) ; 0 = 1xBet seul
+LIVE_COMBO_MIN_LEGS = _int("LIVE_COMBO_MIN_LEGS", 2)  # combiné live : 2 à 4 paris (plus la cote totale grimpe, plus un seul but change tout)
+LIVE_COMBO_MAX_LEGS = _int("LIVE_COMBO_MAX_LEGS", 4)
+LIVE_COMBO_MAX_ODDS = _float("LIVE_COMBO_MAX_ODDS", 20.0)   # cote totale maximale d'un combiné live
 LIVE_COUNT = _int("LIVE_COUNT", 150)                # matchs demandés à 1xBet (une requête, ~3 Ko par match)
 LIVE_TTL = _int("LIVE_TTL", 30)                     # secondes pendant lesquelles la liste live lue est reprise du cache
-LIVE_W_PROFILES = _float("LIVE_W_PROFILES", 0.7)   # poids de l'avis de Kelly face à 1xBet avec les profils FotMob / API-Football (modèle de force : 1)
-LIVE_W_LIGHT = _float("LIVE_W_LIGHT", 0.5)         # ... avec les données légères (derniers résultats 365scores) : moitié Kelly, moitié marché
+LIVE_W_PROFILES = _float("LIVE_W_PROFILES", 0.7)   # facteur du poids de Kelly (LIVE_W_KELLY) avec les profils FotMob / API-Football (modèle de force : 1)
+LIVE_W_LIGHT = _float("LIVE_W_LIGHT", 0.5)         # ... avec les données légères (derniers résultats 365scores) : poids de Kelly réduit de moitié
 QUIET_HOURS = os.environ.get("QUIET_HOURS", "23-7")   # heures calmes des alertes (heure d'Abidjan = UTC) : gardées et envoyées au réveil (kelly/quiet.py) ; « off » : jamais
 # Suivi des tickets et opportunités live (kelly/watch.py, `bot.py --watch`, kelly-watch.timer toutes les 10 min)
 LIVE_OPP = _bool("LIVE_OPP", True)                  # 0 : plus d'« 🔴 Opportunité live »
@@ -454,7 +458,7 @@ MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8
                  # tirs et tirs cadrés (total ou une équipe) : marchés mal pricés, comme corners et cartons
                  "team_shots_total": 1.6, "team_shots_home": 1.5, "team_shots_away": 1.5,
                  "team_sot_total": 1.6, "team_sot_home": 1.5, "team_sot_away": 1.5}
-PLAYER_WEIGHT = 1.8
+PLAYER_WEIGHT = 1.0           # plus de bonus de sélection pour les marchés joueur (aucun n'a jamais donné un pari)
 
 UNITS = {
     "totals": {"soccer": "buts", "basketball": "points", "tennis": "jeux"},

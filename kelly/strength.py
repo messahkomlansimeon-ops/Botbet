@@ -10,7 +10,7 @@ ensuite par maximum de vraisemblance. Même décomposition attaque / défense po
 et cartons là où les colonnes existent ; surdispersion (binomiale négative) estimée sur les données.
 
 Facteurs de contexte (petits, bornés, expliqués) : forme des 5 derniers matchs, domicile/extérieur propre à l'équipe,
-face-à-face, repos, enjeu (classement calculé depuis les résultats de la saison) ; arbitre pour cartons et fautes.
+face-à-face, repos, enjeu (classement calculé depuis les résultats de la saison) ; arbitre pour cartons, cartons jaunes et fautes.
 
 Cache : data/strength_<DIV>.json, un fichier par ligue, recalculé au plus une fois par jour (ou quand les profils
 football-data sont actualisés). Sans données brutes, le dernier cache de moins de STALE_DAYS jours sert, marqué périmé.
@@ -27,18 +27,18 @@ from datetime import date, timedelta
 
 from . import store
 
-VERSION = 1
+VERSION = 2                      # 2 : + cartons jaunes seuls (stat « yellow ») ; un cache de la version 1 est refait au premier appel
 HALF_LIFE = 110                  # jours : un match vieux de 110 jours pèse moitié moins
-STATS = ("goals", "shots", "sot", "corners", "fouls", "cards")
-UNIT = {"goals": "buts", "shots": "tirs", "sot": "tirs cadrés", "corners": "corners", "fouls": "fautes", "cards": "cartons"}
-COLS = {"shots": ("hs", "as"), "sot": ("hst", "ast"), "corners": ("hc", "ac"), "fouls": ("hf", "af")}
+STATS = ("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")
+UNIT = {"goals": "buts", "shots": "tirs", "sot": "tirs cadrés", "corners": "corners", "fouls": "fautes", "cards": "cartons", "yellow": "cartons jaunes"}
+COLS = {"shots": ("hs", "as"), "sot": ("hst", "ast"), "corners": ("hc", "ac"), "fouls": ("hf", "af"), "yellow": ("hy", "ay")}      # yellow : jaunes SEULS (1xBet ne compte que les jaunes), cards = jaunes + rouges
 MIN_MATCHES = 60                 # matchs minimum dans la ligue pour ajuster un modèle
 MIN_ROWS = 50                    # lignes minimum pour une statistique
 STALE_DAYS = 14                  # cache périmé encore utilisable si les données brutes manquent
 NEFF_FULL = 8.0                  # matchs pondérés à partir desquels une équipe est « bien connue »
 # a priori des équipes promues (attaque, défense) : elles marquent moins et encaissent plus
 PROMO = {"goals": (0.87, 1.13), "shots": (0.93, 1.07), "sot": (0.93, 1.07), "corners": (0.94, 1.06),
-         "fouls": (1.0, 1.0), "cards": (1.0, 1.0)}
+         "fouls": (1.0, 1.0), "cards": (1.0, 1.0), "yellow": (1.0, 1.0)}
 K_RANGE = (3.0, 25.0)            # force de l'a priori, en matchs : bornes de l'estimation sur les données
 
 FORM_N, FORM_W, FORM_K = 5, (1.0, 0.85, 0.7, 0.55, 0.4), 0.15
@@ -709,8 +709,8 @@ def referee_factor(model, referee, kind):
     refs = ctx.get("refs") or {}
     if not referee or not refs:
         return None
-    from .sources import names
-    name = referee if referee in refs else names.player_match(referee, refs)
+    from .sources import features
+    name = referee if referee in refs else features.match_referee(referee, refs)      # « Michael Oliver, England » -> « M Oliver » ; jamais une devinette
     if not name:
         return None
     n, avg = (refs[name][0], refs[name][1]) if kind == "cards" else (refs[name][2], refs[name][3])
@@ -855,17 +855,18 @@ def predict(model, home, away, on=None, referee=None, ctx=True):
         if stat != "goals":
             stats[stat] = {"h": e[0], "a": e[1], "al": s["alpha"], "at": s["atot"]}
     stats["goals"]["rho"] = g.get("rho", 0.0)
-    for kind in ("cards", "fouls"):
+    for kind in ("cards", "fouls", "yellow"):
         if kind in stats:
-            rf = referee_factor(model, referee, kind)
+            rk = "fouls" if kind == "fouls" else "cards"           # les jaunes suivent l'arbitre comme les cartons (les rouges sont rares)
+            rf = referee_factor(model, referee, rk)
             if rf:
                 stats[kind]["h"] *= rf[0]
                 stats[kind]["a"] *= rf[0]
                 stats[kind]["ref"] = rf[0]
                 if kind == "cards":
                     info["referee"] = {"name": rf[4], "n": rf[1], "cards": rf[2], "lg": rf[3], "factor": rf[0]}
-                else:
-                    info["referee_fouls"] = {"avg": (model["ctx"]["refs"][rf[4]][3]), "lg": model["ctx"]["lg"].get("fouls")}
+                elif kind == "fouls":
+                    info["referee_fouls"] = {"name": rf[4], "n": rf[1], "avg": rf[2], "lg": rf[3], "factor": rf[0]}
     pred = {"div": model.get("div"), "home": h, "away": a, "lh": lh, "la": la, "lh0": lh0, "la0": la0, "rho": g.get("rho", 0.0),
             "fh": fh_, "fa": fa_, "q": qs.get("goals", 0.0), "qs": qs, "stats": stats, "notes": notes, "info": info, "tm": tm,
             "base": {"lh": base["goals"][0], "la": base["goals"][1],
@@ -920,7 +921,7 @@ def grid(pred, base=False, like=None):
     out["team_totals"] = {"home": _both(goal_pmf(M, 0), (0.5, 1.5, 2.5)), "away": _both(goal_pmf(M, 1), (0.5, 1.5, 2.5))}
     flat = sorted(((M[i][j], f"{i}-{j}") for i in range(len(M)) for j in range(len(M))), reverse=True)[:5]
     out["scores"] = [(s, p) for p, s in flat]
-    for stat in ("corners", "cards", "shots", "sot", "fouls"):
+    for stat in ("corners", "cards", "yellow", "shots", "sot", "fouls"):
         s = st.get(stat)
         if not s:
             continue
@@ -986,7 +987,7 @@ def lines(pred, home, away):
             for nm, k, word in (("Over", "over", "plus"), ("Under", "under", "moins")):
                 add("team_totals", nm, float(pt), v[k], b["team_totals"][side][pt][k], "buts équipe", f"{team} : {word} de {pt} buts",
                     side=side)
-    for stat, market in (("corners", "alternate_totals_corners"), ("cards", "alternate_totals_cards"), ("shots", "team_shots_total"),
+    for stat, market in (("corners", "alternate_totals_corners"), ("cards", "alternate_totals_cards"), ("yellow", "team_yellow_total"), ("shots", "team_shots_total"),
                          ("sot", "team_sot_total"), ("fouls", "team_fouls_total")):
         if stat not in g:
             continue
@@ -1064,14 +1065,17 @@ def explain(pred):
     for stat, unit in (("corners", "corners"), ("shots", "tirs"), ("sot", "tirs cadrés")):
         if stat in pred["tm"]:
             out[stat] = _team_phrase(pred, stat, unit)
-    for stat, unit in (("cards", "cartons"), ("fouls", "fautes")):
+    for stat, unit in (("cards", "cartons"), ("yellow", "cartons jaunes"), ("fouls", "fautes")):
         tt = pred["tm"].get(stat)
         if not tt:
             continue
         s = f"{h} {tt['hf']:.1f} {unit}/match à domicile (ligue {tt['lh']:.1f}), {a} {tt['af']:.1f} dehors (ligue {tt['la']:.1f})"
         r = pred["info"].get("referee")
-        if stat == "cards" and r:
+        if stat in ("cards", "yellow") and r:
             s += f" ; arbitre {r['name']} {r['cards']:.1f} cartons/match (ligue {r['lg']:.1f})"
+        rfo = pred["info"].get("referee_fouls")
+        if stat == "fouls" and rfo:
+            s += f" ; arbitre {rfo['name']} {rfo['avg']:.1f} fautes/match (ligue {rfo['lg']:.1f})"
         out[stat] = s
     return out
 
@@ -1160,6 +1164,9 @@ def _analysis_text(home, away, sport_key, referee, on, model):
     if r:
         L.append(f"Arbitre {r['name']} : {r['cards']:.1f} cartons/match sur {r['n']} matchs (ligue {r['lg']:.1f}), "
                  f"effet retenu {_pct(r['factor'])} sur les cartons.")
+        rfo = info.get("referee_fouls")
+        if rfo:
+            L[-1] += f" Fautes : {rfo['avg']:.1f}/match (ligue {rfo['lg']:.1f}), effet retenu {_pct(rfo['factor'])}."
     elif referee:
         L.append(f"Arbitre {referee} : trop peu de matchs connus pour en tenir compte.")
 
@@ -1174,6 +1181,7 @@ def _analysis_text(home, away, sport_key, referee, on, model):
 
     mid("corners", "corners", "Corners")
     mid("cards", "cartons", "Cartons (jaunes + rouges)")
+    mid("yellow", "cartons jaunes", "Cartons jaunes seuls (le pari de 1xBet)")
     mid("shots", "tirs", "Tirs")
     mid("sot", "tirs cadrés", "Tirs cadrés")
     mid("fouls", "fautes", "Fautes")
