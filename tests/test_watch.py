@@ -76,7 +76,7 @@ def test_more_markets():
     payload = {"statistics": [{"name": "Yellow Cards", "competitorId": 1, "value": "2"}, {"name": "Red Cards", "competitorId": 1, "value": "1"},
                               {"name": "Yellow Cards", "competitorId": 2, "value": "3"}, {"name": "Corners", "competitorId": 2, "value": "4"}]}
     old = http.fetch, s365.read_json
-    http.fetch, s365.read_json = (lambda *a, **k: None), (lambda res: payload)
+    http.fetch, s365.read_json = (lambda *a, **k: http.Result("u", b"{}", 200)), (lambda res: payload)      # réponse fraîche (une vieille copie : rien)
     try:
         st = watch._stats(s365, {"id": 9, "home": {"id": 1}, "away": {"id": 2}})
     finally:

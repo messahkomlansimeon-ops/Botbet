@@ -18,7 +18,7 @@ envfile.load()                                   # mêmes réglages que le bot (
 from kelly import exposure, quiet, store, telegram, watch  # noqa: E402
 from kelly.sources import s365  # noqa: E402
 
-FIX = "f9435c9"                                  # correctif « suivi des matchs des tickets perdus »
+FIX = "f9435c9"                                  # correctif « suivi des matchs des tickets perdus » (au moins)
 
 
 def ok(b):
@@ -62,7 +62,21 @@ def main():
     print(ok(not calm), f"heures calmes ({C.QUIET_HOURS} UTC) :", "en ce moment, les messages sont gardés pour le réveil" if calm else "pas maintenant")
     box = store.load(telegram.OUTBOX, [])
     print(ok(not box), "messages Telegram en attente d'envoi :", len(box))
-    d = watch._load()
+    from kelly.sources import state as src_state
+    bl = src_state.health("s365").get("blocked_until")
+    print(ok(not bl), "365scores", f"BLOQUÉ jusqu'au {str(bl)[:16].replace('T', ' ')} UTC" if bl else "pas bloqué")
+    try:
+        d = watch._load()
+    except watch.WatchStateError as e:
+        print("❌ document du suivi illisible :", e)
+        return
+    h = d.get("health") or {}
+    if h.get("at"):
+        state_txt = "en panne : " + str(h.get("why") or "?") if not h.get("ok") else "en bonne santé"
+        print(ok(h.get("ok")), f"santé du suivi au dernier passage ({h['at'][11:16]} UTC) :", state_txt)
+    print(ok(not d.get("out")), "lignes du suivi en attente d'envoi :", len(d.get("out") or []))
+    b = d.get("budget") or {}
+    print("ℹ️ fiches de match lues aujourd'hui :", b.get("detail", 0) if b.get("day") == str(now.date()) else 0, "/", C.WATCH_DETAIL_DAY)
     ts = [t for x in (now.date(), now.date() - timedelta(days=1)) for t in exposure.tickets(str(x))]
     todo = watch._open_legs(ts, d, now)
     print("ℹ️", len(ts), "tickets joués (hier et aujourd'hui) ;", len({l["id"] for _, l, _ in todo}), "matchs à suivre maintenant ou dans l'heure")

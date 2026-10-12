@@ -1,12 +1,13 @@
 """Heures calmes des alertes (C.QUIET_HOURS, « 23-7 » par défaut, heure d'Abidjan = UTC) : une alerte envoyée la nuit (💰 / ⚠️ / 📈, 🧮 stats ouvertes,
 suivi des tickets, opportunités live) est gardée dans data/kelly.db (quiet_outbox.json) et partira au premier passage après la fin des heures calmes
 (watch.tick toutes les 10 min, flush). Les réponses à tes commandes et le message du matin ne passent jamais par ici. Ne lève jamais."""
+import html
 import sys
 from datetime import datetime, timezone
 
 from . import config as C, store, telegram
 
-FILE = "quiet_outbox.json"      # [{"text", "html", "markup"}]
+FILE = "quiet_outbox.json"      # [{"text", "html", "markup", "kind": "suivi" | "autre", "at"}]
 
 
 def _now():
@@ -34,31 +35,63 @@ def is_quiet(now=None):
     return (a <= h or h < b) if a > b else (a <= h < b)
 
 
-def send(msg, now=None):
-    """Envoie l'alerte `msg`, ou la garde pour la fin des heures calmes. -> True si envoyée ou gardée."""
+QUIET_MAX = 200                 # alertes « autre » gardées au plus pendant la nuit (les plus anciennes partent d'abord) ; le suivi des matchs n'est jamais jeté
+
+
+def send(msg, now=None, kind="autre"):
+    """Envoie l'alerte `msg`, ou la garde pour la fin des heures calmes. `kind` : « suivi » (suivi des matchs : jamais jeté, regroupé au réveil en un
+    seul résumé) ou « autre ». Ajout atomique (store.update) : le suivi et le relevé horaire peuvent garder une alerte en même temps.
+    -> True si envoyée ou gardée (ou mise en attente par Telegram)."""
     if not is_quiet(now):
         return telegram.send(msg)
+    entry = {"text": str(msg), "html": isinstance(msg, telegram.Html), "markup": getattr(msg, "markup", None), "kind": kind,
+             "at": (now or _now()).isoformat(timespec="minutes")}
+
+    def add(held):
+        held = (held if isinstance(held, list) else []) + [entry]
+        others = [i for i, h in enumerate(held) if h.get("kind") != "suivi"]
+        drop = set(others[:max(0, len(others) - QUIET_MAX)])          # trop d'alertes « autre » : les plus anciennes partent
+        if drop:
+            print(f"[calme] {len(drop)} alerte(s) de la nuit trop ancienne(s) abandonnée(s)", file=sys.stderr)
+        return [h for i, h in enumerate(held) if i not in drop], True
     try:
-        held = store.load(FILE, [])
-        held = held if isinstance(held, list) else []
-        held.append({"text": str(msg), "html": isinstance(msg, telegram.Html), "markup": getattr(msg, "markup", None)})
-        store.save(FILE, held[-30:])
-        return True
+        return store.update(FILE, add, [])
     except Exception as e:                          # noqa: BLE001 - au pire elle part tout de suite
         print(f"[calme] alerte non gardée : {type(e).__name__}: {e}", file=sys.stderr)
         return telegram.send(msg)
 
 
+def _hm(at):
+    """« 02h10 » depuis l'horodatage ISO d'une alerte gardée ; '' s'il manque (ancienne entrée)."""
+    try:
+        return datetime.fromisoformat(str(at)).strftime("%Hh%M")
+    except ValueError:
+        return ""
+
+
 def flush(now=None):
-    """Hors des heures calmes : envoie les alertes gardées pendant la nuit (dans l'ordre), précédées d'un mot. -> nombre envoyé."""
+    """Hors des heures calmes : envoie les alertes gardées pendant la nuit. Le suivi des matchs part en UN résumé (« 🌙 Tes matchs pendant la nuit »,
+    chaque passage précédé de son heure), puis les autres alertes, dans l'ordre, précédées d'un mot. La file est vidée d'un coup (atomique) avant
+    l'envoi : un message qui échoue est mis en attente par Telegram (data/outbox.json), jamais perdu. -> nombre d'alertes envoyées."""
     if is_quiet(now):
         return 0
-    held = store.load(FILE, [])
-    if not isinstance(held, list) or not held:
+    try:
+        held = store.update(FILE, lambda h: ([], h if isinstance(h, list) else []), [])
+    except OSError as e:
+        print(f"[calme] alertes de la nuit non relues : {e}", file=sys.stderr)
         return 0
-    store.save(FILE, [])
-    telegram.send(f"🌙 {len(held)} alerte{'s' if len(held) > 1 else ''} de la nuit, gardée{'s' if len(held) > 1 else ''} pendant les heures calmes :")
-    for h in held:
-        text = telegram.Html(h["text"]) if h.get("html") else h["text"]
-        telegram.send(telegram.with_buttons(text, h["markup"]) if h.get("markup") else text)
+    if not held:
+        return 0
+    follow = [h for h in held if h.get("kind") == "suivi"]
+    others = [h for h in held if h.get("kind") != "suivi"]
+    if follow:
+        parts = [(f"<b>{_hm(h.get('at'))}</b>\n" if _hm(h.get("at")) else "") + (h["text"] if h.get("html") else html.escape(h["text"], quote=False))
+                 for h in follow]
+        telegram.send(telegram.Html("🌙 <b>Tes matchs pendant la nuit</b>\n\n" + "\n\n".join(parts)))
+    if others:
+        telegram.send(f"🌙 {len(others)} alerte{'s' if len(others) > 1 else ''} de la nuit, gardée{'s' if len(others) > 1 else ''} pendant les heures "
+                      "calmes :")
+        for h in others:
+            text = telegram.Html(h["text"]) if h.get("html") else h["text"]
+            telegram.send(telegram.with_buttons(text, h["markup"]) if h.get("markup") else text)
     return len(held)

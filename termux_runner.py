@@ -300,31 +300,52 @@ def install_signals():
 
 
 class Runner:
-    def __init__(self, serve_cmd=None, tick=15, run=run_cmd, plan=due_tasks, state=None, watch_every=5):
+    def __init__(self, serve_cmd=None, tick=15, run=run_cmd, plan=due_tasks, state=None, watch_every=5, watch_thread=True):
         os.makedirs(LOGS, exist_ok=True)
         self.serve = ServeSupervisor(serve_cmd or [sys.executable, "-u", BOT, "--serve"], pidfile=os.path.join(LOGS, "serve.pid"))
         self.tick, self.run, self.plan, self.watch_every = tick, run, plan, watch_every
         self.state = state if state is not None else load_state()
+        self.watch_thread = watch_thread                # suivi des matchs (--watch) dans son propre fil : jamais bloqué par --track, --daily, --xbet...
+        self.state_lock = threading.Lock()
+
+    def _done(self, args, now, rc):
+        with self.state_lock:
+            mark_done(self.state, args, now, time.time(), rc)
+            save_state(self.state)
+
+    def watch_loop(self):
+        """Toutes les WATCH_EVERY s, le suivi des matchs (--watch), en parallèle des autres passages : il ne prend pas le verrou des données (sa
+        file de messages et ses compteurs s'écrivent de façon atomique), un --track de 25 min ou le matin ne le retardent plus."""
+        while not STOP.is_set():
+            with self.state_lock:
+                due = time.time() - self.state["watch_at"] >= WATCH_EVERY
+            if due:
+                rc = self.run(["--watch"])
+                self._done(["--watch"], datetime.now(timezone.utc), rc)
+            STOP.wait(min(self.tick, 15))
 
     def shutdown(self):
         self.serve.stop()
 
     def loop(self):
         threading.Thread(target=self.serve.watch, args=(self.watch_every,), daemon=True).start()
+        if self.watch_thread:
+            threading.Thread(target=self.watch_loop, daemon=True).start()
         while not STOP.is_set():
             self.serve.check()
             now, epoch = datetime.now(timezone.utc), time.time()
             if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()) and self.state["daily_try_day"] != str(now.date()):
                 log(f"⚠️ le matin du {now.date()} n'a pas tourné (téléphone éteint ?) ; prochain passage demain à {DAILY_HOUR:02d}:00 UTC", err=True)
                 self.state["daily_try_day"], self.state["daily_tries"] = str(now.date()), DAILY_MAX_TRIES
-            for args in self.plan(now, self.state, epoch):
+            with self.state_lock:
+                todo = [a for a in self.plan(now, self.state, epoch) if not (self.watch_thread and a[0] == "--watch")]
+            for args in todo:
                 if STOP.is_set():
                     break
                 if args[0] == "--daily" and now.hour > DAILY_HOUR:
                     log(f"rattrapage du matin à {now:%H:%M} UTC (pas fait à {DAILY_HOUR:02d}:00)")
                 rc = self.run(args)
-                mark_done(self.state, args, now, time.time(), rc)
-                save_state(self.state)
+                self._done(args, now, rc)
                 self.serve.check()
                 now = datetime.now(timezone.utc)
             STOP.wait(self.tick)

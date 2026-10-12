@@ -1,5 +1,6 @@
 """Envoi de messages et lecture des commandes Telegram."""
 import calendar
+import fcntl
 import html as _html
 import os
 import re
@@ -11,6 +12,7 @@ import requests
 from . import config as C, store
 
 LAST_ERROR = ""        # dernière erreur d'envoi (description renvoyée par l'API Telegram)
+LAST_QUEUED = False    # le dernier envoi (send) a-t-il été mis en attente (data/outbox.json) plutôt que perdu ? (suivi des matchs : ses lignes partiront plus tard)
 OUTBOX = "outbox.json"  # messages dont l'envoi a échoué (réseau / Telegram en panne), renvoyés dans l'ordre par flush_outbox
 LATE_NOTE = "📬 Message en retard (réseau indisponible à l'heure prévue)"
 BUSY = "⏳ Kelly est en plein travail (message du matin ou relevé horaire) : ton action sera faite dès qu'elle a fini."
@@ -174,13 +176,23 @@ def _deliver(part, is_html, markup, chat_id):
 
 
 def _enqueue(parts, is_html, markup, chat_id):
-    """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier)."""
-    box = store.load(OUTBOX, [])
+    """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier). Ajout ATOMIQUE (store.update) : le bot Telegram et le suivi
+    des matchs peuvent ajouter en même temps sans s'écraser. LAST_QUEUED passe à vrai (le message n'est pas perdu : il partira plus tard)."""
+    global LAST_QUEUED
     now = time.time()
-    box += [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
-            for i, p in enumerate(parts)]
-    store.save(OUTBOX, box)
-    print(f"[telegram] {len(parts)} message(s) mis en attente ({len(box)} dans la file) : renvoi dès que le réseau revient", file=sys.stderr)
+    new = [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
+           for i, p in enumerate(parts)]
+
+    def add(box):
+        box = (box if isinstance(box, list) else []) + new
+        return box, len(box)
+    try:
+        n = store.update(OUTBOX, add, [])
+    except OSError as e:
+        print(f"[telegram] {len(parts)} message(s) NON mis en attente (base refusée : {e})", file=sys.stderr)
+        return
+    LAST_QUEUED = True
+    print(f"[telegram] {len(parts)} message(s) mis en attente ({n} dans la file) : renvoi dès que le réseau revient", file=sys.stderr)
 
 
 def _send_one(text, chat_id=None, queue=True):
@@ -189,7 +201,8 @@ def _send_one(text, chat_id=None, queue=True):
     l'id du dernier message envoyé (True sans identifiants), ou False et note l'erreur (stderr + LAST_ERROR) si Telegram refuse.
     Panne passagère (réseau, 429, 5xx) : le message est mis en attente (data/outbox.json, voir flush_outbox) derrière ceux qui
     attendent déjà, pour garder l'ordre ; un refus définitif (400) est abandonné. `queue=False` : message éphémère, jamais mis en attente."""
-    global LAST_ERROR
+    global LAST_ERROR, LAST_QUEUED
+    LAST_QUEUED = False
     token, chat = creds()
     chat_id = chat_id or chat
     if not (token and chat_id):
@@ -238,10 +251,39 @@ def flush_outbox():
     box = store.load(OUTBOX, [])
     if not box or not token:
         return 0, len(box)
+    lock = _outbox_lock()
+    if lock is None:                                 # un autre processus vide déjà la file : jamais deux renvois du même message
+        return 0, len(box)
+    try:
+        return _flush(box, chat)
+    finally:
+        lock.close()
+
+
+def _outbox_lock():
+    """Verrou NON bloquant data/.outbox.lock (fichier ouvert, à fermer) ; None s'il est déjà pris par un autre processus."""
+    try:
+        os.makedirs(store.DATA_DIR, exist_ok=True)
+        f = open(store.path(".outbox.lock"), "a")
+    except OSError:
+        return None
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return f
+    except OSError:
+        f.close()
+        return None
+
+
+def _flush(box, chat):
+    """Corps de flush_outbox (sous le verrou de la file). À la fin, ne retire de la file QUE les messages envoyés ou abandonnés ici : un message
+    ajouté pendant le renvoi par un autre processus reste."""
     now = time.time()
+    done = []                                        # entrées traitées (envoyées ou abandonnées), retirées de la file à la fin
     keep = [e for e in box if now - e.get("ts", now) <= C.OUTBOX_MAX_HOURS * 3600]
     if len(keep) < len(box):
         print(f"[telegram] {len(box) - len(keep)} message(s) en attente depuis plus de {C.OUTBOX_MAX_HOURS} h abandonné(s)", file=sys.stderr)
+        done += [e for e in box if e not in keep]
     sent = 0
     while keep:
         e = keep[0]
@@ -257,7 +299,7 @@ def flush_outbox():
             if err.maybe_sent:                       # issue inconnue : abandonné plutôt que doublé (note sur stderr), la suite continue
                 print(f"[telegram] message en attente sans réponse (peut-être livré), abandonné : {err}", file=sys.stderr)
                 _last_fail[0] = time.monotonic()
-                keep.pop(0)
+                done.append(keep.pop(0))
                 continue
             if _transient(err) or not target:
                 _last_fail[0] = time.monotonic()
@@ -266,12 +308,25 @@ def flush_outbox():
             print(f"[telegram] message en attente refusé définitivement, abandonné : {err}", file=sys.stderr)
         else:
             sent += 1
-        keep.pop(0)
-    if len(keep) != len(box):
-        store.save(OUTBOX, keep)
+        done.append(keep.pop(0))
+    if done:
+        def drop(cur):
+            cur, left = list(cur if isinstance(cur, list) else []), list(done)
+            for e in list(cur):
+                if e in left:                         # une entrée traitée ici (même contenu, même heure) : retirée une fois
+                    left.remove(e)
+                    cur.remove(e)
+            return cur, len(cur)
+        try:
+            remaining = store.update(OUTBOX, drop, [])
+        except OSError as e:
+            print(f"[telegram] file des messages non mise à jour : {e}", file=sys.stderr)
+            remaining = len(keep)
+    else:
+        remaining = len(keep)
     if sent:
-        print(f"[telegram] {sent} message(s) en attente renvoyé(s), {len(keep)} restant(s)", file=sys.stderr)
-    return sent, len(keep)
+        print(f"[telegram] {sent} message(s) en attente renvoyé(s), {remaining} restant(s)", file=sys.stderr)
+    return sent, remaining
 
 
 def answer_callback(callback_id, text=None):

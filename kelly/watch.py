@@ -15,6 +15,7 @@ Opportunités live : entre C.LIVE_OPP_HOURS, au plus C.LIVE_OPP_DAY par jour et 
 assez de matchs en cours dans la fenêtre C.LIVE_MIN_MINUTE-C.LIVE_MAX_MINUTE, 30e-80e), puis la liste live de 1xBet (kelly/live.py) ; si un bon combiné live est possible, « 🔴 Opportunité
 live » avec des boutons de cote. Heures calmes (kelly/quiet.py) : les messages de la nuit sont gardés pour le réveil. Ne lève jamais."""
 import math
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -46,12 +47,44 @@ def _ko(c):
         return None
 
 
+class WatchStateError(Exception):
+    """Le document du suivi (ticket_watch.json) n'a pas pu être lu : le passage ne fait RIEN (sinon il croirait tout neuf et renverrait tous les
+    ✅ / ❌ / 🏆 déjà annoncés)."""
+
+
+V = 2                           # version du document : verdicts des tickets par identifiant daté (tid), santé, lignes à envoyer
+KEEP_DAYS = 3                   # paris, tickets et drapeaux oubliés au-delà
+DEFAULTS = (("legs", {}), ("tickets", {}), ("games", {}), ("flags", {}), ("out", []), ("health", {}), ("budget", {}), ("recap", {}), ("opp", {}))
+
+
 def _load():
-    d = store.load(FILE, {})
+    """Document du suivi, version 2 ; lève WatchStateError si la base ne peut pas le lire. Migration : les anciens verdicts rangés par NOM de ticket
+    (« vm1 », « pari » : le combi m1 d'aujourd'hui héritait de celui d'hier) sont oubliés ; rien n'est ré-annoncé."""
+    try:
+        d = store.load(FILE, {}, strict=True)
+    except OSError as e:
+        raise WatchStateError(str(e)) from None
     d = d if isinstance(d, dict) else {}
-    for k, v in (("legs", {}), ("tickets", {}), ("opp", {})):
-        d.setdefault(k, v)
+    for k, v in DEFAULTS:
+        if not isinstance(d.get(k), type(v)):
+            d[k] = type(v)()
+    if d.get("v") != V:
+        d["tickets"] = {k: v for k, v in d["tickets"].items() if "|" in k}
+        d["v"] = V
     return d
+
+
+def _purge(d, now):
+    """Oublie ce qui a plus de KEEP_DAYS jours (paris, tickets, drapeaux), les matchs de plus de 2 jours et les lignes jamais envoyées trop vieilles."""
+    cut = (now - timedelta(days=KEEP_DAYS)).isoformat()
+    d["legs"] = {k: v for k, v in d["legs"].items() if str(v.get("at") or "9") >= cut}
+    day_cut = str((now - timedelta(days=KEEP_DAYS)).date())
+    d["tickets"] = {k: v for k, v in d["tickets"].items() if k[:10] >= day_cut}
+    d["flags"] = {k: v for k, v in d["flags"].items() if k[:10] >= day_cut}
+    gcut = (now - timedelta(days=2)).isoformat()
+    d["games"] = {k: v for k, v in d["games"].items() if str((v or {}).get("at") or "9") >= gcut}
+    ocut = (now - timedelta(hours=C.OUTBOX_MAX_HOURS)).isoformat()
+    d["out"] = [o for o in d["out"] if str(o.get("at") or "9") >= ocut]
 
 
 # ---------- marché d'un pari -> ce qu'il faut regarder ----------
@@ -149,13 +182,21 @@ def _day_games(s365, now, net=True):
 
 
 def _live(s365, ids, now):
-    """Score, minute et statut des matchs `ids` (requête ciblée /games/?games=…, ~1 Ko par match) -> {id: {"live", "ended", "score", "minute"}}."""
+    """Score, minute et statut des matchs `ids` (requête ciblée /games/?games=…, ~1 Ko par match) -> {id: {"live", "ended", "score", "minute"}} ;
+    None si 365scores n'a pas répondu (ou seulement par une vieille copie)."""
     if not ids:
         return {}
     fmt_d = lambda d: d.strftime("%d/%m/%Y")              # noqa: E731
     res = http.fetch(s365._url("/games/", games=",".join(map(str, sorted(ids))), startDate=fmt_d(now - timedelta(days=1)), endDate=fmt_d(now)),
                      s365.NAME, 120)
-    return {g.get("id"): _status(g) for g in (((s365.read_json(res) or {}).get("games") or []) if res.ok else [])}
+    if not _fresh(res):                                   # erreur, source bloquée, ou vieille copie : AUCUNE donnée (jamais un score périmé pris pour le direct)
+        return None
+    return {g.get("id"): _status(g) for g in ((s365.read_json(res) or {}).get("games") or [])}
+
+
+def _fresh(res):
+    """Réponse utilisable comme donnée du moment : reçue, ni périmée (copie de secours après une erreur), ni d'une source bloquée."""
+    return bool(res is not None and res.ok and not res.stale and not res.blocked)
 
 
 def _status(g):
@@ -194,7 +235,7 @@ def find(leg, games):
 def _stats(s365, g):
     """Stats du match (en direct ou fini) -> {clé: (domicile, extérieur)} ; {} si illisible."""
     res = http.fetch(s365._url("/game/stats/", games=g["id"]), s365.NAME, 240)
-    data = s365.read_json(res)
+    data = s365.read_json(res) if _fresh(res) else None
     out = {}
     for st in (data or {}).get("statistics") or []:
         key = s365.STAT_NAMES.get(str(st.get("name") or "").lower())
@@ -212,32 +253,41 @@ def _stats(s365, g):
 
 
 def _final(s365, g):
-    """Score final d'un match terminé, par les derniers résultats de l'équipe à domicile -> (h, a) ou None s'il n'y est pas encore."""
-    res = http.fetch(s365._url("/games/results/", competitors=g["home"]["id"]), s365.NAME, 600)
-    data = s365.read_json(res)
-    for x in (data or {}).get("games") or []:
-        if x.get("id") == g["id"]:
-            hs, as_ = (x.get("homeCompetitor") or {}).get("score"), (x.get("awayCompetitor") or {}).get("score")
-            if hs is not None and as_ is not None and hs >= 0 and as_ >= 0:
-                return int(hs), int(as_)
+    """Score final d'un match terminé, par les derniers résultats de l'équipe à domicile, sinon de l'équipe à l'extérieur -> (h, a) ou None s'il n'y
+    est pas encore."""
+    for side in ("home", "away"):
+        res = http.fetch(s365._url("/games/results/", competitors=g[side]["id"]), s365.NAME, 600)
+        data = s365.read_json(res) if _fresh(res) else None
+        for x in (data or {}).get("games") or []:
+            if x.get("id") == g["id"]:
+                hs, as_ = (x.get("homeCompetitor") or {}).get("score"), (x.get("awayCompetitor") or {}).get("score")
+                if hs is not None and as_ is not None and hs >= 0 and as_ >= 0:
+                    return int(hs), int(as_)
     return None
 
 
 # ---------- le passage ----------
 
+def _verdict(d, t):
+    """Verdict déjà annoncé du ticket `t` (« won » / « lost » / None), rangé par son identifiant daté."""
+    return d["tickets"].get(t.get("tid") or t["what"])
+
+
 def _open_legs(ts, d, now):
-    """Paris des tickets encore à suivre (pas décidés, match commencé ou commençant dans l'heure, pas trop vieux). Ticket gagné : plus rien à suivre.
-    Ticket déjà perdu : ses autres matchs restent suivis (C.WATCH_AFTER_LOSS) ; avec des tickets de 12 paris, un seul pari raté coupait sinon la
-    moitié de tes matchs (dimanche 11/10 : 43 matchs sur 86 jamais suivis)."""
+    """Paris des tickets encore à suivre (pas décidés, ou décidés en cours de match : provisoires jusqu'à la fin), match commencé ou commençant dans
+    l'heure, pas trop vieux. Ticket gagné : seuls ses paris provisoires restent revus (but annulé). Ticket déjà perdu : ses autres matchs restent suivis (C.WATCH_AFTER_LOSS) ; avec des
+    tickets de 12 paris, un seul pari raté coupait sinon la moitié de tes matchs (dimanche 11/10 : 43 matchs sur 86 jamais suivis)."""
     out = []
     for t in ts:
-        verdict = d["tickets"].get(t["what"])
-        if verdict == "won" or (verdict == "lost" and not C.WATCH_AFTER_LOSS):
-            continue
+        verdict = _verdict(d, t)
+        closed = verdict == "won" or (verdict == "lost" and not C.WATCH_AFTER_LOSS)     # tranché : seuls ses paris provisoires restent revus
         for leg in t["legs"]:
             k = f"{t['what']}|{leg['key']}"
             ko = _ko(leg)
-            if d["legs"].get(k, {}).get("state") in ("win", "loss") or not ko or need(leg)[0] is None:
+            cur = d["legs"].get(k, {})
+            if closed and not cur.get("prov"):
+                continue
+            if (cur.get("state") in ("win", "loss") and not cur.get("prov")) or not ko or need(leg)[0] is None:
                 continue
             if ko <= now + timedelta(hours=1) and now - ko <= timedelta(hours=GIVE_UP_H):
                 out.append((t, leg, k))
@@ -257,73 +307,239 @@ def _ticket_line(t, d):
     return None, f"📊 {won}/{len(st)} gagnés, {len(st) - won} en cours"
 
 
-def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None):
-    """Suivi des tickets : -> le message (Html) ou None s'il n'y a rien de neuf. `games` ({id: match}), `live_for(ids)`, `stats_for(g)`, `final_for(g)` :
-    injectables (tests) ; sinon 365scores via le proxy."""
+def _out(d, now, kind, text):
+    """Ajoute une ligne (HTML déjà échappé) au message du passage. `kind` : warn (panne / rétabli), ev (événement), foot (pied de ticket), nf (non suivi).
+    Les lignes restent dans le document jusqu'à leur envoi réussi (ou leur mise en attente par Telegram) : jamais perdues si le passage est coupé."""
+    if not any(o["text"] == text and o["k"] == kind for o in d["out"]):
+        d["out"].append({"at": now.isoformat(timespec="minutes"), "k": kind, "text": text})
+
+
+ORDER = ("warn", "ev", "foot", "nf")
+
+
+def compose(out):
+    """Message du passage depuis les lignes à envoyer : avertissement / rétabli, événements, pieds de tickets, paris non suivis ; None si rien."""
+    blocks = []
+    for kind in ORDER:
+        lines = [o["text"] for o in out if o["k"] == kind]
+        if lines:
+            blocks.append("\n".join(lines))
+    return telegram.Html("\n\n".join(blocks)) if blocks else None
+
+
+def _dur(td):
+    m = int(td.total_seconds() // 60)
+    return f"{m // 60} h {m % 60:02d}" if m >= 60 else f"{m} min"
+
+
+def _health(d, now, ok, why="", open_n=0, hard=False):
+    """Santé du suivi (d["health"]) : jamais de panne silencieuse. Panne DURE (365scores bloqué, proxy absent, plafond du mois) : avertie tout de suite ;
+    panne douce (pas de réponse, délai dépassé, erreur) : après C.WATCH_FAIL_PASSES passages de suite. Seulement s'il y a des matchs de tes tickets à
+    suivre, et une seule fois par panne ; au premier passage réussi ensuite : « ✅ rétabli »."""
+    h = d["health"]
+    at = now.isoformat(timespec="minutes")
+    if ok:
+        if h.get("warned"):
+            try:
+                since = _dur(now - datetime.fromisoformat(h["since"])) if h.get("since") else ""
+            except ValueError:
+                since = ""
+            _out(d, now, "warn", "✅ " + fmt.b("Suivi des matchs rétabli") + fmt.esc(f" (coupé {since})" if since else "") + fmt.esc(" : rattrapage ci-dessous."))
+        d["health"] = {"at": at, "ok": True, "why": "", "since": None, "fails": 0, "warned": False, "open": open_n}
+        return
+    h.update(at=at, ok=False, why=why, open=open_n, fails=int(h.get("fails") or 0) + 1, since=h.get("since") or at)
+    if open_n > 0 and not h.get("warned") and (hard or h["fails"] >= C.WATCH_FAIL_PASSES):
+        n = f"{open_n} match{'s' if open_n > 1 else ''} de tes tickets ne {'sont' if open_n > 1 else 'est'} plus suivi{'s' if open_n > 1 else ''}"
+        _out(d, now, "warn", "⚠️ " + fmt.b("Suivi des matchs en panne") + fmt.esc(f" : {why}. {n} : regarde-les toi-même. Je te préviens dès que ça repart."))
+        h["warned"] = True
+    print(f"[suivi] en panne : {why}", file=sys.stderr)
+
+
+def _blocked_why():
+    """Raison d'une panne dure de 365scores (source bloquée après un refus, avec l'heure de fin), ou None."""
+    from .sources import state as src_state
+    hl = src_state.health("s365")
+    if not hl.get("blocked_until"):
+        return None
+    until = str(hl["blocked_until"])[:16].replace("T", " à ")
+    return f"365scores refuse les lectures ({hl.get('last_error') or 'accès refusé'}), bloqué jusqu'au {until[8:10]}/{until[5:7]} {until[11:]} UTC"
+
+
+def _unfollowed(ts, d, now, games):
+    """Paris de tes tickets que Kelly ne peut PAS suivre en direct, dits une fois (d["legs"][k]["nf"]) : marché non suivi, heure inconnue, match
+    introuvable sur 365scores 30 min après le coup d'envoi. -> [(texte du match, raison)]."""
+    out, seen = [], set()
+    for t in ts:
+        if _verdict(d, t) == "won":
+            continue
+        for leg in t["legs"]:
+            k = f"{t['what']}|{leg['key']}"
+            cur = d["legs"].get(k, {})
+            if cur.get("nf") or cur.get("state") in ("win", "loss") or leg["key"] in seen:
+                continue
+            ko = _ko(leg)
+            if need(leg)[0] is None and ko and ko <= now:
+                why = "marché non suivi en direct"
+            elif not ko:
+                why = "heure du match inconnue"
+            elif games is not None and now - ko >= timedelta(minutes=30) and now - ko <= timedelta(hours=GIVE_UP_H) and not find(leg, games):
+                why = "match introuvable sur 365scores"
+            else:
+                continue
+            seen.add(leg["key"])
+            for t2 in ts:                               # le même pari dans plusieurs tickets : dit une fois, marqué partout
+                for l2 in t2["legs"]:
+                    if l2["key"] == leg["key"]:
+                        d["legs"].setdefault(f"{t2['what']}|{l2['key']}", {}).update(nf=why, at=now.isoformat(timespec="minutes"))
+            out.append((f"{leg.get('home')} – {leg.get('away')}" + (f" ({leg.get('pick')})" if leg.get("pick") else ""), why))
+    return out
+
+
+def _lower(prev, cur):
+    """Le score a-t-il BAISSÉ depuis le passage précédent (but annulé, VAR) ?"""
+    try:
+        ph, pa = (int(x) for x in str(prev).split("-"))
+    except ValueError:
+        return False
+    return cur[0] < ph or cur[1] < pa
+
+
+def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None):
+    """Le travail d'un passage, sur le document `d` (lignes à envoyer ajoutées à d["out"], document sauvé après chaque match)."""
     from .sources import s365
-    now = now or _now()
-    d = _load()
     ts = [t for day in (now.date(), now.date() - timedelta(days=1)) for t in exposure.tickets(str(day))]
     todo = _open_legs(ts, d, now)
+    open_n = len({leg.get("id") or leg["key"] for _, leg, _ in todo})
     if not todo:
-        return None
-    alive = {t["what"] for t in ts if d["tickets"].get(t["what"]) not in ("won", "lost")}         # tickets encore en jeu avant ce passage
-    alive_legs = {leg["key"] for t in ts if t["what"] in alive for leg in t["legs"]}
-    # message : chaque pari décidé ou but UNE fois (même dans 7 tickets), puis une ligne par ticket touché (« 🎫 Combi … · 📊 1/7 gagnés, 6 en cours »)
-    events, touched = {}, {}                          # ligne -> None (ordre, sans doublon) ; ticket -> t
+        for m, why in _unfollowed(ts, d, now, games):
+            _out(d, now, "nf", "👁️ " + fmt.esc(f"Pas suivi en direct (verdict au règlement du matin) : {m} : {why}"))
+        d["health"].update(at=now.isoformat(timespec="minutes"), open=0)
+        return
+    alive = {t.get("tid") or t["what"] for t in ts if _verdict(d, t) not in ("won", "lost")}            # tickets encore en jeu avant ce passage
+    alive_legs = {leg["key"] for t in ts if (t.get("tid") or t["what"]) in alive for leg in t["legs"]}
+    if games is None:
+        why = _blocked_why()
+        if why:
+            _health(d, now, False, why, open_n, hard=True)
+            return
+    events, touched = {}, {}
     with (_NoProxy() if games is not None else s365._via_proxy(settle=True)) as why:     # tes tickets (~1 Ko par match) passent avant la lecture de fond
         if why:
-            print(f"[suivi] tickets non suivis : {why}", file=sys.stderr)
-            return None
+            _health(d, now, False, why, open_n, hard=True)
+            return
         games = games if games is not None else _day_games(s365, now)
+        for m, why_nf in _unfollowed(ts, d, now, games):
+            _out(d, now, "nf", "👁️ " + fmt.esc(f"Pas suivi en direct (verdict au règlement du matin) : {m} : {why_nf}"))
         found = [(t, leg, k, find(leg, games)) for t, leg, k in todo]
         found = [x for x in found if x[3] and _ko(x[1]) <= now]                 # matchs commencés
         if not found:
-            store.save(FILE, d)
-            return None
+            _health(d, now, True, open_n=open_n)
+            return
         status = (live_for or (lambda ids: _live(s365, ids, now)))({g["id"] for _, _, _, g in found})
-        cache_stats, cache_final = {}, {}
-        for t, leg, k, g in found:
-            ko, prev, st_g = _ko(leg), d["legs"].get(k, {}), status.get(g["id"]) or {}
-            paused = st_g.get("paused")
-            finished = st_g.get("ended") or (not st_g.get("live") and not paused and now - ko >= timedelta(minutes=FINISH_MIN))
-            score = st_g.get("score") if (st_g.get("live") or st_g.get("ended") or paused) else None
-            if finished and not score:
-                if g["id"] not in cache_final:
-                    cache_final[g["id"]] = (final_for or (lambda x: _final(s365, x)))(g)
-                score = cache_final[g["id"]]
-            if not score:
-                continue
-            stats = {}
-            if need(leg)[0] not in (None, "goals"):
-                if g["id"] not in cache_stats:
-                    cache_stats[g["id"]] = (stats_for or (lambda x: _stats(s365, x)))(g)
-                stats = cache_stats[g["id"]]
-            st, detail = state(leg, *score, stats, finished)
-            if st is None:
-                continue
-            sc = f"{score[0]}-{score[1]}"
-            line = None
-            match = f"{leg['home']} – {leg['away']}"
-            if st in ("win", "loss"):
-                line = f"{'✅' if st == 'win' else '❌'} {match} : {leg.get('pick')} ({detail}{'' if detail == sc else ', ' + sc})"
-            elif leg.get("market") in GOAL_MARKETS and prev.get("score") not in (None, sc):        # un but : tous les paris de buts (pas seulement plus / moins)
-                line = f"⚽ {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e{', suspendu' if paused else ''}) · {leg.get('pick')} : {margin(leg, *score)}".rstrip(" :")
-            d["legs"][k] = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
-            if line:
-                if leg["key"] not in alive_legs:          # pari seulement dans des tickets déjà perdus : dit, mais sans compter
-                    line += " · ticket déjà perdu"
-                events[line] = None
-                if t["what"] in alive:                    # pied de ticket : seulement les tickets encore en jeu (« ❌ Ticket perdu » une seule fois)
-                    touched[t["what"]] = t
-    feet = []
-    for what, t in touched.items():
+        if status is None:
+            _health(d, now, False, "365scores ne répond pas", open_n)
+            return
+        by_game = {}
+        for x in found:
+            by_game.setdefault(x[3]["id"], []).append(x)
+        order = sorted(by_game, key=lambda gid: (not (status.get(gid) or {}).get("live"), min(_ko(x[1]) for x in by_game[gid])))
+        cache_stats, cache_final, late = {}, {}, False
+        for gid in order:
+            dl = http.get_deadline()
+            if dl is not None and http.monotonic() > dl:
+                late = True
+                break
+            try:
+                _one_game(d, now, by_game[gid], status.get(gid) or {}, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive,
+                          alive_legs)
+            except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
+                print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+            for line in events:
+                _out(d, now, "ev", fmt.esc(line))
+            events.clear()
+            store.save(FILE, d)                         # après CHAQUE match : un passage coupé ne perd ni ne répète rien
+    for tid, t in touched.items():
         verdict, foot = _ticket_line(t, d)
+        old = d["tickets"].get(tid)
+        if old and verdict != old:                       # verdict revu (but annulé, décision provisoire corrigée)
+            foot = ("⚠️ Ticket corrigé : de nouveau en jeu. " if not verdict else "⚠️ Ticket corrigé. ") + foot
         if verdict:
-            d["tickets"][what] = verdict
-        feet.append(f"🎫 {fmt.b(fmt.esc(t['name']))} · {fmt.esc(foot)}")
+            d["tickets"][tid] = verdict
+        else:
+            d["tickets"].pop(tid, None)
+        _out(d, now, "foot", f"🎫 {fmt.b(fmt.esc(t['name']))} · {fmt.esc(foot)}")
+    if late:
+        _health(d, now, False, f"passage trop long (plus de {C.WATCH_DEADLINE_S} s), le reste au prochain passage", open_n)
+    else:
+        _health(d, now, True, open_n=open_n)
+
+
+def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive, alive_legs):
+    """Les paris d'UN match : score, stats si besoin, état de chaque pari ; lignes dans `events`, tickets touchés dans `touched`."""
+    g = legs[0][3]
+    paused = st_g.get("paused")
+    ko = min(_ko(x[1]) for x in legs)
+    finished = st_g.get("ended") or (not st_g.get("live") and not paused and now - ko >= timedelta(minutes=FINISH_MIN))
+    score = st_g.get("score") if (st_g.get("live") or st_g.get("ended") or paused) else None
+    if finished and not score:
+        if g["id"] not in cache_final:
+            cache_final[g["id"]] = (final_for or (lambda x: _final(s365, x)))(g)
+        score = cache_final[g["id"]]
+    if not score:
+        return
+    sc = f"{score[0]}-{score[1]}"
+    match = f"{legs[0][1]['home']} – {legs[0][1]['away']}"
+    var_said = False
+    for t, leg, k, _ in legs:
+        prev = d["legs"].get(k, {})
+        stats = {}
+        if need(leg)[0] not in (None, "goals"):
+            if g["id"] not in cache_stats:
+                cache_stats[g["id"]] = (stats_for or (lambda x: _stats(s365, x)))(g)
+            stats = cache_stats[g["id"]]
+        st, detail = state(leg, *score, stats, finished)
+        if st is None:
+            continue
+        line = None
+        if prev.get("score") and _lower(prev["score"], score) and not var_said:
+            events[f"↩️ But annulé : {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e)"] = None
+            var_said = True
+        tag = "" if leg["key"] in alive_legs else " · ticket déjà perdu"
+        if prev.get("prov") and prev.get("state") in ("win", "loss"):
+            if st != prev["state"] and (finished or st == "live" or st in ("win", "loss")):
+                if st in ("win", "loss"):
+                    line = f"⚠️ Corrigé : {match} : {leg.get('pick')} : finalement {'gagné' if st == 'win' else 'perdu'} ({detail}){tag}"
+                else:
+                    line = f"⚠️ Corrigé : {match} : {leg.get('pick')} : de nouveau en jeu ({sc}){tag}"
+        elif st in ("win", "loss"):
+            line = f"{'✅' if st == 'win' else '❌'} {match} : {leg.get('pick')} ({detail}{'' if detail == sc else ', ' + sc}){tag}"
+        elif leg.get("market") in GOAL_MARKETS and prev.get("score") not in (None, sc) and not _lower(prev["score"], score):
+            line = (f"⚽ {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e{', suspendu' if paused else ''}) · {leg.get('pick')} : "
+                    f"{margin(leg, *score)}").rstrip(" :") + tag
+        rec = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
+        if st in ("win", "loss") and not finished:
+            rec["prov"] = 1                              # décidé en cours de match : revu jusqu'à la fin (but annulé)
+        d["legs"][k] = {**{x: prev[x] for x in ("nf",) if x in prev}, **rec}
+        if line:
+            events[line] = None
+            tid = t.get("tid") or t["what"]
+            if tid in alive or line.startswith("⚠️ Corrigé"):     # pied : tickets en jeu, ou ticket déjà tranché dont un pari est corrigé
+                touched[tid] = t
+
+
+def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, keep=False):
+    """Suivi des tickets : -> le message (Html) ou None s'il n'y a rien de neuf. `games` ({id: match}), `live_for(ids)`, `stats_for(g)`, `final_for(g)` :
+    injectables (tests) ; sinon 365scores via le proxy. `keep` : les lignes restent dans le document jusqu'à leur envoi (tick les retire ensuite) ;
+    sinon elles sont rendues et retirées tout de suite. Lève WatchStateError si le document ne peut pas être lu."""
+    now = now or _now()
+    d = _load()
+    _purge(d, now)
+    _follow(d, now, games, live_for, stats_for, final_for)
+    msg = compose(d["out"])
+    if not keep:
+        d["out"] = []
     store.save(FILE, d)
-    return telegram.Html("\n".join(fmt.esc(x) for x in events) + ("\n\n" + "\n".join(feet) if feet else "")) if events else None
+    return msg
 
 
 class _NoProxy:
@@ -378,14 +594,95 @@ def opportunity(now=None, current=None, get=None):
     return telegram.with_buttons(msg, telegram.inline([[(f"cote {t}", f"live|{t}") for t in targets]]))
 
 
-def tick(now=None):
-    """Le passage de 10 minutes : alertes gardées la nuit (quiet.flush), suivi des tickets, opportunité live. Ne lève jamais."""
-    now = now or _now()
-    for name, fn in (("alertes de la nuit", lambda: quiet.flush(now)), ("tickets", lambda: follow(now)), ("opportunité live", lambda: opportunity(now))):
+def _lock():
+    """Verrou NON bloquant data/.watch.lock (fichier ouvert à fermer) ; None si un autre passage du suivi tourne déjà."""
+    import fcntl
+    try:
+        os.makedirs(store.DATA_DIR, exist_ok=True)
+        f = open(store.path(".watch.lock"), "a")
+    except OSError:
+        return None
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return f
+    except OSError:
+        f.close()
+        return None
+
+
+def _tickets(now):
+    """Suivi des tickets puis envoi du message : ses lignes ne quittent le document qu'une fois envoyées ou mises en attente par Telegram ; après
+    SEND_TRIES échecs elles sont abandonnées (note sur stderr). Une erreur imprévue compte comme une panne (santé, avertissement)."""
+    try:
+        msg = follow(now, keep=True)
+    except WatchStateError as e:
+        print(f"[suivi] tickets non suivis : document du suivi illisible ({e}) : rien envoyé", file=sys.stderr)
         try:
-            msg = fn()
-            if msg and not isinstance(msg, int):
+            store.save("watch_health.json", {"at": now.isoformat(timespec="minutes"), "ok": False, "why": f"document illisible : {e}"})
+        except OSError:
+            pass
+        return
+    except Exception as e:                          # noqa: BLE001 - jamais muet : la panne est comptée et, si elle dure, dite
+        print(f"[suivi] tickets ignorés : {http.err(e)}", file=sys.stderr)
+        try:
+            d = _load()
+            _health(d, now, False, f"erreur interne ({type(e).__name__})", int(d["health"].get("open") or 0))
+            store.save(FILE, d)
+            msg = compose(d["out"])
+        except Exception:                           # noqa: BLE001
+            return
+    if not msg:
+        return
+    try:
+        d = _load()
+    except WatchStateError:
+        return
+    sent_lines = list(d["out"])
+    ok = quiet.send(msg, now, kind="suivi")
+    queued = telegram.LAST_QUEUED
+    if ok or queued:
+        d["out"] = [o for o in d["out"] if o not in sent_lines]
+        d["health"]["send_fails"] = 0
+        print(f"[suivi] tickets : message {'envoyé' if ok and not queued else 'mis en attente'}", file=sys.stderr)
+    else:
+        n = int(d["health"].get("send_fails") or 0) + 1
+        d["health"]["send_fails"] = n
+        if n >= SEND_TRIES:
+            d["out"] = [o for o in d["out"] if o not in sent_lines]
+            d["health"]["send_fails"] = 0
+            print(f"[suivi] tickets : envoi impossible {n} fois de suite, {len(sent_lines)} ligne(s) abandonnée(s)", file=sys.stderr)
+        else:
+            print(f"[suivi] tickets : envoi échoué, gardé pour le prochain passage ({n}/{SEND_TRIES})", file=sys.stderr)
+    store.save(FILE, d)
+
+
+SEND_TRIES = 3
+
+
+def tick(now=None):
+    """Le passage de 10 minutes : alertes gardées la nuit (quiet.flush), suivi des tickets, opportunité live. Un seul passage à la fois (verrou),
+    délai global C.WATCH_DEADLINE_S pour les téléchargements. Ne lève jamais."""
+    now = now or _now()
+    lock = _lock()
+    if lock is None:
+        print("[suivi] un autre passage du suivi tourne déjà : rien cette fois", file=sys.stderr)
+        return
+    http.set_deadline(C.WATCH_DEADLINE_S)
+    try:
+        try:
+            n = quiet.flush(now)
+            if n:
+                print(f"[suivi] alertes de la nuit : {n} envoyée(s)", file=sys.stderr)
+        except Exception as e:                      # noqa: BLE001
+            print(f"[suivi] alertes de la nuit ignorées : {http.err(e)}", file=sys.stderr)
+        _tickets(now)
+        try:
+            msg = opportunity(now)
+            if msg:
                 quiet.send(msg, now)
-                print(f"[suivi] {name} : message envoyé", file=sys.stderr)
-        except Exception as e:                      # noqa: BLE001 - une partie en panne n'empêche pas les autres
-            print(f"[suivi] {name} ignoré : {http.err(e)}", file=sys.stderr)
+                print("[suivi] opportunité live : message envoyé", file=sys.stderr)
+        except Exception as e:                      # noqa: BLE001
+            print(f"[suivi] opportunité live ignorée : {http.err(e)}", file=sys.stderr)
+    finally:
+        http.set_deadline(None)
+        lock.close()

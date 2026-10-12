@@ -327,7 +327,7 @@ def test_supervisor_survives_missing_script():
 def helper_proc(logs, sighup_ignored=False):
     code = ("import sys, atexit, termux_runner as R\n"
             "R.LOGS = sys.argv[1]\n"
-            "r = R.Runner(serve_cmd=[sys.executable, '-c', 'import time; time.sleep(60)'], tick=0.2, plan=lambda n, s, e: [], state=R.new_state())\n"
+            "r = R.Runner(serve_cmd=[sys.executable, '-c', 'import time; time.sleep(60)'], tick=0.2, plan=lambda n, s, e: [], state=R.new_state(), watch_thread=False)\n"
             "atexit.register(r.shutdown)\n"
             "R.install_signals()\n"
             "print('pret', flush=True)\n"
@@ -392,7 +392,7 @@ def test_atexit_and_stale():
     logs = tempfile.mkdtemp(prefix="kelly-atexit-")
     code = ("import sys, atexit, termux_runner as R\n"
             "R.LOGS = sys.argv[1]\n"
-            "r = R.Runner(serve_cmd=[sys.executable, '-c', 'import time; time.sleep(60)'], tick=0.2, plan=lambda n, s, e: [], state=R.new_state())\n"
+            "r = R.Runner(serve_cmd=[sys.executable, '-c', 'import time; time.sleep(60)'], tick=0.2, plan=lambda n, s, e: [], state=R.new_state(), watch_thread=False)\n"
             "atexit.register(r.shutdown)\n"
             "r.serve.check(); print('PIDLINE', r.serve.proc.pid, flush=True)\n"
             "raise SystemExit(0)\n")
@@ -447,6 +447,40 @@ def test_run_cmd_timeout_cwd():
     print("ok  passages : chemin absolu, dossier du dépôt, délai maximal (124), coupé à l'arrêt (143)")
 
 
+def test_watch_thread_runs_during_long_task():
+    """Le suivi des matchs (--watch) tourne dans son propre fil : il passe PENDANT un --track long, et n'est plus lancé par la boucle principale."""
+    logs = tempfile.mkdtemp(prefix="kelly-watchthread-")
+    real_logs, real_stop = R.LOGS, R.STOP
+    R.LOGS, R.STOP = logs, threading.Event()
+    ran, lock = [], threading.Lock()
+    st = R.new_state()
+
+    def fake(args):
+        with lock:
+            ran.append((args[0], time.time()))
+        if args[0] == "--track":
+            time.sleep(1.5)                         # un relevé horaire long
+        return 0
+    r = R.Runner(serve_cmd=[sys.executable, "-c", "import time; time.sleep(60)"], tick=0.05, state=st, run=fake,
+                 plan=lambda now, s, e: [["--track"], ["--watch"]] if not any(a == "--track" for a, _ in ran) else [])
+    t = threading.Thread(target=r.loop)
+    t.start()
+    try:
+        end = time.time() + 5
+        while time.time() < end and not any(a == "--watch" for a, _ in ran):
+            time.sleep(0.05)
+        R.STOP.set()
+        t.join(5)
+    finally:
+        r.shutdown()
+        R.LOGS, R.STOP = real_logs, real_stop
+    tr = next(x for a, x in ran if a == "--track")
+    w = [x for a, x in ran if a == "--watch"]
+    assert len(w) == 1 and w[0] < tr + 1.5, ran        # lancé par son fil pendant le --track, une seule fois (jamais par la boucle principale)
+    assert st["watch_at"] > 0, st
+    print("ok  suivi des matchs dans son propre fil : passe pendant un relevé long")
+
+
 def test_loop_supervises_during_task():
     """--serve est relancé PENDANT un passage long (fil de surveillance), et le planning marque le passage fait."""
     logs = tempfile.mkdtemp(prefix="kelly-loop-")
@@ -455,7 +489,7 @@ def test_loop_supervises_during_task():
     ran, pids = [], []
     st = R.new_state()
     r = R.Runner(serve_cmd=[sys.executable, "-c", "import time; time.sleep(60)"], tick=0.1, state=st, watch_every=0.1,
-                 plan=lambda now, s, e: [["--watch"]] if not ran else [])
+                 plan=lambda now, s, e: [["--watch"]] if not ran else [], watch_thread=False)
     pidfile = os.path.join(logs, "serve.pid")
 
     def long_task(args):                            # un passage de plusieurs secondes pendant lequel --serve est tué
@@ -519,6 +553,7 @@ def main():
     test_signals()
     test_atexit_and_stale()
     test_run_cmd_timeout_cwd()
+    test_watch_thread_runs_during_long_task()
     test_loop_supervises_during_task()
     test_gitignore()
     print("TOUS LES TESTS DU RUNNER PASSENT")

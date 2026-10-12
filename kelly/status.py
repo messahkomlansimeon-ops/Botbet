@@ -10,7 +10,7 @@ Aucun crédit dépensé, aucune écriture. Ne lève jamais : une partie en éche
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import config as C, progress
 
@@ -265,6 +265,12 @@ def report(now=None):
     if svc:
         blocks.append([fmt.b("⚙️ Services")] + [fmt.esc(x) for x in svc])
     try:
+        wl = watch_lines(now)
+        if wl:
+            blocks.append([fmt.b("🎫 Suivi des matchs")] + [fmt.esc(x) for x in wl])
+    except Exception as e:                              # noqa: BLE001
+        blocks.append([f"⚠️ Suivi des matchs : état illisible ({type(e).__name__})"])
+    try:
         blocks.append([fmt.b("📡 Sources")] + [fmt.esc(x) for x in source_lines(now)])
     except Exception as e:                              # noqa: BLE001
         blocks.append([f"⚠️ Sources de stats : rapport illisible ({type(e).__name__})"])
@@ -279,6 +285,37 @@ def report(now=None):
     verdict = "tout va bien 👍" if not bad else f"{bad} point{'s' if bad > 1 else ''} à regarder ❌"
     head = fmt.b(f"🩺 Kelly — {now:%Hh%M}") + f" · {verdict}"
     return Html("\n\n".join([head] + ["\n".join(blk) for blk in blocks]))
+
+
+def watch_lines(now=None):
+    """État du suivi des matchs (kelly/watch.py, ticket_watch.json["health"]) : « ✅ … », « ❌ en panne depuis 19h50 : <raison> », « ❌ dernier passage il
+    y a 47 min » (seulement quand des matchs de tes tickets sont à suivre) ; [] si le suivi n'a jamais tourné."""
+    from . import store, watch
+    now = now or datetime.now(timezone.utc)
+    d = store.load(watch.FILE, {})
+    h = (d or {}).get("health") if isinstance(d, dict) else None
+    if not h or not h.get("at"):
+        return []
+    try:
+        at = datetime.fromisoformat(h["at"])
+    except ValueError:
+        return []
+    n = int(h.get("open") or 0)
+    games = f"{n} match{'s' if n > 1 else ''} à suivre" if n else "aucun match de tes tickets en cours"
+    out = []
+    if not h.get("ok"):
+        since = h.get("since") or h["at"]
+        out.append(f"❌ En panne depuis {since[11:16].replace(':', 'h')} UTC : {h.get('why') or 'raison inconnue'} · {games}")
+    elif n and now - at > timedelta(minutes=25):
+        out.append(f"❌ Dernier passage il y a {int((now - at).total_seconds() // 60)} min · {games}")
+    else:
+        out.append(f"✅ Actif · {games} · dernier passage {h['at'][11:16].replace(':', 'h')} UTC")
+    b = d.get("budget") or {}
+    if b.get("day") == str(now.date()) and b.get("detail"):
+        out.append(f"🔎 Fiches de match lues aujourd'hui : {b['detail']}/{C.WATCH_DETAIL_DAY}")
+    if d.get("out"):
+        out.append(f"⏳ {len(d['out'])} ligne(s) en attente d'envoi")
+    return out
 
 
 def is_status(text):

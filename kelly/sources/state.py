@@ -27,11 +27,22 @@ def _all():
 
 
 def _put(name, **kw):
-    d = _all()
-    cur = d.get(name) if isinstance(d.get(name), dict) else {}
-    cur.update(kw)
-    d[name] = cur
-    store.save(FILE, d)
+    """Met à jour l'état de la source `name` : lire-modifier-écrire atomique (store.update), plusieurs processus (suivi des matchs, relevé horaire)
+    peuvent bloquer ou noter une source en même temps."""
+    def upd(d):
+        d = d if isinstance(d, dict) else {}
+        cur = d.get(name) if isinstance(d.get(name), dict) else {}
+        cur.update(kw)
+        d[name] = cur
+        return d, None
+    try:
+        store.update(FILE, upd, {})
+    except OSError:                                  # base illisible dans ce processus : comme avant (save refusé), rien d'écrit
+        d = _all()
+        cur = d.get(name) if isinstance(d.get(name), dict) else {}
+        cur.update(kw)
+        d[name] = cur
+        store.save(FILE, d)
 
 
 _priority = set()                  # clés (ligues) à actualiser en premier dans ce passage (sources.refresh_all)

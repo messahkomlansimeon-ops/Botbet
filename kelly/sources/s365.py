@@ -838,11 +838,17 @@ def _via_proxy(settle=False):
         b, n = w["bytes"] - start["bytes"], w["requests"] - start["requests"]
         if n:
             day = str(state.now().date())
-            cur = usage(day)                              # relu : un autre processus a pu compter entre-temps
-            cur["bytes"], cur["requests"] = int(cur["bytes"] + b), cur["requests"] + n
-            cur["days"][day] = int(cur["days"].get(day, 0) + b)
-            cur["days"] = dict(sorted(cur["days"].items())[-40:])
-            store.save(USAGE, cur)
+
+            def add(u):                                   # atomique : un autre processus compte peut-être en même temps
+                cur = u if isinstance(u, dict) and u.get("month") == day[:7] else {"month": day[:7], "bytes": 0, "requests": 0, "days": {}}
+                cur["bytes"], cur["requests"] = int(cur["bytes"] + b), cur["requests"] + n
+                cur["days"][day] = int(cur["days"].get(day, 0) + b)
+                cur["days"] = dict(sorted(cur["days"].items())[-40:])
+                return cur, None
+            try:
+                store.update(USAGE, add, {})
+            except OSError as e:
+                print(f"[365scores] compteur de données non mis à jour : {e}", file=sys.stderr)
 
 
 def fill(*a, **kw):

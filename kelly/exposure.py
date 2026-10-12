@@ -25,36 +25,63 @@ def _leg(id_, key, prob, home="", away="", src=None):
 
 
 def tickets(day):
-    """Tickets joués du jour `day` : [{"what", "name", "legs": [{id, key, prob, home, away}], "stake", "odds"}]."""
+    """Tickets joués du jour `day` : [{"what", "tid", "name", "legs": [{id, key, prob, home, away, ...FIELDS}], "stake", "odds"}]. `tid` : identifiant
+    STABLE du ticket, daté (« 2026-10-12|vm1 », « 2026-10-12|pari|<clé> ») : les combis sur mesure repartent à m1 chaque jour et tous les paris seuls
+    s'appellent « pari » ; le suivi des matchs (kelly/watch.py) range ses verdicts par tid. Une ligne abîmée est sautée (note sur stderr), jamais
+    les autres tickets."""
     from . import played
     day = str(day)[:10]
     out = []
+
+    def one(build, what):
+        try:
+            t = build()
+        except Exception as e:                      # noqa: BLE001 - un ticket illisible ne cache pas les autres
+            print(f"[tickets] ticket {what} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+            return
+        if t:
+            out.append(t)
     try:
         bets = store.load("bets.json", {"picks": [], "combos": []})
         rows = track.load()
-        by_key = {r["key"]: r for r in rows if r.get("date") == day}
-        for c in bets.get("combos", []):
-            if c.get("date") == day and c.get("played") and not c.get("skipped"):
-                legs = [_leg(k.split("|")[0], k, (by_key.get(k) or {}).get("prob"), (by_key.get(k) or {}).get("home", ""),
-                             (by_key.get(k) or {}).get("away", ""), by_key.get(k)) for k in c.get("keys") or []]
-                out.append({"what": played.norm(fmt.tier_word(c["tier"])), "name": fmt.tier_word(c["tier"]),
-                            "legs": legs, "stake": c["played"]["stake"], "odds": c["played"]["odds"]})
-        singles = played.single_rows(rows, bets.get("combos", [])) + played.gap_rows(rows)
-        for r in singles:
-            if r.get("date") == day and r.get("played") and not r.get("skipped"):
-                what = played.gap_what(r) if r.get("sharpgap") and r.get("gap_n") and r.get("single") is not True else "pari"
-                out.append({"what": what, "name": r.get("pick") or "pari du jour", "stake": r["played"]["stake"], "odds": r["played"]["odds"],
-                            "legs": [_leg(r.get("id") or r["key"].split("|")[0], r["key"], r.get("prob"), r.get("home", ""), r.get("away", ""), r)]})
-        for c in fair.load_combos():
-            if c.get("date") == day and c.get("played") and not c.get("skipped"):
-                out.append({"what": f"v{c['tier']}",
-                            "name": played.custom_name(c) if played.is_custom(c)
-                            else played._fair_name(c["tier"], played.is_real(c), c),      # « Stats », « Tirs cadrés »... : jamais la clé interne (« ts5 »)
-                            "stake": c["played"]["stake"], "odds": c["played"]["odds"],
-                            "legs": [_leg(l.get("id"), l.get("key"), l.get("prob"), l.get("home", ""), l.get("away", ""), l) for l in c.get("legs") or []],
-                            "live": c.get("src") == "live", "date": c.get("date")})
+        combos_rows = fair.load_combos()
     except Exception as e:                          # noqa: BLE001 - jamais bloquant : sans tickets, rien ne change
         print(f"[tickets] lecture des tickets joués impossible : {type(e).__name__}: {e}", file=sys.stderr)
+        return out
+    by_key = {r["key"]: r for r in rows if r.get("date") == day}
+    for c in bets.get("combos", []):
+        if c.get("date") == day and c.get("played") and not c.get("skipped"):
+            def morning(c=c):
+                what = played.norm(fmt.tier_word(c["tier"]))
+                legs = [_leg(k.split("|")[0], k, (by_key.get(k) or {}).get("prob"), (by_key.get(k) or {}).get("home", ""),
+                             (by_key.get(k) or {}).get("away", ""), by_key.get(k)) for k in c.get("keys") or []]
+                return {"what": what, "tid": f"{day}|{what}", "name": fmt.tier_word(c["tier"]), "legs": legs,
+                        "stake": c["played"]["stake"], "odds": c["played"]["odds"]}
+            one(morning, c.get("tier"))
+    try:
+        singles = played.single_rows(rows, bets.get("combos", [])) + played.gap_rows(rows)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[tickets] paris seuls illisibles : {type(e).__name__}: {e}", file=sys.stderr)
+        singles = []
+    for r in singles:
+        if r.get("date") == day and r.get("played") and not r.get("skipped"):
+            def single(r=r):
+                what = played.gap_what(r) if r.get("sharpgap") and r.get("gap_n") and r.get("single") is not True else "pari"
+                tid = f"{day}|pari|{r['key']}" if what == "pari" else f"{day}|{what}"
+                return {"what": what, "tid": tid, "name": r.get("pick") or "pari du jour", "stake": r["played"]["stake"], "odds": r["played"]["odds"],
+                        "legs": [_leg(r.get("id") or r["key"].split("|")[0], r["key"], r.get("prob"), r.get("home", ""), r.get("away", ""), r)]}
+            one(single, r.get("key"))
+    for c in combos_rows:
+        if c.get("date") == day and c.get("played") and not c.get("skipped"):
+            def combo(c=c):
+                what = f"v{c['tier']}"
+                return {"what": what, "tid": f"{day}|{what}",
+                        "name": played.custom_name(c) if played.is_custom(c)
+                        else played._fair_name(c["tier"], played.is_real(c), c),      # « Stats », « Tirs cadrés »... : jamais la clé interne (« ts5 »)
+                        "stake": c["played"]["stake"], "odds": c["played"]["odds"],
+                        "legs": [_leg(l.get("id"), l.get("key"), l.get("prob"), l.get("home", ""), l.get("away", ""), l) for l in c.get("legs") or []],
+                        "live": c.get("src") == "live", "date": c.get("date")}
+            one(combo, c.get("tier"))
     return out
 
 

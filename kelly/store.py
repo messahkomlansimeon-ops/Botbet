@@ -146,10 +146,11 @@ def _now():
 _unreadable = set()     # documents dont la dernière lecture a raté sur ERREUR DE BASE dans ce processus : save() refuse de les écraser (lire un default puis le réécrire effacerait de bonnes données)
 
 
-def load(name, default):
+def load(name, default, strict=False):
     """Document `name`, ou `default` s'il n'existe pas (ou si la base est illisible : le bot continue). Une erreur de base (verrou
     dépassé, disque) est mémorisée (réussie -> oubliée) : le prochain save() du document est refusé, pour ne pas remplacer de bonnes
-    données par un default. Un JSON abîmé, lui, est réparable : le save() suivant remplace le document."""
+    données par un default. Un JSON abîmé, lui, est réparable : le save() suivant remplace le document. `strict` : une erreur de base
+    lève OSError au lieu de rendre `default` (l'appelant ne doit surtout pas croire le document vide : suivi des matchs)."""
     try:
         with _db() as con:
             row = con.execute("SELECT body FROM docs WHERE name=?", (name,)).fetchone()
@@ -158,6 +159,8 @@ def load(name, default):
     except OSError as e:
         _unreadable.add(name)
         print(f"[store] lecture de {name} impossible : {e}", file=sys.stderr)
+        if strict:
+            raise
         return default
     except ValueError as e:
         print(f"[store] lecture de {name} impossible : {e}", file=sys.stderr)
@@ -189,6 +192,33 @@ def save(name, obj, compact=False):
     with _db() as con:
         con.execute("INSERT INTO docs (name, body, updated) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET body=excluded.body,"
                     " updated=excluded.updated, version=docs.version+1", (name, body, _now()))
+
+
+def update(name, fn, default):
+    """Lire-modifier-écrire ATOMIQUE du document `name` : dans une seule transaction SQLite (BEGIN IMMEDIATE), lit le document (ou `default`),
+    appelle `new, result = fn(document)`, écrit `new` (sauf si c'est None : rien d'écrit), valide. Deux processus (le bot Telegram et le suivi des
+    matchs, qui ajoutent tous deux à la file des messages) ne peuvent plus écraser l'ajout de l'autre. -> `result`. Lève OSError (base refusée)
+    ; refuse un document illisible dans ce processus (comme save)."""
+    if name in _unreadable:
+        raise OSError(f"{name} : la base n'a pas pu être relue dans ce processus")
+    with _db() as con:
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            row = con.execute("SELECT body FROM docs WHERE name=?", (name,)).fetchone()
+            try:
+                obj = json.loads(row[0]) if row else default
+            except ValueError:
+                obj = default
+            new, result = fn(obj)
+            if new is not None:
+                con.execute("INSERT INTO docs (name, body, updated) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET body=excluded.body,"
+                            " updated=excluded.updated, version=docs.version+1", (name, _dump(new), _now()))
+            con.execute("COMMIT")
+        except BaseException:
+            with contextlib.suppress(sqlite3.Error):
+                con.execute("ROLLBACK")
+            raise
+    return result
 
 
 def exists(name):
