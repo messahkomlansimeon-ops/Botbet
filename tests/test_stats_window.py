@@ -68,6 +68,7 @@ def setup(p=0.66, extra=(), announced=True, combos=None):
     pas encore ouverts à 04:00."""
     store.save(calib.FILE, {})
     calib._memo.clear()
+    C.QUIET_HOURS = "off"
     for name in (statswindow.FILE, "bets.json", "tracked.json", fair.FILE, fair.COMBOS_FILE, app.COMBO_UPDATES, "xbet_usage.json", "ensemble_log.json", "outbox.json",
                  custom.FILE):
         store.save(name, [] if name in (fair.FILE, fair.COMBOS_FILE, "tracked.json", "outbox.json") else {})

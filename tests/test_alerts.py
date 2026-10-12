@@ -33,6 +33,7 @@ def reset():
         store.save(f, {})
     calib._memo.clear()
     C.XALERTS_ENABLED, C.XALERT_LIVE_MAX = True, 3
+    C.QUIET_HOURS = "off"
 
 
 def at(h, m=0):

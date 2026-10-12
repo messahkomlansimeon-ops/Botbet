@@ -213,8 +213,22 @@ Réglages : `APISTATS_DAILY` (0 = désactivé), `APISTATS_SECONDS` (durée maxim
 ## Mises
 Toutes les mises sont en **FCFA**. La mise conseillée de chaque pari vient du budget du jour (voir « Commandes Telegram ») : part maximale par palier (Sûr 30 %, Costaud 18 %, Spécial 15 %, Méchant 8 %, Monstre 4 %, pari du jour 25 %, combinés à vérifier 12 / 8 / 5 % selon leur cote mini) multipliée par la confiance (l'espérance du pari), réduite proportionnellement les jours riches, arrondie. Sans budget du jour, Kelly ne donne aucune mise. Ce que tu joues vraiment (« ✅ Je l'ai joué », `/joue`) est noté à la cote et à la mise de 1xBet et fait le résultat en argent ; le calcul Kelly en unités (`bankroll.py`, plafonds `STAKE_CAP`) n'est plus affiché. Après 5 combinés perdus d'affilée, Kelly te dit de lever le pied.
 
-## Installation
-Secrets GitHub (Settings > Secrets and variables > Actions) : `ODDS_API_KEY` (the-odds-api.com), `TELEGRAM_TOKEN` + `TELEGRAM_CHAT_ID` (@BotFather, puis `getUpdates` pour lire ton chat id), et en option `STATS_API_KEY` (api-football sur api-sports.io : règle les corners/cartons/stats joueurs et nourrit le modèle ; sans elle ces paris restent « non réglés » et n'entrent pas dans l'apprentissage).
+## Installation et Configuration (.env)
+
+Copie `.env.example` vers `.env` et renseigne tes clés :
+- `ODDS_API_KEY` (the-odds-api.com, gratuit 500 crédits/mois)
+- `TELEGRAM_TOKEN` + `TELEGRAM_CHAT_ID` (@BotFather, puis `getUpdates` pour lire ton chat id)
+- `STATS_API_KEY` (optionnel, api-football sur api-sports.io : règle les corners/cartons/stats joueurs et nourrit le modèle)
+- `XBET_PROXY` (optionnel mais recommandé : proxy Webshare `http://user:pass@p.webshare.io:80` pour 1xBet et 365scores)
+
+## Hébergement autonome (Termux / Android / GrapheneOS)
+
+En production, Kelly tourne 24h/24 et 7j/7 sur un smartphone dédié sous GrapheneOS via **Termux** (coût 0 FCFA, aucun VPS payant).
+- **Orchestrateur tout-en-un** : [`termux_runner.py`](termux_runner.py) remplace `systemd` et gère le bot en continu (`--serve`), le suivi des tickets en direct (`--watch` toutes les 10 min), les passages horaires (`--track`), le passage matinal (`--daily` à 04:00 UTC) et les relevés 1xBet (`--xbet`, `--evening`).
+- **Commande CLI simplifiée** : la commande `kelly` (`kelly update`, `kelly start`, `kelly stop`, `kelly restart`, `kelly logs`, `kelly status`) permet d'administrer le bot directement depuis Termux.
+- **Sauvegarde mobile** : la commande `/backup` dans Telegram envoie une archive ZIP compressée de `data/kelly.db` (1,8 Mo au lieu de 16 Mo) avec un timeout réseau de 300 s.
+
+Pour tous les détails de configuration (wake-lock, gestion de la batterie, proxy Webshare), voir le guide complet : [DEPLOY_TERMUX.md](DEPLOY_TERMUX.md).
 
 ## Forfait gratuit
 Kelly est réglée pour tourner **tout le mois** sur les forfaits gratuits : The Odds API 500 crédits/mois, API-Football 100 requêtes/jour, GitHub Actions 2 000 minutes/mois (dépôt privé).
