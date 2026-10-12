@@ -224,8 +224,15 @@ def learning_lines(top=6):
     d = calib.load()
     fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and a[0]), key=lambda x: -x[1][0])
     for f, (n, w, s) in fams[:top]:
-        dot, txt = _state(n, w, s, calib.min_need(f), calib._k([n, w, s], fam=f))
+        dot, txt = _state(n, w, s, calib.min_need(f), calib.family_k(f, d, real_only=True))
         out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}")
+    try:
+        from . import replay
+        rl = replay.status_line()
+        if rl:
+            out.append(rl)
+    except Exception:                                   # noqa: BLE001 - facultatif
+        pass
     ens = [(f, ensemble.weights(f)) for f in ("goals", "dc", "btts", "h2h")]
     ready = [calib.LABELS.get(f, f) for f, w in ens if w["n_m"] >= C.ENSEMBLE_MIN_N]
     wait = [f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in ens if w["n_m"] < C.ENSEMBLE_MIN_N]

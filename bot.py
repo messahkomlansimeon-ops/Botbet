@@ -19,6 +19,9 @@
   python bot.py --tune       réglage sur l'historique football-data en cache (demi-vie par ligue, poids des buts) -> data/tuning.json ;
                              budget TUNE_SECONDS (1800 s), reprend où il s'est arrêté ; --force refait tout. À planifier chaque semaine.
                              Mode séparé : ne touche ni aux paris ni à Telegram, ne plante jamais le run du matin.
+  python bot.py --replay     rejoue la saison passée (CSV football-data en cache, aucune requête) : pronostics de stats refaits match par match
+                             sans voir l'avenir, réglés, comptés à poids borné dans la fiabilité -> data/calib_boot.json. Reprend où il s'est arrêté ;
+                             --force refait tout. Aussi poursuivi après le réglage du dimanche (--tune) tant qu'il n'est pas fini.
   python bot.py --xbet       second relevé des cotes 1xBet (15:00) : pronostics du matin remis aux cotes du moment, message si nouveaux 💎.
                               Prend lui-même le verrou des données (relecture-écriture de today.json pendant tout le relevé) ; --no-lock s'il est déjà lancé sous `flock`
   python bot.py --stats-window  la fenêtre des stats seule (déjà faite par chaque `--track`) : relit les paris tirs / fautes / touches des matchs qui commencent dans
@@ -57,6 +60,9 @@ def main(argv):
     elif "--tune" in argv:
         from kelly import tune
         sys.exit(tune.main(argv))
+    elif "--replay" in argv:
+        from kelly import replay
+        sys.exit(replay.main(argv))
     elif "--snapshot" in argv:
         app.run_snapshot()
     elif "--track" in argv:

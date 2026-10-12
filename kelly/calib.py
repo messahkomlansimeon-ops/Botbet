@@ -22,6 +22,12 @@ Mémoire qui vieillit : tous les cumuls (familles, championnats, cases, jambes d
 chaque ajout (data["_t"] : date du dernier vieillissement). Les rapports ne bougent pas, les vieux résultats pèsent moins (n devient un nombre
 effectif, décimal).
 
+Rejeu de la saison passée (data/calib_boot.json, kelly/replay.py) : les mêmes cumuls (familles, championnats, cases), mesurés sur la saison passée des
+championnats football-data. Ils ne se mélangent jamais aux vrais résultats : la correction qu'ils donnent (même cascade) devient le POINT DE DÉPART
+des vrais résultats, à la place de « pas de correction » (k = 1). Sans vrai résultat, c'est elle qui s'applique ; dès qu'il y en a assez, les vrais
+résultats s'en écartent avec le même poids qu'avant (n / (n + inertie)). Un vrai signal (tirs : 45 % réalisés pour 65 % annoncés) n'est donc pas
+dilué par une saison rejouée où la méthode seule s'est montrée plus juste. C.REPLAY_PRIOR=0 l'ignore.
+
 Jambes de combinés (data["_combo"]) : réussite des jambes des combinés réglés face à leur proba (déjà corrigée) ; combos.leg_discount en tire la
 prudence par jambe.
 """
@@ -31,6 +37,7 @@ from datetime import date, datetime, timezone
 from . import catalogue, config as C, store
 
 FILE = "calib.json"
+BOOT_FILE = "calib_boot.json"      # rejeu de la saison passée (kelly/replay.py)
 K_RANGE = (0.4, 1.2)
 SHOW_MIN = 20              # pronostics réglés minimum pour afficher une famille dans le bilan
 FAMILIES = {"totals": "goals", "btts": "btts", "double_chance": "dc", "h2h": "h2h", "team_totals_home": "team_goals", "team_totals_away": "team_goals",
@@ -53,7 +60,7 @@ def family(market):
 
 
 def load():
-    """Cumul de fiabilité (data/calib.json), gardé en mémoire et relu dès que le document change dans la base (store.version, comme
+    """Cumul de fiabilité des vrais résultats (data/calib.json), gardés en mémoire et relus dès que le document change dans la base (store.version, comme
     strength.tuning) : le bot Telegram qui tourne en continu voit le cumul que le règlement du matin vient d'écrire."""
     now = _clock()
     if "data" in _memo and now - _memo.get("checked", float("-inf")) < RECHECK_SECONDS:
@@ -64,6 +71,24 @@ def load():
         d = store.load(FILE, {})
         _memo["data"], _memo["sig"] = (d if isinstance(d, dict) else {}), sig
     return _memo["data"]
+
+
+def boot():
+    """Document du rejeu de la saison passée (data/calib_boot.json, voir kelly/replay.py), {} s'il n'existe pas ; relu dès qu'il change."""
+    now = _clock()
+    if "boot" in _memo and now - _memo.get("bchecked", float("-inf")) < RECHECK_SECONDS:
+        return _memo["boot"]
+    sig = store.version(BOOT_FILE)
+    _memo["bchecked"] = now
+    if "boot" not in _memo or _memo.get("bsig") != sig:
+        d = store.load(BOOT_FILE, {})
+        _memo["boot"], _memo["bsig"] = (d if isinstance(d, dict) else {}), sig
+    return _memo["boot"]
+
+
+def boot_acc():
+    """Cumuls du rejeu de la saison passée ({} sans rejeu ou si C.REPLAY_PRIOR vaut 0)."""
+    return (boot().get("acc") or {}) if C.REPLAY_PRIOR else {}
 
 
 def _acc_list(v):
@@ -131,22 +156,27 @@ def add(rows, today=None):
         return 0
     data["_t"] = aged(data, data.get("_t"), today)
     for r in new:
-        fam, p0, won = family(r["market"]), r.get("p0") or r["prob"], r["result"] == "win"
-        accs = [data.setdefault(fam, [0, 0, 0.0])]
-        if r.get("sport_key"):
-            accs.append(data.setdefault("_lg", {}).setdefault(r["sport_key"], {}).setdefault(fam, [0, 0, 0.0]))
-        sd = side(r)
-        if sd:
-            cells = data.setdefault("_cell", {})
-            accs += [cells.setdefault(f"{fam}|{sd}", [0, 0, 0.0]), cells.setdefault(f"{fam}|{sd}|{band(p0)}", [0, 0, 0.0])]
-        for acc in accs:
-            acc[0] = round(acc[0] + 1, 4)
-            acc[1] = round(acc[1] + won, 4)
-            acc[2] = round(acc[2] + p0, 4)
+        accumulate(data, r, r["result"] == "win")
         r["calib"] = True
         n += 1
     _save(data)
     return n
+
+
+def accumulate(data, r, won):
+    """Compte un pronostic réglé `r` (market, p0 ou prob, sport_key, name, home, away) dans `data` : famille, championnat, sens et tranche."""
+    fam, p0 = family(r["market"]), r.get("p0") or r["prob"]
+    accs = [data.setdefault(fam, [0, 0, 0.0])]
+    if r.get("sport_key"):
+        accs.append(data.setdefault("_lg", {}).setdefault(r["sport_key"], {}).setdefault(fam, [0, 0, 0.0]))
+    sd = side(r)
+    if sd:
+        cells = data.setdefault("_cell", {})
+        accs += [cells.setdefault(f"{fam}|{sd}", [0, 0, 0.0]), cells.setdefault(f"{fam}|{sd}|{band(p0)}", [0, 0, 0.0])]
+    for acc in accs:
+        acc[0] = round(acc[0] + 1, 4)
+        acc[1] = round(acc[1] + won, 4)
+        acc[2] = round(acc[2] + p0, 4)
 
 
 def add_combo_legs(legs, today=None):
@@ -227,14 +257,19 @@ def _fine(fam, sd, p, k_side, cells):
     return ks[-1]
 
 
-def factor(market, data=None, sport_key=None, side=None, p=None):
+def factor(market, data=None, sport_key=None, side=None, p=None, base=None):
     """k du marché (1 = pas de correction), en cascade : famille ; sens du pari `side` (rapproché de la famille) ; tranche de la proba brute `p`
     (rapprochée du sens, interpolée) ; puis l'écart du championnat `sport_key` (k du championnat / k de la famille, s'il a assez de pronostics de
-    cette famille). Sans sens, sans proba ou sans résultats dans ces cases : exactement la correction famille / championnat."""
+    cette famille). Sans sens, sans proba ou sans résultats dans ces cases : exactement la correction famille / championnat. Point de départ `base`
+    (k vers lequel la famille est rapprochée) : par défaut la correction que donne le rejeu de la saison passée (même cascade sur boot_acc), 1 sans
+    rejeu."""
     data = data if data is not None else load()
+    if base is None:
+        acc = boot_acc()
+        base = factor(market, acc, sport_key, side, p, base=1.0) if acc else 1.0
     fam = family(market)
-    k_fam = _k(data.get(fam), fam=fam)
-    k_fam = 1.0 if k_fam is None else k_fam
+    k_fam = _k(data.get(fam), base, fam=fam)
+    k_fam = base if k_fam is None else k_fam
     k = k_fam
     cells = data.get("_cell") or {}
     if side and cells:
@@ -251,6 +286,17 @@ def factor(market, data=None, sport_key=None, side=None, p=None):
 def calibrate(market, p, data=None, sport_key=None, side=None):
     """Proba corrigée d'un pronostic de proba brute `p` (championnat `sport_key` et sens `side` facultatifs, voir factor)."""
     return 0.5 + (p - 0.5) * factor(market, data, sport_key, side, p)
+
+
+def rep_market(fam):
+    """Un marché de la famille `fam` (pour factor)."""
+    return next((m for m, f in FAMILIES.items() if f == fam), f"team_{fam}_total")
+
+
+def family_k(fam, data=None, real_only=False):
+    """Correction de la famille, sans sens ni championnat : celle qu'affichent les bilans (rejeu compris). `real_only` : sur les seuls vrais
+    résultats, celle qui écarte un marché des combinés (combos.data_ok)."""
+    return factor(rep_market(fam), data, base=1.0 if real_only else None)
 
 
 def count(n):
@@ -282,7 +328,7 @@ def lines(data=None, detail=False):
         if n < SHOW_MIN:
             continue
         txt = f"{LABELS.get(fam, fam)} : {round(w / n * 100)} % réalisés pour {round(s / n * 100)} % annoncés ({count(n)})"
-        k = factor(next((m for m, f in FAMILIES.items() if f == fam), fam), data)
+        k = family_k(fam, data)
         if detail and k != 1.0:
             txt += f", correction k = {k:.2f}"
         out.append(txt)

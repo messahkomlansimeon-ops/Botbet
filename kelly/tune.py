@@ -337,11 +337,22 @@ def format_report(res):
     return "\n".join(L)
 
 
+def _replay():
+    """Rejeu de la saison passée (kelly/replay.py) poursuivi C.REPLAY_TUNE_SECONDS s s'il n'est pas fini. Ne lève jamais."""
+    try:
+        from . import replay
+        if C.REPLAY_TUNE_SECONDS > 0 and not replay.done():
+            replay.run(seconds=C.REPLAY_TUNE_SECONDS, log=lambda s: print("[replay] " + s, flush=True))
+    except Exception as e:                                       # noqa: BLE001 - facultatif
+        print(f"[replay] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+
+
 def main(argv=()):
     """Mode `python bot.py --tune [--force]` : règle, affiche le rapport. Ne lève jamais ; code de sortie 0 (même partiel), 1 si échec."""
     try:
         res = run(force="--force" in argv, log=lambda s: print("[tune] " + s, flush=True))
         print(format_report(res))
+        _replay()
         return 0
     except Exception as e:                                       # noqa: BLE001
         print(f"[tune] échec : {type(e).__name__}: {e}", file=sys.stderr)

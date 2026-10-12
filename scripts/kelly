@@ -49,6 +49,21 @@ case "$1" in
     logs)
         tail -n 50 -f "$LOG"
         ;;
+    rejeu|replay)
+        # rejoue la saison passée (CSV football-data déjà en cache, aucune requête) ; Kelly prévient sur Telegram à la fin
+        cd "$DIR" || exit 1
+        mkdir -p logs
+        if pgrep -f "bot.py --replay" > /dev/null; then
+            echo "⏳ Le rejeu tourne déjà : kelly rejeu-log pour le suivre."
+        else
+            nohup python -u bot.py --replay $2 > "$DIR/logs/replay.log" 2>&1 &
+            echo "📚 Rejeu de la saison passée lancé (10 à 30 min). Kelly t'enverra un message sur Telegram à la fin."
+            echo "   Pour suivre : kelly rejeu-log"
+        fi
+        ;;
+    rejeu-log)
+        tail -n 30 -f "$DIR/logs/replay.log"
+        ;;
     doctor)
         echo "🩺 Diagnostic de Kelly"
         if running; then echo "✅ Kelly tourne (runner PID: $(pgrep -f termux_runner.py | head -n1))"; else echo "❌ Kelly est arrêtée : kelly start"; fi
@@ -83,7 +98,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|status|doctor}"
+        echo "Usage: kelly {start|stop|restart|update|logs|status|doctor|rejeu|rejeu-log}"
         exit 1
         ;;
 esac

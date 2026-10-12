@@ -147,6 +147,19 @@ def fotmob_score(b, leagues=None):
                   "scores": [{"name": b["home"], "score": str(m["hg"])}, {"name": b["away"], "score": str(m["ag"])}]}
 
 
+def fd_stats(m):
+    """Stats d'un match des CSV football-data, au format du règlement (settle_pick) : totaux, et par équipe tirs, tirs cadrés, corners, fautes,
+    jaunes SEULS (fd.match_stats : jaunes + rouges pour les cartons)."""
+    out = fd.match_stats(m)
+    side = out.setdefault("side", {"home": {}, "away": {}})
+    for key, h, a in (("corners", "hc", "ac"), ("yellow", "hy", "ay"), ("fouls", "hf", "af")):
+        if m.get(h) is not None and m.get(a) is not None:
+            side["home"][key], side["away"][key] = m[h], m[a]
+            if key == "yellow":
+                out["yellow"] = m[h] + m[a]
+    return out
+
+
 class FootballData:
     """Règlement gratuit avec les CSV football-data déjà en cache (aucune requête : refresh_all les actualise le
     matin). Le site ne se met à jour que ~2 fois par semaine : un match récent peut manquer."""
@@ -174,16 +187,7 @@ class FootballData:
 
     def stats(self, b):
         m = self.match(b)
-        if not m:
-            return None
-        out = fd.match_stats(m)
-        side = out.setdefault("side", {"home": {}, "away": {}})
-        for key, h, a in (("corners", "hc", "ac"), ("yellow", "hy", "ay"), ("fouls", "hf", "af")):   # corners et fautes d'une équipe, jaunes SEULS (match_stats : jaunes + rouges)
-            if m.get(h) is not None and m.get(a) is not None:
-                side["home"][key], side["away"][key] = m[h], m[a]
-                if key == "yellow":
-                    out["yellow"] = m[h] + m[a]
-        return out
+        return fd_stats(m) if m else None
 
     def fotmob_score(self, b):
         """Score FotMob (fotmob_score) ; le fichier de profils n'est lu qu'une fois par exécution."""
@@ -545,7 +549,7 @@ def _reliability_lines():
                   key=lambda x: -x[1][0])
     out = []
     for f, (n, w, s_) in fams:
-        dot, txt = status._state(n, w, s_, calib.min_need(f), calib._k([n, w, s_], fam=f))
+        dot, txt = status._state(n, w, s_, calib.min_need(f), calib.family_k(f, d, real_only=True))
         out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}")
     rows = calib.league_rows(d)
     pick = rows if len(rows) <= 3 else rows[:2] + rows[-1:]
@@ -654,11 +658,20 @@ def _bilan_detail(bets, days, rows, picks, combos):
                                       and a[0] >= calib.SHOW_MIN), key=lambda x: -x[1][0])]
         b = ["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(réalisé / annoncé · correction)")]
         for line, f in zip(fam, fams):
-            k = calib._k(d[f], fam=f)
+            k = calib.family_k(f, d)
             head, sep, tail = line.partition(" → ")
-            b.append(e(head + (f" · ×{fmt.num(k)}" if k is not None and line[0] != "⏳" else "") + (sep + tail if sep else "")))
+            if line[0] == "⏳":                    # pas encore assez de vrais résultats : la correction est celle du rejeu, s'il y en a un
+                tag = f" · ×{fmt.num(k)} (rejeu)" if f in calib.boot_acc() and abs(k - 1) >= 0.005 else ""
+            else:
+                tag = f" · ×{fmt.num(k)}" if k is not None else ""
+            b.append(e(head + tag + (sep + tail if sep else "")))
         b += [e(f"• {x}") for x in calib.cell_lines()]
         blocks.append(b)
+    from . import replay
+    rl = replay.status_line()
+    if rl:
+        blocks.append(["📚 <b>Rejeu de la saison passée</b> " + fmt.i("(point de départ des corrections, tes vrais résultats passent devant)"),
+                       e(rl.removeprefix("📚 Rejeu de la saison passée : "))] + [e(x) for x in replay.family_lines()])
     lg = [f"{'🔴' if status._mood(won, said) == 'trop confiante' else '🟢'} {name} · {calib.count(n)} · {status._mood(won, said)} "
           f"({fmt.pct(won)} / {fmt.pct(said)})" for name, n, won, said in calib.league_rows()]
     if lg:

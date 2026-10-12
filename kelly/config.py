@@ -199,6 +199,11 @@ FAIR_CALIB_MIN_PROPS = _int("FAIR_CALIB_MIN_PROPS", 30)                    # mar
 FAIR_CALIB_PRIOR_PROPS = _int("FAIR_CALIB_PRIOR_PROPS", 60)
 CALIB_HALF_LIFE = _float("CALIB_HALF_LIFE", 120)          # jours : un résultat de fiabilité vieux de 120 j compte moitié moins (0 = jamais d'oubli)
 CALIB_BANDS = (0.60, 0.70)                                 # tranches de proba brute de la correction fine (<60 %, 60-70 %, >= 70 %)
+# Rejeu de la saison passée (kelly/replay.py, data/calib_boot.json) : la méthode de Kelly rejouée match par match sur les CSV football-data
+REPLAY_PRIOR = _int("REPLAY_PRIOR", 1)            # 1 : la correction mesurée par le rejeu sert de point de départ aux vrais résultats ; 0 = rejeu ignoré
+REPLAY_DAYS = _int("REPLAY_DAYS", 365)            # jours rejoués (avant la date du premier rejeu)
+REPLAY_STEP_DAYS = _int("REPLAY_STEP_DAYS", 7)    # le modèle est réajusté tous les N jours pendant le rejeu (sur les seuls matchs d'avant)
+REPLAY_TUNE_SECONDS = _int("REPLAY_TUNE_SECONDS", 420)   # temps donné au rejeu après le réglage du dimanche (--tune), s'il n'est pas fini
 COMBO_LEG_K = (0.90, 0.99)                                 # prudence par jambe d'un combiné (mesurée sur les jambes réglées), bornée ; 0,99 = 1 % au moins
 COMBO_LEG_PRIOR = _int("COMBO_LEG_PRIOR", 200)              # la prudence mesurée remplace progressivement 0,99 : n / (n + 200)
 FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe

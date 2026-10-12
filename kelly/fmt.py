@@ -53,6 +53,11 @@ def pct(p):
     return f"{v:.1f} %".replace(".", ",") if 0 < v < 1 else f"{round(v)} %"
 
 
+def thousands(n):
+    """12345.6 -> « 12 346 » (entier arrondi, espace entre les milliers)."""
+    return f"{int(round(n)):,}".replace(",", " ")
+
+
 def units(x):
     """Montant en unités : « 2 u », « 0,2 u ». Plus utilisé dans les messages (tout est en FCFA) : gardé comme outil de format."""
     return f"{trim(x, 1 if abs(x) >= 1 else 2)} u"

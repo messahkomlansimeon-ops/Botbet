@@ -297,8 +297,14 @@ def _deep(out, home, away, sport_key, referee):
     div = footballdata.SPORT_TO_DIV.get(sport_key)
     model = strength.get(div) if div else None
     pred = strength.predict(model, out.get("home_team") or home, out.get("away_team") or away, referee=referee) if model else None
-    if not pred:
-        return
+    if pred:
+        fill_deep(out, pred)
+
+
+def fill_deep(out, pred):
+    """Chiffres d'avant-match tirés de la prévision `pred` du modèle approfondi (strength.predict) : aussi utilisé par le rejeu de la saison passée
+    (kelly/replay.py), qui prédit chaque match avec le modèle ajusté sur les seuls matchs d'avant."""
+    out.setdefault("sources", [])
     st = pred["stats"]
     out["sources"].append("modèle Kelly")
     out["home_team"], out["away_team"] = pred["home"], pred["away"]

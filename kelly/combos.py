@@ -420,7 +420,8 @@ def data_ok(c):
     from . import calib
     if c.get("conf", 1.0) < C.VIABLE_MIN_Q or (c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N):
         return False
-    return calib.factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0")) >= C.VIABLE_MIN_K
+    # sur les seuls vrais résultats : le rejeu de la saison passée corrige les probas, il n'écarte jamais un marché à lui seul
+    return calib.factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0"), base=1.0) >= C.VIABLE_MIN_K
 
 
 def best_per_match(pronos):
