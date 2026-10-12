@@ -119,9 +119,10 @@ def test_red_card():
     store.save(watch.FILE, {})
     ts = [ticket("vm1", [leg(0)])]
     with tickets(ts):
-        run(30, {0: live((0, 0), 30, red=(0, 0))})
+        run(30, {0: live((0, 0), 30)})                                          # pas de redCards : 365scores ne les donne que s'il y en a
         msg = str(run(60, {0: live((0, 0), 60, red=(0, 1))}))
-        assert msg == "🟥 Carton rouge pour A0 (60e) · H0 0-0 A0", msg            # 365scores en direct (redCards)
+        assert msg == "🟥 Carton rouge pour A0 (60e) · H0 0-0 A0", msg            # 365scores en direct (redCards), le 1er rouge compris
+        assert run(65, {0: live((0, 0), 65, red=(0, 1))}) is None, "dit une fois"
         det = {"events": [goal_ev(3, "home", 70, "X"), {"id": "3|72|0|9", "kind": "red", "sub": "", "side": "home", "min": "72'", "player": "Y"}],
                "s90": None, "ht": None, "text": ""}
         msg = str(run(73, {0: live((1, 0), 73)}, det))

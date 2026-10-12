@@ -182,6 +182,17 @@ L'analyse du 8-11/10 montrait les favoris sous-estimés (1N2 domicile : modèle 
 - **Le réglage tourne** : les CSV « new » (championnats en année civile) sont gardés **800 jours** (`footballdata.NEW_KEEP_DAYS`, 400 auparavant : ces ligues ne pouvaient jamais atteindre les 540 jours de `TUNE_MIN_SPAN_DAYS`) ; les championnats européens lisent 3 saisons (déjà le cas : les 401 jours du rapport du 9/10 étaient l'ancien cache à 2 saisons). `TUNE_MIN_SPAN_DAYS` reste à 540 : 150 jours d'apprentissage minimum + 365 de test. Demi-vie choisie sur la 1re moitié de la fenêtre de test, poids des buts mesuré sur la 2e.
 - **Petits restes** : `MARKET_WEIGHT` porte `team_corners_home/away` (1,5) et `team_yellow_total` (1,6) (plus de `fair.EXTRA_WEIGHT`) ; l'arbitre désigné (liste du jour d'API-Football en cache) s'affiche dans `/analyse` et `/match` (« 👨‍⚖️ Arbitre désigné : … », plus son effet sur les cartons si connu) ; les stats de joueurs sont gardées **par identifiant** avec leur équipe (`stats.fixture_stats`, ancien format {nom: stats} toujours lu) et le règlement des paris joueur passe par `players.stat` avec l'équipe du pari quand il la porte : un homonyme n'est jamais réglé au hasard.
 
+## Suivi des matchs de tes tickets (`kelly/watch.py`, `kelly/inplay.py`)
+
+Toutes les 10 minutes (fil à part du runner Termux, jamais bloqué par les autres passages), un seul message groupé, un bloc par match :
+- **Moments du match** : ⚽ but (buteur, penalty, contre son camp par la fiche 365scores, lue seulement sur un but d'un ticket en jeu, au plus
+  `WATCH_DETAIL_DAY` fiches par jour), 🟥 carton rouge, ↩️ but refusé par la VAR, ⏸️ mi-temps, ⏱️ prolongation (paris de buts réglés sur le score à 90 min),
+  🏁 fin du match, ✅ / ❌ paris décidés (provisoires jusqu'à la fin : corrigés si un but est annulé), 🏆 / ❌ tickets.
+- **Chances en direct** : « Plus de 2,5 buts : il manque 2 buts · 60 % (55 % avant le match) », stats au rythme du match (« 6 corners à la 55e, rythme
+  9,8 sur 90 min ») ; ⚠️ pari en danger (sous 25 %), ❗ dernier pari restant (avec le gain), 🌙 bilan de la soirée.
+- **Jamais silencieux** : 365scores bloqué, proxy absent, plafond du mois, pas de réponse : un avertissement, puis « ✅ rétabli ». Les matchs des tickets
+  déjà perdus restent suivis ; les paris non suivis en direct sont dits une fois. État dans `status` (🎫) et `kelly suivi` sur le téléphone.
+
 ## Alertes 1xBet (`kelly/xalerts.py`)
 
 Cinq alertes (la cinquième, « 💰 1xBet paie plus que le marché », a son propre message : voir plus haut), toutes centrées sur 1xBet (le seul bookmaker où tu joues) et chacune avec une action. Un seul message par passage, groupé par type (💰, ⚠️, 📈, ✅), **6 alertes au plus** (`XALERT_MAX_ITEMS`), chacune avec le match, l'heure, la ligue, le pari, la cote 1xBet et l'heure de sa lecture, ce qu'il faut faire et, pour un pari à jouer, un **code coupon** du pari seul.

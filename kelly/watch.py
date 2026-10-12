@@ -19,7 +19,7 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import config as C, exposure, fmt, livedata, quiet, store, telegram
+from . import config as C, exposure, fmt, inplay, livedata, quiet, store, telegram
 from .sources import http, names
 
 FILE = "ticket_watch.json"      # {"legs": {"<ticket>|<pari>": {"state", "score", "gid", "val"}}, "tickets": {ticket: "won"|"lost"}, "opp": {"day", "n", "at"}}
@@ -488,6 +488,13 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
         return
     alive = {t.get("tid") or t["what"] for t in ts if _verdict(d, t) not in ("won", "lost")}            # tickets encore en jeu avant ce passage
     alive_legs = {leg["key"] for t in ts if (t.get("tid") or t["what"]) in alive for leg in t["legs"]}
+    names = {}
+    for t in ts:
+        if (t.get("tid") or t["what"]) in alive:
+            for leg in t["legs"]:
+                names.setdefault(leg["key"], [])
+                if t["name"] not in names[leg["key"]]:
+                    names[leg["key"]].append(t["name"])
     if games is None:
         why = _blocked_why()
         if why:
@@ -522,13 +529,14 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
                 break
             try:
                 _one_game(d, now, by_game[gid], status.get(gid) or {}, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive,
-                          alive_legs, detail_for)
+                          alive_legs, detail_for, names)
             except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
                 print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
             for text, extra in events.items():
                 _out(d, now, "ev", fmt.esc(text), **{k: fmt.esc(v) for k, v in (extra or {}).items()})
             events.clear()
             store.save(FILE, d)                         # après CHAQUE match : un passage coupé ne perd ni ne répète rien
+    _last_legs(d, now, ts, alive)
     for tid, t in touched.items():
         verdict, foot = _ticket_line(t, d)
         old = d["tickets"].get(tid)
@@ -565,7 +573,51 @@ def _leg_now(leg, h, a, stats):
     return f"{val} {ONE.get(key, key) if val == 1 else WORD.get(key, key)}"
 
 
-def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive, alive_legs, detail_for=None):
+DANGER_DROP = 0.15              # « pari en danger » : la chance a baissé d'au moins 15 points depuis l'avant-match
+
+
+def _pred(gs, leg):
+    """Buts attendus d'avant-match du match (live.model : modèle de force, profils, équipes préparées), gardés dans gs["pred"] ; {} si inconnus."""
+    if "pred" not in gs:
+        gs["pred"] = {}
+        try:
+            from . import live
+            got = live.model({"home": leg["home"], "away": leg["away"], "league": leg.get("league") or "", "start": None}, leg.get("sport_key"))
+            pr = (got or {}).get("pred") or {}
+            if pr.get("lh") and pr.get("la"):
+                gs["pred"] = {"lh": round(float(pr["lh"]), 3), "la": round(float(pr["la"]), 3),
+                              "stats": {k: {"al": v.get("al"), "at": v.get("at")} for k, v in (pr.get("stats") or {}).items() if isinstance(v, dict)}}
+        except Exception as e:                      # noqa: BLE001 - sans modèle, pas de chance pour le 1N2 : rien d'autre ne change
+            print(f"[suivi] modèle du match {leg.get('home')} – {leg.get('away')} indisponible : {type(e).__name__}", file=sys.stderr)
+    return gs["pred"]
+
+
+def _chance(leg, gs, score, st_g, stats):
+    """(chance du pari maintenant, rythme) ou (None, '') — kelly/inplay.py ; C.WATCH_CHANCES=0 : jamais."""
+    if not C.WATCH_CHANCES:
+        return None, ""
+    key, side = need(leg)
+    if key is None:
+        return None, ""
+    pred = _pred(gs, leg) if (leg.get("market") in ("h2h", "double_chance", "btts") or key != "goals") else None
+    try:
+        return inplay.chance(leg, key, side, score, int(st_g.get("minute") or 0), int(st_g.get("period") or (1 if (st_g.get("minute") or 0) <= 45 else 2)),
+                             tuple(st_g.get("red") or (0, 0)), stats, pred)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[suivi] chance de {leg.get('pick')} non calculée : {type(e).__name__}: {e}", file=sys.stderr)
+        return None, ""
+
+
+def _ch_txt(p, leg):
+    """« · 61 % (55 % avant le match) » ; '' sans chance."""
+    if p is None:
+        return ""
+    p0 = leg.get("prob")
+    return f" · {inplay.pct(p)}" + (f" ({inplay.pct(p0)} avant le match)" if p0 else "")
+
+
+def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive, alive_legs, detail_for=None,
+              names=None):
     """Les paris d'UN match : score, stats si besoin, fiche détaillée aux moments clés (but d'un match d'un ticket en jeu, prolongation), état de chaque
     pari ; UN bloc de lignes pour ce match dans `events` (titre + lignes des paris), tickets touchés dans `touched`."""
     g = legs[0][3]
@@ -625,6 +677,8 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     stats_g = cache_stats.get(g["id"]) or {}
     red_now = st_g.get("red") or stats_g.get("red")
     red_prev = tuple(gs["red"]) if isinstance(gs.get("red"), list) else None
+    if red_prev is None and prev is not None and red_now:
+        red_prev = (0, 0)                                # 365scores ne donne les rouges que s'il y en a : un match déjà vu sans rouge en avait 0
     reds = [e for e in new_ev if e["kind"] == "red"]
     if reds and C.WATCH_SUMMARIES:
         for e in reds:
@@ -646,7 +700,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
         head_goal = f"⚽ {home} {sc} {away} (prolongation, {minute}e) · sans effet sur tes paris de buts"
     if head_goal:
         block.append(head_goal)
-    ht_lines, ft_lines, said = [], [], set()
+    ht_lines, ft_lines, live_lines, dec_lines, said = [], [], [], [], set()
     for t, leg, k, _ in legs:
         prevl = d["legs"].get(k, {})
         stats = {}
@@ -677,16 +731,33 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
             line = f"{'✅' if st == 'win' else '❌'} {match} : {leg.get('pick')} ({shown}){tag}"
         elif st == "live" and first:
             now_txt = _leg_now(leg, *score, stats)
+            p, rhythm = _chance(leg, gs, score, st_g, stats) if not et else (None, "")
+            if p is not None:
+                for t2, l2, k2, _ in legs:
+                    if l2["key"] == leg["key"]:
+                        d["legs"].setdefault(k2, {})["p"] = round(p, 3)
+            now_txt = rhythm or now_txt
             if head_goal and goal_leg:
-                block.append(f"   {leg.get('pick')}" + (f" : {now_txt}" if now_txt else "") + tag)
+                live_lines.append(f"   {leg.get('pick')}" + (f" : {now_txt}" if now_txt else "") + _ch_txt(p, leg) + tag)
             if st_g.get("ht") and not gs.get("ht"):
-                ht_lines.append(f"   {fmt.market_icon(leg)} {leg.get('pick')}" + (f" : {now_txt}" if now_txt else "") + tag)
+                ht_lines.append(f"   {fmt.market_icon(leg)} {leg.get('pick')}" + (f" : {now_txt}" if now_txt else "") + _ch_txt(p, leg) + tag)
+            p0 = leg.get("prob")
+            if (p is not None and p0 and leg["key"] in alive_legs and p < C.WATCH_DANGER_P and p0 - p >= DANGER_DROP and int(st_g.get("minute") or 0) >= 20
+                    and not prevl.get("danger")):
+                tks = ", ".join((names or {}).get(leg["key"], [])) or ""
+                _out(d, now, "danger", fmt.esc(f"⚠️ Pari en danger · {match} ({st_g.get('minute')}e, {sc}) : {leg.get('pick')} · {inplay.pct(p)} "
+                                               f"({inplay.pct(p0)} avant le match)" + (f" · {tks}" if tks else "")))
+                for t2, l2, k2, _ in legs:
+                    if l2["key"] == leg["key"]:
+                        d["legs"].setdefault(k2, {})["danger"] = 1
+                prevl = d["legs"].get(k, {})
         rec = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
         if st in ("win", "loss") and not finished and not decided_now:
             rec["prov"] = 1                              # décidé en cours de match : revu jusqu'à la fin (but annulé)
-        d["legs"][k] = {**{x: prevl[x] for x in ("nf", "danger") if x in prevl}, **rec}
+        cur = d["legs"].get(k, {})
+        d["legs"][k] = {**{x: cur[x] for x in ("nf", "danger", "p") if x in cur and (x != "p" or st == "live")}, **rec}
         if line and first:
-            (ft_lines if finished else block).append(line)
+            (ft_lines if finished else dec_lines).append(line)
             tid = t.get("tid") or t["what"]
             if tid in alive or line.startswith("⚠️ Corrigé"):     # pied : tickets en jeu, ou ticket déjà tranché dont un pari est corrigé
                 touched[tid] = t
@@ -697,6 +768,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     if st_g.get("ht") and not gs.get("ht") and C.WATCH_SUMMARIES:
         gs["ht"] = 1
         events[f"⏸️ Mi-temps · {home} {sc} {away}" + ("\n" + "\n".join(ht_lines) if ht_lines else "")] = {"ht": f"{home} {sc} {away}"}
+    block += live_lines + dec_lines                       # titre, paris encore en jeu, puis paris décidés
     if finished and C.WATCH_SUMMARIES and not gs.get("ft"):
         gs["ft"] = 1
         shown = f"{gs['s90']} à 90 min, {sc} au final" if et and s90 and gs["s90"] != sc else sc
@@ -705,6 +777,99 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     gs["score"] = sc
     if block:
         events["\n".join(block)] = {}
+
+
+def _last_legs(d, now, ts, alive):
+    """« ❗ Il ne manque que … pour gagner X FCFA » : un ticket encore en jeu (au moins 2 paris) dont tous les paris sont gagnés sauf UN encore en jeu ; une
+    fois par ticket (d["flags"]["<tid>|last"])."""
+    from . import money
+    for t in ts:
+        tid = t.get("tid") or t["what"]
+        if tid not in alive or len(t["legs"]) < 2 or d["flags"].get(f"{tid}|last"):
+            continue
+        st = [(leg, d["legs"].get(f"{t['what']}|{leg['key']}", {})) for leg in t["legs"]]
+        rest = [(leg, cur) for leg, cur in st if cur.get("state") not in ("win", "loss")]
+        if len(rest) != 1 or any(cur.get("state") == "loss" for _, cur in st):
+            continue
+        leg, cur = rest[0]
+        ko = _ko(leg)
+        gain = money.money(round((t.get("odds") or 0) * (t.get("stake") or 0)))
+        txt = f"❗ Il ne manque que {leg.get('home')} – {leg.get('away')} ({leg.get('pick')}) pour gagner {gain} avec {t['name']}"
+        if need(leg)[0] is None:
+            txt += " (pas suivi en direct)"
+        elif ko and ko > now:
+            txt += f" · coup d'envoi {ko:%Hh%M} UTC"
+        elif cur.get("p") is not None:
+            txt += f" · {inplay.pct(cur['p'])} de chances"
+        _out(d, now, "last", fmt.esc(txt))
+        d["flags"][f"{tid}|last"] = leg["key"]
+
+
+def _recap_day(d, now):
+    """Jour dont le bilan de la soirée est dû, ou None : le jour même dès C.WATCH_RECAP_HOUR UTC quand plus aucun match de ses tickets n'est en cours ;
+    la veille entre minuit et 3 h dans le même cas (matchs des Amériques), et à 3 h au plus tard."""
+    if not C.WATCH_RECAP:
+        return None
+    for day, forced in ((now.date(), False), (now.date() - timedelta(days=1), now.hour >= 3)):
+        if str(day) == (d["recap"] or {}).get("day"):
+            continue
+        if day == now.date() and now.hour < C.WATCH_RECAP_HOUR:
+            continue
+        if day != now.date() and now.hour >= C.WATCH_RECAP_HOUR:
+            continue
+        ts = exposure.tickets(str(day))
+        if not ts:
+            continue
+        running = any(_ko(leg) and _ko(leg) <= now < _ko(leg) + timedelta(minutes=FINISH_MIN + 10)
+                      and d["legs"].get(f"{t['what']}|{leg['key']}", {}).get("state") not in ("win", "loss") for t in ts for leg in t["legs"])
+        if forced or not running:
+            return day, ts
+    return None
+
+
+def _recap(d, now):
+    """🌙 Bilan de la soirée, une fois par jour (d["recap"]) : tickets gagnés / perdus / en jeu, argent des tickets tranchés, tickets perdus d'un seul pari,
+    paris gagnés. Chiffres du suivi en direct (le règlement officiel suit le lendemain matin)."""
+    from . import money
+    got = _recap_day(d, now)
+    if not got:
+        return
+    day, ts = got
+    won = lost = 0
+    staked = cashed = 0.0
+    near, legs_won, legs_done = [], set(), set()
+    for t in ts:
+        states = [(leg, d["legs"].get(f"{t['what']}|{leg['key']}", {})) for leg in t["legs"]]
+        verdict = _verdict(d, t) or _ticket_line(t, d)[0]
+        for leg, cur in states:
+            if cur.get("state") in ("win", "loss"):
+                legs_done.add(leg["key"])
+                if cur["state"] == "win":
+                    legs_won.add(leg["key"])
+        if verdict == "won":
+            won += 1
+            staked += t.get("stake") or 0
+            cashed += (t.get("odds") or 0) * (t.get("stake") or 0)
+        elif verdict == "lost":
+            lost += 1
+            staked += t.get("stake") or 0
+            losses = [(leg, cur) for leg, cur in states if cur.get("state") == "loss"]
+            if len(losses) == 1 and all(cur.get("state") == "win" for leg, cur in states if (leg, cur) != losses[0]) and len(states) > 1:
+                leg, cur = losses[0]
+                near.append(f"   • {t['name']} ({len(states) - 1}/{len(states)}) : {leg.get('home')} – {leg.get('away')}, {leg.get('pick')} ({cur.get('score')})")
+    open_n = len(ts) - won - lost
+    lines = [f"🌙 {fmt.b('Bilan de la soirée')} · {fmt.DAYS[day.weekday()]} {day:%d/%m}",
+             fmt.esc(f"🎫 {len(ts)} ticket{'s' if len(ts) > 1 else ''} · 🏆 {won} gagné{'s' if won > 1 else ''} · ❌ {lost} perdu{'s' if lost > 1 else ''}"
+                     + (f" · ⏳ {open_n} encore en jeu" if open_n else ""))]
+    if won or lost:
+        lines.append(fmt.esc(f"💰 Misé {money.money(round(staked))} · encaissé {money.money(round(cashed))} · {money.signed(round(cashed - staked))}"))
+    if near:
+        lines += [fmt.esc("😬 Perdus d'un seul pari :")] + [fmt.esc(x) for x in near[:5]] + ([fmt.esc(f"   … et {len(near) - 5} autres")] if len(near) > 5 else [])
+    if legs_done:
+        lines.append(fmt.esc(f"✅ {len(legs_won)} paris gagnés sur {len(legs_done)} ({round(100 * len(legs_won) / len(legs_done))} %)"))
+    lines.append(fmt.i(fmt.esc("Chiffres du suivi en direct ; règlement officiel demain matin.")))
+    _out(d, now, "recap", "\n".join(lines))
+    d["recap"] = {"day": str(day)}
 
 
 def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, keep=False, detail_for=None):
@@ -716,6 +881,10 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, 
     d = _load()
     _purge(d, now)
     _follow(d, now, games, live_for, stats_for, final_for, detail_for)
+    try:
+        _recap(d, now)
+    except Exception as e:                          # noqa: BLE001 - le bilan ne bloque jamais le suivi
+        print(f"[suivi] bilan de la soirée ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     msg = compose(d["out"])
     if not keep:
         d["out"] = []
