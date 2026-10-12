@@ -61,6 +61,11 @@ case "$1" in
             echo "   Pour suivre : kelly rejeu-log"
         fi
         ;;
+    suivi)
+        # contrôle du suivi des matchs et des notifications (lecture seule)
+        cd "$DIR" || exit 1
+        python tools/suivi.py
+        ;;
     rejeu-log)
         tail -n 30 -f "$DIR/logs/replay.log"
         ;;
@@ -98,7 +103,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|status|doctor|rejeu|rejeu-log}"
+        echo "Usage: kelly {start|stop|restart|update|logs|status|doctor|suivi|rejeu|rejeu-log}"
         exit 1
         ;;
 esac
