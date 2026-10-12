@@ -360,6 +360,8 @@ def note(t, odds, stake, now=None, ref_at=None):
         M._cap_memo.clear()
         st = M.capital_state()
         lines.append(f"💼 Reste aujourd'hui : {M._n(st['left'])} / {M.money(M._r(st['limit']))}")
+        if st["staked"] > st["limit"] + 0.5:          # noté quand même (c'est ce que tu as joué), mais dit clairement
+            lines.append(f"⚠️ Limite du jour dépassée de {M.money(M._r(st['staked'] - st['limit']))} : plus aucune mise conseillée aujourd'hui.")
         if st["tickets"] > M.TICKETS_DAY:           # trop de tickets : signalé, jamais bloqué (la note est déjà enregistrée)
             lines.append(f"⚠️ {st['tickets']}e ticket aujourd'hui : au-delà de {M.TICKETS_DAY}, tes tickets partagent souvent les mêmes matchs "
                          "et les pertes s'additionnent.")

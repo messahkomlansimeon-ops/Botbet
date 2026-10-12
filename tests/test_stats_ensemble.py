@@ -79,10 +79,25 @@ def test_learned_weights():
     print(f"ok  poids appris (Kelly {round(w * 100)} % sur les tirs) : le désaccord seul ne fait plus un pari")
 
 
+def test_no_probable_path_for_stats():
+    """Poids appris très bas (le marché pèse plus de 70 %) : le chemin « probable » (sans sharp, -10 % toléré) est celui des buts ; une ligne de stats
+    doit toujours valoir C.ENSEMBLE_MARGIN au prix 1xBet."""
+    reset()
+    store.save(ensemble.FILE, {"fam": {"shots": {"m": {"ll": [-((i - 0) ** 2) / 4.0 for i in range(40)], "n": 600}}}, "done": {}})
+    ensemble._memo.clear()
+    assert 1 - ensemble.weights("shots")["wm"] >= C.ENSEMBLE_VETO_WEIGHT
+    c = prono("team_shots_total", "Over", 22.5, 0.72, [["Over", 22.5, 0.72, None]])       # 1xBet 1,36 : espérance au mélange -4 %
+    assert xprice.price(c, SHOTS) == "low" and c.get("xkind") is None and not CB.viable(c), c
+    v = ensemble.value_of("totals", 0.72, 0.70, None, 1.36)                                  # buts sans sharp : « probable » comme avant
+    assert v["ok"] and v["kind"] == "probable", v
+    print("ok  stats : jamais « probable » sans valeur au prix 1xBet, même quand Kelly pèse peu ; buts : inchangé")
+
+
 def main():
     test_families()
     test_blend_and_line_choice()
     test_learned_weights()
+    test_no_probable_path_for_stats()
     print("tests choix des lignes de stats : OK")
 
 

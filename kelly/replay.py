@@ -157,6 +157,9 @@ def run(seconds=None, force=False, today=None, loader=None, log=None):
         if res is None:
             log(f"temps écoulé : reprise au prochain passage ({len(divs()) - len(missing(doc))}/{len(divs())} championnats faits)")
             break
+        cur = load()                                   # un autre rejeu (réglage du dimanche, « kelly rejeu ») a pu en finir d'autres entre-temps
+        if cur.get("from") == doc["from"] and cur.get("to") == doc["to"]:
+            doc["divs"] = {d: v for d, v in (cur.get("divs") or {}).items() if complete(v)} | {d: v for d, v in doc["divs"].items() if complete(v) or d not in cur.get("divs", {})}
         doc["divs"][div] = res
         doc["acc"] = _total(doc["divs"])
         doc["built"] = str(today or state.now().date())

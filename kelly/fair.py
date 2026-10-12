@@ -485,6 +485,8 @@ def record(pronos, day, shown=None):
             old = slot.get((str(day), c["id"], c["market"]))
             if old is not None and old.get("result") is None:      # la ligne a changé (relevé 1xBet) : même suivi, mis à jour
                 old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")} | _rule(c))
+                if not _rule(c):                                    # la nouvelle ligne n'a pas été choisie par l'ensemble : plus comptée « depuis la correction »
+                    old.pop("rule", None)
                 by_key[c["key"]] = old
             elif old is None:
                 by_key[c["key"]] = row = ({k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
@@ -503,10 +505,12 @@ def record(pronos, day, shown=None):
 
 
 def _rule(c):
-    """{"rule": C.RULE} pour un pronostic dont la ligne est choisie par l'ensemble (mélange avec 1xBet) : calib le compte aussi « depuis la
-    correction » (data["_new"]) ; {} sinon."""
+    """{"rule": C.RULE} pour un pronostic dont la ligne a VRAIMENT été choisie par l'ensemble (mélange avec 1xBet) : prix 1xBet lu, proba retenue
+    posée, pari validé (pas de c["xwhy"]) ; calib le compte aussi « depuis la correction » (data["_new"]). {} sinon (match absent de 1xBet, ligne
+    écartée : la règle n'a rien choisi)."""
     from . import ensemble
-    return {"rule": C.RULE} if ensemble.is_active(c["market"]) else {}
+    ok = ensemble.is_active(c["market"]) and c.get("p_ens") is not None and c.get("xodds") and not c.get("xwhy")
+    return {"rule": C.RULE} if ok else {}
 
 
 def _stats_extra(cands, taken):

@@ -71,6 +71,9 @@ OVERROUND = (0.98, 1.30)                    # somme des 1/cote d'un marché : en
 DC_OVERROUND = (1.96, 2.60)
 DONE_DAYS = 30                              # jours de mémoire des pronostics déjà appris (plus que ENSEMBLE_LOG_DAYS)
 _OTHER = {"Over": "Under", "Under": "Over", "Yes": "No", "No": "Yes"}
+# Familles où un avis sharp peut exister (buts, 1N2, double chance, les 2 marquent) : seules elles ont le chemin « probable » sans sharp. Corners, cartons,
+# tirs, fautes n'ont jamais d'avis sharp : même quand le marché y pèse lourd (poids appris), une ligne doit valoir C.ENSEMBLE_MARGIN au prix 1xBet.
+PROBABLE_FAMILIES = frozenset(("goals", "btts", "dc", "h2h", "team_goals"))
 _memo = {}
 
 
@@ -460,7 +463,7 @@ def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_app
         out["why"] = "no_market"
     elif heavy and out["gap"] is not None and out["gap"] > C.ENSEMBLE_MAX_DISAGREE:
         out["why"] = "veto"
-    elif heavy and p_sharp is None:                  # pas d'avis sharp : jamais « valeur », au mieux « probable »
+    elif heavy and p_sharp is None and family(market) in PROBABLE_FAMILIES:     # pas d'avis sharp : jamais « valeur », au mieux « probable »
         if not C.ENSEMBLE_PROBABLE:
             out["why"] = "no_sharp"
         elif p < C.ENSEMBLE_PROBABLE_MIN_P:

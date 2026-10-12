@@ -143,11 +143,28 @@ def test_note_confirmation():
     print("ok  confirmation « ✅ Noté » : gain si ça passe, écart dit à partir de 1 %, reste du jour en mode capital")
 
 
+def test_over_limit():
+    from kelly import played
+    reset()
+    assert money.over_limit(10 ** 6) is None                                       # hors mode capital : jamais
+    app.handle_command("capital 50000")
+    app.handle_command("perte max 5000")
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 4800, 3.0)]})
+    money._cap_memo.clear()
+    assert money.over_limit(600) == 200 and money.over_limit(200) is None          # 600 conseillés à l'envoi, 200 restants : la mise sera demandée
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 5600, 3.0)]})
+    money._cap_memo.clear()
+    out = played.note(Ticket(50.52), 50.52, 10)
+    assert "⚠️ Limite du jour dépassée de 600 FCFA" in out and out.startswith("✅ Noté"), out        # noté (c'est ce qui a été joué), mais dit
+    print("ok  mode capital : mise conseillée au-delà du reste du jour -> demandée ; dépassement dit dans la confirmation")
+
+
 def main():
     test_commands_and_limit()
     test_follows_results_and_stops()
     test_display_and_goal()
     test_note_confirmation()
+    test_over_limit()
     print("tests mode capital : OK")
 
 

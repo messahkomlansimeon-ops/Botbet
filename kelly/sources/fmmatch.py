@@ -90,6 +90,10 @@ def parse_match(html):
     g = (pp or {}).get("general") or {}
     if not g.get("finished"):
         return None
+    status = ((pp.get("header") or {}).get("status")) or {}
+    reason = str((status.get("reason") or {}).get("short") or "FT")
+    if reason.upper() not in ("FT", "FIN") or status.get("awarded"):     # après prolongation (AET, Pen) : stats de 120 min, les paris se règlent sur 90 ;
+        return None                                                      # match sur tapis vert : aucune stat réelle
     teams = ((pp.get("header") or {}).get("teams") or [])
     if len(teams) != 2 or any(t.get("score") is None for t in teams):
         return None

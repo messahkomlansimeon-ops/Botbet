@@ -598,6 +598,11 @@ def on_callback(data, message_id=None):
         if t.item.get("played") and _double_tap(what, day, message_id):      # le même appui, deux fois de suite : rien de plus (aucune question ouverte)
             return ""                                # réponse vide : rien n'est envoyé (telegram._handle)
         if t.known and not t.item.get("played") and not played.is_stale(t):     # cote 1xBet connue ET récente : jamais demandée (trop vieille : « à quelle cote ? »)
+            left = money.over_limit(t.stake) if t.stake > 0 else None
+            if t.stake > 0 and left is not None:     # mode capital : la mise conseillée à l'envoi dépasse ce qu'il reste aujourd'hui -> la mise est demandée
+                set_pending(what, day, message_id, odds=t.ref, lst=page)
+                return (f"⚠️ Kelly te conseillait {money.money(t.stake)}, mais il ne reste que {money.money(money._r(left))} sur ta limite du jour "
+                        f"(d'autres tickets notés depuis).\n" + _ask(t))
             if t.stake > 0:                          # et mise conseillée : noté tout de suite (« ✏️ Autre cote » / « ↩️ Annuler » corrigent)
                 reply = played.note(t, t.ref, t.stake, ref_at=played.read_note(t)) + played.overlap_suffix(what, t.item.get("date") or day)
                 clear_pending_for(what, day)
@@ -617,7 +622,6 @@ def on_callback(data, message_id=None):
             _refresh_msg(message_id, what, day, _page(parts[3]) if len(parts) == 4 else None)
         return reply
     if parts[0] in ("skip", "unskip") and len(parts) in (3, 4):
-        from . import money
         reply = money.skip(parts[1], parts[2], undo=parts[0] == "unskip")
         if message_id and not reply.startswith(("Pas de", "Ce pari", "Le ")):       # « Le … est déjà réglé » : rien ne change
             if len(parts) == 4:                       # depuis la liste « Mes paris » : la liste entière est rafraîchie

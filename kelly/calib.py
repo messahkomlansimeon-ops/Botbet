@@ -69,6 +69,8 @@ def load():
     _memo["checked"] = now
     if "data" not in _memo or _memo.get("sig") != sig:
         d = store.load(FILE, {})
+        if FILE in store._unreadable:               # lecture ratée (base occupée...) : jamais gardée ; les derniers bons cumuls, relecture au prochain contrôle
+            return _memo.get("data", {})
         _memo["data"], _memo["sig"] = (d if isinstance(d, dict) else {}), sig
     return _memo["data"]
 
@@ -82,6 +84,8 @@ def boot():
     _memo["bchecked"] = now
     if "boot" not in _memo or _memo.get("bsig") != sig:
         d = store.load(BOOT_FILE, {})
+        if BOOT_FILE in store._unreadable:          # lecture ratée : jamais gardée (le rejeu serait ignoré jusqu'à la prochaine écriture)
+            return _memo.get("boot", {})
         _memo["boot"], _memo["bsig"] = (d if isinstance(d, dict) else {}), sig
     return _memo["boot"]
 
@@ -152,13 +156,13 @@ def add(rows, today=None):
     (data["_cell"]), après avoir vieilli les cumuls (C.CALIB_HALF_LIFE). -> nombre ajouté."""
     data, n = load(), 0
     new = [r for r in rows if not r.get("calib") and r.get("result") in ("win", "loss")]
-    if not new:
+    if not new or FILE in store._unreadable:        # cumul illisible : rien n'est compté ni marqué (sinon perdu : save() refuserait d'écrire)
         return 0
     data["_t"] = aged(data, data.get("_t"), today)
     for r in new:
         accumulate(data, r, r["result"] == "win")
-        if r.get("rule") == C.RULE and family(r["market"]) in C.STATS_NEW_FAMILIES:     # compteur « depuis la correction »
-            accumulate(data.setdefault("_new", {}), r, r["result"] == "win")
+        if r.get("rule") == C.RULE and family(r["market"]) in C.STATS_NEW_FAMILIES:     # compteur « depuis la correction » : la proba ANNONCÉE
+            accumulate(data.setdefault("_new", {}), r | {"p0": r["prob"]}, r["result"] == "win")      # (mélange avec 1xBet), pas celle du modèle seul
         r["calib"] = True
         n += 1
     _save(data)
@@ -188,6 +192,8 @@ def add_combo_legs(legs, today=None):
     if not new:
         return 0
     data = load()
+    if FILE in store._unreadable:
+        return 0
     data["_t"] = aged(data, data.get("_t"), today)
     acc = data.setdefault("_combo", [0, 0, 0.0])
     for leg in new:
@@ -321,12 +327,14 @@ def judged_on_new(fam, data=None):
     return fam in C.STATS_NEW_FAMILIES and new_count(fam, data) >= new_min(fam)
 
 
-def viable_factor(market, sport_key=None, side=None, p=None, data=None):
+def viable_factor(market, sport_key=None, side=None, p=None, data=None, shown=None):
     """k qui décide si un marché reste dans les combinés (combos.data_ok) : sur les seuls vrais résultats (jamais le rejeu), et pour
-    C.STATS_NEW_FAMILIES sur ceux de la nouvelle règle dès qu'il y en a new_min (les résultats de l'ancienne règle n'écartent plus)."""
+    C.STATS_NEW_FAMILIES sur ceux de la nouvelle règle dès qu'il y en a new_min (les résultats de l'ancienne règle n'écartent plus). Ceux-là
+    mesurent la proba annoncée (`shown`, le mélange avec 1xBet), les autres la proba brute `p`."""
     data = data if data is not None else load()
-    src = new_rule(data) if judged_on_new(family(market), data) else data
-    return factor(market, src, sport_key, side, p, base=1.0)
+    if judged_on_new(family(market), data):
+        return factor(market, new_rule(data), sport_key, side, shown if shown is not None else p, base=1.0)
+    return factor(market, data, sport_key, side, p, base=1.0)
 
 
 def new_rule_note(fam, data=None):

@@ -18,11 +18,13 @@ OLD = {"shots": [67, 30, 43.5]}                       # ancienne règle : 45 % r
 
 def prono(i, market="team_shots_total", **kw):
     return {"key": f"m{i}|{market}||24.5|Over", "id": f"m{i}", "sport_key": "soccer_epl", "home": f"H{i}", "away": f"A{i}",
-            "commence": f"{DAY}T15:00:00Z", "market": market, "name": "Over", "point": 24.5, "prob": 0.63, "p0": 0.65, "xodds": 1.72, "score": 0.1} | kw
+            "commence": f"{DAY}T15:00:00Z", "market": market, "name": "Over", "point": 24.5, "prob": 0.63, "p0": 0.65, "p_ens": 0.63, "xodds": 1.72,
+            "score": 0.1} | kw
 
 
 def leg():
-    return {"market": "team_shots_total", "name": "Over", "home": "A", "away": "B", "sport_key": "soccer_epl", "p0": 0.65, "conf": 0.9, "n_min": 10}
+    return {"market": "team_shots_total", "name": "Over", "home": "A", "away": "B", "sport_key": "soccer_epl", "p0": 0.70, "prob": 0.65, "conf": 0.9,
+            "n_min": 10}
 
 
 def reset(data=None):
@@ -32,14 +34,17 @@ def reset(data=None):
 
 def test_tagged_and_counted():
     store.save(fair.FILE, [])
-    fair.record([prono(1), prono(2, "team_throws_total")], DAY, shown=[prono(1), prono(2, "team_throws_total")])
-    rows = {r["market"]: r for r in fair.load()}
-    assert rows["team_shots_total"].get("rule") == C.RULE and "rule" not in rows["team_throws_total"], rows    # touches : règle d'avant
+    pr = [prono(1), prono(2, "team_throws_total"), prono(4, xwhy="price"), prono(5, xodds=None, p_ens=None)]
+    fair.record(pr, DAY, shown=pr)
+    rows = {r["id"]: r for r in fair.load()}
+    assert rows["m1"].get("rule") == C.RULE and "rule" not in rows["m2"], rows                          # touches : règle d'avant
+    assert "rule" not in rows["m4"] and "rule" not in rows["m5"], rows        # ligne écartée, match absent de 1xBet : la règle n'a rien choisi
     reset(dict(OLD))
     settled = [dict(r, result="win") for r in fair.load()] + [dict(prono(3), date=DAY, result="loss")]    # sans « rule » : ancienne règle
-    assert calib.add(settled) == 3
+    assert calib.add(settled) == 5
     d = calib.load()
-    assert d["shots"][0] < 70 and calib.new_count("shots") == 1 and "throws" not in calib.new_rule(), d   # seul le tir de la nouvelle règle
+    assert calib.new_count("shots") == 1 and "throws" not in calib.new_rule(), d                         # seul le tir de la nouvelle règle
+    assert calib.new_rule()["shots"][2] == 0.63 and d["shots"][2] > 43.5 + 3 * 0.65 - 0.01, d             # compteur : proba annoncée ; cumul : brute
     print("ok  pronostics de la nouvelle règle marqués (« rule ») et comptés à part ; touches et anciens pronostics : non")
 
 

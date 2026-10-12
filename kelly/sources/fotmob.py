@@ -185,7 +185,9 @@ def parse_league(html):
     matches, seen = [], set()
     for x in all_matches:
         st = x.get("status") or {}
-        if not st.get("finished") or st.get("cancelled"):
+        if not st.get("finished") or st.get("cancelled") or st.get("awarded"):
+            continue
+        if str((st.get("reason") or {}).get("short") or "FT").upper() not in ("FT", "FIN"):     # après prolongation : score de 120 min, pas celui des 90
             continue
         home, away = (x.get("home") or {}).get("name"), (x.get("away") or {}).get("name")
         if not home or not away:

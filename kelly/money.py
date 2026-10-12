@@ -253,6 +253,16 @@ def row_item(x):
         return None
 
 
+def over_limit(stake):
+    """Mode capital : la mise `stake` (pas encore notée) dépasse-t-elle ce qu'il reste de la limite du jour ? -> ce qu'il reste (FCFA), sinon None.
+    Une mise conseillée est calculée à l'envoi du message ; d'autres tickets notés depuis ont pu consommer la limite."""
+    if not capital_mode():
+        return None
+    _cap_memo.clear()
+    left = capital_state().get("left")
+    return left if left is not None and stake > left + 0.5 else None
+
+
 def suggested(x):
     """Mise conseillée (devise du budget) d'un pari : celle décidée le matin (ligne avec sa devise « cur » et une mise > 0) ; 0 si le matin la
     jugeait trop petite pour le budget (« stake » = 0) ; sinon (pas de mise du matin : budget fixé après coup, ancienne ligne) calculée sur le

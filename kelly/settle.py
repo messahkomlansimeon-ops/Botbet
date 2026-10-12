@@ -73,7 +73,7 @@ def settle_pick(b, ev, fstats=None):
     totals = {"totals": h + a, "team_totals_home": h, "team_totals_away": a}
     if fstats:
         for mk, k in (("alternate_totals_corners", "corners"), ("alternate_totals_cards", "cards")):
-            if fstats.get(k) is not None:
+            if match_total(fstats, k) is not None:
                 totals[mk] = fstats[k]
         field = {"player_shots": "shots", "player_shots_on_target": "shots_on_target",
                  "player_fouls": "fouls"}.get(m)
@@ -200,10 +200,19 @@ class FootballData:
         return fotmob_score(b, self._fm)
 
 
+def match_total(fst, k):
+    """Total du match de la stat `k` (corners, cards) d'après fst ; None si une équipe ne l'a pas (« nul » d'API-Football : sa valeur
+    vaudrait 0 dans le total, un « moins de » serait gagné à tort)."""
+    fst = fst or {}
+    if any(k in ((fst.get("side") or {}).get(s) or {}).get("nul", ()) for s in ("home", "away")):
+        return None
+    return fst.get(k)
+
+
 def _has_stat(b, fst):
     """`fst` donne-t-il la valeur dont le marché de `b` a besoin (corners / cartons du match, ou la stat d'une équipe) ?"""
     if b["market"] in FD_MARKETS:
-        return (fst or {}).get("corners" if "corners" in b["market"] else "cards") is not None
+        return match_total(fst, "corners" if "corners" in b["market"] else "cards") is not None
     if b["market"] in SHOT_MARKETS:
         return shot_value(b["market"], fst or {}) is not None
     return bool(fst)
@@ -237,17 +246,21 @@ def match_stats(b, fdata, stats_for=None):
         fstats = stats_for(b)
     elif stats.enabled() and soccer:
         fx = stats.find_fixture(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])
+        if fx and not b["market"].startswith(("totals", "btts", "h2h", "double_chance", "team_totals")):     # stats : jamais après prolongation
+            res = stats.fixture_result(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"])        # (les paris se règlent sur 90 min ;
+            if (res or {}).get("status") in ("AET", "PEN"):                                                      # les stats de l'API comptent 120 min)
+                fx = None
         fstats = stats.fixture_stats(fx["id"], players=b["market"].startswith("player_")) if fx else None
         if fstats and fx:                              # tirs de chaque équipe : les marchés « par équipe » en ont besoin
             teams = fstats.get("teams") or {}
             fstats = dict(fstats, side={"home": teams.get(str(fx["home_id"])), "away": teams.get(str(fx["away_id"]))})
     need = "corners" if "corners" in b["market"] else "cards"
-    if soccer and b["market"] in FD_MARKETS and (fstats or {}).get(need) is None:
+    if soccer and b["market"] in FD_MARKETS and match_total(fstats, need) is None:
         fstats = fdata.stats(b) or fstats              # API-Football absent ou quota épuisé : football-data
     elif soccer and b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None:
         fstats = fdata.stats(b) or fstats
     if soccer and (b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None
-                   or b["market"] in FD_MARKETS and (fstats or {}).get(need) is None):
+                   or b["market"] in FD_MARKETS and match_total(fstats, need) is None):
         try:                                           # touches, hors-jeu (FotMob seul les a), ou rien ailleurs : page du match FotMob
             fstats = fmmatch.match_stats(b) or fstats
         except Exception as e:                         # noqa: BLE001 - facultatif
@@ -389,6 +402,21 @@ def settle_ensemble(now=None, stats_for=None):
     return ensemble.settle_log(lambda r: _settle_fair_row(r, now, fdata, stats_for or _cached_fstats))
 
 
+def _combo_legs(rows):
+    """Jambes qui apprennent la prudence par jambe : celles des combinés de Kelly (pas les combinés sur mesure : « custom »), chaque jambe une seule
+    fois par jour même reprise dans plusieurs tickets (la première rencontrée, toujours la même d'un passage à l'autre)."""
+    seen, out = set(), []
+    for c in rows:
+        if c.get("custom"):
+            continue
+        for leg in c.get("legs") or []:
+            k = (str(c.get("date")), leg.get("key"))
+            if k not in seen:
+                seen.add(k)
+                out.append(leg)
+    return out
+
+
 def settle_fair_combos(now=None, stats_for=None):
     """Règle les combinés à cote juste (data/fair_combos.json) : perdu dès qu'une jambe est perdue, gagné quand toutes sont
     gagnées (jambes remboursées ignorées). Une jambe sans score trouvé est « unknown », pas « void » : le combiné est alors « unknown »,
@@ -409,7 +437,7 @@ def settle_fair_combos(now=None, stats_for=None):
             c["result"] = UNKNOWN if UNKNOWN in results else ("win" if "win" in results else "void")   # sans jambe gagnée : rien à payer
         if c.get("result"):
             settled.append(c)
-    calib.add_combo_legs([leg for c in rows for leg in c.get("legs") or []], now.date())     # prudence par jambe des combinés (combos.leg_discount)
+    calib.add_combo_legs(_combo_legs(rows), now.date())     # prudence par jambe des combinés (combos.leg_discount)
     store.save(fair.COMBOS_FILE, rows)
     return rows, settled
 
