@@ -290,19 +290,60 @@ def goal_line(odds):
     return txt + f" ({round(share * 100)} % de ta limite du jour)" + (" ⚠️ trop risqué" if share > 0.5 else "")
 
 
+def _r(x):
+    """Montant du mode capital arrondi au franc (le capital suit des gains à centimes : « −5 368,03 » s'affiche « −5 368 »)."""
+    return round(x)
+
+
+def _n(x):
+    """« 5 000 » : montant arrondi, sans la devise."""
+    return money(_r(x)).removesuffix(" " + cur())
+
+
 def capital_line(html=True):
-    """« 💼 Capital 50 000 FCFA · limite du jour 5 000 FCFA (déjà misé 1 500) · objectif +18 000 FCFA » puis « 📈 Hier : +3 200 FCFA sur 18 000 FCFA »
-    (HTML si `html`) ; '' hors mode capital."""
+    """Une ligne : « 💼 Capital 50 000 FCFA · reste aujourd'hui 200 / 5 000 FCFA · objectif +18 000 FCFA » (HTML si `html`) ; '' hors mode capital."""
     st = capital_state()
     if not st:
         return ""
     b = fmt.b if html else (lambda x: x)
     e = fmt.esc if html else (lambda x: x)
-    line = f"💼 Capital {b(e(money(st['capital'])))} · limite du jour {e(money(st['limit']))}" \
-        + (f" (déjà misé {e(money(st['staked']))})" if st["staked"] else "") + (f" · objectif {e(signed(st['goal']))}" if st["goal"] else "")
+    return (f"💼 Capital {b(e(money(_r(st['capital']))))} · reste aujourd'hui {e(_n(st['left']))} / {e(money(_r(st['limit'])))}"
+            + (f" · objectif {e(signed(_r(st['goal'])))}" if st["goal"] else ""))
+
+
+def _bar(part, cells=10):
+    """« ▰▰▰▰▰▰▰▰▰▱ 96 % » : part (0 à 1) de la limite du jour déjà misée."""
+    part = max(0.0, min(1.0, part))
+    full = min(cells, math.floor(part * cells + 1e-9))      # arrondi inférieur : une case reste vide tant que la limite n'est pas atteinte
+    return "▰" * full + "▱" * (cells - full) + f" {round(part * 100)} %"
+
+
+def capital_card(st=None):
+    """« 💼 Mon capital » (HTML) : le capital et son départ ; la journée (limite, déjà misé, reste, barre) ; l'objectif et la veille ; une ligne
+    d'explication. Montants arrondis au franc, date en français."""
+    from .telegram import Html
+    st = st or capital_state()
+    e, b, i = fmt.esc, fmt.b, fmt.i
+    since = fmt.fr_day(st["since"]).split(" ", 1)[1] if st.get("since") else ""
+    lines = [b("💼 Mon capital"), "", f"💰 Capital : {b(e(money(_r(st['capital']))))}",
+             f"📅 Depuis le {e(since)} (départ {e(money(_r(st['base'])))})" if since else f"📅 Départ : {e(money(_r(st['base'])))}", ""]
+    if st["capital"] <= 0:
+        lines.append("⛔ " + b("Capital épuisé") + " : écris " + i("capital 50000") + " pour repartir.")
+    else:
+        lines += ["📆 " + b("Aujourd'hui"), f"Limite : {e(money(_r(st['limit'])))}", f"Déjà misé : {e(money(_r(st['staked'])))}"]
+        step = round_step(st["limit"]) if st["limit"] >= 1 else 1
+        left = st["left"] if st["left"] >= step else 0
+        lines.append(f"Reste : {b(e(money(_r(left))))}" + (" · limite atteinte, plus de mise aujourd'hui" if not left else ""))
+        if st["limit"]:
+            lines.append(_bar(st["staked"] / st["limit"]))
+        if not st["max_day"]:
+            lines.append("💡 Fixe ta perte max : " + i("perte max 5000"))
+    lines.append("")
+    lines.append(f"🏁 Objectif : {e(signed(_r(st['goal'])))} par jour" if st["goal"] else "🏁 Ajoute un objectif : " + i("objectif 18000"))
     if st["yesterday"] is not None:
-        line += f"\n📈 Hier : {e(signed(st['yesterday']))}" + (f" sur {e(money(st['goal']))}" if st["goal"] else "")
-    return line
+        lines.append(f"📈 Hier : {e(signed(_r(st['yesterday'])))}")
+    lines += ["", i(f"ℹ️ Limite = ta perte max, ou {round(CAPITAL_DAY_SHARE * 100)} % du capital s'il baisse. Le capital suit les paris que tu notes.")]
+    return Html("\n".join(lines))
 
 
 def budget_line(spent, kept, poor=None):
@@ -449,19 +490,17 @@ def _amount_arg(args, name):
 
 
 def capital_status():
-    """Le capital, la limite du jour, ce qui est déjà misé, l'objectif, et comment les changer."""
+    """La carte « 💼 Mon capital » (capital_card) ; sans capital, comment le fixer."""
     st = capital_state()
     if not st:
         return "💼 Pas encore de capital. " + CAPITAL_HELP
-    lines = [capital_line(html=False),
-             f"Départ : {money(st['base'])} le {st['since']} ; le capital suit les paris que tu notes (« ✅ Je l'ai joué »).",
-             f"Limite du jour : la plus petite de ta perte max ({money(st['max_day']) if st['max_day'] else 'non fixée'}) et de "
-             f"{round(CAPITAL_DAY_SHARE * 100)} % du capital. Reste à miser aujourd'hui : {money(st['left'])}."]
-    if not st["max_day"]:
-        lines.append("💡 Fixe ta perte maximale par jour : « perte max 5000 ».")
-    if not st["goal"]:
-        lines.append("💡 Tu peux afficher un objectif : « objectif 18000 ».")
-    return "\n".join(lines)
+    return capital_card(st)
+
+
+def _done(extra=""):
+    """« ✅ » + la carte, après un changement (`extra` : phrase HTML ajoutée en dessous)."""
+    from .telegram import Html
+    return Html("✅ " + capital_status() + (("\n\n" + extra) if extra else ""))
 
 
 def capital_command(args):
@@ -476,7 +515,7 @@ def capital_command(args):
         _cap_memo.clear()
         return "💼 Mode capital arrêté : plus de mise conseillée. Écris « capital 50000 » pour le reprendre, ou « budget 5000 » pour un budget du jour."
     _save_capital(capital=amount, since=str(_today()))
-    return "✅ " + capital_status()
+    return _done()
 
 
 def max_loss_command(args):
@@ -490,7 +529,7 @@ def max_loss_command(args):
     if not capital_mode():
         return "💼 Fixe d'abord ton capital : « capital 50000 »."
     _save_capital(max_day=amount if amount > 0 else None)
-    return "✅ " + capital_status()
+    return _done()
 
 
 def goal_command(args):
@@ -504,9 +543,9 @@ def goal_command(args):
         return "💼 Fixe d'abord ton capital : « capital 50000 »."
     _save_capital(goal=amount if amount > 0 else None)
     if amount <= 0:
-        return "✅ Objectif retiré.\n" + capital_status()
-    return ("✅ " + capital_status() + "\n\nKelly n'augmentera jamais une mise pour atteindre l'objectif : sous chaque combiné, elle te dit ce que "
-            "rapporte sa mise conseillée et ce qu'il faudrait miser pour l'atteindre d'un coup, avec un avertissement si c'est trop risqué.")
+        return _done(fmt.i("Objectif retiré."))
+    return _done(fmt.i("Kelly n'augmentera jamais une mise pour atteindre l'objectif : sous chaque combiné, elle te dit ce que rapporte sa mise "
+                       "conseillée et ce qu'il faudrait miser pour l'atteindre d'un coup, avec un avertissement si c'est trop risqué."))
 
 
 def played_norm(w):
