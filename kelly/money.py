@@ -35,6 +35,9 @@ SHARE = {"pari": 0.25, "🛡️": 0.30, "⚖️": 0.18, "🎯": 0.15, "🔥": 0.
 FAIR_SHARE = ((8, 0.12), (20, 0.08), (math.inf, 0.05))                            # combinés à vérifier, selon la cote mini
 CONF_FULL, CONF_MIN = 0.10, 0.3       # espérance de +10 % ou plus : part entière ; jamais moins de 30 % de la part
 CAPITAL_DAY_SHARE = 0.10              # mode capital : au plus 10 % du capital misé par jour (et jamais plus que la perte maximale choisie)
+LOTTERY_P = 0.05                      # mode capital : un pari à moins de 5 % de chances est un ticket « loterie »...
+LOTTERY_SHARE = 0.05                  # ... sa mise est plafonnée à 5 % de la limite du jour (250 FCFA pour 5 000)
+TICKETS_DAY = 3                       # au-delà de 3 tickets notés dans la journée, la confirmation le signale (rien n'est bloqué)
 
 
 def load():
@@ -98,14 +101,14 @@ def capital_state(today=None, docs=None):
     gains = _counted(bets, rows, fair_rows)
     capital = max(0.0, base + sum(g for x, g in gains if str(x.get("date") or "")[:10] >= since))
     yest = [g for x, g in gains if str(x.get("date") or "")[:10] == yday]
-    staked = sum(_amount((x.get("played") or {}).get("stake")) for x in items(bets, rows, fair_rows)
-                 if x.get("played") and not x.get("skipped") and str(x.get("date") or "")[:10] == day)
+    today_played = [x for x in items(bets, rows, fair_rows) if x.get("played") and not x.get("skipped") and str(x.get("date") or "")[:10] == day]
+    staked = sum(_amount(x["played"].get("stake")) for x in today_played)
     max_day = _amount(d.get("max_day"))
     limit = min(max_day or math.inf, capital * CAPITAL_DAY_SHARE)
     step = round_step(limit) if limit >= 1 else 1
     limit = math.floor(limit / step) * step if limit >= 1 else 0
     state = {"capital": round(capital, 2), "base": base, "since": since, "limit": limit, "staked": staked, "left": max(0, limit - staked),
-             "max_day": max_day, "goal": _amount(d.get("goal")), "yesterday": sum(yest) if yest else None}
+             "max_day": max_day, "goal": _amount(d.get("goal")), "yesterday": sum(yest) if yest else None, "tickets": len(today_played)}
     if docs is None:
         _cap_memo.update(key=key, at=time.monotonic(), state=state)
     return state
@@ -210,9 +213,30 @@ def allocate(items, budget=None, detail=False):
     scale = min(1.0, 1.0 / total) if total else 0
     step = round_step(budget)
     stakes = [math.floor(budget * r * scale / step) * step for r in raw]
+    cap = lottery_cap()
+    if cap is not None:                              # mode capital : ticket « loterie » plafonné, le reste n'est pas redistribué (gardé)
+        stakes = [min(st, cap) if _lottery(it) else st for st, it in zip(stakes, items)]
     spent = round(sum(stakes), 2)
     out = (stakes, spent, round(budget - spent, 2))
     return out + (total < 1,) if detail else out
+
+
+def _lottery(it):
+    try:
+        return float(it.get("prob")) < LOTTERY_P
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
+def lottery_cap():
+    """Mise maximale d'un ticket « loterie » (chances < LOTTERY_P) en mode capital : LOTTERY_SHARE de la limite du jour, arrondie ; None hors mode
+    capital (rien n'est plafonné)."""
+    st = capital_state()
+    if not st:
+        return None
+    limit = st["limit"]
+    step = round_step(limit) if limit >= 1 else 1
+    return math.floor(limit * LOTTERY_SHARE / step) * step
 
 
 def row_item(x):
@@ -271,7 +295,8 @@ def stake_words(st, prob=None, odds=None, suffix=""):
     if not st:
         return no_stake_txt(prob, odds)
     if capital_mode():
-        return money(st) + (f" → si ça passe : {signed(st * (odds - 1))}" if odds and odds > 1 else "")
+        lot = " · ticket loterie, mise plafonnée" if prob is not None and prob < LOTTERY_P else ""
+        return money(st) + lot + (f" → si ça passe : {signed(round(st * (odds - 1)))}" if odds and odds > 1 else "")
     return money(st) + suffix
 
 
@@ -605,13 +630,21 @@ def result(bets, rows, fair_rows, days=None, today=None):
 
 
 def summary_lines(bets, rows, fair_rows, today=None):
-    """Lignes du bilan en argent (texte brut) : 7 derniers jours et depuis le début, avec les paris gagnés. [] si aucun pari noté n'est réglé."""
+    """Lignes du bilan en argent (texte brut) : « 7 derniers jours : −11 608 FCFA · 2 gagnés sur 90 », la jauge de la mise récupérée de la
+    première période affichée (« ▰▱▱▱▱▱▱▱▱▱ 12 % de la mise récupérée »), puis « Depuis le début : … » seulement s'il y a plus de paris que sur
+    7 jours. Montants arrondis au franc. [] si aucun pari noté n'est réglé."""
     out = []
-    for days, label in ((7, "7 derniers jours"), (None, "depuis le début")):
-        done = _counted(bets, rows, fair_rows, days, today)
-        if done:
-            n, total, staked = len(done), sum(g for _, g in done), sum(x["played"]["stake"] for x, _ in done)
-            won = sum(1 for x, _ in done if x["result"] == "win")
-            roi = f", {round(total / staked * 100):+d} % de ce qui a été misé" if staked else ""
-            out.append(f"{label} : {signed(total)} sur {n} pari{'s' if n > 1 else ''} ({won} gagné{'s' if won > 1 else ''}){roi}")
+    week = _counted(bets, rows, fair_rows, 7, today)
+    all_ = _counted(bets, rows, fair_rows, None, today)
+    periods = [(week, "7 derniers jours")] + ([(all_, "Depuis le début")] if len(all_) > len(week) else [])
+    for done, label in periods:
+        if not done:
+            continue
+        n, total, staked = len(done), sum(g for _, g in done), sum(x["played"]["stake"] for x, _ in done)
+        won = sum(1 for x, _ in done if x["result"] == "win")
+        out.append(f"{label} : {signed(round(total))} · {won} gagné{'s' if won > 1 else ''} sur {n}")
+        if staked and len(out) == 1:                # en perte : la part de la mise revenue (jauge) ; en gain : ce que la mise a rapporté
+            back = max(0.0, (staked + total) / staked)
+            out.append(f"{fmt.bar(back)} {round(back * 100)} % de la mise récupérée" if back < 1 else
+                       f"📈 +{round((back - 1) * 100)} % sur ce qui a été misé")
     return out

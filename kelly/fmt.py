@@ -50,7 +50,7 @@ def odds_txt(x):
 def pct(p):
     """0.314 -> « 31 % » ; sous 1 % une décimale (« 0,7 % »)."""
     v = p * 100
-    return f"{v:.1f} %".replace(".", ",") if v < 1 else f"{round(v)} %"
+    return f"{v:.1f} %".replace(".", ",") if 0 < v < 1 else f"{round(v)} %"
 
 
 def units(x):

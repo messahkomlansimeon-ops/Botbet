@@ -360,6 +360,9 @@ def note(t, odds, stake, now=None, ref_at=None):
         M._cap_memo.clear()
         st = M.capital_state()
         lines.append(f"💼 Reste aujourd'hui : {M._n(st['left'])} / {M.money(M._r(st['limit']))}")
+        if st["tickets"] > M.TICKETS_DAY:           # trop de tickets : signalé, jamais bloqué (la note est déjà enregistrée)
+            lines.append(f"⚠️ {st['tickets']}e ticket aujourd'hui : au-delà de {M.TICKETS_DAY}, tes tickets partagent souvent les mêmes matchs "
+                         "et les pertes s'additionnent.")
     if t.ref_word == "cote mini" and odds < t.ref:
         lines.append("⚠️ 1xBet paie moins que la cote mini : Kelly conseillait de passer ton chemin.")
     elif gap < -0.15:

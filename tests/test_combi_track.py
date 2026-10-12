@@ -463,7 +463,7 @@ def test_settle_and_bilan():
     # le bilan compte le combi sur mesure (argent) même quand il est le seul réglé
     store.save(fair.COMBOS_FILE, [mine])
     bilan = str(settle.bilan({"picks": [], "combos": []}, rows=[]))
-    assert "Aucun pari réglé" not in bilan and "Tes paris notés" in bilan and "+2 385 FCFA sur 1 pari" in bilan, bilan
+    assert "Aucun pari réglé" not in bilan and "Ton argent" in bilan and "+2 385 FCFA · 1 gagné sur 1" in bilan, bilan
     assert "Combinés à vérifier chez 1xBet" not in bilan
     # perdu : une jambe à 3-1
     reset()

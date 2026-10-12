@@ -297,7 +297,7 @@ def test_noted_rows_survive_retention():
     assert money.result({"combos": []}, [], kept) == before, (money.result({"combos": []}, [], kept), before)
     old_row = next(r for r in kept if r["tier"] == "m1")
     assert old_row.get("slim") and all(set(l) <= set(fair.SLIM_LEG) for l in old_row["legs"]) and old_row["played"], old_row      # jambes allégées, l'argent intact
-    assert money.summary_lines({"combos": []}, [], kept)[-1].startswith("depuis le début : +2 500 FCFA")
+    assert any(x.startswith("Depuis le début : +2 500 FCFA") for x in money.summary_lines({"combos": []}, [], kept)), money.summary_lines({"combos": []}, [], kept)
     fair.record_custom(mk("m9", str(today + timedelta(days=2)), True), str(today + timedelta(days=2)))
     assert {"m1", "m2", "m9"} <= {r["tier"] for r in fair.load_combos()}
     # tracked.json : une ligne notée réglée plus vieille que TRACK_KEEP_DAYS reste, les autres vont à l'archive

@@ -445,9 +445,9 @@ def bilan(bets, days=None, rows=None, detail=False):
     return _bilan_detail(bets, days, rows, picks, combos) if detail else _bilan_simple(days, rows, picks, combos)
 
 
-def fair_line(rows, days=None, today=None):
+def fair_line(rows, days=None, today=None, short=False):
     """Pronostics sans cote réglés, en mots simples : « Pronostics sans cote : 5 gagnés sur 8 (62 %), Kelly en annonçait 64 % en
-    moyenne. » ('' si rien de réglé)."""
+    moyenne. » ('' si rien de réglé). `short` (bilan) : « Pronostics sans cote : 5 gagnés sur 8 (62 % réalisés, 64 % annoncés) »."""
     done = [r for r in rows if r.get("result") in ("win", "loss")]
     if days:
         cut = str((datetime.fromisoformat(str(today)) if today else datetime.now(timezone.utc)).date() - timedelta(days=days))
@@ -455,11 +455,14 @@ def fair_line(rows, days=None, today=None):
     if not done:
         return ""
     w = sum(1 for r in done if r["result"] == "win")
+    said = fmt.pct(sum(r["prob"] for r in done) / len(done))
+    if short:
+        return f"Pronostics sans cote : {w} gagné{'s' if w > 1 else ''} sur {len(done)} ({fmt.pct(w / len(done))} réalisés, {said} annoncés)"
     return (f"Pronostics sans cote : {w} gagné{'s' if w > 1 else ''} sur {len(done)} ({fmt.pct(w / len(done))}), Kelly en "
-            f"annonçait {fmt.pct(sum(r['prob'] for r in done) / len(done))} en moyenne.")
+            f"annonçait {said} en moyenne.")
 
 
-def fair_combo_line(rows, days=None, today=None):
+def fair_combo_line(rows, days=None, today=None, short=False):
     """Combinés à cote juste réglés : « Combinés à vérifier : 2 gagnés sur 5 (sans mise : à comparer aux cotes de 1xBet) » ; '' si
     rien de réglé. Les combinés sur mesure que l'utilisateur joue (« ✅ Je le joue », marque « custom ») n'y sont pas : il les choisit lui-même,
     ils ne mesurent pas les combinés du matin de Kelly (ils sont dans le bilan en argent et celui des paris joués)."""
@@ -470,6 +473,8 @@ def fair_combo_line(rows, days=None, today=None):
     if not done:
         return ""
     w = sum(1 for r in done if r["result"] == "win")
+    if short:                                       # bilan : « Combinés à vérifier : 6 gagnés sur 20 »
+        return f"Combinés à vérifier : {w} gagné{'s' if w > 1 else ''} sur {len(done)}"
     return (f"Combinés à vérifier chez 1xBet : {w} gagné{'s' if w > 1 else ''} sur {len(done)} "
             "(le résultat en argent ne compte que ceux que tu as notés).")
 
@@ -502,54 +507,74 @@ def _sum_txt(cs, html=True):
         g = money.gain(c)
         if g is not None:
             by.setdefault(c.get("cur") or money.cur(), []).append(g)
-    txt = " et ".join(money.signed(sum(g), cur) for cur, g in by.items())
+    txt = " et ".join(money.signed(round(sum(g)), cur) for cur, g in by.items())      # arrondi au franc
     return fmt.esc(txt) if html else txt
 
 
+def _reliability_lines():
+    """Fiabilité de Kelly par famille (pastilles du status : 🟢 / 🔴 / ⏳, réalisé / annoncé) et par championnat (les 2 plus fiables et le moins
+    fiable, au plus 3), en texte brut : ([familles], [championnats])."""
+    from . import status
+    d = calib.load()
+    fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and len(a) == 3 and a[0] >= calib.SHOW_MIN),
+                  key=lambda x: -x[1][0])
+    out = []
+    for f, (n, w, s_) in fams:
+        dot, txt = status._state(n, w, s_, calib.min_need(f), calib._k([n, w, s_], fam=f))
+        out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}")
+    rows = calib.league_rows(d)
+    pick = rows if len(rows) <= 3 else rows[:2] + rows[-1:]
+    lg = []
+    for name, n, won, said in pick:
+        mood = status._mood(won, said)
+        lg.append(f"{'🔴' if mood == 'trop confiante' else '🟢'} {name} · {calib.count(n)} · {mood} ({fmt.pct(won)} / {fmt.pct(said)})")
+    return out, lg
+
+
 def _bilan_simple(days, rows, picks, combos):
-    """Bilan en mots simples, par blocs séparés d'une ligne vide : combinés (gagnés sur joués, résultat de TES paris notés), paris envoyés,
-    paris joués chez 1xBet, pronostics sans cote, fiabilité par marché."""
+    """Bilan en carte (HTML), par blocs séparés d'une ligne vide : ton argent (paris notés, arrondis, jauge de la mise récupérée), les combinés du
+    matin par palier, paris envoyés / pronostics / combinés à vérifier / paris 1xBet en retard, tes cotes chez 1xBet, la fiabilité de Kelly (pastilles)
+    et par championnat, puis les paris en attente."""
+    from . import money
     sent = [r for r in picks if r.get("sent")]
     blocks = [[f"📊 <b>Bilan</b>{f' — {days} derniers jours' if days else ''}"]]
+    bets_ = store.load_doc("bets.json", {"combos": []})
+    ml = money.summary_lines(bets_, rows, fair.load_combos())
+    if ml:
+        blocks.append(["💰 <b>Ton argent</b> " + fmt.i("(paris notés)")] + [fmt.esc(x) for x in ml])
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
-        b = [f"🎯 <b>Combinés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)}"]
+        b = [f"🎯 <b>Combinés du matin</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)}"]
         tiers = {}
         for c in combos:
             tiers.setdefault(fmt.tier_name(c["tier"]), []).append(c)
         for tier, cs in tiers.items():
             mine = _sum_txt(cs)
-            b.append(f"      {fmt.esc(tier)} : {sum(1 for c in cs if c['result'] == 'win')} sur {len(cs)}" + (f" (tes paris : {mine})" if mine else ""))
+            b.append(f"{fmt.esc(tier)} · {sum(1 for c in cs if c['result'] == 'win')}/{len(cs)}" + (f" · tes paris {mine}" if mine else ""))
         blocks.append(b)
+    counts = []
     if sent:
         w = sum(1 for r in sent if r["result"] == "win")
-        blocks.append([f"✅ <b>Paris envoyés</b> : {w} gagné{'s' if w > 1 else ''} sur {len(sent)} ({fmt.pct(w / len(sent))})"])
-    from . import money
-    bets_ = store.load_doc("bets.json", {"combos": []})
-    ml = money.summary_lines(bets_, rows, fair.load_combos())
-    if ml:
-        blocks.append(["💰 <b>Tes paris notés</b> " + fmt.i("(seuls ceux que tu as notés comptent)")] + [f"• {fmt.esc(x)}" for x in ml])
+        counts.append(f"✅ Paris envoyés : {w} gagné{'s' if w > 1 else ''} sur {len(sent)} ({fmt.pct(w / len(sent))})")
+    counts += [f"🎲 {fmt.esc(x)}" for x in (fair_line(fair.load(), days, short=True), fair_combo_line(fair.load_combos(), days, short=True)) if x]
+    gl = sharpgap.summary_line(rows, days)
+    if gl:
+        counts.append(f"💰 {fmt.esc(gl)}")
+    if counts:
+        blocks.append(counts)
     pl = played.summary_lines(bets_, rows, fair.load_combos(), days)
     if ml:                                          # le résultat en argent est au-dessus : ne garder que l'écart de cote 1xBet
         pl = [x for x in pl if not x.startswith("Joués chez 1xBet")]
-        if pl:
-            blocks.append([f"💵 {fmt.esc(x)}" for x in pl])
-    elif pl:
-        blocks.append([f"💵 <b>{fmt.esc(pl[0])}</b>"] + [f"      {fmt.esc(x)}" for x in pl[1:]])
-    free = [x for x in (fair_line(fair.load(), days), fair_combo_line(fair.load_combos(), days)) if x]
-    if free:
-        blocks.append([f"🎲 {fmt.esc(x)}" for x in free])
-    gl = sharpgap.summary_line(rows, days)
-    if gl:
-        blocks.append([f"💰 {fmt.esc(gl)}"])
-    cl, ll = calib.lines(), calib.league_lines(limit=3)
-    if cl:
-        blocks.append(["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(pronostics réglés, depuis le début)")] + [f"• {fmt.esc(x)}" for x in cl])
-    if ll:
-        blocks.append(["🏟 <b>Ses meilleurs championnats</b>"] + [f"• {fmt.esc(x)}" for x in ll])
+    if pl:
+        blocks.append(["💵 <b>Tes cotes chez 1xBet</b>"] + [fmt.i(fmt.esc(x.removeprefix("💵 "))) for x in pl])
+    fam, lg = _reliability_lines()
+    if fam:
+        blocks.append(["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(réalisé / annoncé)")] + [fmt.esc(x) for x in fam])
+    if lg:
+        blocks.append(["🏟 <b>Par championnat</b>"] + [fmt.esc(x) for x in lg])
     pending = sum(1 for r in rows if r.get("result") is None)
-    foot = ([f"⏳ {pending} pari{'s' if pending > 1 else ''} en attente de résultat"] if pending else [])
-    blocks.append(foot + [fmt.i("Chiffres techniques : bouton « Plus de détails », ou écris « bilan détail »")])
+    blocks.append([(f"⏳ {pending} pari{'s' if pending > 1 else ''} en attente · " if pending else "")
+                   + fmt.i("écris « bilan détail » pour les chiffres techniques")])
     return fmt.Html("\n\n".join("\n".join(b) for b in blocks))
 
 

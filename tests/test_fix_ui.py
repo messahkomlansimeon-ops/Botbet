@@ -369,7 +369,7 @@ def test_display():
     assert "résultat −960 FCFA" in played.summary_lines(mixed, [], [])[0]          # plus d'unités : tout en FCFA
     # bilan simple : le résultat de TES paris notés, par palier
     simple = settle.bilan(mixed)
-    assert "(tes paris : +40 FCFA)" in simple and "(tes paris : −1 000 FCFA)" in simple and " u)" not in simple, simple
+    assert "· tes paris +40 FCFA" in simple and "· tes paris −1 000 FCFA" in simple and " u)" not in simple, simple
     print("ok  affichages : journée riche, devise échappée, tout en FCFA, cote corrigée")
 
 

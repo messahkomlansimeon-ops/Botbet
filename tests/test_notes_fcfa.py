@@ -243,12 +243,12 @@ def test_only_noted_bets_count():
     assert all(money.gain(x) is None for x in bets["combos"] + rows + fc)
     assert played.items(bets, rows, fc) == [] and played.summary_lines(bets, rows, fc) == []
     bilan = str(settle.bilan(bets, rows=rows))
-    assert "Tes paris notés" not in bilan and "FCFA" not in bilan and "Joués chez 1xBet" not in bilan, bilan
-    assert "🎯 <b>Combinés</b> : 1 gagné sur 2" in bilan, bilan
+    assert "Ton argent" not in bilan and "FCFA" not in bilan and "Joués chez 1xBet" not in bilan, bilan
+    assert "🎯 <b>Combinés du matin</b> : 1 gagné sur 2" in bilan, bilan
     det = settle.bilan(bets, rows=rows, detail=True)
     assert "FCFA" not in det and "tes paris" not in det and "Joués chez 1xBet" not in det, det
     cmd = str(app.handle_command("/bilan"))
-    assert "Budget du jour" in cmd and "Tes paris notés" not in cmd, cmd
+    assert "Budget du jour" in cmd and "Ton argent" not in cmd, cmd
     # alertes « tu as joué » : un pari seulement conseillé n'est pas un pari joué
     unsettled = [r | {"result": None} for r in rows]
     comb = [c | {"result": None} for c in bets["combos"]]
@@ -267,9 +267,9 @@ def test_only_noted_bets_count():
     n, total, staked = money_result()
     assert n == 4 and abs(total - (4000 - 500 - 800 + 1800)) < 1e-6 and staked == 2700, (n, total, staked)
     lines = money.summary_lines(bets, rows, fc, today=DAY)
-    assert lines[0].startswith("7 derniers jours : +4 500 FCFA sur 4 paris (2 gagnés)") and "FCFA" in lines[1], lines
+    assert lines == ["7 derniers jours : +4 500 FCFA · 2 gagnés sur 4", "📈 +167 % sur ce qui a été misé"], lines      # tout est dans les 7 jours
     simple = str(settle.bilan(bets, rows=rows))
-    assert "💰 <b>Tes paris notés</b>" in simple and "+4 500 FCFA sur 4 paris" in simple, simple
+    assert "💰 <b>Ton argent</b>" in simple and "+4 500 FCFA · 2 gagnés sur 4" in simple, simple
     no_units(simple, "bilan")
     det = settle.bilan(bets, rows=rows, detail=True)
     assert "Joués chez 1xBet : 2 gagnés sur 4 · résultat +4 500 FCFA" in det and "tes paris : +4 000 FCFA" in det, det
@@ -876,22 +876,22 @@ def test_unnoted_morning_bets_stay_tracked():
     assert "FCFA" not in rep and "Combinés à vérifier chez 1xBet : 1 gagné sur 1 (le résultat en argent ne compte que ceux que tu as notés)." in rep, rep
     # bilan : les statistiques gagné / perdu comptent ces paris ; le résultat en argent (FCFA) NON
     simple = str(settle.bilan(bets))
-    assert "🎯 <b>Combinés</b> : 1 gagné sur 1" in simple and "SÛR : 1 sur 1" in simple, simple
-    assert "✅ <b>Paris envoyés</b>" in simple and "Combinés à vérifier chez 1xBet : 1 gagné sur 1" in simple, simple
-    assert "FCFA" not in simple and "Tes paris notés" not in simple and "Joués chez 1xBet" not in simple, simple
+    assert "🎯 <b>Combinés du matin</b> : 1 gagné sur 1" in simple and "SÛR · 1/1" in simple, simple
+    assert "✅ Paris envoyés" in simple and "Combinés à vérifier : 1 gagné sur 1" in simple, simple
+    assert "FCFA" not in simple and "Ton argent" not in simple and "Joués chez 1xBet" not in simple, simple
     det = settle.bilan(bets, detail=True)
     assert "SÛR : 1/1" in det and "Combinés à vérifier chez 1xBet : 1 gagné sur 1" in det and "FCFA" not in det, det
     assert money_result() == (0, 0, 0) and played.summary_lines(bets, track.load(), fair.load_combos()) == []
     assert money.summary_lines(bets, track.load(), fair.load_combos(), today="2030-01-02") == []
     cmd = str(app.handle_command("/bilan"))
-    assert "1 gagné sur 1" in cmd and "Tes paris notés" not in cmd, cmd
+    assert "1 gagné sur 1" in cmd and "Ton argent" not in cmd, cmd
     # NOTÉ ensuite : le même pari entre alors dans l'argent (cote et mise de 1xBet), et lui seul
     bets["combos"][0]["played"], bets["combos"][0]["cur"] = {"odds": 5.0, "stake": 1000}, FCFA
     store.save("bets.json", bets)
     n, total, staked = money_result()
     assert n == 1 and staked == 1000 and abs(total - 1000 * (5.0 * (1.5 ** 4) / real["odds"] - 1)) < 1e-6, (n, total, staked)
     simple = str(settle.bilan(bets))
-    assert "Tes paris notés" in simple and "sur 1 pari (1 gagné)" in simple and "🎯 <b>Combinés</b> : 1 gagné sur 1" in simple
+    assert "Ton argent" in simple and "· 1 gagné sur 1" in simple and "🎯 <b>Combinés du matin</b> : 1 gagné sur 1" in simple
     # un combi sur mesure suivi mais pas encore noté (la mise n'a pas été donnée) : surveillé par les alertes ⚠️ comme tout ce qui est suivi, mais pas « joué »
     reset()
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pronos(7)})

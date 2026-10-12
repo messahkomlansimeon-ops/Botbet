@@ -1479,7 +1479,7 @@ def test_africa_and_fair_settlement():
         assert "Aucun pari réglé" in bil                                                   # sans paris réglés, le bilan reste inchangé
         track.save([dict(mk_row("x", "e9", "h2h", True, "2026-09-30T15:00:00Z"), result="win", prob=0.5, date="2026-09-30", closed_at="x",
                          clv=0.01)])
-        assert "Pronostics sans cote : 5 gagnés sur 8 (62 %)" in settle.bilan({"picks": [], "combos": []})
+        assert "Pronostics sans cote : 5 gagnés sur 8 (62 % réalisés" in settle.bilan({"picks": [], "combos": []})
     print("Afrique et règlement des pronostics : OK")
 
 
@@ -2289,7 +2289,7 @@ def test_run_daily_world():
         assert "Combiné à cote mini" in msgs[0] and ("✅" in msgs[0] or "❌" in msgs[0]) and "le résultat en argent ne compte que ceux que tu as notés" in msgs[0], msgs[0]
         assert all(r.get("reported") for r in rows if r["result"] in ("win", "loss")) and app.fair_combos_report(datetime(2026, 10, 9, 9, tzinfo=UTC)) == []
         bil = app.handle_command("/bilan")
-        assert "Combinés à vérifier chez 1xBet : " in bil and " sur " in bil, bil
+        assert "Combinés à vérifier : " in bil and " sur " in bil, bil
         assert "Combinés à vérifier chez 1xBet" in app.handle_command("/bilan détail")
         assert bankroll.load()["bankroll"] == 100.0, "aucun combiné à cote juste dans la bankroll"
         assert not any("fair" in c.get("tier", "") for c in store.load("bets.json", {"combos": []})["combos"])
@@ -2410,8 +2410,8 @@ def test_played_bets():
         res = app.combo_result(bets["combos"][0], {})
         assert "cote 5,40 chez 1xBet" in res and "+13,2 FCFA" in res and " u" not in res, res
         simple = settle.bilan(bets, rows=rows)
-        assert "sur 3 paris (2 gagnés)" in simple and "Cotes de 1xBet : +6,6 % en moyenne" in simple, simple
-        assert "Joués chez 1xBet" not in simple and "+7,2 FCFA" in simple, simple             # le résultat en argent est donné une seule fois
+        assert "2 gagnés sur 3" in simple and "Cotes de 1xBet : +6,6 % en moyenne" in simple, simple
+        assert "Joués chez 1xBet" not in simple and "+7 FCFA · 2 gagnés sur 3" in simple, simple             # le résultat en argent est donné une seule fois
         detail = settle.bilan(bets, rows=rows, detail=True)
         assert "Écart de cote 1xBet par palier : Sûr +8 % (1), Pari du jour" in detail, detail
         assert "Joués chez 1xBet : 2 gagnés sur 3 · résultat +7,2 FCFA" in detail, detail
@@ -2649,7 +2649,7 @@ def main():
     text = settle.bilan(bets, detail=True)
     assert "Envoyés" in text and "Suivis en silence" in text and "Brier" in text and "CLV" in text, text
     simple = settle.bilan(bets)
-    assert "Bilan" in simple and "Combinés</b> :" in simple and not re.search(r"Brier|CLV|rendement", simple), simple
+    assert "Bilan" in simple and "Combinés du matin</b> :" in simple and not re.search(r"Brier|CLV|rendement", simple), simple
     print("\n" + text + "\n")
 
     # --- Calibration : 400 résultats synthétiques « corners/cartons » dont les

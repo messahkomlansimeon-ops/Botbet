@@ -111,7 +111,7 @@ def test_skip_and_money_bilan():
     lines = money.summary_lines(b, track.load(), store.load("fair_combos.json", []), today="2026-10-09")
     assert lines and lines[0].startswith("7 derniers jours : +") and "FCFA" in lines[0], lines
     simple = settle.bilan(store.load("bets.json", {}), rows=track.load())
-    assert "💰 <b>Tes paris notés</b>" in simple and "Joués chez 1xBet" not in simple and "FCFA" in simple, simple
+    assert "💰 <b>Ton argent</b>" in simple and "Joués chez 1xBet" not in simple and "FCFA" in simple, simple
     assert " u<" not in simple and " u " not in simple and "unités" not in simple, simple              # jamais d'unités
     store.save("today.json", {"day": "2026-10-09", "picks": [], "pronos": []})       # « Mes paris » liste le jour Kelly en cours
     todo = app.handle_command("🧾 Mes paris")
