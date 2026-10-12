@@ -330,10 +330,18 @@ class Runner:
             STOP.wait(self.tick)
 
 
+LOCK_WAIT = 30                                 # secondes d'attente du verrou au démarrage
+
+
 def main():
     os.chdir(ROOT)
     os.makedirs(LOGS, exist_ok=True)
     lock = acquire_single_instance(os.path.join(LOGS, "runner.lock"))
+    for _ in range(LOCK_WAIT):                 # ancien runner encore en train de s'arrêter (redémarrage rapide) : on l'attend un peu
+        if lock is not None:
+            break
+        time.sleep(1)
+        lock = acquire_single_instance(os.path.join(LOGS, "runner.lock"))
     if lock is None:
         log("❌ un autre termux_runner.py tourne déjà (verrou logs/runner.lock) : arrêt", err=True)
         return 1

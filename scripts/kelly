@@ -1,0 +1,56 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Commande « kelly » pour Termux. Installée par : cp ~/kelly/scripts/kelly $PREFIX/bin/kelly && chmod +x $PREFIX/bin/kelly
+# « kelly update » la réinstalle toute seule après chaque git pull.
+DIR="$HOME/kelly"
+LOG="$DIR/logs/termux.log"
+
+running() { pgrep -f "termux_runner.py" > /dev/null; }
+
+case "$1" in
+    start)
+        cd "$DIR" || exit 1
+        mkdir -p logs
+        if running; then
+            echo "⚠️ Kelly est déjà en cours d'exécution."
+        else
+            nohup python -u termux_runner.py > "$LOG" 2>&1 &
+            sleep 3
+            if running; then echo "🚀 Kelly démarrée en arrière-plan."; else echo "❌ Kelly n'a pas démarré : kelly logs"; fi
+        fi
+        ;;
+    stop)
+        pkill -f "termux_runner.py"
+        pkill -f "bot.py"
+        for i in $(seq 1 20); do
+            pgrep -f "termux_runner.py|bot.py" > /dev/null || break
+            sleep 1
+        done
+        pkill -9 -f "termux_runner.py|bot.py" 2>/dev/null
+        echo "🛑 Kelly arrêtée."
+        ;;
+    restart)
+        "$0" stop
+        "$0" start
+        ;;
+    update)
+        cd "$DIR" || exit 1
+        echo "🔄 Mise à jour du dépôt..."
+        git pull || exit 1
+        cp "$DIR/scripts/kelly" "$PREFIX/bin/kelly" && chmod +x "$PREFIX/bin/kelly"
+        exec "$PREFIX/bin/kelly" restart
+        ;;
+    logs)
+        tail -n 50 -f "$LOG"
+        ;;
+    status)
+        if running; then
+            echo "✅ Kelly est active (runner PID: $(pgrep -f termux_runner.py | head -n1))"
+        else
+            echo "❌ Kelly est arrêtée."
+        fi
+        ;;
+    *)
+        echo "Usage: kelly {start|stop|restart|update|logs|status}"
+        exit 1
+        ;;
+esac

@@ -61,62 +61,15 @@ kelly <commande>
 - `kelly logs` : Suit les logs en temps réel (`tail -f logs/termux.log`).
 - `kelly status` : Vérifie si le runner et le bot sont actifs (affiche les PIDs).
 
-### Code du wrapper (`/data/data/com.termux/files/usr/bin/kelly`) :
+### Le wrapper (`$PREFIX/bin/kelly`)
 
-`stop` attend que le runner et `bot.py` soient vraiment arrêtés (20 s au plus) avant que `restart` relance : sans cette attente, un ancien runner encore en train de s'arrêter garde le verrou `logs/runner.lock` et le nouveau refuse de démarrer.
+Le script est dans le dépôt : `scripts/kelly`. Installation ou mise à jour, une seule ligne à coller dans Termux :
 
 ```bash
-#!/data/data/com.termux/files/usr/bin/bash
-DIR="$HOME/kelly"
-LOG="$DIR/logs/termux.log"
-
-case "$1" in
-    start)
-        cd "$DIR" || exit 1
-        mkdir -p logs
-        if pgrep -f "termux_runner.py" > /dev/null; then
-            echo "⚠️ Kelly est déjà en cours d'exécution."
-        else
-            nohup python -u termux_runner.py > "$LOG" 2>&1 &
-            echo "🚀 Kelly démarrée en arrière-plan."
-        fi
-        ;;
-    stop)
-        pkill -f "termux_runner.py"
-        pkill -f "bot.py"
-        # attendre la vraie fin (le runner arrête --serve proprement), 20 s au plus
-        for i in $(seq 1 20); do
-            pgrep -f "termux_runner.py|bot.py" > /dev/null || break
-            sleep 1
-        done
-        pkill -9 -f "termux_runner.py|bot.py" 2>/dev/null
-        echo "🛑 Kelly arrêtée."
-        ;;
-    restart)
-        $0 stop
-        $0 start
-        ;;
-    update)
-        cd "$DIR" || exit 1
-        echo "🔄 Mise à jour du dépôt..."
-        git pull && $0 restart
-        ;;
-    logs)
-        tail -n 50 -f "$LOG"
-        ;;
-    status)
-        if pgrep -f "termux_runner.py" > /dev/null; then
-            echo "✅ Kelly est active (runner PID: $(pgrep -f termux_runner.py | head -n1))"
-        else
-            echo "❌ Kelly est arrêtée."
-        fi
-        ;;
-    *)
-        echo "Usage: kelly {start|stop|restart|update|logs|status}"
-        exit 1
-        ;;
-esac
+cd ~/kelly && git pull && cp scripts/kelly $PREFIX/bin/kelly && chmod +x $PREFIX/bin/kelly && kelly restart
 ```
+
+Ensuite, `kelly update` fait tout seul `git pull`, réinstalle le script et redémarre Kelly. `stop` attend que le runner et `bot.py` soient vraiment arrêtés (20 s au plus), et le runner lui-même attend jusqu'à 30 s le verrou `logs/runner.lock` au démarrage : un redémarrage rapide ne laisse jamais Kelly arrêtée.
 
 ---
 
