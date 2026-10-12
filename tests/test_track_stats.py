@@ -35,7 +35,7 @@ def test_selection():
         p("xx1", "alternate_totals_cards", "soccer_xx_unknown"),               # ni CSV ni 365scores : il coûterait une requête
         p("en1", "alternate_totals_cards"), p("en1", "team_fouls_away"),
         p("en4", "team_sot_home"), p("en4", "alternate_totals_corners"),        # tirs cadrés suivis par C.FAIR_TRACK_SHOTS (API-Football) : match déjà relevé
-        p("en1", "team_offsides_total"),                                         # hors-jeu : absents des CSV
+        p("en1", "team_offsides_total"),                                         # hors-jeu : absents des CSV, mais FotMob les lit (Premier League)
         p("en2", "player_shots_on_target"),                                      # joueurs : jamais
         p("en3", "totals"),                                                      # buts : déjà suivis par FAIR_TRACK_FREE
     ]
@@ -49,7 +49,7 @@ def test_selection():
     for m in ("alternate_totals_cards", "team_fouls_away"):
         assert got[k("en1", m)].get("free") == 1 and got[k("en1", m)]["x"] == 1, got[k("en1", m)]
     assert not got[k("en4", "team_sot_home")].get("free") and not got[k("en4", "alternate_totals_corners")].get("free")      # relevé de toute façon
-    assert k("en1", "team_offsides_total") not in got and k("en2", "player_shots_on_target") not in got
+    assert got[k("en1", "team_offsides_total")].get("free") == 1 and k("en2", "player_shots_on_target") not in got
     # montré plus tard : il sort du silence et se règle normalement (API-Football d'abord)
     fair.record([p("en1", "alternate_totals_cards")], DAY, shown=[p("en1", "alternate_totals_cards")])
     r = rows_by_key()[k("en1", "alternate_totals_cards")]
@@ -107,6 +107,16 @@ def test_free_settlement():
         try:
             assert settle.match_stats(row, fdata)["side"]["away"]["fouls"] == 12 and calls == [False], calls
             assert settle.match_stats(p("en1", "alternate_totals_cards") | {"group": "soccer", "free": 1}, fdata)["cards"] == 6      # pas de cartons : CSV
+            # 365scores n'a pas le match : la mémoire de FotMob (sans requête) passe avant les CSV
+            settle.s365._match_stats = lambda b, net=True: calls.append(net) or None
+            old_fm = settle.fmmatch.memory_stats
+            settle.fmmatch.memory_stats = lambda b: {"offsides": 5, "side": {"home": {"offsides": 2}, "away": {"offsides": 3}}}
+            try:
+                off = p("en1", "team_offsides_total") | {"group": "soccer", "free": 1}
+                assert settle.match_stats(off, FD(None))["offsides"] == 5 and settle.shot_value("team_offsides_total", settle.match_stats(off, FD(None))) == 5
+                assert settle.match_stats(row, fdata)["side"]["away"]["fouls"] == 14                      # FotMob sans fautes : les CSV
+            finally:
+                settle.fmmatch.memory_stats = old_fm
         finally:
             settle.s365._match_stats = old
     finally:

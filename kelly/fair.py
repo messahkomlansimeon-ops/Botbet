@@ -26,7 +26,7 @@ settle.settle_fair) pour mesurer si les probas de Kelly sont justes : les C.FAIR
 C.FAIR_TRACK_FREE pronostics de buts, 1N2, double chance et « les 2 marquent » suivis en silence (réglés avec la liste des
 matchs de la veille, déjà téléchargée : aucune requête de plus), et jusqu'à C.FAIR_TRACK_STATS pronostics de stats (corners, cartons, tirs,
 fautes, touches, hors-jeu) : ceux des matchs dont les stats sont relevées de toute façon, puis ceux des championnats aux CSV football-data complets ou
-lus par 365scores, réglés avec la mémoire de 365scores et ces CSV (« free », _stats_extra), jamais une requête. Le cumul par famille (kelly/calib.py) corrige ensuite les
+lus par 365scores ou FotMob, réglés avec leurs mémoires et ces CSV (« free », _stats_extra), jamais une requête. Le cumul par famille (kelly/calib.py) corrige ensuite les
 probas des marchés où Kelly se montre trop sûre d'elle (c["p0"] = proba avant correction).
 """
 import os
@@ -506,14 +506,18 @@ def _stats_extra(cands, taken):
     """Pronostics de stats suivis en silence en plus (C.FAIR_TRACK_STATS par jour), sans requête de plus : tous les marchés de stats d'un match dont les
     stats seront relevées de toute façon (un pronostic de stats de ce match est déjà suivi), ceux des championnats aux CSV football-data complets
     (fd.STATS_SPORTS, marchés FD_STATS) et tous ceux des championnats que 365scores lit à chaque passage horaire (s365.scope) : réglés (« free ») avec
-    la mémoire de 365scores puis les CSV, jamais une requête. D'abord le meilleur pronostic de chaque match, puis le 2e… : plus de
+    la mémoire de 365scores, puis celle de FotMob, puis les CSV, jamais une requête. D'abord le meilleur pronostic de chaque match, puis le 2e… : plus de
     matchs différents, des résultats plus indépendants. -> (pronostics, clés réglées avec les CSV seuls)."""
-    from .sources import footballdata as fd, s365
+    from .sources import fmmatch, footballdata as fd, s365
     fetched = {c["id"] for c in taken if c["market"] not in FREE_MARKETS}
     s365_keys = set(s365.scope()) if s365.enabled() else set()
+    try:                                                            # ligues que FotMob lit à chaque passage horaire (sa mémoire règle aussi)
+        s365_keys |= set(fmmatch.leagues())
+    except Exception:                                               # noqa: BLE001 - facultatif
+        pass
     pool = [c for c in cands if c["market"] not in FREE_MARKETS and not c["market"].startswith("player_")
             and (c["id"] in fetched or (c.get("sport_key") in fd.STATS_SPORTS and c["market"].startswith(FD_STATS))
-                 or c.get("sport_key") in s365_keys)]               # championnats lus par 365scores : tous les marchés de stats (touches, hors-jeu compris)
+                 or c.get("sport_key") in s365_keys)]               # lus par 365scores ou FotMob : tous les marchés de stats (touches, hors-jeu compris)
     rank, ranked = {}, []
     for i, c in enumerate(sorted(pool, key=lambda c: -c.get("score", 0))):
         r = rank[c["id"]] = rank.get(c["id"], -1) + 1

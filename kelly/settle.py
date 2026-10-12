@@ -217,12 +217,18 @@ def match_stats(b, fdata, stats_for=None):
             return None
         if stats_for:
             return stats_for(b)
-        try:                                           # 365scores : seulement les matchs déjà lus par le passage horaire (frais, sans requête)
-            got = s365._match_stats(b, net=False)
-        except Exception as e:                         # noqa: BLE001 - facultatif
-            print(f"[settle] 365scores (mémoire) ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-            got = None
-        return got if got and _has_stat(b, got) else (fdata.stats(b) or got)     # sinon les CSV football-data
+        first = None                                   # mémoires des passages horaires (365scores, FotMob : frais, sans requête), puis les CSV
+        for name, read in (("365scores", lambda: s365._match_stats(b, net=False)), ("FotMob", lambda: fmmatch.memory_stats(b)),
+                           ("football-data", lambda: fdata.stats(b))):
+            try:
+                got = read()
+            except Exception as e:                     # noqa: BLE001 - facultatif
+                print(f"[settle] {name} (mémoire) ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+                got = None
+            if got and _has_stat(b, got):
+                return got
+            first = first or got
+        return first
     if stats_for:
         fstats = stats_for(b)
     elif stats.enabled() and soccer:

@@ -426,6 +426,11 @@ def match_stats(b):
             elif not err or http.failure_kind(err) == "specific":      # page lue sans statistiques, ou page en échec propre au match : on s'en souvient
                 mark_retry(d, m["id"], m["d"], failure=bool(err))
                 save(d)
+    return _totals(r)
+
+
+def _totals(r):
+    """Un match de la mémoire (d["recent"]) au format de stats.fixture_stats ; None sans match."""
     if not r:
         return None
     s = r["s"]
@@ -434,3 +439,8 @@ def match_stats(b):
     out["side"] = {side: {k: s[k][i] for k in ks} for i, side in ((0, "home"), (1, "away"))}
     out["players"] = {}
     return out
+
+
+def memory_stats(b):
+    """match_stats SANS aucune requête : seulement les matchs déjà lus par les passages horaires (FM_RECENT_DAYS jours) ; None sinon."""
+    return _totals(_find_recent(load(), b))
