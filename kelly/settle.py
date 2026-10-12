@@ -419,13 +419,14 @@ def _rate(rows):
 
 
 def _block(name, rows):
+    """« Envoyés · 11/23 (48 %) · rendement −14 % · CLV +1,6 % » (texte brut, virgules françaises)."""
     n, w, roi = _rate(rows)
     if not n:
-        return f"{name} : aucun réglé"
-    txt = f"{name} : {w}/{n} gagnés ({w/n*100:.0f}%) | rendement {roi:+.0f}% par mise"
+        return f"{name} · aucun réglé"
+    txt = f"{name} · {w}/{n} ({fmt.pct(w / n)}) · rendement {fmt.signed(round(roi), ' %')}"
     clv = [r["clv"] for r in rows if r.get("clv") is not None]
     if clv:
-        txt += f" | CLV {sum(clv)/len(clv)*100:+.1f}%"
+        txt += f" · CLV {fmt.signed(sum(clv) / len(clv) * 100, ' %')}"
     return txt
 
 
@@ -440,7 +441,7 @@ def bilan(bets, days=None, rows=None, detail=False):
         picks = [b for b in picks if b["date"] >= cutoff]
         combos = [c for c in combos if c["date"] >= cutoff]
     if not picks and not combos and not fair_combo_line(fair.load_combos(), days) and not _custom_done(fair.load_combos(), days):
-        return "📊 BILAN\nAucun pari réglé pour l'instant." if detail else fmt.Html(
+        return fmt.Html("🔬 <b>Bilan détaillé</b>\n\nAucun pari réglé pour l'instant.") if detail else fmt.Html(
             "📊 <b>Bilan</b>\n\nAucun pari réglé pour l'instant : les paris du jour sont réglés le lendemain matin.")
     return _bilan_detail(bets, days, rows, picks, combos) if detail else _bilan_simple(days, rows, picks, combos)
 
@@ -579,56 +580,67 @@ def _bilan_simple(days, rows, picks, combos):
 
 
 def _bilan_detail(bets, days, rows, picks, combos):
+    """Bilan détaillé en carte (HTML) : ton argent (paris notés, écarts de cote 1xBet), la qualité des choix de Kelly (rendement, CLV, Brier, expliqués),
+    les combinés du matin, par marché, le suivi gratuit, qui Kelly écoute (ensemble), sa fiabilité (pastilles, facteur de correction, sens et niveau de
+    chances) et par championnat, puis les paris en attente."""
+    from . import status
+    e = fmt.esc
     sent = [r for r in picks if r.get("sent")]
     ghost = [r for r in picks if not r.get("sent")]
-    lines = [f"📊 BILAN{f' ({days} derniers jours)' if days else ''}",
-             _block("Envoyés", sent), _block("Suivis en silence", ghost)]
-    lines += played.summary_lines(bets, rows, fair.load_combos(), days, detail=True)
-    tiers = {}
-    for c in combos:
-        tiers.setdefault(c["tier"].split(" (")[0], []).append(c)
-    for tier, rows_ in tiers.items():
-        nn = len(rows_); ww = sum(1 for r in rows_ if r["result"] == "win")
-        mine = _sum_txt(rows_, html=False)
-        lines.append(f"{tier} : {ww}/{nn}" + (f" | tes paris : {mine}" if mine else ""))      # résultat de TES paris notés seulement
+    blocks = [[f"🔬 <b>Bilan détaillé</b>{f' — {days} derniers jours' if days else ''}"]]
+    pl = played.summary_lines(bets, rows, fair.load_combos(), days, detail=True)
+    if pl:
+        blocks.append(["💰 <b>Ton argent</b> " + fmt.i("(paris notés)")] + [e(x) for x in pl])
+    q = [e("✅ " + _block("Envoyés", sent)), e("👻 " + _block("Suivis en silence", ghost))]
+    if picks:
+        brier = sum((r["prob"] - (1.0 if r["result"] == "win" else 0.0)) ** 2 for r in picks) / len(picks)
+        q.append(f"🎯 Brier {fmt.num(brier, 3)} " + fmt.i("(0,25 = hasard, plus bas = mieux)"))
+    q.append(fmt.i("ℹ️ CLV positif : Kelly prend de meilleures cotes que la cote finale, le meilleur signe sur la durée. Rendement : gain moyen par mise."))
+    blocks.append(["🎯 <b>Qualité des choix de Kelly</b>"] + q)
+    if combos:
+        tiers = {}
+        for c in combos:
+            tiers.setdefault(fmt.tier_name(c["tier"]), []).append(c)
+        b = ["🧩 <b>Combinés du matin</b>"]
+        for tier, rows_ in tiers.items():
+            mine = _sum_txt(rows_)
+            b.append(f"{e(tier)} · {sum(1 for r in rows_ if r['result'] == 'win')}/{len(rows_)}" + (f" · tes paris {mine}" if mine else ""))
+        blocks.append(b)
     if sent:
-        lines.append("Par marché (envoyés) :")
         markets = {}
-        for b in sent:
-            markets.setdefault(b["market"], []).append(b)
+        for r in sent:
+            markets.setdefault(r["market"], []).append(r)
+        b = ["📈 <b>Par marché</b> " + fmt.i("(paris envoyés)")]
         for m, rows_ in sorted(markets.items(), key=lambda kv: -len(kv[1])):
             nn, ww, rr = _rate(rows_)
             if nn:
-                lines.append(f"• {C.MARKET_LABELS.get(m, m)} : {ww}/{nn} ({ww/nn*100:.0f}%) | {rr:+.0f}%")
-    if picks:
-        brier = sum((r["prob"] - (1.0 if r["result"] == "win" else 0.0)) ** 2 for r in picks) / len(picks)
-        lines.append(f"Brier (justesse des probas, plus bas = mieux, 0.25 = hasard) : {brier:.3f}")
+                b.append(e(f"{C.MARKET_LABELS.get(m, m).capitalize()} · {ww}/{nn} ({fmt.pct(ww / nn)}) · rendement {fmt.signed(round(rr), ' %')}"))
+        blocks.append(b)
+    free = [x for x in (fair_line(fair.load(), days, short=True), fair_combo_line(fair.load_combos(), days, short=True), sharpgap.summary_line(rows, days)) if x]
+    if free:
+        blocks.append(["🎲 <b>Suivi gratuit</b>"] + [e(x) for x in free])
+    el = ensemble.lines(short=True)
+    if el:
+        blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(avis de Kelly · part de Pinnacle · résultats)")] + [e(x) for x in el]
+                      + [fmt.i("ℹ️ ↑ / ↓ : Kelly pèse plus ou moins que prévu au départ.")])
+    fam, _ = _reliability_lines()
+    if fam:
+        d = calib.load()
+        fams = [f for f, a in sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and len(a) == 3
+                                      and a[0] >= calib.SHOW_MIN), key=lambda x: -x[1][0])]
+        b = ["📏 <b>Fiabilité de Kelly</b> " + fmt.i("(réalisé / annoncé · correction)")]
+        for line, f in zip(fam, fams):
+            k = calib._k(d[f], fam=f)
+            head, sep, tail = line.partition(" → ")
+            b.append(e(head + (f" · ×{fmt.num(k)}" if k is not None and line[0] != "⏳" else "") + (sep + tail if sep else "")))
+        b += [e(f"• {x}") for x in calib.cell_lines()]
+        blocks.append(b)
+    lg = [f"{'🔴' if status._mood(won, said) == 'trop confiante' else '🟢'} {name} · {calib.count(n)} · {status._mood(won, said)} "
+          f"({fmt.pct(won)} / {fmt.pct(said)})" for name, n, won, said in calib.league_rows()]
+    if lg:
+        blocks.append(["🏟 <b>Par championnat</b> " + fmt.i("(du plus fiable au moins fiable)")] + [e(x) for x in lg])
     pending = sum(1 for r in rows if r.get("result") is None)
     if pending:
-        lines.append(f"({pending} paris en attente de résultat)")
-    fl = fair.summary(fair.load(), days)
-    if fl:
-        lines.append(fl)
-    fc = fair_combo_line(fair.load_combos(), days)
-    if fc:
-        lines.append(fc)
-    gl = sharpgap.summary_line(rows, days)
-    if gl:
-        lines.append(gl)
-    el = ensemble.lines()
-    if el:
-        lines.append("Qui Kelly écoute, appris sur les résultats (Kelly face au marché, Pinnacle face à 1xBet) :")
-        lines += [f"• {x}" for x in el]
-    cl = calib.lines(detail=True)
-    if cl:
-        lines.append("Fiabilité par marché (pronostics sans cote, les résultats récents comptent plus) :")
-        lines += [f"• {x}" for x in cl]
-    xl = calib.cell_lines()
-    if xl:
-        lines.append("Fiabilité par sens du pari et niveau de chances :")
-        lines += [f"• {x}" for x in xl]
-    ll = calib.league_lines()
-    if ll:
-        lines.append("Fiabilité par championnat (du plus fiable au moins fiable) :")
-        lines += [f"• {x}" for x in ll]
-    return "\n".join(lines)
+        blocks.append([f"⏳ {pending} pari{'s' if pending > 1 else ''} en attente de résultat"])
+    return fmt.Html("\n\n".join("\n".join(b) for b in blocks))
+

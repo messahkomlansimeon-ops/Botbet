@@ -221,7 +221,7 @@ def test_calibration_uses_book_prob():
     wipe()
     done = [row(f"d{i}", "h2h", "Alpha", None, 2.0, result="win" if i % 2 else "loss", prob=0.8, prob_book=0.5) for i in range(4)]
     txt = settle.bilan({"picks": [], "combos": []}, rows=done, detail=True)
-    assert "Brier (justesse des probas, plus bas = mieux, 0.25 = hasard) : 0.340" in txt, txt
+    assert "🎯 Brier 0,340 <i>(0,25 = hasard, plus bas = mieux)</i>" in txt, txt
 
 
 def main():

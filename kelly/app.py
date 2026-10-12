@@ -1910,9 +1910,9 @@ def _handle_command(text):
         bets = store.load("bets.json", {"picks": [], "combos": []})
         out = settle.bilan(bets, days, detail=detail)
         line = money_line(bets["combos"])
-        if detail:
+        if detail:                                  # carte HTML : le bilan détaillé, la ligne capital, puis « 🧠 Kelly apprend » (texte, échappé)
             d = learn.describe(learn.load(), track.load())
-            return out + "\n\n" + line + ("\n\n" + d if d else "")
+            return Html(out + "\n\n" + fmt.esc(line) + ("\n\n" + fmt.esc(d) if d else ""))
         d = learn.describe_simple(learn.load(), track.load())
         return telegram.with_buttons(Html(out + "\n\n" + fmt.esc(line) + (("\n\n" + d) if d else "")),
                                      telegram.inline([[("🔎 Plus de détails", "bilan|detail")]]))

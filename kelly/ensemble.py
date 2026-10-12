@@ -514,11 +514,21 @@ def explain_c(c):
     return " · ".join(bits + ([f"retenu : {pct(p)}"] if p is not None else []))
 
 
-def lines(data=None):
+def _arrow(w, prior):
+    """« ↑ » / « ↓ » quand le poids appris s'écarte de plus de 2 points du poids prévu ; '' sinon."""
+    return " ↑" if w > prior + 0.02 else " ↓" if w < prior - 0.02 else ""
+
+
+def lines(data=None, short=False):
     """Une ligne par famille apprise, en mots simples : « buts : Kelly compte pour 12 % (prévu 12 %), Pinnacle 75 % du marché (prévu 75 %) — 130 résultats »
-    (« Kelly » : poids du modèle face au marché ; « Pinnacle » : part des books de référence dans l'avis du marché face à 1xBet)."""
+    (« Kelly » : poids du modèle face au marché ; « Pinnacle » : part des books de référence dans l'avis du marché face à 1xBet). `short` (bilan détaillé) :
+    « Corners · 53 % ↑ · 75 % · 165 », les familles les plus suivies d'abord (↑ / ↓ : plus ou moins que prévu au départ)."""
     d = load() if data is None else data
     out = []
+    if short:
+        ws = sorted(((fam, weights(fam, d)) for fam in d.get("fam") or {}), key=lambda x: -x[1]["n_m"])
+        return [f"{calib.LABELS.get(fam, fam).capitalize()} · {w['wm'] * 100:.0f} %{_arrow(w['wm'], w['prior_wm'])} · "
+                f"{w['ws'] * 100:.0f} %{_arrow(w['ws'], w['prior_ws'])} · {w['n_m']:.0f}" for fam, w in ws]
     for fam in sorted(d.get("fam") or {}):
         w = weights(fam, d)
         out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour {w['wm'] * 100:.0f} % (prévu {w['prior_wm'] * 100:.0f} %), Pinnacle "

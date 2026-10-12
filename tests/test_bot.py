@@ -796,7 +796,7 @@ def test_bootstrap_training():
         model = learn.update([])
         assert model["adopted"] and model["boot_n"] == len(obj["rows"]) and store.load("model.json", {})["boot_n"] == model["boot_n"]
         d = learn.describe(model, [])
-        assert d.startswith("🧠 KELLY APPREND") and f"Historique football-data : {len(obj['rows'])} lignes" in d, d
+        assert d.startswith("🧠 Kelly apprend") and f"Historique football-data : {len(obj['rows']):,} matchs".replace(",", " ") in d, d
         assert "matchs historiques" in d
         store.save("bootstrap.json", {"rows": "illisible"})                 # fichier corrompu : sans effet
         assert not learn.update([])["adopted"]
@@ -2290,7 +2290,7 @@ def test_run_daily_world():
         assert all(r.get("reported") for r in rows if r["result"] in ("win", "loss")) and app.fair_combos_report(datetime(2026, 10, 9, 9, tzinfo=UTC)) == []
         bil = app.handle_command("/bilan")
         assert "Combinés à vérifier : " in bil and " sur " in bil, bil
-        assert "Combinés à vérifier chez 1xBet" in app.handle_command("/bilan détail")
+        assert "Combinés à vérifier : " in app.handle_command("/bilan détail")
         assert bankroll.load()["bankroll"] == 100.0, "aucun combiné à cote juste dans la bankroll"
         assert not any("fair" in c.get("tier", "") for c in store.load("bets.json", {"combos": []})["combos"])
     print("matin complet avec stats mondiales et combinés à cote juste : OK")
@@ -2414,7 +2414,7 @@ def test_played_bets():
         assert "Joués chez 1xBet" not in simple and "+7 FCFA · 2 gagnés sur 3" in simple, simple             # le résultat en argent est donné une seule fois
         detail = settle.bilan(bets, rows=rows, detail=True)
         assert "Écart de cote 1xBet par palier : Sûr +8 % (1), Pari du jour" in detail, detail
-        assert "Joués chez 1xBet : 2 gagnés sur 3 · résultat +7,2 FCFA" in detail, detail
+        assert "Joués chez 1xBet : 2 gagnés sur 3 · résultat +7 FCFA" in detail, detail
         r = app.handle_command("/bank 500")
         assert "ne suit plus de bankroll en unités" in r and "FCFA" in r and not bankroll.load().get("real") and bankroll.load()["bankroll"] == 1000.0
     print("paris joués chez 1xBet (/joue) : OK")
@@ -2451,7 +2451,7 @@ def test_calibration_tracking():
         assert all(r["market"] == "totals" or (r["market"] == "alternate_totals_corners" and r.get("free")) for r in got if r.get("x"))
         text = settle.bilan({"picks": [], "combos": []}, rows=[{"result": "win", "sent": True, "odds": 2.0, "prob": 0.5,
                                                                  "date": "2026-10-08", "market": "h2h", "key": "z"}], detail=True)
-        assert "Fiabilité par marché" in text and "corners : 55 % réalisés pour 70 % annoncés (100), correction k = 0.75" in text, text
+        assert "Fiabilité de Kelly</b>" in text and "🔴 Corners · 100 · trop confiante (55 % / 70 %) · ×0,75 → écartés des combinés" in text, text
     print("suivi élargi et fiabilité par marché : OK")
 
 
@@ -2672,9 +2672,9 @@ def main():
     # --- Message du matin et commandes
     model = learn.update(track.load())
     d = learn.describe(model, track.load())
-    assert d.startswith("🧠 KELLY APPREND"), d
+    assert d.startswith("🧠 Kelly apprend"), d
     print(d, "\n")
-    assert "Bilan" in app.handle_command("/bilan") and "BILAN" in app.handle_command("/bilan détail")
+    assert "Bilan" in app.handle_command("/bilan") and "Bilan détaillé" in app.handle_command("/bilan détail")
     assert "PSG" in app.handle_command("/match psg")
     # cote 3 et non plus 30 : la dé-marge de Shin retire plus de marge aux longshots que la proportionnelle, et ces données
     # synthétiques ont une marge proportionnelle (sans biais favori-outsider) : il n'y reste que 4 jambes de qualité (max 3,6)

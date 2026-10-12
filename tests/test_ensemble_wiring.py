@@ -1169,7 +1169,7 @@ def test_weekly_bilan_and_morning_results():
     simple = fmt.plain(str(settle.bilan(bets)))
     assert "💰 Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre Pinnacle +2,3 %" in simple, simple
     detail = settle.bilan(bets, detail=True)
-    assert "Paris 1xBet en retard : 4 suivis" in detail and "Qui Kelly écoute, appris sur les résultats" in detail and "• buts : Kelly compte pour 12 %" in detail, detail
+    assert "Paris 1xBet en retard : 4 suivis" in detail and "Qui Kelly écoute</b>" in detail and "\nButs · 12 % · " in detail, detail
     # rien de tel sans données : pas de ligne
     reset()
     store.save("bets.json", {"picks": [], "combos": []})

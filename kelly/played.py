@@ -486,7 +486,7 @@ def _gain_txt(xs):
     by = {}
     for x in xs:
         by.setdefault(x.get("cur") or M.cur(), []).append(x)
-    return " et ".join(M.signed(sum(bankroll.played_gain(x) for x in g), c) for c, g in by.items()) or M.signed(0)
+    return " et ".join(M.signed(round(sum(bankroll.played_gain(x) for x in g)), c) for c, g in by.items()) or M.signed(0)      # arrondi au franc
 
 
 def summary_lines(bets, rows, fair_rows, days=None, detail=False, today=None):

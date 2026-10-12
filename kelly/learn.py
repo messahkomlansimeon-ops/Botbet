@@ -451,48 +451,52 @@ def load():
 
 
 def describe(model, rows, days=7):
+    """« 🧠 Kelly apprend » du bilan détaillé (texte brut, virgules françaises) : paris suivis et clôtures, cote finale battue et CLV, modèle (adopté ou
+    pourquoi pas, coupes successives), historique, books les plus lents, calibration. '' s'il n'y a rien à dire."""
+    from . import fmt
     if not model or (not rows and not model.get("boot_n")):
         return ""
+    pc = lambda v: fmt.signed(v * 100, " %")                        # noqa: E731 - « +1,6 % »
     closed = [r for r in rows if r.get("clv") is not None]
     sent = [r for r in closed if r.get("sent")]
-    lines = [f"🧠 KELLY APPREND — {len(rows)} paris suivis, {len(closed)} avec clôture"]
+    lines = [f"🧠 Kelly apprend · {len(rows)} paris suivis, {len(closed)} avec clôture"]
     if sent:
-        cutoff = str((datetime.now(timezone.utc).date()).toordinal() - days)
-        recent = [r for r in sent if datetime.fromisoformat(r["date"]).toordinal() > int(cutoff)]
-        beat = sum(1 for r in sent if r["clv"] > 0) / len(sent) * 100
-        mean_all = sum(r["clv"] for r in sent) / len(sent) * 100
-        txt = f"Envoyés : CLV moyen {mean_all:+.1f}% (bat la clôture {beat:.0f}% du temps)"
+        cutoff = datetime.now(timezone.utc).date().toordinal() - days
+        recent = [r for r in sent if datetime.fromisoformat(r["date"]).toordinal() > cutoff]
+        beat = sum(1 for r in sent if r["clv"] > 0) / len(sent)
+        txt = f"{'✅' if beat >= 0.5 else '⚠️'} Cote finale battue {fmt.pct(beat)} du temps · CLV moyen {pc(sum(r['clv'] for r in sent) / len(sent))}"
         if recent:
-            txt += f", {days} derniers jours {sum(r['clv'] for r in recent)/len(recent)*100:+.1f}%"
+            txt += f" ({days} derniers jours : {pc(sum(r['clv'] for r in recent) / len(recent))})"
         lines.append(txt)
     if model.get("adopted"):
         w = sorted(zip(model["names"], model["w"]), key=lambda kv: -abs(kv[1]))[:3]
-        lines.append("Modèle adopté. Signaux qui pèsent : " + ", ".join(
-            f"{n.replace('market=', '').replace('book=', 'book ')} ({v:+.3f})" for n, v in w))
         what = "matchs historiques" if model.get("oos_source") == "historique" else "paris"
-        lines.append(f"Test hors échantillon ({model['test_rows']} {what}) : modèle {model['oos_model']*100:+.1f}% "
-                     f"vs heuristique {model['oos_heuristic']*100:+.1f}%")
+        lines.append(f"🤖 Modèle adopté · test sur {model['test_rows']} {what} : {pc(model['oos_model'])} contre {pc(model['oos_heuristic'])} "
+                     "pour la méthode simple")
+        lines.append("   Signaux qui pèsent : " + ", ".join(f"{n.replace('market=', '').replace('book=', 'book ')} ({v:+.3f})".replace(".", ",") for n, v in w))
     else:
-        lines.append("Modèle : " + model.get("reason", "pas encore"))
+        why = model.get("reason", "pas encore")
+        if why.startswith("le modèle ne bat pas"):          # en mots simples (la raison technique reste dans model.json)
+            why = "pas encore adopté, il ne bat pas la méthode simple sur des jours qu'il n'a pas vus"
+        lines.append("🤖 Modèle : " + why)
     if model.get("folds"):
         f = model["folds"]
-        lines.append(f"Coupes successives : mieux que l'heuristique sur {sum(x['win'] for x in f)} sur {len(f)} ("
-                     + ", ".join(f"{x['gap'] * 100:+.1f}%" for x in f) + ")")
+        lines.append(f"   Périodes de test : mieux que la méthode simple sur {sum(x['win'] for x in f)} sur {len(f)} ("
+                     + ", ".join(pc(x["gap"]) for x in f) + ")")
     if model.get("boot_n"):
-        lines.append(f"📚 Historique football-data : {model['boot_n']} lignes (cotes d'ouverture vs clôture) "
-                     f"en appoint de l'apprentissage")
+        lines.append(f"📚 Historique football-data : {model['boot_n']:,} matchs en appoint".replace(",", " "))
     slow = sorted(model.get("books", {}).items(), key=lambda kv: -kv[1]["clv"])[:3]
     if slow:
-        lines.append("Books les plus lents : " + ", ".join(f'{k} ({v["clv"]*100:+.1f}%, n={v["n"]})' for k, v in slow))
+        lines.append("🐢 Books les plus lents : " + ", ".join(f"{k} {pc(v['clv'])} ({v['n']})" for k, v in slow))
     cal = model.get("calibration", {})
-    active = [f"{k} ({v['n']}, Brier hors échantillon {v.get('oos_before', v['brier_before']):.3f}→{v.get('oos_after', v['brier_after']):.3f})"
+    active = [f"{k} ({v['n']}, Brier {fmt.num(v.get('oos_before', v['brier_before']), 3)} → {fmt.num(v.get('oos_after', v['brier_after']), 3)})"
               for k, v in cal.items() if v.get("active")]
     waiting = [f"{k} {v['n']}/{C.CALIB_MIN_ROWS}" if v["n"] < C.CALIB_MIN_ROWS else f"{k} (pas d'amélioration hors échantillon)"
                for k, v in cal.items() if not v.get("active")]
     if active:
-        lines.append("Calibration active : " + ", ".join(active))
+        lines.append("✅ Calibration active : " + ", ".join(active))
     if waiting:
-        lines.append("Calibration en attente : " + ", ".join(waiting))
+        lines.append("⏳ Calibration en attente : " + ", ".join(waiting))
     return "\n".join(lines)
 
 

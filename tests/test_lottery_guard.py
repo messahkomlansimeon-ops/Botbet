@@ -74,10 +74,31 @@ def test_bilan_card():
     print("ok  bilan : argent d'abord (arrondi, jauge), combinés par palier, fiabilité à pastilles, par championnat")
 
 
+def test_detail_card():
+    from kelly import ensemble, track
+    T.reset()
+    day = str(T.TODAY)
+    rows = [{"key": f"k{i}", "id": f"e{i}", "date": day, "market": "totals", "sent": i < 6, "odds": 2.0, "prob": 0.55, "clv": 0.016,
+             "result": "win" if i % 2 else "loss"} for i in range(10)]
+    track.save(rows)
+    store.save("bets.json", {"picks": [], "combos": [T.combo(T.TODAY, 5368.03, 1.5, "loss", tier="⚖️ COSTAUD (cote 10)")]})
+    store.save(calib.FILE, {"shots": [67, 30, 43.5]})
+    calib._memo.clear()
+    out = str(app.handle_command("/bilan détail"))
+    assert out.startswith("🔬 <b>Bilan détaillé</b>") and "✅ Envoyés · 3/6 (50 %) · rendement +0 % · CLV +1,6 %" in out, out
+    assert re.search(r"🎯 Brier 0,25\d <i>\(0,25 = hasard, plus bas = mieux\)</i>", out) and "⚖️ COSTAUD · 0/1 · tes paris −5 368 FCFA" in out, out
+    assert "🔴 Tirs · 67 · trop confiante (45 % / 65 %) · ×0,40 → écartés des combinés" in out, out
+    assert "🧠 Kelly apprend · 10 paris suivis, 10 avec clôture" in out or "🧠" not in out, out
+    assert not re.search(r"\d\.\d+ ?%|\d,\d\d FCFA|KELLY APPREND|BILAN", out), out           # virgules françaises, montants arrondis
+    assert ensemble._arrow(0.53, 0.50) == " ↑" and ensemble._arrow(0.10, 0.12) == "" and ensemble._arrow(0.05, 0.12) == " ↓"
+    print("ok  bilan détaillé : carte, virgules françaises, montants arrondis, pastilles et correction, flèches de l'ensemble")
+
+
 def main():
     test_lottery_cap()
     test_too_many_tickets()
     test_bilan_card()
+    test_detail_card()
     print("tests garde-fou loterie et bilan : OK")
 
 

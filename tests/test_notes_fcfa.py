@@ -272,7 +272,7 @@ def test_only_noted_bets_count():
     assert "💰 <b>Ton argent</b>" in simple and "+4 500 FCFA · 2 gagnés sur 4" in simple, simple
     no_units(simple, "bilan")
     det = settle.bilan(bets, rows=rows, detail=True)
-    assert "Joués chez 1xBet : 2 gagnés sur 4 · résultat +4 500 FCFA" in det and "tes paris : +4 000 FCFA" in det, det
+    assert "Joués chez 1xBet : 2 gagnés sur 4 · résultat +4 500 FCFA" in det and "tes paris +4 000 FCFA" in det, det
     no_units(det, "bilan détail")
     cmd = app.handle_command("/bilan")
     assert "+4 500 FCFA" in cmd and "Budget du jour" in cmd and cmd.markup["inline_keyboard"][0][0]["callback_data"] == "bilan|detail"
@@ -880,7 +880,7 @@ def test_unnoted_morning_bets_stay_tracked():
     assert "✅ Paris envoyés" in simple and "Combinés à vérifier : 1 gagné sur 1" in simple, simple
     assert "FCFA" not in simple and "Ton argent" not in simple and "Joués chez 1xBet" not in simple, simple
     det = settle.bilan(bets, detail=True)
-    assert "SÛR : 1/1" in det and "Combinés à vérifier chez 1xBet : 1 gagné sur 1" in det and "FCFA" not in det, det
+    assert "SÛR · 1/1" in det and "Combinés à vérifier : 1 gagné sur 1" in det and "FCFA" not in det, det
     assert money_result() == (0, 0, 0) and played.summary_lines(bets, track.load(), fair.load_combos()) == []
     assert money.summary_lines(bets, track.load(), fair.load_combos(), today="2030-01-02") == []
     cmd = str(app.handle_command("/bilan"))
