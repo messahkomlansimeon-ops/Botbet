@@ -163,17 +163,17 @@ def test_default_stake_with_budget():
     t = played.find("sur", DAY)
     assert t.stake == 1000, "mise conseillée du matin (budget du jour)"
     reply = played.command(["sur", "5,40"], DAY)            # la cote seule : la mise conseillée est reprise
-    assert reply.startswith("✅ Noté") and "joué à 5,40 chez 1xBet, mise 1 000 FCFA" in reply, reply
+    assert reply.startswith("✅ Noté") and "💰 1 000 FCFA à 5,40 →" in reply, reply
     c = store.load("bets.json", {})["combos"][0]
     assert c["played"]["odds"] == 5.4 and c["played"]["stake"] == 1000 and c["cur"] == FCFA, c
     # une autre cote sur un pari déjà noté garde la mise notée (et la mise donnée la remplace)
-    assert "mise 1 000 FCFA" in played.command(["sur", "5,10"], DAY) and store.load("bets.json", {})["combos"][0]["played"]["odds"] == 5.1
-    assert "mise 2 000 FCFA" in played.command(["sur", "5,10", "2000"], DAY)
+    assert "💰 1 000 FCFA à 5,10" in played.command(["sur", "5,10"], DAY) and store.load("bets.json", {})["combos"][0]["played"]["odds"] == 5.1
+    assert "💰 2 000 FCFA à 5,10" in played.command(["sur", "5,10", "2000"], DAY)
     # budget fixé après le matin (pas de mise du matin) : la mise conseillée est calculée sur le budget d'aujourd'hui
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, prob=0.25)]})      # espérance positive (+25 %) : à 0 %, Kelly ne conseille aucune mise
     want = money.allocate([{"kind": "combo", "tier": SUR, "prob": 0.25, "odds": 5.0}])[0][0]
     assert want > 0 and played.find("sur", DAY).stake == want, (want, played.find("sur", DAY).stake)
-    assert f"mise {money.money(want)}" in played.command(["sur", "5,40"], DAY)
+    assert f"💰 {money.money(want)} à 5,40" in played.command(["sur", "5,40"], DAY)
     # mise du matin jugée trop petite (0) : pas de mise conseillée, Kelly la demande
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, 5.0, stake=0)]})
     assert played.find("sur", DAY).stake == 0 and played.command(["sur", "5,40"], DAY).startswith("Avec quelle mise en FCFA ?")
@@ -196,7 +196,7 @@ def test_default_stake_without_budget():
         assert "played" not in store.load("bets.json", {})["combos"][0]
         out = chat.route("5,40 1 000")[1]
     c = store.load("bets.json", {})["combos"][0]
-    assert out.startswith("✅ Noté") and "mise 1 000 FCFA" in out and chat.get_pending() is None, out
+    assert out.startswith("✅ Noté") and "💰 1 000 FCFA à" in out and chat.get_pending() is None, out
     assert c["played"]["odds"] == 5.4 and c["played"]["stake"] == 1000 and c["cur"] == FCFA and c["stake"] is None, c
     assert f.edits[-1][0] == 11 and f.last_texts() == ["✅ Joué à 5,40 · 1 000 FCFA", "✏️ Autre cote", "↩️ Annuler"], f.last_texts()
     # /joue tapé sans mise ouvre la même attente
@@ -387,7 +387,7 @@ def test_custom_is_a_note():
     row = fair.load_combos()[0]
     assert row["custom"] and row["played"]["odds"] == row["min_odds"] == 21.49 and row["played"]["stake"] == item["stake"], row
     assert row["cur"] == FCFA and row["stake"] == item["stake"], row
-    assert reply.startswith("✅ Noté : combi sur mesure (cote 20)") and f"mise {money.money(item['stake'])}" in reply, reply
+    assert reply.startswith("✅ Noté · combi sur mesure (cote 20)") and f"💰 {money.money(item['stake'])} à 21,49 → si ça passe" in reply, reply
     assert f.last_buttons() == ["noop", f"joue|vm1|{DAY}", f"annule|vm1|{DAY}", f"xmaj|m1|{DAY}"], f.last_buttons()
     assert f.last_texts()[1:3] == ["✏️ Autre cote", "↩️ Annuler"] and money_result()[0] == 0, "pas réglé : pas encore dans le résultat"
     text = str(played.todo(DAY))
@@ -407,7 +407,7 @@ def test_custom_is_a_note():
         assert "pas encore noté" in again and "Avec quelle mise en FCFA ?" in again            # deuxième appui : la question est reposée
         out = chat.route("500")[1]                                                              # un montant seul = la mise, à la cote 1xBet
     row = fair.load_combos()[0]
-    assert out.startswith("✅ Noté : combi sur mesure (cote 5)") and "joué à 5,77 chez 1xBet, mise 500 FCFA" in out and row["played"] == {
+    assert out.startswith("✅ Noté · combi sur mesure (cote 5)") and "💰 500 FCFA à 5,77 → si ça passe : +2 385 FCFA" in out and row["played"] == {
         "odds": 5.77, "stake": 500, "at": row["played"]["at"]} and row["cur"] == FCFA, (out, row)
     # budget fixé APRÈS le message du combiné : la mise conseillée est calculée à l'appui, et le combiné est noté tout de suite
     msg, _ = custom_msg(budget=False, target=20.0)
@@ -440,12 +440,12 @@ def test_custom_is_a_note():
             if budget:                                  # mise conseillée : seule la cote est demandée
                 assert "À quelle cote as-tu joué" in reply and "ta mise sera de" in reply, reply
                 out = chat.route("4,60")[1]
-                assert "joué à 4,60 chez 1xBet, mise" in out and fair.load_combos()[0]["played"]["stake"] > 0, out
+                assert " à 4,60 → si ça passe" in out and fair.load_combos()[0]["played"]["stake"] > 0, out
             else:                                       # aucune mise conseillée : la cote et la mise
                 assert "À quelle cote et avec quelle mise en FCFA ?" in reply, reply
                 assert chat.route("2 000")[1].startswith("Je n'ai pas compris la cote")              # ici « 2 000 » est ambigu (cote ou mise ?) : redemandé
                 out = chat.route("4,60 800")[1]
-                assert "joué à 4,60 chez 1xBet, mise 800 FCFA" in out, out
+                assert "💰 800 FCFA à 4,60 →" in out, out
     print("ok  4 « Je le joue » = une note : cote 1xBet connue jamais demandée (mise conseillée : noté tout de suite ; sinon seule la mise) ; cote mini : cote (et mise) demandées")
 
 
@@ -927,7 +927,7 @@ def test_known_odds_never_asked():
         with Fakes() as f:
             reply = chat.on_callback(f"joue|{what}|{DAY}", 90)
         t = played.find(what, DAY)
-        assert reply.startswith("✅ Noté") and f"joué à {odds_txt} chez 1xBet" in reply and "À quelle cote" not in reply, (what, reply)
+        assert reply.startswith("✅ Noté") and f" à {odds_txt} → si ça passe" in reply and "À quelle cote" not in reply, (what, reply)
         assert chat.get_pending() is None and t.item["played"]["odds"] == float(odds_txt.replace(",", ".")) and t.item["cur"] == FCFA
         assert t.item["played"]["stake"] == (stake or t.stake) > 0
         assert f.edits[-1][0] == 90 and f.last_texts()[0].startswith("✅ Joué à") and f.last_texts()[1:3] == ["✏️ Autre cote", "↩️ Annuler"]
@@ -947,23 +947,23 @@ def test_known_odds_never_asked():
         with Fakes():
             out = chat.route(txt)[1]
         p = played.find("sur", DAY).item["played"]
-        assert out.startswith("✅ Noté") and f"joué à {odds_} chez 1xBet" in out and p["stake"] == stake and p["odds"] == 5.06, (txt, out, p)
+        assert out.startswith("✅ Noté") and f" à {odds_} → si ça passe" in out and p["stake"] == stake and p["odds"] == 5.06, (txt, out, p)
         chat.on_callback(f"annule|sur|{DAY}", 91)
     chat.set_pending("sur", DAY, 91, odds=5.06)                    # « cote mise » corrige la cote ; la garde « 2 000 = cote ou mise ? » ne joue pas ici
     with Fakes():
         out = chat.route("5,10 1 000")[1]
-    assert "joué à 5,10 chez 1xBet, mise 1 000 FCFA" in out, out
+    assert "💰 1 000 FCFA à 5,10 →" in out, out
     chat.on_callback(f"annule|sur|{DAY}", 91)
     # 3. le pari du jour typé avec /joue : la cote tapée est retenue, seule la mise manque
     reply = app.handle_command("/joue pari 1,45")
     assert reply == "Avec quelle mise en FCFA ? Réponds ta mise, par exemple 1 000 (cote 1,45 retenue).", reply
-    assert chat.get_pending()["odds"] == 1.45 and "joué à 1,45 chez 1xBet, mise 800 FCFA" in chat.route("800")[1]
+    assert chat.get_pending()["odds"] == 1.45 and "💰 800 FCFA à 1,45 →" in chat.route("800")[1]
     # 4. « ✏️ Autre cote » (pari noté) demande la cote ; la mise notée reste, un « cote mise » la change
     with Fakes():
         assert chat.on_callback(f"joue|pari|{DAY}", 92).startswith("À quelle cote as-tu finalement joué")
-        assert "mise 800 FCFA" in chat.route("1,50")[1]
+        assert "💰 800 FCFA à 1,50" in chat.route("1,50")[1]
         chat.on_callback(f"joue|pari|{DAY}", 92)
-        assert "joué à 1,52 chez 1xBet, mise 300 FCFA" in chat.route("1,52 300")[1]
+        assert "💰 300 FCFA à 1,52 →" in chat.route("1,52 300")[1]
     # 5. cote de référence d'un autre bookmaker / cote mini : pas de cote 1xBet connue, la cote est demandée
     reset()
     money.set_daily(5000)
@@ -974,7 +974,7 @@ def test_known_odds_never_asked():
         ask = chat.on_callback(f"joue|sur|{DAY}", 93)
         assert ask.startswith("À quelle cote as-tu joué") and "ta mise sera de 1 000 FCFA" in ask and "odds" not in chat.get_pending(), ask
         assert chat.route("2 000")[1].startswith("Je n'ai pas compris la cote")            # ici la garde d'ambiguïté s'applique
-        assert "joué à 5,40 chez 1xBet, mise 1 000 FCFA" in chat.route("5,40")[1]
+        assert "💰 1 000 FCFA à 5,40 →" in chat.route("5,40")[1]
     print("ok  10 cote 1xBet connue jamais demandée (noté tout de suite avec une mise conseillée, sinon seule la mise ; montant seul = mise ; « cote mise » "
           "corrige) ; cote de référence / mini : la cote est demandée ; « Autre cote » la demande")
 

@@ -104,9 +104,13 @@ def overlap_note(day, what):
         alone = math.prod(l["prob"] for l in me["legs"])
         anyp = chance_any(ts)
         listed = names(me["legs"], shared)
-        return (f"🔗 {len(shared)} match{'s' if len(shared) > 1 else ''} en commun avec {len(others)} autre{'s' if len(others) > 1 else ''} ticket"
-                f"{'s' if len(others) > 1 else ''} ({', '.join(listed[:2])}{' +' + str(len(listed) - 2) if len(listed) > 2 else ''}) : s'ils ratent, tout tombe ensemble.\n"
-                f"🎯 Ce ticket : {fmt.pct(alone)} · au moins un de tes {len(ts)} tickets : {fmt.pct(anyp)}")
+        many = len(shared) > 1
+        fall = "S'ils ratent" if many else "S'il rate"
+        return (f"🔗 {len(shared)} match{'s' if many else ''} partagé{'s' if many else ''} avec {len(others)} autre{'s' if len(others) > 1 else ''} "
+                f"ticket{'s' if len(others) > 1 else ''}\n"
+                f"   {', '.join(listed[:2])}{' +' + str(len(listed) - 2) if len(listed) > 2 else ''}\n"
+                f"   {fall}, plusieurs tickets tombent ensemble.\n"
+                f"🎯 Chances : ce ticket {fmt.pct(alone)} · au moins un de tes {len(ts)} tickets {fmt.pct(anyp)}")
     except Exception as e:                          # noqa: BLE001
         print(f"[tickets] alerte de matchs partagés ignorée : {type(e).__name__}: {e}", file=sys.stderr)
         return ""

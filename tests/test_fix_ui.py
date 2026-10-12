@@ -156,7 +156,7 @@ def test_played_never_switches_real_mode_for_budget_or_zero():
     assert ask.startswith("À quelle cote et avec quelle mise en FCFA ?") and chat.get_pending()["what"] == "costaud", ask
     assert chat.route("13")[1].startswith("Avec quelle mise en FCFA ?") and chat.get_pending()["what"] == "costaud"
     _, reply = chat.route("13 1 000")
-    assert reply.startswith("✅ Noté") and "mise 1 000 FCFA" in reply and chat.get_pending() is None, reply
+    assert reply.startswith("✅ Noté") and "💰 1 000 FCFA à" in reply and chat.get_pending() is None, reply
     c1 = store.load("bets.json", {})["combos"][1]
     assert c1["played"]["stake"] == 1000 and c1["cur"] == "FCFA" and not bankroll.load().get("real"), c1
     assert chat.on_callback(f"joue|sur|{DAY}").startswith("À quelle cote as-tu finalement joué")        # déjà noté : on corrige la cote

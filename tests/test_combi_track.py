@@ -234,7 +234,7 @@ def test_tap_with_budget():
     assert all(l["result"] is None and l["xodds"] == 1.55 for l in row["legs"]) and "skipped" not in row
     # « Je le joue » EST une note : à la cote du combiné affiché et à la mise conseillée, en FCFA
     assert row["played"]["odds"] == row["min_odds"] == 21.49 and row["played"]["stake"] == 250, row
-    assert reply.startswith("✅ Noté : combi sur mesure (cote 20)") and "joué à 21,49 chez 1xBet, mise 250 FCFA" in reply, reply
+    assert reply.startswith("✅ Noté · combi sur mesure (cote 20)") and "💰 250 FCFA à 21,49 → si ça passe : +5 122 FCFA" in reply, reply
     assert "Mes paris" in reply and "compté dans tes résultats" in reply and "Kelly te prévient" in reply, reply
     assert f.edits[-1][0] == 77 and f.last_buttons() == ["noop", f"joue|vm1|{DAY}", f"annule|vm1|{DAY}", f"xmaj|m1|{DAY}"], f.last_buttons()
     assert f.edits[-1][1]["inline_keyboard"][1][0]["text"] == "✏️ Autre cote" and f.edits[-1][1]["inline_keyboard"][1][1]["text"] == "↩️ Annuler"
@@ -282,7 +282,7 @@ def test_tap_without_budget():
         with Fakes() as f:
             out = chat.route(txt)[1]
         row = fair.load_combos()[0]
-        assert out.startswith("✅ Noté : combi sur mesure (cote 5)") and "joué à 5,77 chez 1xBet" in out and chat.get_pending() is None, (txt, out)
+        assert out.startswith("✅ Noté · combi sur mesure (cote 5)") and " à 5,77 → si ça passe" in out and chat.get_pending() is None, (txt, out)
         assert row["played"]["odds"] == 5.77 and row["played"]["stake"] == stake and row["cur"] == "FCFA", (txt, row)
         assert f.edits[-1][0] == 78 and f.last_texts()[0].startswith("✅ Joué à 5,77")
         assert "Note annulée" in played.command(["vm1", "0"], DAY)
@@ -291,14 +291,14 @@ def test_tap_without_budget():
     with Fakes():
         out = chat.route("5,40 1 000")[1]
     row = fair.load_combos()[0]
-    assert "joué à 5,40 chez 1xBet, mise 1 000 FCFA" in out and row["played"]["odds"] == 5.4, out
+    assert "💰 1 000 FCFA à 5,40 →" in out and row["played"]["odds"] == 5.4, out
     played.command(["vm1", "0"], DAY)
     chat.set_pending("vm1", DAY, 78, odds=5.77)
     with Fakes():
         ask = chat.route("5,40")[1]
         assert ask.startswith("Avec quelle mise en FCFA ?") and "cote 5,40 retenue" in ask and chat.get_pending()["odds"] == 5.4, ask
         out = chat.route("750")[1]
-    assert "joué à 5,40 chez 1xBet, mise 750 FCFA" in out and fair.load_combos()[0]["played"]["stake"] == 750, out
+    assert "💰 750 FCFA à 5,40 →" in out and fair.load_combos()[0]["played"]["stake"] == 750, out
     # incompréhensible : on redemande la mise, la question reste ouverte
     played.command(["vm1", "0"], DAY)
     chat.set_pending("vm1", DAY, 78, odds=5.77)
@@ -312,7 +312,7 @@ def test_tap_without_budget():
     with Fakes():
         assert "À quelle cote as-tu finalement joué" in chat.on_callback(f"joue|vm1|{DAY}", 78)
         out = chat.route("5,40")[1]
-    assert "joué à 5,40 chez 1xBet, mise 1 000 FCFA" in out, out
+    assert "💰 1 000 FCFA à 5,40 →" in out, out
     lines = played.summary_lines({"combos": []}, [], fair.load_combos())
     assert any("Combinés aux cotes 1xBet joués" in x for x in lines) and "1 noté" in lines[0], lines
     # annuler la note
@@ -324,11 +324,11 @@ def test_tap_without_budget():
         reply = chat.on_callback(f"cjoue|{cid}|{DAY}", 79)
         assert "Avec quelle mise en FCFA ?" in reply and "À quelle cote" not in reply and "cote 1xBet 11061,9" in reply, reply
         out = chat.route("1000")[1]
-        assert out.startswith("✅ Noté : combi sur mesure (cote 10000)") and "joué à 11061,9 chez 1xBet, mise 1 000 FCFA" in out, out
+        assert out.startswith("✅ Noté · combi sur mesure (cote 10000)") and "💰 1 000 FCFA à 11061,9 → si ça passe" in out, out
         assert "Note annulée" in chat.on_callback(f"annule|v{cid}|{DAY}", 79)
         chat.on_callback(f"joue|v{cid}|{DAY}", 79)
         out = chat.route("11000 1000")[1]
-        assert "joué à 11000,0 chez 1xBet, mise 1 000 FCFA" in out, out
+        assert "💰 1 000 FCFA à 11000,0 →" in out, out
         chat.on_callback(f"joue|v{cid}|{DAY}", 79)                      # noté : « Autre cote » demande la cote
         assert "par exemple 11061,90" in chat.route("99999")[1]           # au-delà du double de sa cote : redemandée
     print("ok  2 cote 1xBet connue jamais demandée : sans mise conseillée seule la mise est demandée (« 1000 », « 2 000 » = mise), « cote mise » corrige "
@@ -627,13 +627,13 @@ def test_real_picks_without_budget():
         assert "stake" not in fair.load_combos()[0] and reply.count("Avec quelle mise en FCFA ?") == 1 and "À quelle cote" not in reply, (fair.load_combos()[0], reply)
         out = chat.route("1 000")[1]               # la cote 1xBet (5,06) est connue : un montant seul est la mise
     row = fair.load_combos()[0]
-    assert "joué à 5,06 chez 1xBet, mise 1 000 FCFA" in out and row["src"] == "picks" and row["cur"] == "FCFA", out
+    assert "💰 1 000 FCFA à 5,06 →" in out and row["src"] == "picks" and row["cur"] == "FCFA", out
     assert row["played"]["stake"] == 1000 and row["played"]["odds"] == 5.06, row
     # « ✏️ Autre cote » : la cote est demandée, la mise notée reste
     with Fakes():
         assert "À quelle cote as-tu finalement joué" in chat.on_callback(f"joue|vm1|{DAY}", 9)
         out = chat.route("5,10")[1]
-    assert "joué à 5,10 chez 1xBet, mise 1 000 FCFA" in out and fair.load_combos()[0]["played"]["odds"] == 5.1, out
+    assert "💰 1 000 FCFA à 5,10 →" in out and fair.load_combos()[0]["played"]["odds"] == 5.1, out
     with Fakes(code="VERIF2") as f:
         out = app.refresh_combo("m1", DAY, now=at(13), fetch=fake_fetch({f"e{i}": {("h2h", "HOME", None): XB} for i in range(1, 5)}))
     assert "💰 Mise : <b>1 000 FCFA</b>" in out and " u</b>" not in out and "aucun changement" in out, out

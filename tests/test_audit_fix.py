@@ -729,7 +729,7 @@ def test_texts_and_currency():
     with Fakes():
         chat.set_pending("sur", DAY, 5)
         out = chat.route("5,40 2k")[1]
-    assert "mise 2 000 FCFA" in out and "K" not in out.replace("FCFA", ""), out
+    assert "💰 2 000 FCFA à 5,40" in out and "K" not in out.replace("FCFA", ""), out
     print("ok  15 textes à jour (pied de Mes paris, question de mise, combi retiré, bilan sans « hors bankroll ») ; devise verrouillée FCFA (5k = 5 000, 2k = 2 000)")
 
 

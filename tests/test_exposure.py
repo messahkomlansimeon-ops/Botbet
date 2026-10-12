@@ -45,8 +45,8 @@ def test_overlap_alert():
     assert "en commun" not in out
     cid = T.keep_custom(T.pronos(2) + [K.fouls(0), K.fouls(1)], stake=100, cur="FCFA")
     out = played.command([f"v{cid}", "5", "100"], DAY)
-    assert out.startswith("✅ Noté") and "🔗 2 matchs en commun avec 1 autre ticket (H0 – A0, H1 – A1) : s'ils ratent, tout tombe ensemble." in out, out
-    assert "🎯 Ce ticket : " in out and " · au moins un de tes 2 tickets : " in out, out
+    assert out.startswith("✅ Noté") and "\n\n🔗 2 matchs partagés avec 1 autre ticket\n   H0 – A0, H1 – A1\n   S'ils ratent, plusieurs tickets tombent ensemble.\n" in out, out
+    assert "🎯 Chances : ce ticket " in out and " · au moins un de tes 2 tickets " in out, out
     cid = T.keep_custom([K.fouls(2), K.fouls(3)], stake=100, cur="FCFA")
     assert "en commun" not in played.command([f"v{cid}", "2,25", "100"], DAY), "aucun match partagé : pas d'alerte"
     print("ok  alerte à la note d'un ticket qui partage des matchs avec tes autres tickets")

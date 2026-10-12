@@ -802,7 +802,7 @@ def test_notes_money_and_lists():
         # « ✅ Je l'ai joué » sous le message : noté tout de suite à la cote 1xBet lue, à la mise conseillée ; les boutons de TOUT le message sont refaits
         r1 = row(1)
         out = chat.on_callback(f"joue|g1|{DAY}", 77)
-        assert out.startswith("✅ Noté") and f"joué à {fmt.odds_txt(r1['xodds'])} chez 1xBet, mise {money.money(r1['stake'])}" in out, out
+        assert out.startswith("✅ Noté") and f"💰 {money.money(r1['stake'])} à {fmt.odds_txt(r1['xodds'])} →" in out, out
         p = row(1)["played"]
         assert p["odds"] == r1["xodds"] and p["stake"] == r1["stake"] and row(1)["cur"] == money.cur()
         mid, markup = f.edits[-1]

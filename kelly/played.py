@@ -330,7 +330,7 @@ def overlap_suffix(what, day):
     """« ⚠️ Ce ticket a 4 matchs en commun avec 5 de tes tickets du jour… » (exposure.overlap_note), à la suite d'une note ; '' sinon."""
     from . import exposure
     w = exposure.overlap_note(day, norm(what))
-    return "\n" + w if w else ""
+    return "\n\n" + w if w else ""
 
 
 def note(t, odds, stake, now=None, ref_at=None):
@@ -349,11 +349,17 @@ def note(t, odds, stake, now=None, ref_at=None):
             x["stake"] = None
     t.save()
     gap = _gap(odds, t.ref)
-    lines = [f"✅ Noté : {t.label}, joué à {fmt.odds_txt(odds)} chez 1xBet, mise {M.money(stake, x['cur'])} "
-             f"({t.ref_word} {fmt.odds_txt(t.ref)}"
-             + (f", lue à {ref_at}" if ref_at else "") + f" : {fmt.signed(gap * 100, ' %')})."]
+    lines = [f"✅ Noté · {t.label}",
+             f"💰 {M.money(stake, x['cur'])} à {fmt.odds_txt(odds)} → si ça passe : {M.signed(round(stake * (odds - 1)), x['cur'])}"]
+    if abs(gap) >= 0.01:                            # écart avec la cote de référence : dit seulement s'il compte (plus de « +0 % »)
+        lines.append(f"{'📈' if gap > 0 else '📉'} {round(abs(gap) * 100)} % de {'mieux' if gap > 0 else 'moins'} que la {t.ref_word} "
+                     f"({fmt.odds_txt(t.ref)})")
     if ref_at:
-        lines.append(f"🕒 Cote lue par Kelly à {ref_at} : si 1xBet t'a payé autre chose, touche « ✏️ Autre cote ».")
+        lines.append(f"🕒 Cote lue par Kelly à {ref_at}. Si 1xBet t'a payé autre chose : « ✏️ Autre cote ».")
+    if M.capital_mode():                            # ce qu'il reste de la limite du jour, cette note comprise
+        M._cap_memo.clear()
+        st = M.capital_state()
+        lines.append(f"💼 Reste aujourd'hui : {M._n(st['left'])} / {M.money(M._r(st['limit']))}")
     if t.ref_word == "cote mini" and odds < t.ref:
         lines.append("⚠️ 1xBet paie moins que la cote mini : Kelly conseillait de passer ton chemin.")
     elif gap < -0.15:

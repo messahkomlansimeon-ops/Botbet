@@ -120,10 +120,34 @@ def test_display_and_goal():
     print("ok  « si ça passe : +X », objectif affiché et jamais forcé, ligne du bilan ; sans capital : espérance négative dite")
 
 
+class Ticket:
+    """Un pari trouvé (played.find) réduit à ce que played.note lit."""
+    def __init__(self, ref, ref_word="cote 1xBet"):
+        self.item, self.ref, self.stake, self.label, self.ref_word = {"cur": "FCFA", "date": str(TODAY)}, ref, 0, "combi sur mesure (cote 50)", ref_word
+        self.save = lambda: None
+
+
+def test_note_confirmation():
+    from kelly import played
+    reset()
+    out = played.note(Ticket(50.52), 50.52, 10, ref_at="12h06")
+    assert out.splitlines() == ["✅ Noté · combi sur mesure (cote 50)", "💰 10 FCFA à 50,52 → si ça passe : +495 FCFA",
+                                "🕒 Cote lue par Kelly à 12h06. Si 1xBet t'a payé autre chose : « ✏️ Autre cote »."], out     # écart nul : pas de ligne
+    assert "📈 3 % de mieux que la cote 1xBet (49,05)" in played.note(Ticket(49.05), 50.52, 10)
+    assert "📉 4 % de moins que la cote mini (52,50)" in played.note(Ticket(52.5, "cote mini"), 50.52, 10)
+    assert "📈" not in played.note(Ticket(50.2), 50.52, 10) and "💼" not in out                    # moins de 1 % ; pas de capital : pas de ligne 💼
+    app.handle_command("capital 50000")
+    app.handle_command("perte max 5000")
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 4800, 3.0)]})
+    assert "💼 Reste aujourd'hui : 200 / 5 000 FCFA" in played.note(Ticket(50.52), 50.52, 10)
+    print("ok  confirmation « ✅ Noté » : gain si ça passe, écart dit à partir de 1 %, reste du jour en mode capital")
+
+
 def main():
     test_commands_and_limit()
     test_follows_results_and_stops()
     test_display_and_goal()
+    test_note_confirmation()
     print("tests mode capital : OK")
 
 

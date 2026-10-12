@@ -120,7 +120,7 @@ def track(cid, day, message_id=None):
     reply = chat.on_callback(f"joue|{what}|{day}", message_id)
     t = played.find(what, day)
     if not isinstance(t, str) and t is not None and t.item.get("played"):
-        return (f"{reply}\nIl est dans « 🧾 Mes paris » et compté dans tes résultats (« ✏️ Autre cote » corrige la cote, « ↩️ Annuler » retire "
-                "la note)." + (" Kelly te prévient si un de ses paris n'est plus jouable chez 1xBet." if real else ""))
+        return (f"{reply}\n\n📌 Dans « 🧾 Mes paris », compté dans tes résultats."
+                + (" Kelly te prévient si un de ses paris n'est plus jouable." if real else ""))
     _buttons(message_id, what, day)
     return f"{head} : il est dans « 🧾 Mes paris ».\n" + reply

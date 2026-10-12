@@ -180,7 +180,7 @@ def test_single_flag():
     settle.record_combos(sent_combos, day)
     assert app.handle_command("/joue pari 1,5").startswith("Avec quelle mise en FCFA ?")        # sans budget du jour : la mise est demandée
     out = app.handle_command("/joue pari 1,5 100")
-    assert "Noté" in out and "pari du jour du" in out and "Pari 0" in out and "mise 100 FCFA" in out, out
+    assert "Noté" in out and "pari du jour du" in out and "Pari 0" in out and "💰 100 FCFA à" in out, out
     rows = track.load()
     assert next(r for r in rows if r["key"] == "k0").get("played") and not next(r for r in rows if r["key"] == "old").get("played")
     assert {r["key"] for r in played.single_rows(rows, store.load("bets.json", {})["combos"])} == {"old", "k0"}

@@ -2371,11 +2371,11 @@ def test_played_bets():
         m = app.handle_command("/joue sûr 5,40")
         assert m.startswith("Avec quelle mise en FCFA ?") and "played" not in store.load("bets.json", {})["combos"][0], m
         m = app.handle_command("/joue sûr 5,40 10")
-        assert "Noté" in m and "5,40" in m and "+8 %" in m and "mise 10 FCFA" in m and "ne suit plus que les paris notés" not in m, m
+        assert "Noté" in m and "5,40" in m and "8 % de mieux" in m and "💰 10 FCFA à 5,40" in m and "ne suit plus que les paris notés" not in m, m
         assert not bankroll.load().get("real") and store.load("bets.json", {})["combos"][0]["played"]["stake"] == 10.0
         assert store.load("bets.json", {})["combos"][0]["cur"] == "FCFA"
         m = app.handle_command("/joue sur 5,40 3")
-        assert "mise 3 FCFA" in m and " u" not in m, m
+        assert "💰 3 FCFA à" in m and " u" not in m, m
         assert "Noté" in app.handle_command("/joue pari 2 10")
         assert next(r for r in track.load() if r["key"] == "k3")["played"] == {"odds": 2.0, "stake": 10.0,
                                                                                "at": next(r for r in track.load() if r["key"] == "k3")["played"]["at"]}

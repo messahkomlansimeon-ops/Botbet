@@ -140,7 +140,7 @@ def test_stale_reference_odds():
         assert p and p["what"] == "sur" and not p.get("odds"), p
         with T.Fakes():
             out = chat.route("5,40")[1]                    # la cote obtenue + la mise conseillée
-        assert out.startswith("✅ Noté") and "joué à 5,40" in out and "mise 1 000 FCFA" in out and "lue à" not in out, out
+        assert out.startswith("✅ Noté") and "💰 1 000 FCFA à 5,40" in out and "Cote lue par Kelly" not in out, out
         assert played.find("sur", DAY).item["played"]["odds"] == 5.4
         # cote lue il y a 1 h : noté tout de suite, avec l'heure de lecture dans la confirmation
         morning_combo()
@@ -148,7 +148,7 @@ def test_stale_reference_odds():
         assert not played.is_stale(played.find("sur", DAY))
         with T.Fakes():
             out = chat.on_callback(f"joue|sur|{DAY}", 5)
-        assert out.startswith("✅ Noté") and "joué à 5,06 chez 1xBet, mise 1 000 FCFA" in out and "lue à 09h30" in out, out
+        assert out.startswith("✅ Noté") and "💰 1 000 FCFA à 5,06 → si ça passe : +4 060 FCFA" in out and "📈" not in out and "📉" not in out, out
         assert "Cote lue par Kelly à 09h30" in out and "✏️ Autre cote" in out, out
         assert played.find("sur", DAY).item["played"]["odds"] == 5.06
         # pile à la limite (180 min) : encore frais ; heure de lecture inconnue (ancienne ligne) : comme avant
