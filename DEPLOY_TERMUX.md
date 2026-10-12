@@ -75,11 +75,15 @@ Ensuite, `kelly update` fait tout seul `git pull`, réinstalle le script et red�
 
 ## 4. Maintien en veille (GrapheneOS / Android)
 
-Pour que le bot continue de tourner lorsque l'écran du téléphone est éteint :
-1. **Wake-lock Termux** :
-   - Exécuter la commande `termux-wake-lock` dans Termux. Cela empêche le noyau Android de suspendre le CPU (partial wake lock).
-2. **Optimisation de la batterie** :
-   - Dans les paramètres Android de GrapheneOS : `Applications > Termux > Batterie > Non restreinte` (Unrestricted).
+En veille profonde, Android coupe le réseau et ralentit Termux : les logs montrent alors des `[telegram] lecture des commandes échouée : … Read timed out`, Kelly répond en retard et les passages programmés peuvent glisser. Pour l'éviter :
+
+1. **Wake-lock** : `kelly start` (et donc `kelly restart` / `kelly update`) appelle maintenant `termux-wake-lock` tout seul, et `kelly stop` le relâche. Le journal l'indique au démarrage (« wake-lock demandé »). À défaut : notification Termux → « Acquire wakelock ».
+2. **Batterie** : Paramètres → Applications → Termux → Batterie → **Non restreinte**.
+3. **Réseau (GrapheneOS)** : Paramètres → Applications → Termux → autorisation **Réseau** activée, et **données en arrière-plan** autorisées.
+4. **Après un redémarrage du téléphone** : relancer `kelly start`, ou l'automatiser avec l'appli **Termux:Boot** (F-Droid) : créer `~/.termux/boot/kelly` contenant `#!/data/data/com.termux/files/usr/bin/sh` puis `kelly start`, et le rendre exécutable (`chmod +x`).
+5. **Wi-Fi** : si le réglage existe, garder le Wi-Fi actif pendant la veille.
+
+`kelly doctor` vérifie tout ça d'un coup : runner actif, wake-lock demandé, dernier passage du matin, nombre de coupures Telegram récentes, et rappelle les réglages Android.
 
 ---
 

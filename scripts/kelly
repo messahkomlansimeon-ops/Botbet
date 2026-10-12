@@ -5,6 +5,7 @@ DIR="$HOME/kelly"
 LOG="$DIR/logs/termux.log"
 
 running() { pgrep -f "termux_runner.py" > /dev/null; }
+has() { command -v "$1" > /dev/null 2>&1; }
 
 case "$1" in
     start)
@@ -13,6 +14,11 @@ case "$1" in
         if running; then
             echo "⚠️ Kelly est déjà en cours d'exécution."
         else
+            if has termux-wake-lock; then
+                termux-wake-lock && export KELLY_WAKELOCK=1 && echo "🔒 Wake-lock activé : Android ne met plus Kelly en sommeil."
+            else
+                echo "⚠️ termux-wake-lock introuvable : pkg install termux-tools, ou touche « Acquire wakelock » dans la notification Termux."
+            fi
             nohup python -u termux_runner.py > "$LOG" 2>&1 &
             sleep 3
             if running; then echo "🚀 Kelly démarrée en arrière-plan."; else echo "❌ Kelly n'a pas démarré : kelly logs"; fi
@@ -26,6 +32,7 @@ case "$1" in
             sleep 1
         done
         pkill -9 -f "termux_runner.py|bot.py" 2>/dev/null
+        has termux-wake-unlock && termux-wake-unlock
         echo "🛑 Kelly arrêtée."
         ;;
     restart)
@@ -42,6 +49,25 @@ case "$1" in
     logs)
         tail -n 50 -f "$LOG"
         ;;
+    doctor)
+        echo "🩺 Diagnostic de Kelly"
+        if running; then echo "✅ Kelly tourne (runner PID: $(pgrep -f termux_runner.py | head -n1))"; else echo "❌ Kelly est arrêtée : kelly start"; fi
+        if has termux-wake-lock; then echo "✅ Commande termux-wake-lock disponible"; else echo "❌ termux-wake-lock absente : pkg install termux-tools"; fi
+        if [ -f "$LOG" ]; then
+            grep -q "wake-lock demandé" "$LOG" && echo "✅ Wake-lock demandé au démarrage" || echo "⚠️ Wake-lock non demandé au dernier démarrage : kelly restart"
+            last=$(grep -E "matin|--daily" "$LOG" | tail -n 1)
+            [ -n "$last" ] && echo "🕓 Dernier passage du matin dans le journal : ${last:0:120}" || echo "🕓 Aucun passage du matin dans le journal actuel"
+            n=$(tail -n 2000 "$LOG" | grep -c "Read timed out")
+            if [ "$n" -gt 20 ]; then echo "⚠️ $n coupures Telegram récentes : le téléphone met sans doute Termux en veille (voir les réglages ci-dessous)"; else echo "✅ $n coupure(s) Telegram récente(s) : normal"; fi
+        else
+            echo "⚠️ Pas encore de journal ($LOG)"
+        fi
+        echo ""
+        echo "Réglages Android à vérifier (GrapheneOS) :"
+        echo "  1. Paramètres > Applications > Termux > Batterie > Non restreinte"
+        echo "  2. Paramètres > Applications > Termux > autorisation Réseau activée + données en arrière-plan"
+        echo "  3. Après un redémarrage du téléphone : kelly start (ou Termux:Boot, voir DEPLOY_TERMUX.md)"
+        ;;
     status)
         if running; then
             echo "✅ Kelly est active (runner PID: $(pgrep -f termux_runner.py | head -n1))"
@@ -50,7 +76,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|status}"
+        echo "Usage: kelly {start|stop|restart|update|logs|status|doctor}"
         exit 1
         ;;
 esac

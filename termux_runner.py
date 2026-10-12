@@ -345,7 +345,8 @@ def main():
     if lock is None:
         log("❌ un autre termux_runner.py tourne déjà (verrou logs/runner.lock) : arrêt", err=True)
         return 1
-    log("🔥 Démarrage de Kelly sur GrapheneOS / Termux...")
+    log("🔥 Démarrage de Kelly sur GrapheneOS / Termux..."
+        + (" (wake-lock demandé)" if os.environ.get("KELLY_WAKELOCK") == "1" else " (sans wake-lock : le téléphone peut mettre Kelly en veille)"))
     kill_stale_serve(os.path.join(LOGS, "serve.pid"))
     runner = Runner()
     atexit.register(runner.shutdown)
