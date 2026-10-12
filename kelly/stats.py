@@ -813,11 +813,16 @@ def fixture_stats(fixture_id, players=True):
             try:
                 got = {}
                 for team in resp:
+                    tid = (team.get("team") or {}).get("id")
                     for p in team.get("players") or []:
                         s = (p.get("statistics") or [{}])[0]
                         if not (s.get("games") or {}).get("minutes"):      # remplaçant jamais entré (minutes null ou 0) : pas de stats, pas un « 0 tir »
                             continue
-                        got[p["player"]["name"]] = {
+                        pid = p["player"].get("id")
+                        # clé = identifiant du joueur (deux homonymes, un par équipe, ne s'écrasent plus) ; nom et équipe gardés pour kelly/players.py ;
+                        # sans identifiant (réponse incomplète) : le nom, comme l'ancien format {nom: stats} que players.py lit toujours
+                        got[str(pid) if pid is not None else p["player"]["name"]] = {
+                            "name": p["player"]["name"], **({"team_id": tid} if tid is not None else {}),
                             "shots": _num((s.get("shots") or {}).get("total")),
                             "shots_on_target": _num((s.get("shots") or {}).get("on")),
                             "fouls": _num((s.get("fouls") or {}).get("committed")),
@@ -853,13 +858,14 @@ def player_stat(stats, name, field):
     if not qs:
         return None
     hits = {}
-    for pname, st in stats["players"].items():
+    for pkey, st in stats["players"].items():
+        pname = st.get("name") or pkey if isinstance(st, dict) else pkey          # format par identifiant {id: {"name", "team_id", ...}} ou ancien {nom: stats}
         pi, ps = _player_key(pname)
         if not ps or not (qs <= ps or ps <= qs):
             continue
         if qi and pi and qi != pi:
             continue
-        hits[pname] = st
+        hits[pkey] = st
     if len(hits) != 1:
         return None
     return next(iter(hits.values())).get(field)

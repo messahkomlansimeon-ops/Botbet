@@ -67,7 +67,8 @@ def stats_allowed(c):
         if not c.get("xodds"):
             return False
         try:
-            return bool(ensemble.value(c)["ok"])
+            v = ensemble.value(c)
+            return bool(v["ok"]) and v.get("kind") != "probable"       # « probable » (sans avis sharp) n'est pas une raison « stats »
         except Exception:                           # noqa: BLE001 - avis incomplets : l'ensemble ne valide pas
             return False
     return True
@@ -355,6 +356,24 @@ def skip_line(missing, n_events, anything=True):
 # optimiseur que les combinés réels, appliqué aux cotes minimales : le combiné a une « cote mini » (produit des cotes
 # minimales) et une proba. Jamais mélangé aux combinés à cotes réelles (autres jambes, autres messages, autre suivi) et
 # jamais de mise calculée sur la bankroll : seulement une mise indicative.
+
+def probable(c):
+    """Pronostic de buts / 1N2 « probable » sans avis sharp (c["xkind"], xprice) : jamais « valeur », aucune mise tant que 1xBet sans marge ne lui donne pas d'espérance positive."""
+    return c.get("xkind") == "probable"
+
+
+def stake_prob(legs, prob):
+    """Proba servant à calculer la MISE d'un combiné de `legs` dont la proba est `prob` : celle de Kelly, sauf pour une jambe « probable » (sans avis sharp), où elle est
+    remplacée par la proba de 1xBet sans marge (c["p_x"]) : Kelly ne mise que s'il reste une espérance au prix du marché (cote x proba 1xBet - 1 > 0), en pratique
+    presque jamais puisque 1xBet garde sa marge. Proba 1xBet inconnue pour une telle jambe : 0 (aucune mise). Les jambes sûres de valeur sont inchangées."""
+    for c in legs:
+        if probable(c):
+            px = c.get("p_x") if c.get("p_x") is not None else c.get("xp")
+            if not c.get("prob"):
+                return 0.0
+            prob *= min(1.0, (px or 0.0) / c["prob"])
+    return prob
+
 
 def viable(c):
     """Pronostic sans cote assez solide pour être montré ou joué (C.VIABLE_*) : assez de chances après correction de fiabilité, assez

@@ -1196,20 +1196,22 @@ def test_fair_pronostics():
         pronos = fair.make(scan, [], datetime(2026, 10, 8).date())
         assert pronos and {c["id"] for c in pronos} == {"m1"}, [c["event"] for c in pronos]   # pas de profil / sélection : rien d'inventé
         assert 1 <= len(pronos) <= 2 and pronos == sorted(pronos, key=lambda c: -c["score"])
-        top = pronos[0]
-        # corners : binomiale négative (dispersion de base + incertitude du profil de 10 matchs, fair.alpha_eff), plus le Poisson d'avant
+        # corners : binomiale négative (dispersion de base + incertitude du profil de 10 matchs, fair.alpha_eff). Plus de rapprochement vers 50 % (FAIR_SHRINK = 1 :
+        # il doublait la correction mesurée de calib.py) : la ligne la plus proche de 65 % n'est donc plus « plus de 9,5 » (70,8 % brut) mais « plus de 10,5 » (61,4 %)
         nb_over = lambda pt: S.p_over(S.nb_pmf(12.0, fair.alpha_eff(fair.ALPHA0["corners"], 12.0, 10)), pt)      # noqa: E731
-        exp_p = 0.5 + (prematch.over_p("Over", nb_over(9.5)) - 0.5) * C.FAIR_SHRINK
-        assert top["market"] == "alternate_totals_corners" and (top["name"], top["point"]) == ("Over", 9.5), top
+        exp_p = 0.5 + (prematch.over_p("Over", nb_over(10.5)) - 0.5) * C.FAIR_SHRINK
+        pronos = fair.make(scan, [], datetime(2026, 10, 8).date(), all_families=True)         # tous les marchés du match : « corners » n'est plus dans les 2 meilleurs
+        top = next(c for c in pronos if c["market"] == "alternate_totals_corners")
+        assert (top["name"], top["point"]) == ("Over", 10.5), top
         assert abs(top["prob"] - exp_p) < 1e-3 and top["fair"] == round(1 / top["prob"], 2)
         assert top["min_odds"] == round(1 / top["prob"] * (1 + C.FAIR_MARGIN), 2) > top["fair"]
-        assert top["pick"] == "Plus de 9,5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
-        assert top["key"] == "m1|alternate_totals_corners||9.5|Over" and top["why"].startswith("stats réelles : 12.0 corners attendus")
+        assert top["pick"] == "Plus de 10,5 corners" and top["league"] == "Championship" and top["start"] == "19:00"
+        assert top["key"] == "m1|alternate_totals_corners||10.5|Over" and top["why"].startswith("stats réelles : 12.0 corners attendus")
         for c in pronos:                                                   # proba utile : ni hasard ni évidence
             assert C.FAIR_P_RANGE[0] <= c["prob"] <= C.FAIR_P_RANGE[1] and c["min_odds"] >= c["fair"] >= 1 / C.FAIR_P_RANGE[1] - 0.01
         text = fmt.pronos(pronos)
         assert text.startswith("<b>🎲 Pronostics Kelly</b>"), text
-        assert "<b>Alpha – Bravo</b>" in text and "👉 Plus de 9,5 corners · mini <b>" in text, text
+        assert "<b>Alpha – Bravo</b>" in text and "👉 Plus de 10,5 corners · mini <b>" in text, text
         assert f'<b>{fmt.num(top["min_odds"])}</b>' in text and "cote juste" not in text
         # toutes les familles de marchés : buts, les 2 marquent, double chance (libellés familiers), corners, cartons
         f = {"n_home": 10, "n_away": 10, "exp_corners": 10.2, "exp_cards": 4.9, "exp_goals_home": 1.6, "exp_goals_away": 1.3}
@@ -1317,7 +1319,7 @@ def test_morning_always_useful():
         fair_rows = store.load("fair.json", [])
         shown_rows = [r for r in fair_rows if not r.get("x")]                     # les montrés : un pronostic viable par match
         assert shown_rows and len({r["id"] for r in shown_rows}) == len(shown_rows) and all(r["result"] is None for r in fair_rows)
-        assert all(r["market"] in fair.FREE_MARKETS for r in fair_rows if r.get("x")) and all("p0" in r for r in fair_rows)
+        assert all(r["market"] in fair.FREE_MARKETS or r["market"].startswith(("team_corners_", "team_yellow_")) for r in fair_rows if r.get("x")) and all("p0" in r for r in fair_rows)
         # --- commandes lues dans le cache du matin (aucun appel réseau)
         sb.serve(lambda url, **kw: (_ for _ in ()).throw(AssertionError(f"requête inattendue : {url}")))
         m = app.handle_command("/monde")

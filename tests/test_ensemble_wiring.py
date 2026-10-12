@@ -179,9 +179,11 @@ def test_active_family_is_decided_by_the_ensemble():
     assert c["prob"] == c["p_ens"] == round(p_ens, 4) and c["p_model"] == 0.76 and c["p_sharp"] == 0.74 and c["p_x"] == round(p_x, 4)
     assert c["p_ens"] < 0.76 and c["xodds"] == 1.45 and c["min_odds"] <= 1.45 and CB.viable(c)
     assert E.explain_c(c) == "1xBet : 67 % · Sharp : 74 % · Kelly : 76 % · retenu : 73 %", E.explain_c(c)
-    # sans avis sharp, un marché à 88 % : la valeur du modèle seul (0,76 x 1,45 = 1,10) n'est plus de la valeur
+    # sans avis sharp, un marché à 88 % : la valeur du modèle seul (0,76 x 1,45 = 1,10) n'est plus de la valeur ; la ligne reste « probable » (🎯), sans mise
     low = copy.deepcopy(base)
-    assert xprice.price(low, px, refs) == "low" and low["xwhy"] == "price" and not CB.viable(low) and low["prob"] < 0.76 and low["min_odds"] > low["xodds"]
+    assert xprice.price(low, px, refs) == "value" and low["xkind"] == "probable" and CB.viable(low) and low["prob"] < 0.76 and low["min_odds"] <= low["xodds"]
+    assert c["xkind"] == "value" and CB.stake_prob([c], c["prob"]) == c["prob"] and CB.stake_prob([low], low["prob"]) < low["prob"] and low["xev_x"] < 0
+    assert not CB.stats_allowed(low | {"pm": {"kind": "goals", "pgap": 0.2}}), "« probable » n'est jamais une raison « stats »"
     # écart modèle-marché énorme : veto, même à cote généreuse
     far = prono(p0=0.88, name="Over", point=1.5, alts=[["Over", 1.5, 0.88, None]]) | {"psh": sharp}
     assert xprice.price(far, px, refs) == "low" and far["xveto"] == 1 and far["xwhy"] == "veto" and not CB.viable(far) and far["p_model"] == 0.88

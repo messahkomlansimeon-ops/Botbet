@@ -67,6 +67,14 @@ def _ens_line(c, px, name, point, p0, base, price, data):
     return v, pm, b
 
 
+def line_rank(v):
+    """Rang d'une ligne validée par l'ensemble (v : ensemble.value_of), à la cote 1xBet : d'abord les « valeur » (avis sharp) avant les « probable », puis celles assez
+    probables pour un combiné, puis l'espérance AU PRIX 1xBet : valeur x proba pour une espérance positive (à valeur égale, la plus probable), l'espérance seule quand
+    elle est négative (la moins mal payée gagne ; valeur x proba préférerait la proba la plus basse, d'où un biais vers « Moins de » et les lignes hautes)."""
+    ev = v["ev"]
+    return (v.get("kind") != "probable", v["p"] >= C.FAIR_COMBO_MIN_P, ev * v["p"] if ev > 0 else ev)
+
+
 def _choose_ens(c, px):
     """choose() de l'ensemble : (tuple de choose, décision) ou None. Une ligne est retenue si le modèle la voit au moins aussi bonne qu'un match moyen
     (référence), si la proba retenue p_ens atteint C.VIABLE_MIN_P et si ensemble.value_of la valide (valeur et pas de veto) ; entre deux lignes,
@@ -80,7 +88,7 @@ def _choose_ens(c, px):
         v, pm, b = _ens_line(c, px, name, point, p0, base, price, data)
         if (b is not None and pm < b) or not v["ok"] or v["p"] < C.VIABLE_MIN_P:
             continue
-        rank = (v["p"] >= C.FAIR_COMBO_MIN_P, v["ev"] * v["p"])
+        rank = line_rank(v)
         if key is None or rank > key:
             best, key = ((name, point, v["p"], p0, b, price, v["ev"]), v), rank
     return best
@@ -192,7 +200,15 @@ def _ens_fields(c, v, pm, p0, odd, price_ok):
     connaît que « cote 1xBet < cote mini », le refuse aussi."""
     parts = v["parts"]
     p = v["p"]
-    min_odds = round(ensemble.min_price(p), 2)
+    if price_ok and v.get("kind"):                  # « value » (avis sharp) ou « probable » (sans avis sharp) : jamais « valeur » sans sharp (fmt.pronos)
+        c["xkind"] = v["kind"]
+    else:
+        c.pop("xkind", None)
+    if v.get("ev_x") is None:
+        c.pop("xev_x", None)
+    else:
+        c["xev_x"] = round(v["ev_x"], 4)           # espérance au prix 1xBet sans marge : combos.stake_prob n'accepte une mise que si elle est positive
+    min_odds = round(ensemble.min_price(p), 2) if v.get("kind") != "probable" else round((1 + C.ENSEMBLE_PROBABLE_MIN_EV) / p, 2)
     c.update(prob=round(p, 4), p_ens=round(p, 4), p_model=round(pm, 4), p0=round(p0, 4), fair=round(1 / p, 2),
              min_odds=min_odds if price_ok else max(min_odds, round(odd + 0.01, 2)), xodds=odd, xev=round(v["ev"], 4),
              xp=None if parts["p_x"] is None else round(parts["p_x"], 4), ew=round(parts["wm"], 4), esrc=parts["src"])
@@ -204,7 +220,7 @@ def _ens_fields(c, v, pm, p0, odd, price_ok):
     c.pop("xveto", None)
     c.pop("xwhy", None)
     if not price_ok:
-        c["xwhy"] = v["why"]
+        c["xwhy"] = v["why"] or "line"              # « line » : la ligne actuelle passerait, mais elle n'est pas parmi les lignes proposées (c["alts"])
         if v["why"] in ("veto", "no_market"):
             c["xveto"] = 1
 
@@ -269,7 +285,7 @@ def apply(pronos, fetch=None, picks=None):
     for c in pronos:
         m = found.get(c["id"])
         if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
-            for k in ("xodds", "xev", "xp", "xnone", "xref") + (("p_x", "p_sharp", "p_ens", "ew", "esrc", "xveto", "xwhy") if C.ENSEMBLE_ENABLED else ()):
+            for k in ("xodds", "xev", "xp", "xnone", "xref") + (("p_x", "p_sharp", "p_ens", "ew", "esrc", "xveto", "xwhy", "xkind", "xev_x") if C.ENSEMBLE_ENABLED else ()):
                 c.pop(k, None)
             c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
             if m.get("cid"):

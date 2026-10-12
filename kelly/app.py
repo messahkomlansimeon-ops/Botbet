@@ -53,9 +53,9 @@ def day_stakes(top, built, built_fair, gaps=()):
     for title, (_, odds_, prob) in built:
         keys.append(title)
         items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_})
-    for target, (_, min_total, prob) in built_fair:
+    for target, (legs, min_total, prob) in built_fair:
         keys.append(("fair", target))
-        items.append({"kind": "fair", "tier": min_total, "prob": prob, "odds": min_total})
+        items.append({"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total})        # jambe « probable » (sans avis sharp) : proba 1xBet sans marge
     stakes, spent, kept, poor = money.allocate(items, detail=True)
     return dict(zip(keys, stakes)), spent, kept, poor
 
@@ -247,7 +247,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         if fair_coupons is not None and coupon:
             fair_coupons[target] = coupon
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                               stake_txt=mise(stakes.get(("fair", target)), prob, min_total),
+                                                               stake_txt=mise(stakes.get(("fair", target)), CB.stake_prob(legs, prob), min_total),
                                                                title=CB.shots_title(target), coupon=coupon, when=when,
                                                                retry=RETRY_BUTTON if xfair and not coupon else None),
                                                 f"v{target}", day, stake=stakes.get(("fair", target)),
@@ -1586,12 +1586,29 @@ def pm_note(c):
     return f" (Kelly prévoit {fmt.num(pm['exp'], 1)} ; ligne à {fmt.trim(c['point'])})"
 
 
-def deep_analysis(first):
-    """Analyse approfondie (modèle de force, contexte, grille de marchés) ou None si indisponible."""
+def referee_of(c):
+    """Arbitre désigné du match du pronostic ou pari `c` (liste du jour d'API-Football déjà en cache : aucune requête) ; None s'il n'est pas (encore) connu."""
+    if not (c.get("sport_key") or "").startswith("soccer") or not c.get("commence"):
+        return None
+    try:
+        return stats.referee_for({"home_team": c["home"], "away_team": c["away"], "commence_time": c["commence"]})
+    except Exception:                               # noqa: BLE001 - l'arbitre est facultatif
+        return None
+
+
+def referee_line(ref, *texts):
+    """« 👨‍⚖️ Arbitre désigné : M. Oliver » quand l'arbitre est connu et qu'aucun des textes déjà affichés (analyse du modèle, chiffres d'avant-match) n'en parle ; '' sinon."""
+    if not ref or any("Arbitre" in str(t or "") for t in texts):
+        return ""
+    return f"👨‍⚖️ Arbitre désigné : {fmt.esc(ref)}"
+
+
+def deep_analysis(first, referee=None):
+    """Analyse approfondie (modèle de force, contexte, grille de marchés) ou None si indisponible. `referee` : arbitre désigné (referee_of), dont l'effet sur les cartons est chiffré."""
     if not first.get("sport_key", "").startswith("soccer"):
         return None
     try:
-        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"])
+        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"], referee=referee)
     except Exception as e:                       # noqa: BLE001 - l'analyse ne doit jamais casser la commande
         print(f"analyse approfondie : {e}", file=sys.stderr)
         return None
@@ -1657,10 +1674,14 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
             return f"Aucun match du jour ne contient « {query} »."
         if len(events) > 1:
             return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
-        deep = deep_analysis(free[0])
+        ref = referee_of(free[0])
+        deep = deep_analysis(free[0], ref)
         head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))}\n{fmt.i(fmt.hhmm(free[0]['start']) + ' · ' + fmt.esc(free[0]['league']))}"
-        fl = [] if deep else features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"]))
+        fl = [] if deep else features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"], **({"referee": ref} if ref else {})))
         body = ("\n" + fmt.esc(deep)) if deep else ("\n".join(fl) if fl else "\nPas assez de données pour une analyse approfondie de ce match.")
+        rl = referee_line(ref, deep, "\n".join(fl))
+        if rl:
+            body += "\n" + rl
         shown, wait = CB.best_per_match(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
         return Html(comma(head + "\n" + body) + "\n\n" + ("\n\n".join(([str(fmt.pronos(shown, 6, when=when))] if shown or not wait else []) + [wait])
                                                          if wait else str(fmt.pronos(shown, 6, when=when))))
@@ -1669,16 +1690,23 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
         return "Plusieurs matchs correspondent, précise : " + " ; ".join(events[:8])
     first = found[0]
     lines = [f"🔬 {fmt.b(fmt.event_name(first))}", fmt.i(f"{fmt.hhmm(first['start'])} · {fmt.esc(first['league'])}")]
-    deep = deep_analysis(first)
-    f = {"sources": []} if first["group"] != "soccer" else sources.match_features(first["home"], first["away"], first["sport_key"])
+    ref = referee_of(first)
+    deep = deep_analysis(first, ref)
+    f = {"sources": []} if first["group"] != "soccer" else sources.match_features(first["home"], first["away"], first["sport_key"], **({"referee": ref} if ref else {}))
+    shown_ = []
     if deep:
         lines += ["", fmt.esc(deep)]
+        shown_.append(deep)
         if f.get("aps_keys"):                                   # le modèle approfondi n'a que les buts : API-Football complète
             lines += features_lines(f, only=set(f["aps_keys"]), head="Chiffres complémentaires")
     elif f["sources"]:
         lines += features_lines(f)
+        shown_.append("\n".join(lines))
     else:
         lines.append("Pas de stats réelles pour ce match (équipes inconnues des sources ou sources indisponibles).")
+    rl = referee_line(ref, *shown_)
+    if rl:
+        lines.append(rl)
     real = any(c.get("xodds") for c in picks)               # 1xBet a chiffré des paris du jour : les autres ne sont pas jouables
     best = sorted(found, key=lambda c: (bool(c.get("xodds")), c["score"]), reverse=True)[:6] if real else \
         sorted(found, key=lambda c: c["score"], reverse=True)[:6]
@@ -2031,8 +2059,9 @@ def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, w
         code = _coupon(legs) if coupon else None
     stake = None
     if budget and stake_txt is None:
-        stake = _budget_stake(prob, min_total)
-        stake_txt = _stake_words(stake, prob, min_total)
+        p_stake = CB.stake_prob(legs, prob)          # jambe « probable » (sans avis sharp) : proba 1xBet sans marge
+        stake = _budget_stake(p_stake, min_total)
+        stake_txt = _stake_words(stake, p_stake, min_total)
     expected = coupon and bool(retry) and all(c.get("xref") and c.get("xodds") for c in legs) and not code
     top = "\n".join(x for x in (fmt.esc(head).strip("\n"), changes) if x)
     msg = Html((top + "\n\n" if top.strip() else "")

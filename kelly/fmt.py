@@ -336,10 +336,14 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
     if len(stamps) == 1:
         when = next(iter(stamps))                      # toutes lues à la même heure : c'est elle, même si un relevé plus récent a eu lieu ailleurs
     stamp = f" Cotes 1xBet de {when}." if when and priced and not partial else ""
+    maybe = any(c.get("xodds") and c.get("xkind") == "probable" for c in shown)
+    value = any(c.get("xodds") and c.get("xkind") != "probable" for c in shown)            # pronostics de buts sans avis d'un book de référence : « probables », pas « valeur »
+    when_txt = "(relevé partiel : heure sur chaque pari)" if partial else f"de {esc(when)}" if when else "du jour"
+    note = ("🎯 = probable, mais aucun book de référence ne confirme cette cote : pas une valeur, pas de mise conseillée." if maybe else "")
     lines = [b(title or "🎲 Pronostics Kelly"),
              i(esc(intro) + esc(stamp) if intro else
-               ("💎 = cote 1xBet " + ("(relevé partiel : heure sur chaque pari)" if partial else f"de {esc(when)}" if when else "du jour")
-                + " assez haute pour jouer." if priced else "")
+               ((f"💎 = cote 1xBet {when_txt} assez haute pour jouer." if value else f"Cotes 1xBet {when_txt}.") if priced else "")
+               + (" " + note if note else "")
                + (" « mini » : joue seulement si 1xBet paie au moins cette cote." if unpriced else "")).strip()]
     by = {}
     for c in shown:
@@ -354,6 +358,10 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
             odds_vs = f" · 1xBet {pct(px)}" if px is not None else ""
             if c.get("xodds"):
                 at = f" (lue à {esc(c.get('xat') or when)})" if partial and (c.get("xat") or when) else ""
+                if c.get("xkind") == "probable":
+                    lines.append(f"🎯 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
+                    lines.append(i(f"   Kelly {pct(c['prob'])}{odds_vs} · probable, pas une valeur (aucun book de référence){data}"))
+                    continue
                 lines.append(f"💎 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
                 lines.append(i(f"   Kelly {pct(c['prob'])}{odds_vs} · valeur {c['xev'] * 100:+.0f} %{data}"))
             else:

@@ -40,13 +40,26 @@ def side(name):
     return 1.0 if name in ("Over", "Yes") else -1.0
 
 
+XG_SOURCES_TABLE = ("fotmob-classement",)          # xG de saison du classement FotMob : plus grossiers (config.GOAL_XG_WEIGHT_TABLE)
+
+
+def xg_weight(f):
+    """Poids des xG (f["exp_xg_home"] / f["exp_xg_away"]) dans les buts attendus du modèle de force : 0 s'ils manquent. La source (f["xg_src"]) est celle que
+    sources.features a retenue dans l'ordre Understat > FotMob matchs > API-Football matchs > FotMob classement ; les xG du classement pèsent moins."""
+    if f.get("exp_xg_home") is None or f.get("exp_xg_away") is None:
+        return 0.0
+    return C.GOAL_XG_WEIGHT_TABLE if f.get("xg_src") in XG_SOURCES_TABLE else C.GOAL_XG_WEIGHT
+
+
 def goal_means(f):
     """(buts attendus domicile, extérieur, étiquette) : xG Understat si connus, sinon moyennes de buts
-    football-data ; None sinon. Avec le modèle approfondi (f["deep"]), ses buts attendus, mêlés à 30 % aux xG s'ils existent."""
+    football-data ; None sinon. Avec le modèle approfondi (f["deep"]), ses buts attendus, mêlés aux xG s'ils existent (même poids que les pronostics sans cote :
+    xg_weight, 30 % ; 15 % pour les xG de saison du classement FotMob)."""
     d = f.get("deep")
     if d and d.get("lh") is not None:
-        if f.get("exp_xg_home") is not None and f.get("exp_xg_away") is not None:
-            return 0.7 * d["lh"] + 0.3 * f["exp_xg_home"], 0.7 * d["la"] + 0.3 * f["exp_xg_away"], "modèle Kelly + xG"
+        w = xg_weight(f)
+        if w:
+            return (1 - w) * d["lh"] + w * f["exp_xg_home"], (1 - w) * d["la"] + w * f["exp_xg_away"], "modèle Kelly + xG"
         return d["lh"], d["la"], "modèle Kelly"
     if f.get("exp_xg_home") is not None and f.get("exp_xg_away") is not None:
         return f["exp_xg_home"], f["exp_xg_away"], "xG"
@@ -55,32 +68,37 @@ def goal_means(f):
     return None
 
 
-def p_totals(lh, la, point, name):
-    """Proba du côté choisi d'un total de buts (Poisson sur la somme des buts attendus)."""
-    return over_p(name, poisson_over(lh + la, point))
+def goal_kappa(f=None):
+    """Surdispersion des buts d'un match : le kappa du modèle de force (f["deep"]["kappa"], mesuré sur la ligue) sinon C.GOALS_KAPPA_DEFAULT (repli sans modèle)."""
+    d = (f or {}).get("deep") or {}
+    return d["kappa"] if d.get("kappa") is not None else C.GOALS_KAPPA_DEFAULT
 
 
-def p_btts(lh, la, name):
-    """Proba du côté choisi des 2 équipes marquent (buts indépendants)."""
-    yes = (1 - math.exp(-lh)) * (1 - math.exp(-la))
+def goal_rho(f=None):
+    """Correction de Dixon-Coles du modèle de force (f["deep"]["rho"]) ; 0 sans modèle (repli : buts indépendants)."""
+    return ((f or {}).get("deep") or {}).get("rho") or 0.0
+
+
+def p_totals(lh, la, point, name, kappa=None):
+    """Proba du côté choisi d'un total de buts : binomiale négative de moyenne lh + la et de surdispersion `kappa` (C.GOALS_KAPPA_DEFAULT par défaut ; 0 =
+    Poisson), comme la loi bivariée de strength.score_matrix."""
+    k = C.GOALS_KAPPA_DEFAULT if kappa is None else kappa
+    return over_p(name, strength.p_over(strength.nb_pmf(lh + la, k), point))
+
+
+def p_btts(lh, la, name, rho=0.0, kappa=None):
+    """Proba du côté choisi des 2 équipes marquent : matrice de scores bivariée (strength.score_matrix : surdispersion `kappa`, correction de Dixon-Coles `rho` des
+    scores 0-0, 1-0, 0-1 et 1-1) ; l'ancien repli supposait les deux scores indépendants et sans surdispersion."""
+    k = C.GOALS_KAPPA_DEFAULT if kappa is None else kappa
+    m = strength.score_matrix(lh, la, rho, kappa=k)
+    yes = 1 - sum(m[0]) - sum(row[0] for row in m) + m[0][0]
     return yes if name == "Yes" else 1 - yes
 
 
-def p_1x2(lh, la, cap=10):
-    """(P domicile, P nul, P extérieur) pour deux Poisson indépendants de moyennes lh et la."""
-    pm = lambda m, k: math.exp(-m) * m ** k / math.factorial(k)             # noqa: E731
-    ph = pd = pa = 0.0
-    for i in range(cap + 1):
-        for j in range(cap + 1):
-            p = pm(lh, i) * pm(la, j)
-            if i > j:
-                ph += p
-            elif i == j:
-                pd += p
-            else:
-                pa += p
-    t = ph + pd + pa
-    return ph / t, pd / t, pa / t
+def p_1x2(lh, la, cap=10, rho=0.0, kappa=None):
+    """(P domicile, P nul, P extérieur) : matrice de scores de strength.score_matrix (surdispersion `kappa`, C.GOALS_KAPPA_DEFAULT par défaut ; Dixon-Coles `rho`)."""
+    k = C.GOALS_KAPPA_DEFAULT if kappa is None else kappa
+    return strength.result_probs(strength.score_matrix(lh, la, rho, cap=cap, kappa=k))
 
 
 def signed_diff(who, lh, la):
@@ -112,7 +130,7 @@ def aps_scale(f, key):
 
 def deep_p(d, lh, la, market, point, name):
     """Proba du côté choisi pour un total de buts ou « les 2 marquent » avec la matrice de Dixon-Coles du modèle `d`."""
-    m = strength.score_matrix(lh, la, d.get("rho", 0.0))
+    m = strength.score_matrix(lh, la, d.get("rho", 0.0), kappa=d.get("kappa", 0.0))
     if market == "btts":
         yes = 1 - sum(m[0]) - sum(row[0] for row in m) + m[0][0]
         return yes if name == "Yes" else 1 - yes
@@ -207,11 +225,11 @@ def assess(c, f, sources):
     lh, la, label = gm
     if m == "totals" and point is not None:
         exp = lh + la
-        return {"kind": "goals", "exp": exp, "p": p_totals(lh, la, point, c["name"]),
+        return {"kind": "goals", "exp": exp, "p": p_totals(lh, la, point, c["name"], goal_kappa(f)),
                 "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
                 "tag": f"{label} : {exp:.1f} buts attendus vs ligne {point}", "flag": C.PM_FLAG * 1.25}
     if m == "btts":
-        return {"kind": "btts", "p": p_btts(lh, la, c["name"]), "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
+        return {"kind": "btts", "p": p_btts(lh, la, c["name"], goal_rho(f), goal_kappa(f)), "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
                 "tag": f"{label} : {lh:.1f}-{la:.1f} buts attendus (les 2 marquent)", "flag": C.PM_FLAG * 1.25}
     if m == "h2h":
         who = "draw" if c["name"] == "Draw" else ("home" if c["name"] == c["home"] else "away")

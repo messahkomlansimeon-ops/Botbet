@@ -31,7 +31,8 @@ SPORT_TO_NEW = {
     "soccer_league_of_ireland": "IRL", "soccer_finland_veikkausliiga": "FIN",
 }
 NEW_DIVS = frozenset(SPORT_TO_NEW.values())
-NEW_KEEP_DAYS = 400
+NEW_KEEP_DAYS = 800   # les CSV « new » (championnats en année civile) contiennent toutes les saisons : on en garde 800 jours (2 saisons et plus), pas 400 — avec 400 jours (389-401 j mesurés le 09/10)
+                      # le réglage de tune.py (config.TUNE_MIN_SPAN_DAYS = 540 j) refusait ces ligues pour toujours : « historique trop court »
 SPORT_TO_DIV = SPORT_TO_DIV | SPORT_TO_NEW
 DIV_TO_SPORT = {v: k for k, v in SPORT_TO_DIV.items()}
 SLIM_KEYS = ("goals", "corners", "cards")

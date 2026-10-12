@@ -19,7 +19,11 @@ manque (sinon un match sans Pinnacle redonnerait au modèle 30 % au lieu de 12 %
 double chance wm = 0,12 (le marché pèse 88 %, sharp si présent sinon 1xBet) ; corners, cartons, tirs, tirs cadrés, fautes, touches, hors-jeu
 wm = 0,5 (non mesuré) ; ws = 0,75 quand sharp ET 1xBet existent.
 
-Règle de décision (value) : le pari est « de la valeur » ssi cote 1xBet x p_ens >= 1 + ENSEMBLE_MARGIN (3 %) ET pas de veto. Veto : dans les
+Règle de décision (value) : le pari est « de la valeur » ssi cote 1xBet x p_ens >= 1 + ENSEMBLE_MARGIN (3 %) ET pas de veto ET, dans les familles où le marché pèse
+lourd (buts, 1N2...), un avis SHARP existe (Pinnacle, Betfair Exchange, Matchbook : config.SHARP_BOOKS). Sans avis sharp, 1xBet seul, devigé, rend 0,93-0,94 (marge de 6-7 %) :
+le seuil n'est jamais atteint sans que le modèle l'y pousse, et le modèle n'a pas à décider seul. Le pari est alors « probable » (kind « probable », jamais « valeur ») : proba
+retenue >= ENSEMBLE_PROBABLE_MIN_P et 1xBet ne paie pas plus de ENSEMBLE_PROBABLE_MIN_EV sous elle ; ev_x (proba 1xBet sans marge x cote - 1) dit s'il reste une espérance au prix
+du marché (combos.stake_prob : aucune mise conseillée tant qu'elle n'est pas positive). Veto : dans les
 familles où le marché pèse >= ENSEMBLE_VETO_WEIGHT (0,7), un écart |p_model - p_mkt| > ENSEMBLE_MAX_DISAGREE (0,12) écarte le pari (dans ces
 familles, c'est presque toujours Kelly qui se trompe). Sans aucun avis de marché (ligne dont l'autre issue manque chez 1xBet, pas de sharp), rien
 n'est validé (« no_market ») : une valeur jugée sur le seul modèle est celle que l'audit a démentie (ENSEMBLE_REQUIRE_MARKET = faux pour l'autoriser
@@ -436,17 +440,19 @@ def prob(c, price=None, approx=False, data=None):
 
 
 def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_approx_used=False):
-    """Décision sur une ligne : {"ok", "why", "p", "ev", "gap", "parts"}. ok : cote x p_ens >= 1 + marge et pas de veto. why si pas ok :
+    """Décision sur une ligne : {"ok", "why", "p", "ev", "ev_x", "gap", "kind", "parts"}. ok : cote x p_ens >= 1 + marge et pas de veto (« valeur »), ou « probable » sans avis sharp (voir plus haut). why si pas ok :
     « no_prob » (aucun avis), « no_market » (aucun avis de marché pour confirmer le modèle), « veto » (écart modèle-marché
-    trop grand), « price » (1xBet paie trop peu). ev = p_ens x cote - 1. gap = |p_model - p_mkt| ou None."""
+    trop grand), « price » (1xBet paie trop peu), « no_sharp » / « not_probable » (sans avis sharp : « probable » éteint, ou proba retenue trop basse). ev = p_ens x cote - 1.
+    gap = |p_model - p_mkt| ou None. kind : « value » (avis sharp ou famille légère) | « probable » (sans avis sharp) | None. ev_x = proba 1xBet sans marge x cote - 1 ou None."""
     margin = C.ENSEMBLE_MARGIN if margin is None else margin
     p, parts = combine(family(market), p_model, p_x, p_sharp, data)
     parts["x_approx"] = x_approx_used
-    out = {"ok": False, "why": "", "p": p, "ev": None, "gap": None, "parts": parts}
+    out = {"ok": False, "why": "", "p": p, "ev": None, "gap": None, "parts": parts, "kind": None, "ev_x": None}
     if p is None:
         out["why"] = "no_prob"
         return out
     out["ev"] = p * price - 1
+    out["ev_x"] = None if p_x is None else p_x * price - 1
     heavy = parts["market_weight"] >= C.ENSEMBLE_VETO_WEIGHT
     if p_model is not None and parts["p_mkt"] is not None:
         out["gap"] = abs(p_model - parts["p_mkt"])
@@ -454,10 +460,19 @@ def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_app
         out["why"] = "no_market"
     elif heavy and out["gap"] is not None and out["gap"] > C.ENSEMBLE_MAX_DISAGREE:
         out["why"] = "veto"
+    elif heavy and p_sharp is None:                  # pas d'avis sharp : jamais « valeur », au mieux « probable »
+        if not C.ENSEMBLE_PROBABLE:
+            out["why"] = "no_sharp"
+        elif p < C.ENSEMBLE_PROBABLE_MIN_P:
+            out["why"] = "not_probable"
+        elif out["ev"] < C.ENSEMBLE_PROBABLE_MIN_EV:
+            out["why"] = "price"
+        else:
+            out.update(ok=True, kind="probable")
     elif p * price < 1 + margin:
         out["why"] = "price"
     else:
-        out["ok"] = True
+        out.update(ok=True, kind="value")
     return out
 
 

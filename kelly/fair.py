@@ -44,7 +44,6 @@ FREE_MARKETS = ("totals", "btts", "double_chance", "h2h") + TEAM_GOALS      # r�
 NB_SMALL = os.environ.get("FAIR_NB_SMALL", "1").strip().lower() not in ("0", "false", "non", "no", "off")     # 0 : plus d'incertitude sur la moyenne des petits profils (comportement d'avant)
 ALPHA0 = {"corners": 0.03, "cards": 0.06}       # dispersion de base (binomiale négative) des corners et des cartons du modèle simple : Poisson (alpha 0) les disait trop réguliers
 TRACK_NEW = int(os.environ.get("FAIR_TRACK_NEW", "10"))      # pronostics « corners d'une équipe » / « cartons jaunes » suivis en silence par jour (leur fiabilité se mesure comme celle des tirs)
-EXTRA_WEIGHT = {"team_corners_home": 1.5, "team_corners_away": 1.5, "team_yellow_total": 1.6}      # poids de sélection des familles ajoutées (comme corners / cartons / tirs dans config.MARKET_WEIGHT)
 # Tirs et tirs cadrés : total du match, puis une équipe (le suffixe _home / _away dit laquelle) ; (clé des chiffres d'avant-match,
 # libellé, bornes plausibles de la moyenne attendue, dispersion de la binomiale négative)
 # Corners d'UNE équipe (sous-match corners de 1xBet, types 11 à 14) et cartons JAUNES du match (1xBet ne compte que les jaunes : kelly/sources/xbet.py).
@@ -74,8 +73,8 @@ EVAL_MAX = 500             # matchs examinés au plus (le calcul est local, mais
 
 
 def weight(market):
-    """Poids de sélection d'un marché : config.MARKET_WEIGHT, sinon celui des familles ajoutées ici (corners d'une équipe, cartons jaunes), sinon 1."""
-    return C.MARKET_WEIGHT.get(market, EXTRA_WEIGHT.get(market, 1.0))
+    """Poids de sélection d'un marché : config.MARKET_WEIGHT (corners d'une équipe et cartons jaunes compris), sinon 1."""
+    return C.MARKET_WEIGHT.get(market, 1.0)
 
 
 def alpha_eff(alpha, mean, n):
@@ -88,7 +87,8 @@ def alpha_eff(alpha, mean, n):
 
 
 def shrink(p):
-    """Proba rapprochée de 50 % : le modèle de Poisson est trop sûr de lui sur les cas extrêmes."""
+    """Proba rapprochée de 50 % de C.FAIR_SHRINK (1 par défaut : aucun rapprochement). Le seul rapprochement est celui de calib.calibrate, mesuré sur les résultats ; en
+    plus de lui, l'ancien 0,9 comptait deux fois la même prudence et sous-estimait les favoris (1N2 domicile 0,61 annoncé pour 0,85 réel, n = 20)."""
     return 0.5 + (p - 0.5) * C.FAIR_SHRINK
 
 
@@ -100,6 +100,16 @@ def stat_q(f, market):
     q = (d.get("qs") or {}).get(stat)
     return d.get("q", 0.0) if q is None else q
 
+def with_xg(f, d):
+    """(modèle approfondi avec xG, buts attendus domicile, extérieur, étiquette) : les buts attendus du modèle de force `d` mêlés aux xG par match de `f`
+    (poids xg_weight), jusqu'ici absents du chemin principal des pronostics (seul prematch.goal_means les mêlait). Sans xG : `d` inchangé."""
+    w = prematch.xg_weight(f)
+    if not w:
+        return d, d["lh"], d["la"], ""
+    lh, la = (max(0.1, (1 - w) * d["lh"] + w * f["exp_xg_home"]), max(0.1, (1 - w) * d["la"] + w * f["exp_xg_away"]))
+    return dict(d, lh=lh, la=la), lh, la, " + xG"
+
+
 def deep_options(f, home, away):
     """Options du modèle approfondi (f["deep"]) : [(marché, côté, ligne, proba brute, justification, référence naïve)] pour
     les familles réglables (buts 0,5-4,5, les 2 marquent, double chance, corners, cartons, tirs et tirs cadrés). [] si la
@@ -108,9 +118,9 @@ def deep_options(f, home, away):
     if not d or d.get("q", 0) < DEEP_MIN_Q:
         return []
     why = d.get("why") or {}
-    lh, la = d["lh"], d["la"]
+    d, lh, la, xg_tag = with_xg(f, d)
     short = lambda t: strength.shorten(t, 150)                  # noqa: E731 - le message Telegram a une taille limite
-    tag = {"goals": short(f"modèle Kelly : {lh:.1f}-{la:.1f} buts attendus" + (f" ; {why['goals']}" if why.get("goals") else ""))}
+    tag = {"goals": short(f"modèle Kelly{xg_tag} : {lh:.1f}-{la:.1f} buts attendus" + (f" ; {why['goals']}" if why.get("goals") else ""))}
     for kind, market, unit in (("corners", prematch.CORNERS, "corners"), ("cards", prematch.CARDS, "cartons")):
         s = d["stats"].get(kind)
         if s:
@@ -206,27 +216,31 @@ def _stat_options(f, home, away, skip=(), only=None):
 
 
 def _simple_options(f, home, away):
-    """Options du modèle simple (moyennes glissantes, Poisson) : repli sans modèle approfondi."""
+    """Options du modèle simple (moyennes glissantes) : repli sans modèle approfondi. Buts : binomiale négative (surdispersion prematch.goal_kappa : celle du
+    modèle de force s'il existe, sinon C.GOALS_KAPPA_DEFAULT) et correction de Dixon-Coles (prematch.goal_rho) pour les 2 marquent et le 1N2 : l'ancien repli
+    les supposait indépendants et sans surdispersion."""
     out = []
     gm = prematch.goal_means(f)
     lo, hi = prematch.BOUNDS["goals"]
     if gm and all(lo <= x <= hi for x in gm[:2]):
         lh, la, label = gm
+        kap, rho = prematch.goal_kappa(f), prematch.goal_rho(f)
         for pt in LINES["goals"]:
             for name in ("Over", "Under"):
-                out.append(("totals", name, pt, prematch.p_totals(lh, la, pt, name),
+                out.append(("totals", name, pt, prematch.p_totals(lh, la, pt, name, kap),
                             f"{label} : {lh + la:.1f} buts attendus ({lh:.1f}-{la:.1f})"))
         for name in ("Yes", "No"):
-            out.append(("btts", name, None, prematch.p_btts(lh, la, name), f"{label} : {lh:.1f}-{la:.1f} buts attendus"))
-        ph, pd, pa = prematch.p_1x2(lh, la)
+            out.append(("btts", name, None, prematch.p_btts(lh, la, name, rho, kap), f"{label} : {lh:.1f}-{la:.1f} buts attendus"))
+        ph, pd, pa = prematch.p_1x2(lh, la, rho=rho, kappa=kap)
         tag = f"{label} : {lh:.1f}-{la:.1f} buts attendus"
         out.append(("double_chance", f"{home} or Draw", None, ph + pd, tag))
         out.append(("double_chance", f"Draw or {away}", None, pd + pa, tag))
         out += [("h2h", nm, None, p, tag) for nm, p in ((home, ph), ("Draw", pd), (away, pa))]
         for market, mean in (("team_totals_home", lh), ("team_totals_away", la)):
+            pmf = strength.nb_pmf(mean, kap)
             for pt in (0.5, 1.5, 2.5):
                 for name in ("Over", "Under"):
-                    out.append((market, name, pt, prematch.over_p(name, prematch.poisson_over(mean, pt)), tag))
+                    out.append((market, name, pt, prematch.over_p(name, strength.p_over(pmf, pt)), tag))
     return out + _stat_options(f, home, away)
 
 

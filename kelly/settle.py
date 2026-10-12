@@ -2,7 +2,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import calib, config as C, ensemble, fair, fmt, learn, odds, played, sharpgap, stats, store, track
+from . import calib, config as C, ensemble, fair, fmt, learn, odds, played, players, sharpgap, stats, store, track
 from .sources import fmmatch, footballdata as fd, fotmob, names, s365
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals", "team_totals_home", "team_totals_away")
@@ -44,6 +44,12 @@ def _score_map(ev):
     return {s["name"]: float(s["score"]) for s in (ev.get("scores") or [])}
 
 
+def _player_team(b):
+    """Équipe du joueur d'un pari player_* (identifiant API-Football ou nom) quand le pari la porte (b["team_id"], b["team"]), sinon None : players.stat ne règle alors
+    un joueur que s'il est le seul de ce nom dans le match (jamais au hasard entre deux homonymes)."""
+    return b.get("team_id") if b.get("team_id") is not None else b.get("team")
+
+
 def settle_pick(b, ev, fstats=None):
     """Résultat d'un pari : 'win', 'loss', 'push', ou None si non réglable."""
     sc = _score_map(ev)
@@ -72,7 +78,7 @@ def settle_pick(b, ev, fstats=None):
         field = {"player_shots": "shots", "player_shots_on_target": "shots_on_target",
                  "player_fouls": "fouls"}.get(m)
         if field:
-            v = stats.player_stat(fstats, b["who"] or "", field)
+            v = players.stat(fstats, b["who"] or "", field, team=_player_team(b))
             if v is not None:
                 totals[m] = v
         if m in SHOT_MARKETS and shot_value(m, fstats) is not None:
@@ -99,7 +105,7 @@ def final_text(b, ev, fstats=None):
         return f"{v:g} {fmt.TEAM_UNITS[fmt.TEAM_MARKET.match(m)[1]]}" if v is not None else ""
     if m.startswith("player_"):
         field = {"player_shots": "shots", "player_shots_on_target": "shots_on_target", "player_fouls": "fouls"}.get(m)
-        v = stats.player_stat(fstats, b.get("who") or "", field) if field else None
+        v = players.stat(fstats, b.get("who") or "", field, team=_player_team(b)) if field else None
         unit = C.UNITS.get(m)
         return f"{v:g} {unit}" if v is not None and isinstance(unit, str) else ""
     return f"{sc[b['home']]:g}-{sc[b['away']]:g}" if b["home"] in sc and b["away"] in sc else ""

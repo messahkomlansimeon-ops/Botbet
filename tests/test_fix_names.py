@@ -183,7 +183,7 @@ def test_unused_substitute_has_no_player_stats():
     finally:
         stats.requests.get = orig
         os.environ.pop("STATS_API_KEY", None)
-    assert st["players"]["K. Mbappé"] == {"shots": 0.0, "shots_on_target": 0.0, "fouls": 0.0}      # a joué sans tir : vrai zéro
+    assert st["players"]["K. Mbappé"] == {"name": "K. Mbappé", "shots": 0.0, "shots_on_target": 0.0, "fouls": 0.0}      # a joué sans tir : vrai zéro (sans identifiant dans cette réponse : clé = nom)
     assert st["players"]["V. Osimhen"]["shots"] == 3.0
     assert "A. Benched" not in st["players"] and "B. Zero" not in st["players"]
     assert stats.player_stat(st, "A. Benched", "shots") is None and stats.player_stat(st, "Benched", "shots") is None   # ni 0 ni gagné

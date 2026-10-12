@@ -230,7 +230,7 @@ def test_strength_and_prematch_use_tuned_values():
     assert S.hl_for("E0") == 220 and S.hl_for("SP1") == S.HALF_LIFE and S.hl_for("I1") == S.HALF_LIFE and S.hl_for("D1") == S.HALF_LIFE
     assert S.goal_weight("E0") == 0.35 and S.goal_weight("SP1") is None and S.goal_weight("I1") is None and S.goal_weight("F1") is None
     m1 = S.get("E0", on, loader=lambda d: ms)
-    assert m1["hl"] == 220 and m1["key"].endswith("|hl220"), (m1["hl"], m1["key"])          # le cache du jour est refait avec la nouvelle demi-vie
+    assert m1["hl"] == 220 and "|hl220" in m1["key"], (m1["hl"], m1["key"])          # le cache du jour est refait avec la nouvelle demi-vie
     store.save(tune.FILE, {"half_life": {"E0": 330}})                                    # fichier modifié : relu sans reload (même processus)
     assert S.hl_for("E0") == 330
     corrupt(tune.FILE)

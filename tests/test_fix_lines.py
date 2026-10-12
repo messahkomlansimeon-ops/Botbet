@@ -141,7 +141,7 @@ def test_per_stat_confidence():
     assert pronos
     for c in pronos:
         assert c["conf"] == round(fair.stat_q(f2, c["market"]), 2), (c["market"], c["conf"])
-        assert (c["conf"] == 0.9) == (c["market"] in ("totals", "btts", "double_chance")), c
+        assert (c["conf"] == 0.9) == (c["market"] in fair.FREE_MARKETS), c           # tous les marchés du modèle de buts (+ 1N2 et buts d'une équipe, que la fin du rapprochement de 0,9 laisse maintenant sortir)
     # garde de qualité par statistique pour corners / cartons (comme tirs / tirs cadrés)
     fl = dict(f, deep=dict(d, qs=dict(d["qs"], corners=0.1, cards=0.2, shots=0.1)))
     mk = {o[0] for o in fair.deep_options(fl, "Arsenal", "Manchester City")}

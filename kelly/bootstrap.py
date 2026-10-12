@@ -68,7 +68,7 @@ def match_rows(m, lam):
                 xg = prematch.signed_diff(who, *lam)
             elif lam:
                 name = "Over" if who == "over" else "Under"
-                pgap = prematch.p_totals(*lam, LINE, name) - p[i]
+                pgap = prematch.p_totals(*lam, LINE, name, 0.0) - p[i]
                 gap = prematch.side(name) * (sum(lam) - LINE)
                 bump = C.MODEL_WEIGHT["goals"] * pgap * taken       # proba mélangée, comme prematch.apply
             edge += bump

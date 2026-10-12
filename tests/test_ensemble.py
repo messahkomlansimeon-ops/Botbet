@@ -235,22 +235,36 @@ def test_learning_is_slow_and_shrunk():
 
 def test_value_rule_and_veto():
     fresh()
-    # buts : marché 0,55 ; modèle 0,60 -> retenu ~ 0,556. Cote 1,95 : 0,556 x 1,95 = 1,084 >= 1,03 : valeur
-    v = E.value_of("totals", 0.60, 0.55, None, 1.95)
+    # buts, AVEC un avis sharp (Pinnacle, Betfair...) : marché 0,55 ; modèle 0,60 -> retenu ~ 0,556. Cote 1,95 : 0,556 x 1,95 = 1,084 >= 1,03 : valeur
+    v = E.value_of("totals", 0.60, 0.55, 0.55, 1.95)
     assert v["ok"] and v["why"] == "" and 0.55 < v["p"] < 0.60 and close(v["ev"], v["p"] * 1.95 - 1) and close(v["gap"], 0.05)
     # cote 1,80 : 0,556 x 1,80 = 1,0 < 1,03 : le modèle seul (0,60 x 1,8 = 1,08) aurait validé, pas l'ensemble
-    v = E.value_of("totals", 0.60, 0.55, None, 1.80)
+    v = E.value_of("totals", 0.60, 0.55, 0.55, 1.80)
     assert not v["ok"] and v["why"] == "price" and 0.60 * 1.80 > 1.05
+    # SANS avis sharp, même cote et mêmes avis : jamais « valeur » (1xBet seul rend 0,93-0,94 : le modèle ne doit pas décider seul) ; trop peu probable pour être « probable »
+    v = E.value_of("totals", 0.60, 0.55, None, 1.95)
+    assert not v["ok"] and v["why"] == "not_probable" and v["kind"] is None and close(v["ev_x"], 0.55 * 1.95 - 1)
     # marge réglable
-    assert E.value_of("totals", 0.60, 0.55, None, 1.90, margin=0.0)["ok"] and not E.value_of("totals", 0.60, 0.55, None, 1.90, margin=0.20)["ok"]
+    assert E.value_of("totals", 0.60, 0.55, 0.55, 1.90, margin=0.0)["ok"] and not E.value_of("totals", 0.60, 0.55, 0.55, 1.90, margin=0.20)["ok"]
     # frontière exacte : cote x p_ens == 1 + marge est valide
     p = E.combine("goals", 0.60, 0.55)[0]
-    assert E.value_of("totals", 0.60, 0.55, None, (1 + C.ENSEMBLE_MARGIN) / p + 1e-9)["ok"]
-    assert not E.value_of("totals", 0.60, 0.55, None, (1 + C.ENSEMBLE_MARGIN) / p - 1e-3)["ok"]
+    assert E.value_of("totals", 0.60, 0.55, 0.55, (1 + C.ENSEMBLE_MARGIN) / p + 1e-9)["ok"]
+    assert not E.value_of("totals", 0.60, 0.55, 0.55, (1 + C.ENSEMBLE_MARGIN) / p - 1e-3)["ok"]
+    # « probable » : sans avis sharp, proba retenue >= ENSEMBLE_PROBABLE_MIN_P (0,60) et 1xBet pas plus de 10 % sous elle ; ev_x : l'espérance au prix 1xBet sans marge
+    v = E.value_of("totals", 0.66, 0.62, None, 1.55)
+    assert v["ok"] and v["kind"] == "probable" and v["why"] == "" and 0.62 < v["p"] < 0.66 and v["ev"] < 0 and close(v["ev_x"], 0.62 * 1.55 - 1) and v["ev_x"] < 0
+    assert E.value_of("totals", 0.66, 0.62, 0.62, 1.55)["why"] == "price" and E.value_of("totals", 0.66, 0.62, 0.62, 1.70)["kind"] == "value"        # avec sharp : la règle de valeur
+    assert E.value_of("totals", 0.66, 0.62, None, 1.30)["why"] == "price", "1xBet bradé (plus de 10 % sous la proba retenue) : ni valeur ni probable"
+    assert E.value_of("totals", 0.66, 0.62, None, 1.95)["kind"] == "probable", "sans sharp, même une cote généreuse n'est jamais une « valeur »"
+    C.ENSEMBLE_PROBABLE = False
+    try:
+        assert E.value_of("totals", 0.66, 0.62, None, 1.55)["why"] == "no_sharp"
+    finally:
+        C.ENSEMBLE_PROBABLE = True
     # veto : famille où le marché pèse >= 0,7 et écart modèle-marché > 0,12, même avec une cote très généreuse
     v = E.value_of("totals", 0.75, 0.55, None, 3.0)
     assert not v["ok"] and v["why"] == "veto" and close(v["gap"], 0.20) and v["ev"] > 0.5
-    assert E.value_of("totals", 0.67, 0.55, None, 3.0)["ok"], "écart de 0,12 pile : pas de veto"
+    assert E.value_of("totals", 0.67, 0.55, 0.55, 3.0)["ok"], "écart de 0,12 pile : pas de veto"
     assert E.value_of("totals", 0.55 + 0.1201, 0.55, None, 3.0)["why"] == "veto"
     # le veto se mesure au marché total (sharp + 1xBet)
     v = E.value_of("btts", 0.30, 0.52, 0.52, 3.0)
@@ -278,18 +292,20 @@ def test_value_rule_and_veto():
     old = C.ENSEMBLE_VETO_WEIGHT
     C.ENSEMBLE_VETO_WEIGHT = 0.95
     try:
-        assert E.value_of("totals", 0.75, 0.55, None, 3.0)["ok"], "poids du marché 0,88 < 0,95 : plus de veto"
+        assert E.value_of("totals", 0.75, 0.55, 0.55, 3.0)["ok"], "poids du marché 0,88 < 0,95 : plus de veto"
     finally:
         C.ENSEMBLE_VETO_WEIGHT = old
     # value(c, price) lit le pronostic : p_model, xp (ou p_x), psh via p_sharp
-    c = {"market": "totals", "prob": 0.60, "xp": 0.55, "xodds": 1.95}
-    assert E.value(c)["ok"] and close(E.value(c)["p"], E.value_of("totals", 0.60, 0.55, None, 1.95)["p"])
+    c = {"market": "totals", "prob": 0.60, "xp": 0.55, "p_sharp": 0.55, "xodds": 1.95}
+    assert E.value(c)["ok"] and close(E.value(c)["p"], E.value_of("totals", 0.60, 0.55, 0.55, 1.95)["p"])
     assert not E.value(c, 1.80)["ok"] and E.value(c | {"p_x": 0.50})["parts"]["p_x"] == 0.50
     # double chance sans proba 1xBet : refusée tant que l'approximation n'est pas demandée
     d = {"market": "double_chance", "prob": 0.80, "xodds": 1.40}
     assert E.value(d)["why"] == "no_market"
-    va = E.value(d, approx=True)
+    va = E.value(d | {"p_sharp": 0.68}, approx=True)
     assert va["parts"]["x_approx"] and close(va["parts"]["p_x"], 1 / 1.40 / 1.05) and va["why"] == "price" and va["gap"] < C.ENSEMBLE_MAX_DISAGREE
+    va = E.value(d, approx=True)                      # même double chance sans avis sharp : « probable » (proba retenue ~ 0,69, 1xBet pas plus de 10 % sous elle)
+    assert va["ok"] and va["kind"] == "probable" and va["gap"] < C.ENSEMBLE_MAX_DISAGREE
     print("ok  règle de valeur (marge 3 %), veto de désaccord, famille sans marché, marché peu lourd")
 
 
@@ -461,6 +477,11 @@ def test_xprice_switched_off_is_identical():
     print("ok  ENSEMBLE_ENABLED=0 : chemin d'origine de xprice identique à l'ancien (400 scénarios), aucun champ ni fichier d'ensemble")
 
 
+def sharp_free_kind(c, px, refs):
+    xprice.price(c, px, refs)
+    return c.get("xkind")
+
+
 def test_xprice_opt_in_path():
     """Le chemin « ensemble » de xprice dans TOUTES les familles (phase 1) : ici ENSEMBLE_ACTIVE_FAMILIES les contient toutes ; le mode mixte par défaut
     (buts, 1N2, double chance, les 2 marquent seulement) est testé dans tests/test_ensemble_wiring.py."""
@@ -495,10 +516,16 @@ def test_xprice_opt_in_path():
         again = copy.deepcopy(c)
         assert xprice.apply([again], fetch=lambda *a, **k: found)["value"] == 1
         assert again["prob"] == c["prob"] and again["p_model"] == 0.76 and again["p_sharp"] == 0.74 and "psh" in again
-        # --- même pari, sans avis sharp : le marché seul porte 88 % -> pas de valeur au prix de 1xBet (c'est voulu sur les buts) ---
+        # --- même pari, sans avis sharp : le marché seul porte 88 % -> jamais « valeur » (c'est voulu sur les buts) ; « probable » (🎯) : proba retenue ~ 0,68 >= 0,60 et
+        # 1xBet pas plus de 10 % sous elle ; son espérance au prix 1xBet sans marge (xev_x) est négative : aucune mise (combos.stake_prob) ---
         low = copy.deepcopy(base)
-        assert xprice.price(low, px, refs) == "low" and low["xwhy"] == "price" and "xveto" not in low and "p_sharp" not in low
-        assert low["xodds"] == 1.45 and low["min_odds"] > low["xodds"] and not CB.viable(low) and low["p_model"] == 0.76 and low["prob"] < 0.76
+        assert xprice.price(low, px, refs) == "value" and low["xkind"] == "probable" and "xveto" not in low and "p_sharp" not in low and "xwhy" not in low
+        assert low["xodds"] == 1.45 and low["min_odds"] <= low["xodds"] and CB.viable(low) and low["p_model"] == 0.76 and 0.60 <= low["prob"] < 0.76
+        assert low["xev_x"] < 0 and CB.probable(low)
+        assert abs(CB.stake_prob([low], low["prob"]) - low["xp"]) < 1e-3 and low["xp"] * low["xodds"] < 1, "mise calculée sur la proba de 1xBet sans marge : espérance négative"
+        assert sharp_free_kind(copy.deepcopy(base), px, refs) == "probable" and xprice.price(copy.deepcopy(c), px, refs) == "value" and c["xkind"] == "value"
+        cheap = copy.deepcopy(base) | {"prob": 0.70, "p0": 0.70, "alts": [["Over", 1.5, 0.70, None]]}                 # marge de 27 % chez 1xBet (1,30 / 2,00) : plus de 10 % sous la proba retenue, ni valeur ni probable
+        assert xprice.price(cheap, {("totals", "Over", 1.5): 1.30, ("totals", "Under", 1.5): 2.0}, refs) == "low" and cheap["xwhy"] == "price" and "xkind" not in cheap and not CB.viable(cheap)
         legacy = copy.deepcopy(base)
         C.ENSEMBLE_ENABLED = False
         assert xprice.price(legacy, px, refs) == "value", "le modèle seul aurait validé ce pari (0,76 x 1,45 = 1,10) : l'ensemble ne le valide pas"
@@ -514,7 +541,7 @@ def test_xprice_opt_in_path():
         assert "xveto" not in ok and ok.get("xwhy") != "veto" and ok["p_model"] == 0.76
         # ligne actuelle absente de c["alts"] (ligne déplacée) : son modèle vient de c["p0"], jamais de c["prob"] (= p_ens d'un passage précédent)
         off = copy.deepcopy(base) | {"prob": 0.70, "p0": 0.76, "alts": [["Under", 1.5, 0.24, None]]}
-        assert xprice.price(off, px, refs) == "low" and off["p_model"] == 0.76 and off["xodds"] == 1.45 and off["xwhy"] == "price"
+        assert xprice.price(off, px, refs) == "low" and off["p_model"] == 0.76 and off["xodds"] == 1.45 and off["xwhy"] == "line"       # sans sharp la ligne serait « probable » : hors c["alts"], elle n'est pas proposée
         # --- corners (non mesuré : modèle 50 %) : sans avis sharp, la valeur est possible ---
         pxc = {("alternate_totals_corners", "Under", 10.5): 1.55, ("alternate_totals_corners", "Over", 10.5): 2.45}
         cor = {"key": "m|alternate_totals_corners||10.5|Under", "id": "m", "sport_key": "soccer_epl", "home": "A", "away": "B",

@@ -200,7 +200,8 @@ FAIR_CALIB_PRIOR_PROPS = _int("FAIR_CALIB_PRIOR_PROPS", 60)
 FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe
 FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'est du hasard, au-dessus la cote juste est < 1.25
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
-FAIR_SHRINK = 0.9                                 # la proba du modèle est rapprochée de 50 % (le modèle de Poisson est trop sûr de lui)
+FAIR_SHRINK = _float("FAIR_SHRINK", 1.0)          # rapprochement de la proba du modèle vers 50 % : 1 = aucun (défaut). Avant : 0,9, EN PLUS de la correction calib.py (double rapprochement : favoris
+                                                  # sous-estimés, 1N2 domicile 0,61 annoncé pour 0,85 réel). La surdispersion (binomiale négative, GOALS_KAPPA) et calib.py corrigent à la source
 FAIR_MARGIN = 0.05                                # « joue si la cote >= cote juste x 1.05 » : marge de sécurité du modèle
 FAIR_API_EVENTS = _int("FAIR_API_EVENTS", 2)      # repli corners/cartons d'API-Football (historique des profils, aucune requête de plus) : inutilisé quand apistats est actif
 FAIR_API_RESERVE = 30                             # requêtes API-Football du jour gardées pour le règlement
@@ -431,9 +432,12 @@ DISAGREE_FULL_BOOKS = 14
 # (1 - SHARP_WEIGHT) x la moyenne (Shin) des autres books. Sans book de référence : moyenne de tous les books.
 # SHARP_BOOKS : clés The Odds API des books de référence (moyenne entre eux s'il y en a plusieurs). Les exchanges
 # ("betfair_ex_eu", "matchbook") ont ~0 marge, ce que la méthode de Shin traite sans réglage (S ~ 1 : proche d'une
-# simple normalisation), mais leurs prix peuvent être minces/en retard : absents par défaut, à ajouter via SHARP_BOOKS.
+# simple normalisation). Pinnacle n'affiche que 4 matchs de buts sur 1 157 relevés (8-11/10) et jamais les championnats que seul 1xBet couvre : sans autre
+# référence l'ensemble ne validait aucun pari de buts. Betfair Exchange et Matchbook (région « eu » de The Odds API, déjà demandée) comptent donc aussi
+# comme avis « sharp » ; leurs prix peuvent être minces ou en retard, mais ils sont mêlés (SHARP_WEIGHT) aux autres books et un pari n'est « valeur »
+# que si l'avis sharp existe (voir ENSEMBLE_PROBABLE_*). SHARP_BOOKS=pinnacle revient à l'ancien réglage ; smarkets / betfair_ex_uk : clés d'autres régions, inertes ici.
 SHARP_WEIGHT = min(1.0, max(0.0, _float("SHARP_WEIGHT", 0.7)))
-SHARP_BOOKS = tuple(x.lower() for x in _list("SHARP_BOOKS", "pinnacle"))
+SHARP_BOOKS = tuple(x.lower() for x in _list("SHARP_BOOKS", "pinnacle,betfair_ex_eu,matchbook,smarkets,betfair_ex_uk"))
 # ---- Plancher de qualité d'une jambe de combiné (kelly/combos.py.leg_reason) ----
 # Une jambe doit porter une vraie raison, sinon elle n'entre dans aucun combiné ni pari du jour :
 #   valeur : écart (proba x cote typique - 1) >= LEG_MIN_EDGE x (1 + FEW_BOOKS / nb de books) ;
@@ -457,7 +461,9 @@ MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8
                  "alternate_totals_corners": 1.6, "alternate_totals_cards": 1.6,
                  # tirs et tirs cadrés (total ou une équipe) : marchés mal pricés, comme corners et cartons
                  "team_shots_total": 1.6, "team_shots_home": 1.5, "team_shots_away": 1.5,
-                 "team_sot_total": 1.6, "team_sot_home": 1.5, "team_sot_away": 1.5}
+                 "team_sot_total": 1.6, "team_sot_home": 1.5, "team_sot_away": 1.5,
+                 # corners d'une équipe et cartons jaunes (sous-matchs 1xBet) : marchés mal pricés comme corners et cartons (ex-fair.EXTRA_WEIGHT)
+                 "team_corners_home": 1.5, "team_corners_away": 1.5, "team_yellow_total": 1.6}
 PLAYER_WEIGHT = 1.0           # plus de bonus de sélection pour les marchés joueur (aucun n'a jamais donné un pari)
 
 UNITS = {
@@ -569,6 +575,26 @@ ENSEMBLE_PRIOR_OTHER = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_OTHER", 0.5)))  
 ENSEMBLE_PRIOR_SHARP = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_SHARP", 0.75)))  # part du « sharp » dans l'avis du marché quand sharp ET 1xBet existent
 ENSEMBLE_SHARP_MAX_AGE_MIN = _int("ENSEMBLE_SHARP_MAX_AGE_MIN", 180)   # une proba sharp plus vieille (min) n'entre plus dans l'ensemble ; âge inconnu : acceptée
 ENSEMBLE_X_MARGIN = _float("ENSEMBLE_X_MARGIN", 0.05)         # marge supposée de 1xBet quand sa cote sans marge n'est pas calculable (double chance sans les 3 cotes)
+# Sans avis sharp (Pinnacle, Betfair, Matchbook), un pari de buts n'est JAMAIS une « valeur » : 1xBet seul, devigé, rend 0,93-0,94 (marge 6-7 %), donc le seuil
+# 1 + ENSEMBLE_MARGIN n'y est jamais atteint sans modèle. Il est alors « probable » (🎯, pas 💎) : proba retenue >= ENSEMBLE_PROBABLE_MIN_P et 1xBet ne paie pas plus de
+# ENSEMBLE_PROBABLE_MIN_EV sous la proba retenue (-10 % : la marge ordinaire de 1xBet passe, une cote bradée non). Aucune mise conseillée tant que l'espérance au prix
+# 1xBet sans marge (proba 1xBet x cote - 1) n'est pas positive (combos.stake_prob) : en pratique jamais, la marge de 1xBet étant payée à chaque pari.
+ENSEMBLE_PROBABLE = _bool("ENSEMBLE_PROBABLE", True)           # 0 : sans avis sharp rien n est validé (ni valeur ni probable)
+ENSEMBLE_PROBABLE_MIN_P = _float("ENSEMBLE_PROBABLE_MIN_P", 0.60)
+ENSEMBLE_PROBABLE_MIN_EV = _float("ENSEMBLE_PROBABLE_MIN_EV", -0.10)
+# ---- Modèle de buts (kelly/strength.py) ----
+# Ancrage marché : les cotes de CLÔTURE du CSV football-data (Pinnacle, sinon moyenne ; 1N2 + plus/moins 2,5) donnent les buts attendus implicites de chaque match
+# passé (strength.implied_goals) ; l'ajustement des forces apprend sur (1 - w) x buts réels + w x buts implicites. 0 = comme avant (buts réels seuls).
+# Mesuré sur les données fictives de tests/synth.py (python -m tests.test_goal_markets) : log-loss du 1N2 et du plus de 2,5 en baisse.
+STRENGTH_MKT_WEIGHT = min(0.9, max(0.0, _float("STRENGTH_MKT_WEIGHT", 0.5)))
+# Surdispersion des buts : loi binomiale négative BIVARIÉE (facteur d'intensité commun aux deux équipes, gamma de variance kappa) avec le kappa estimé sur les
+# données de la ligue (strength.fit_stat « atot ») x GOALS_KAPPA_SCALE, au plus GOALS_KAPPA_MAX ; 0 = Poisson pur. Repli sans modèle de force : GOALS_KAPPA_DEFAULT.
+GOALS_KAPPA_SCALE = max(0.0, _float("GOALS_KAPPA_SCALE", 1.0))
+GOALS_KAPPA_MAX = _float("GOALS_KAPPA_MAX", 0.15)
+GOALS_KAPPA_DEFAULT = max(0.0, _float("GOALS_KAPPA_DEFAULT", 0.03))
+# xG dans les pronostics sans cote (fair.deep_options) : poids des xG par match (Understat, FotMob / API-Football matchs) et des xG du classement FotMob (plus grossiers)
+GOAL_XG_WEIGHT = min(0.6, max(0.0, _float("GOAL_XG_WEIGHT", 0.3)))
+GOAL_XG_WEIGHT_TABLE = min(0.6, max(0.0, _float("GOAL_XG_WEIGHT_TABLE", 0.15)))
 # Apprentissage (par famille) : posterior bayésien sur une grille de poids, a priori Beta centré sur le poids a priori et d'écart-type
 # ENSEMBLE_PRIOR_SD (petit = rappel fort : buts / 1N2 / 2 marquent / double chance, où l'audit a mesuré ; grand : familles non mesurées). Rien ne
 # bouge avant ENSEMBLE_MIN_N pronostics réglés (avec les deux avis) ; le passage est progressif sur ENSEMBLE_MIN_N de plus.

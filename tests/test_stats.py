@@ -15,7 +15,7 @@ os.environ.pop("STATS_DAILY_CAP", None)
 import contextlib  # noqa: E402
 import json  # noqa: E402
 
-from kelly import apistats, cache, config as C, learn, stats, store  # noqa: E402
+from kelly import apistats, cache, config as C, learn, prematch, stats, store, strength as S_  # noqa: E402
 from kelly.sources import features, footballdata  # noqa: E402
 from tests.fake_api import FakeFootballAPI, match as fake_match, seed_history as seed_team, ts_of  # noqa: E402
 
@@ -206,7 +206,7 @@ def test_fixture_stats_and_averages():
     calls = reset(fake)
     st = stats.fixture_stats(7)
     assert st["corners"] == 10 and st["cards"] == 2 and st["players"]["K. Mbappé"] == {
-        "shots": 0.0, "shots_on_target": 2.0, "fouls": 0.0}
+        "name": "K. Mbappé", "shots": 0.0, "shots_on_target": 2.0, "fouls": 0.0}
     n = len(calls)
     assert stats.fixture_stats(7) is st or stats.fixture_stats(7) == st and len(calls) == n   # cache
     # moyennes : lues dans l'historique accumulé (apistats), SANS requête ; None sous 3 matchs avec statistiques
@@ -424,11 +424,11 @@ def test_goal_markets_and_features():
     h2h = [mk_pick("h2h", "Arsenal", None, prob=0.5), mk_pick("h2h", "Chelsea", None, prob=0.3), mk_pick("h2h", "Draw", None, prob=0.2)]
     stats.enrich([tot, under, btts] + h2h, "2026-10-10")
     lh, la = 1.7, 1.15                                                            # xG attendus (voir put_profiles)
-    p = stats.poisson_over(lh + la, 2.5)
+    p = prematch.over_p("Over", S_.p_over(S_.nb_pmf(lh + la, C.GOALS_KAPPA_DEFAULT), 2.5))     # binomiale négative (surdispersion par défaut), plus Poisson pur
     assert abs(tot["prob"] - (0.8 * 0.40 + 0.2 * p)) < 1e-9 and abs(under["prob"] - (0.8 * 0.60 + 0.2 * (1 - p))) < 1e-9
     assert "xG : 2.8 buts attendus vs ligne 2.5" in tot["why"] and tot["pm"]["kind"] == "goals", tot
-    yes = (1 - math.exp(-lh)) * (1 - math.exp(-la))
-    assert abs(btts["prob"] - (0.8 * 0.40 + 0.2 * yes)) < 1e-9 and "xG : 1.7-1.1 buts attendus" in btts["why"]
+    yes = prematch.p_btts(lh, la, "Yes", 0.0, C.GOALS_KAPPA_DEFAULT)                 # matrice bivariée (surdispersion), ex-produit de deux Poisson indépendants
+    assert abs(yes - (1 - math.exp(-lh)) * (1 - math.exp(-la))) < 0.02 and abs(btts["prob"] - (0.8 * 0.40 + 0.2 * yes)) < 1e-9 and "xG : 1.7-1.1 buts attendus" in btts["why"]
     assert [c["prob"] for c in h2h] == [0.5, 0.3, 0.2] and "pm" in h2h[0]       # 1N2 : proba intacte
     assert h2h[0]["pm"]["xgd"] == 0.55 and h2h[1]["pm"]["xgd"] == -0.55 and h2h[2]["pm"]["xgd"] == -0.55
     f = learn.features(tot, datetime(2026, 10, 10, 8, tzinfo=timezone.utc))
@@ -437,7 +437,7 @@ def test_goal_markets_and_features():
     reset(api_fake())
     os.environ.pop("STATS_API_KEY", None)
     put_profiles(us=False)
-    t2 = mk_pick("totals", "Over", 2.5, prob=0.40)
+    t2 = mk_pick("totals", "Over", 2.5, prob=0.38)             # 0,38 : l'écart avec la binomiale négative (49 %) dépasse le seuil de signalement (10 pts) ; 0,40 ne le dépassait que par Poisson (51 %)
     stats.enrich([t2], "2026-10-10")
     assert t2["pm"]["exp"] == 2.7 and t2["pm"]["kind"] == "goals"                # (2.0 + 1.2)/2 + (1.4 + 0.8)/2
     assert "moyennes de buts : 2.7 buts attendus" in t2["why"]

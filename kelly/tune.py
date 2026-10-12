@@ -20,7 +20,10 @@ strength.hl_for / strength.goal_weight le lisent (mémoire, relu si le fichier c
 
 Budget de temps config.TUNE_SECONDS : ligues les plus importantes d'abord (E0, SP1, I1, D1, F1, puis les autres), fichier
 réécrit après chaque ligue ; au passage suivant on reprend par les ligues jamais réglées puis les plus anciennes (reprise).
-Les championnats en année civile (CSV « new », 400 jours gardés) n'ont pas 2 saisons d'historique : valeurs par défaut.
+Les championnats en année civile (CSV « new ») gardent footballdata.NEW_KEEP_DAYS = 800 jours (400 auparavant : jamais assez pour les 540 jours de
+config.TUNE_MIN_SPAN_DAYS, d'où « historique trop court » sur les 32 ligues du 09/10) ; les championnats européens lisent 3 saisons (footballdata.default_seasons).
+Au 12/10 : saison en cours depuis août + 2 saisons pleines = plus de 780 jours, assez pour 540 j d'historique et 365 j de test. Le réglage utilise le modèle de force
+complet (ancrage marché compris, strength.build) : demi-vie choisie sur la 1re moitié de la fenêtre de test, poids des buts mesuré sur la 2e (jamais les deux sur les mêmes matchs).
 """
 import math
 import sys

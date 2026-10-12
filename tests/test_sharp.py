@@ -147,7 +147,7 @@ def test_pinnacle_reference():
     books = [book(k, h2h(v)) for k, v in SOFT.items()] + [book("pinnacle", h2h(PIN))]
     got = picks_of(books)
     w = C.SHARP_WEIGHT
-    assert w == 0.7 and C.SHARP_BOOKS == ("pinnacle",), (w, C.SHARP_BOOKS)
+    assert w == 0.7 and C.SHARP_BOOKS[0] == "pinnacle" and "betfair_ex_eu" in C.SHARP_BOOKS, (w, C.SHARP_BOOKS)       # + Betfair Exchange, Matchbook (aucun n'est dans ce relevé)
     for i, name in enumerate(("Alpha", "Draw", "Beta")):
         c = got[("h2h", None, None, name)]
         pin, soft = ref_shin(PIN)[0][i], sum(ref_shin(v)[0][i] for v in SOFT.values()) / len(SOFT)
@@ -250,7 +250,11 @@ def test_exchange_as_sharp_book():
     exch = (1.85, 3.55, 4.40)
     books = [book(k, h2h(v)) for k, v in SOFT.items()] + [book("betfair_ex_eu", h2h(exch))]
     try:
-        assert picks_of(books)[("h2h", None, None, "Alpha")]["prob_src"] == "consensus"          # exchange non listé par défaut
+        assert {"pinnacle", "betfair_ex_eu", "matchbook"} <= set(old), old                       # Betfair Exchange et Matchbook comptent par défaut (Pinnacle manque presque partout)
+        C.SHARP_BOOKS = ("pinnacle",)
+        assert picks_of(books)[("h2h", None, None, "Alpha")]["prob_src"] == "consensus"          # SHARP_BOOKS=pinnacle : exchange non listé, comme avant
+        C.SHARP_BOOKS = old
+        assert picks_of(books)[("h2h", None, None, "Alpha")]["prob_src"] == "sharp"              # défaut : l'exchange est un avis de référence
         C.SHARP_BOOKS = ("pinnacle", "betfair_ex_eu")
         c = picks_of(books)[("h2h", None, None, "Alpha")]
         pin = ref_shin(exch)[0][0]

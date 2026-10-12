@@ -503,7 +503,7 @@ def test_prematch_and_fair_use_the_model():
             # buts : matrice de Dixon-Coles ; 1N2 : seulement l'écart de buts attendus
             t = {"market": "totals", "name": "Under", "point": 2.5, "prob": 0.5, "odds": 2.0, "edge": 0.0, "score": 0.0, "weight": 1.0, "why": ""}
             at = prematch.assess(t, f, None)
-            assert at["kind"] == "goals" and close(at["p"], 1 - S.p_over(S.goal_pmf(S.score_matrix(d["lh"], d["la"], d["rho"])), 2.5), 1e-12)
+            assert at["kind"] == "goals" and close(at["p"], 1 - S.p_over(S.goal_pmf(S.score_matrix(d["lh"], d["la"], d["rho"], kappa=d["kappa"])), 2.5), 1e-12)
             b = {"market": "btts", "name": "Yes", "prob": 0.5, "odds": 2.0}
             assert close(prematch.assess(b, f, None)["p"], S.p_btts(d, "Yes"), 1e-12)
             h = {"market": "h2h", "name": "Arsenal", "home": "Arsenal", "away": "Man City", "prob": 0.4, "odds": 2.5}

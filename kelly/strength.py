@@ -9,6 +9,12 @@ promues partent d'un a priori plus faible. La correction de Dixon-Coles (rho, sc
 ensuite par maximum de vraisemblance. Même décomposition attaque / défense pour les tirs, tirs cadrés, corners, fautes
 et cartons là où les colonnes existent ; surdispersion (binomiale négative) estimée sur les données.
 
+Buts : (1) ANCRAGE MARCHÉ — les cotes de clôture du CSV (Pinnacle, sinon moyenne ; 1N2 + plus/moins 2,5) donnent les buts attendus implicites de chaque match
+passé (implied_goals) ; l'ajustement des forces apprend sur (1 - w) x buts réels + w x buts implicites (w = config.STRENGTH_MKT_WEIGHT, 0,5) : le marché
+sait ce que les scores ne disent pas (blessés, motivation) et les favoris ne sont plus sous-estimés par un modèle qui ne voit que des buts entiers ;
+la dispersion et rho restent estimés sur les buts réels. (2) SURDISPERSION — loi binomiale négative bivariée (un facteur d'intensité commun aux deux équipes,
+variance kappa estimée sur les données de la ligue) au lieu de deux Poisson indépendants : totaux et « les 2 marquent » moins sûrs d'eux.
+
 Facteurs de contexte (petits, bornés, expliqués) : forme des 5 derniers matchs, domicile/extérieur propre à l'équipe,
 face-à-face, repos, enjeu (classement calculé depuis les résultats de la saison) ; arbitre pour cartons, cartons jaunes et fautes.
 
@@ -25,9 +31,9 @@ import sys
 import time
 from datetime import date, timedelta
 
-from . import store
+from . import config as C, store
 
-VERSION = 2                      # 2 : + cartons jaunes seuls (stat « yellow ») ; un cache de la version 1 est refait au premier appel
+VERSION = 3                      # 3 : + ancrage marché (buts attendus implicites des cotes de clôture) et kappa des buts ; 2 : + cartons jaunes seuls (stat « yellow ») ; un cache d'une version plus ancienne est refait au premier appel
 HALF_LIFE = 110                  # jours : un match vieux de 110 jours pèse moitié moins
 STATS = ("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")
 UNIT = {"goals": "buts", "shots": "tirs", "sot": "tirs cadrés", "corners": "corners", "fouls": "fautes", "cards": "cartons", "yellow": "cartons jaunes"}
@@ -171,10 +177,22 @@ def tau(x, y, lh, la, rho):
     return 1.0
 
 
-def score_matrix(lh, la, rho=0.0, cap=12):
-    """M[i][j] = P(domicile i, extérieur j) : deux Poisson indépendants + correction de Dixon-Coles, somme = 1."""
-    ph, pa = pois_pmf(lh, cap), pois_pmf(la, cap)
-    m = [[ph[i] * pa[j] for j in range(cap + 1)] for i in range(cap + 1)]
+def score_matrix(lh, la, rho=0.0, cap=12, kappa=0.0):
+    """M[i][j] = P(domicile i, extérieur j) + correction de Dixon-Coles, somme = 1. kappa = 0 : deux Poisson indépendants. kappa > 0 : binomiale négative
+    BIVARIÉE, les deux équipes partageant un facteur d'intensité G (gamma de moyenne 1 et de variance kappa) : chaque côté est binomiale négative
+    (variance lh + kappa x lh^2), le total aussi (variance mu + kappa x mu^2, ce que strength.fit_stat mesure en « atot ») et les deux sont corrélés
+    positivement (covariance kappa x lh x la : les matchs ouverts le sont pour les deux)."""
+    if kappa >= 1e-6:
+        r = 1.0 / kappa
+        mu = lh + la
+        base = r * math.log(r / (r + mu))
+        a, b = math.log(max(lh, 1e-9) / (r + mu)), math.log(max(la, 1e-9) / (r + mu))
+        g0 = math.lgamma(r)
+        lf = [math.lgamma(k + 1) for k in range(cap + 1)]
+        m = [[math.exp(math.lgamma(r + i + j) - g0 - lf[i] - lf[j] + base + i * a + j * b) for j in range(cap + 1)] for i in range(cap + 1)]
+    else:
+        ph, pa = pois_pmf(lh, cap), pois_pmf(la, cap)
+        m = [[ph[i] * pa[j] for j in range(cap + 1)] for i in range(cap + 1)]
     for (i, j) in ((0, 0), (0, 1), (1, 0), (1, 1)):
         m[i][j] *= max(0.0, tau(i, j, lh, la, rho))
     s = sum(map(sum, m))
@@ -274,7 +292,7 @@ def _ipf(rows, n, wt, m, H, A, D, SA, SD, ka, kd, A0, D0, iters=80, tol=1e-6):
     return m, H, A, D, (EA, EA2, ED, ED2)
 
 
-def _eb_k(S, E, E2, mu):
+def _eb_k(S, E, E2, mu, noise=1.0):
     """Force de l'a priori (en événements) par la méthode des moments : variance observée des forces moins la variance
     d'échantillonnage = variance réelle entre équipes ; k = 1 / variance, borné à K_RANGE matchs."""
     vals = []
@@ -283,14 +301,17 @@ def _eb_k(S, E, E2, mu):
         if e < 0.5 * mu or e < 0.5 * med:
             continue                                       # équipe très peu observée : n'informe pas sur la variance entre équipes
         a = s / e
-        vals.append((a - 1) ** 2 - max(a, 0.3) * e2 / (e * e))
+        vals.append((a - 1) ** 2 - noise * max(a, 0.3) * e2 / (e * e))
     t2 = sum(vals) / len(vals) if vals else 0.0
     lo, hi = 1.0 / (K_RANGE[1] * mu), 1.0 / (K_RANGE[0] * mu)
     return 1.0 / _clip(t2, lo, hi)
 
 
-def fit_stat(rows, n, promo=None, stat="goals", iters=80):
-    """Ajuste une statistique. rows = [(i_dom, i_ext, x_dom, x_ext, poids)] ; promo = indices des équipes promues.
+def fit_stat(rows, n, promo=None, stat="goals", iters=80, raw=None, noise=1.0):
+    """Ajuste une statistique. rows = [(i_dom, i_ext, x_dom, x_ext, poids)] ; promo = indices des équipes promues. `raw` : les mêmes lignes avec les
+    valeurs RÉELLES quand `rows` porte des valeurs mêlées au marché (ancrage, build) : la surdispersion alpha / atot se mesure sur elles (des valeurs
+    lissées par le marché la sous-estimeraient). `noise` : variance relative des valeurs de `rows` face à de vrais comptages (1 ; moins quand une part est
+    mêlée à des buts attendus sans bruit d'échantillonnage) : l'a priori qui rapproche une équipe de la moyenne pèse d'autant moins face à des données plus sûres.
     -> {m, h, A, D, W (matchs pondérés par équipe), k (a priori att, déf), alpha, atot, [rho]}."""
     tw = sum(r[4] for r in rows)
     m = max(sum(w * (xh + xa) for _, _, xh, xa, w in rows) / (2 * tw), 1e-6)
@@ -310,17 +331,18 @@ def fit_stat(rows, n, promo=None, stat="goals", iters=80):
     weak = 0.3 * mu
     m, H, A, D, ex = _ipf(rows, n, wt, m, 1.15, A, D, SA, SD, weak, weak, A0, D0, iters)
     mu = m * (1 + H) / 2
-    ka, kd = _eb_k(SA, ex[0], ex[1], mu), _eb_k(SD, ex[2], ex[3], mu)
-    m, H, A, D, ex = _ipf(rows, n, wt, m, H, A, D, SA, SD, ka, kd, A0, D0, iters)
+    ka, kd = _eb_k(SA, ex[0], ex[1], mu, noise), _eb_k(SD, ex[2], ex[3], mu, noise)
+    m, H, A, D, ex = _ipf(rows, n, wt, m, H, A, D, SA, SD, ka * noise, kd * noise, A0, D0, iters)
     num = den = nt = dt = 0.0
-    for hi, ai, xh, xa, w in rows:
+    for hi, ai, xh, xa, w in (raw or rows):
         lh, la = m * H * A[hi] * D[ai], m * A[ai] * D[hi]
         num += w * ((xh - lh) ** 2 - lh + (xa - la) ** 2 - la)
         den += w * (lh * lh + la * la)
         big = lh + la
         nt += w * ((xh + xa - big) ** 2 - big)
         dt += w * big * big
-    adj = 2 * len(rows) / max(2 * len(rows) - 2 * n - 3, 1)               # degrés de liberté perdus par l'ajustement
+    nr = len(raw or rows)
+    adj = 2 * nr / max(2 * nr - 2 * n - 3, 1)               # degrés de liberté perdus par l'ajustement
     out = {"m": m, "h": H, "A": A, "D": D, "W": wt, "k": (ka / mu, kd / mu),
            "alpha": _clip(adj * num / den if den > 0 else 0.0, 0.0, 0.6),
            "atot": _clip(adj * nt / dt if dt > 0 else 0.0, 0.0, 0.6)}
@@ -345,6 +367,120 @@ def fit_rho(rows, fit):
     return best
 
 
+# ---------- buts attendus implicites des cotes de clôture (ancrage marché) ----------
+
+_xg_memo = {}                    # (division, date, domicile, extérieur) -> (lh, la, livre) | None : un match n'est résolu qu'une fois par processus
+XG_MEMO_MAX = 60000
+XG_BOUNDS = (0.15, 5.0)          # buts attendus implicites plausibles ; hors bornes : le match n'ancre rien
+XG_MAX_RESID = 0.03              # écart maximal (probas) entre le marché et la loi de Poisson ajustée ; au-delà, cotes incohérentes
+XG_CAP = 14
+
+
+def _devig(prices):
+    """Probas de clôture sans marge (Shin, comme odds.consensus) d'un marché de cotes décimales ; None si illisible."""
+    if not prices or any(not x or x <= 1 for x in prices):
+        return None
+    from . import odds
+    try:
+        return odds.shin_probs(list(prices))
+    except (ArithmeticError, ValueError):
+        return None
+
+
+def market_close(m):
+    """(proba domicile, proba extérieur, P(plus de 2,5), livre) sans marge des cotes de CLÔTURE d'un match du CSV : Pinnacle d'abord, sinon la moyenne des
+    books (colonnes PSC* / AvgC*). None s'il manque le 1N2 ou le plus/moins 2,5 : le marché ne dit alors rien du total de buts (les CSV « new » des
+    championnats en année civile n'ont pas le plus/moins : pas d'ancrage là)."""
+    o = m.get("odds") or {}
+    p3 = po = None
+    book = None
+    for b in ("ps", "avg"):
+        x = ((o.get("1x2") or {}).get("close") or {}).get(b)
+        if x and p3 is None:
+            p3 = _devig(x)
+            book = b if p3 else book
+    for b in ("ps", "avg"):
+        y = ((o.get("ou25") or {}).get("close") or {}).get(b)
+        if y and po is None:
+            v = _devig(y)
+            po = v[0] if v else None
+    if not p3 or po is None:
+        return None
+    return p3[0], p3[2], po, book
+
+
+def _h_a_o(lh, la):
+    """(P domicile, P extérieur, P plus de 2,5) de deux Poisson indépendants de moyennes lh et la."""
+    ph, pa = pois_pmf(lh, XG_CAP), pois_pmf(la, XG_CAP)
+    pw = pl = 0.0
+    cum_a = cum_h = 0.0
+    for i in range(XG_CAP + 1):
+        pw += ph[i] * cum_a                         # domicile i, extérieur < i
+        pl += pa[i] * cum_h                         # extérieur i, domicile < i
+        cum_a += pa[i]
+        cum_h += ph[i]
+    return pw, pl, 1.0 - sum(pois_pmf(lh + la, XG_CAP)[:3])
+
+
+def solve_goals(p_home, p_away, p_over):
+    """(lh, la) dont deux Poisson indépendants reproduisent au mieux (moindres carrés, Gauss-Newton en log) P(domicile), P(extérieur) et P(plus de 2,5) du
+    marché ; None si l'ajustement échoue (hors XG_BOUNDS ou écart > XG_MAX_RESID)."""
+    lo, hi = 0.3, 9.0                               # total : P(plus de 2,5) croît avec lui (bissection)
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if 1.0 - sum(pois_pmf(mid, XG_CAP)[:3]) < p_over:
+            lo = mid
+        else:
+            hi = mid
+    tot = (lo + hi) / 2
+    share = _clip(0.5 + 0.6 * (p_home - p_away), 0.15, 0.85)
+    x = [math.log(tot * share), math.log(tot * (1 - share))]
+    tgt = (p_home, p_away, p_over)
+
+    def resid(v):
+        return [a - b for a, b in zip(_h_a_o(math.exp(v[0]), math.exp(v[1])), tgt)]
+
+    r = resid(x)
+    for _ in range(14):
+        J = []
+        for k in range(2):
+            y = list(x)
+            y[k] += 1e-4
+            J.append([(a - b) / 1e-4 for a, b in zip(resid(y), r)])             # J[k][i] = d r_i / d x_k
+        a11 = sum(J[0][i] ** 2 for i in range(3)) + 1e-9
+        a22 = sum(J[1][i] ** 2 for i in range(3)) + 1e-9
+        a12 = sum(J[0][i] * J[1][i] for i in range(3))
+        g1, g2 = sum(J[0][i] * r[i] for i in range(3)), sum(J[1][i] * r[i] for i in range(3))
+        det = a11 * a22 - a12 * a12
+        if abs(det) < 1e-14:
+            break
+        d1, d2 = -(a22 * g1 - a12 * g2) / det, -(a11 * g2 - a12 * g1) / det
+        d1, d2 = _clip(d1, -0.5, 0.5), _clip(d2, -0.5, 0.5)
+        x = [x[0] + d1, x[1] + d2]
+        r = resid(x)
+        if abs(d1) + abs(d2) < 1e-6:
+            break
+    lh, la = math.exp(x[0]), math.exp(x[1])
+    if not (XG_BOUNDS[0] <= lh <= XG_BOUNDS[1] and XG_BOUNDS[0] <= la <= XG_BOUNDS[1]) or max(abs(v) for v in r) > XG_MAX_RESID:
+        return None
+    return lh, la
+
+
+def implied_goals(m):
+    """(buts attendus domicile, extérieur, livre) implicites des cotes de clôture du match `m` (market_close + solve_goals), ou None. Gardé en mémoire
+    (le même match sert à des centaines d'ajustements pendant un réglage ou un backtest)."""
+    key = (m.get("div"), m.get("date"), m.get("home"), m.get("away"))
+    if key in _xg_memo:
+        return _xg_memo[key]
+    mc = market_close(m)
+    got = solve_goals(*mc[:3]) if mc else None
+    out = None if got is None else (got[0], got[1], mc[3])
+    if len(_xg_memo) >= XG_MEMO_MAX:
+        _xg_memo.clear()
+    _xg_memo[key] = out
+    return out
+
+
 def _ord(s, memo={}):
     v = memo.get(s)
     if v is None:
@@ -352,9 +488,10 @@ def _ord(s, memo={}):
     return v
 
 
-def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None):
+def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None, mkt=None):
     """Modèle complet d'une ligue à la date `on` (date), à partir des matchs normalisés (footballdata.parse_csv) joués
-    AVANT `on`. None si moins de MIN_MATCHES matchs. Dict JSON : {v, div, on, n, last, stats:{stat:{...,t:{équipe:[att,
+    AVANT `on`. None si moins de MIN_MATCHES matchs. `mkt` : poids des buts attendus implicites des cotes de clôture dans l'apprentissage des buts
+    (config.STRENGTH_MKT_WEIGHT par défaut ; 0 = buts réels seuls). Dict JSON : {v, div, on, n, last, stats:{stat:{...,t:{équipe:[att,
     déf, matchs pondérés, matchs]}}}, ctx:{form, table, refs, lg, h2h}}."""
     global FITS
     on_s = on.isoformat()
@@ -373,9 +510,10 @@ def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None):
     promo = {idx[t] for t, d in first.items() if span >= 250 and _ord(d) - start > 200 and on_o - _ord(d) <= 300}
     ln2 = math.log(2) / hl
     wts = [math.exp(-ln2 * (on_o - _ord(m["date"]))) for m in ms]
+    mkt = C.STRENGTH_MKT_WEIGHT if mkt is None else mkt
     model = {"v": VERSION, "div": div, "on": on_s, "n": len(ms), "last": ms[-1]["date"], "hl": hl, "stats": {}}
     for stat in stats:
-        rows, cnt, seen = [], [0] * n, 0
+        rows, raw, cnt, seen, n_mkt = [], [], [0] * n, 0, 0
         for m, w in zip(ms, wts):
             if w < 0.004:
                 continue                                   # trop ancien pour compter
@@ -383,13 +521,21 @@ def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None):
             p = _pair(m, stat)
             if p is None:
                 continue
-            rows.append((idx[m["home"]], idx[m["away"]], p[0], p[1], w))
+            ig = implied_goals(m) if stat == "goals" and mkt > 0 else None
+            if ig:                                          # ancrage marché : (1 - w) x buts réels + w x buts attendus implicites des cotes de clôture
+                raw.append((idx[m["home"]], idx[m["away"]], p[0], p[1], w))
+                rows.append((idx[m["home"]], idx[m["away"]], (1 - mkt) * p[0] + mkt * ig[0], (1 - mkt) * p[1] + mkt * ig[1], w))
+                n_mkt += 1
+            else:
+                rows.append((idx[m["home"]], idx[m["away"]], p[0], p[1], w))
+                if stat == "goals" and mkt > 0:
+                    raw.append(rows[-1])
             cnt[idx[m["home"]]] += 1
             cnt[idx[m["away"]]] += 1
         if len(rows) < MIN_ROWS:
             continue
         try:
-            f = fit_stat(rows, n, promo, stat)
+            f = fit_stat(rows, n, promo, stat, raw=raw if n_mkt else None, noise=1 - (n_mkt / len(rows)) * (1 - (1 - mkt) ** 2) if n_mkt else 1.0)
         except (ArithmeticError, ValueError):               # donnée dégénérée (colonne vide, tout à zéro) : statistique ignorée
             if stat == "goals":
                 raise
@@ -398,7 +544,8 @@ def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None):
              "cov": _r(len(rows) / seen, 3), "rows": len(rows), "k": [_r(x, 1) for x in f["k"]],
              "t": {teams[i]: [_r(f["A"][i], 4), _r(f["D"][i], 4), _r(f["W"][i], 1), cnt[i]] for i in range(n) if cnt[i]}}
         if stat == "goals":
-            d["rho"] = _r(fit_rho(rows, f), 3)
+            d["rho"] = _r(fit_rho(raw if n_mkt else rows, f), 3)
+            d["mkt"], d["n_mkt"] = mkt if n_mkt else 0.0, n_mkt
             d["promo"] = sorted(teams[i] for i in promo)
         model["stats"][stat] = d
         if stat == "goals":
@@ -643,7 +790,7 @@ def get(div, on=None, loader=None):
         if hit and hit[0] == on.isoformat() and _memo_stamp.get(div) == _stamp():     # CSV actualisés depuis (autre processus) : modèle refait
             return hit[1]
         hl = hl_for(div)
-        key = f"{on.isoformat()}|{_stamp()}" + ("" if hl == HALF_LIFE else f"|hl{hl}")        # demi-vie mesurée : cache du jour refait une fois
+        key = f"{on.isoformat()}|{_stamp()}" + ("" if hl == HALF_LIFE else f"|hl{hl}") + f"|mk{C.STRENGTH_MKT_WEIGHT}"        # demi-vie mesurée : cache du jour refait une fois
         disk = store.load(_file(div), None)
         disk = disk if isinstance(disk, dict) and disk.get("v") == VERSION else None
         if disk and disk.get("key") == key:
@@ -673,6 +820,12 @@ def find_team(model, name):
     if key not in _names:
         _names[key] = names.best_team(name, ts)
     return _names[key]
+
+
+def kappa_of(g):
+    """Variance du facteur d'intensité commun des buts (loi binomiale négative bivariée, score_matrix) d'une ligue : « atot » mesuré sur les données x
+    config.GOALS_KAPPA_SCALE, au plus config.GOALS_KAPPA_MAX. 0 : Poisson pur."""
+    return _clip(float(g.get("atot") or 0.0) * C.GOALS_KAPPA_SCALE, 0.0, C.GOALS_KAPPA_MAX)
 
 
 def _expect(model, stat, h, a):
@@ -855,6 +1008,7 @@ def predict(model, home, away, on=None, referee=None, ctx=True):
         if stat != "goals":
             stats[stat] = {"h": e[0], "a": e[1], "al": s["alpha"], "at": s["atot"]}
     stats["goals"]["rho"] = g.get("rho", 0.0)
+    kappa = kappa_of(g)
     for kind in ("cards", "fouls", "yellow"):
         if kind in stats:
             rk = "fouls" if kind == "fouls" else "cards"           # les jaunes suivent l'arbitre comme les cartons (les rouges sont rares)
@@ -867,7 +1021,7 @@ def predict(model, home, away, on=None, referee=None, ctx=True):
                     info["referee"] = {"name": rf[4], "n": rf[1], "cards": rf[2], "lg": rf[3], "factor": rf[0]}
                 elif kind == "fouls":
                     info["referee_fouls"] = {"name": rf[4], "n": rf[1], "avg": rf[2], "lg": rf[3], "factor": rf[0]}
-    pred = {"div": model.get("div"), "home": h, "away": a, "lh": lh, "la": la, "lh0": lh0, "la0": la0, "rho": g.get("rho", 0.0),
+    pred = {"div": model.get("div"), "home": h, "away": a, "lh": lh, "la": la, "lh0": lh0, "la0": la0, "rho": g.get("rho", 0.0), "kappa": kappa,
             "fh": fh_, "fa": fa_, "q": qs.get("goals", 0.0), "qs": qs, "stats": stats, "notes": notes, "info": info, "tm": tm,
             "base": {"lh": base["goals"][0], "la": base["goals"][1],
                      "stats": {k: {"h": v[0], "a": v[1]} for k, v in base.items()}},
@@ -911,7 +1065,7 @@ def grid(pred, base=False, like=None):
         st = {k: {"h": v["h"], "a": v["a"], "al": pred["stats"][k]["al"], "at": pred["stats"][k]["at"]} for k, v in b["stats"].items()}
     else:
         lh, la, st = pred["lh"], pred["la"], pred["stats"]
-    M = score_matrix(lh, la, pred.get("rho", 0.0))
+    M = score_matrix(lh, la, pred.get("rho", 0.0), kappa=pred.get("kappa", 0.0))
     ph, pd, pa = result_probs(M)
     tot = goal_pmf(M)
     out = {"xg": [lh, la], "1x2": {"H": ph, "D": pd, "A": pa}, "dc": {"1X": ph + pd, "X2": pd + pa, "12": ph + pa},
@@ -939,7 +1093,7 @@ def grid(pred, base=False, like=None):
 
 def p_goals_total(pred, point, name):
     """Proba du côté choisi (Over/Under) d'un total de buts, ligne quelconque (matrice de Dixon-Coles)."""
-    return _side(name, p_over(goal_pmf(score_matrix(pred["lh"], pred["la"], pred.get("rho", 0.0))), point))
+    return _side(name, p_over(goal_pmf(score_matrix(pred["lh"], pred["la"], pred.get("rho", 0.0), kappa=pred.get("kappa", 0.0))), point))
 
 
 def p_btts(pred, name):
@@ -1222,7 +1376,7 @@ def _br(p, k):
     return sum((p[i] - (1.0 if i == k else 0.0)) ** 2 for i in range(len(p)))
 
 
-def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None):
+def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None, mkt=None):
     """Évaluation pas à pas (walk-forward) : avant chaque lot de matchs (tous les `step_days` jours) le modèle est
     réajusté sur le passé seulement, puis prédit le lot. Produit (match, p1x2 [H, D, A], P(plus de 2,5)) pour chaque
     match de [test_from, test_to[ ; (match, None, None) quand le modèle ne peut pas le prédire. Générateur : l'appelant
@@ -1234,7 +1388,7 @@ def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, 
         d = date.fromisoformat(m["date"])
         if batch_start is None or d >= batch_start + timedelta(days=step_days):
             batch_start = d
-            model = build(matches, d, hl, stats, div)
+            model = build(matches, d, hl, stats, div, mkt)
         pred = predict(model, m["home"], m["away"], d, m.get("referee"), ctx) if model else None
         if not pred:
             yield m, None, None
@@ -1243,7 +1397,7 @@ def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, 
         yield m, [gr["1x2"]["H"], gr["1x2"]["D"], gr["1x2"]["A"]], gr["totals"]["2.5"]["over"]
 
 
-def backtest(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None):
+def backtest(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None, mkt=None):
     """Évaluation pas à pas (walk-forward, voir walk). Compare au modèle naïf (fréquences de la ligue avant
     `test_from`) et aux cotes de clôture sans marge, sur les mêmes matchs. -> dict {n, n_mkt, model, market, naive, ...} :
     log-loss et Brier du 1N2 (somme des 3 carrés) et du plus de 2,5 buts, plus la calibration du plus de 2,5 buts."""
@@ -1257,7 +1411,7 @@ def backtest(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=Tr
     acc = {k: {"ll3": 0.0, "br3": 0.0, "llo": 0.0, "bro": 0.0, "n3": 0, "no": 0} for k in ("model", "market", "naive", "model_m")}
     calib = [[0.0, 0.0, 0] for _ in range(5)]
     n = skipped = 0
-    for m, p3, po in walk(matches, test_from, test_to, hl, step_days, ctx, stats, div):
+    for m, p3, po in walk(matches, test_from, test_to, hl, step_days, ctx, stats, div, mkt):
         if p3 is None:
             skipped += 1
             continue
