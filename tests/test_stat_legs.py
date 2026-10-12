@@ -15,6 +15,10 @@ os.environ["XBET_PROXY"] = "http://user:secret@proxy.test:80"
 
 from kelly import app, calib, combos as CB, config as C, fair, fmt, odds, played, store, xprice  # noqa: E402,F401
 
+# Ces tests vérifient la règle d'avant (meilleure ligne au prix 1xBet sur la seule proba de Kelly), toujours celle des touches et des hors-jeu : familles
+# de l'ensemble d'avant le 12/10. Le mélange avec 1xBet des familles de stats est testé dans tests/test_stats_ensemble.py.
+C.ENSEMBLE_ACTIVE_FAMILIES = frozenset(("goals", "h2h", "dc", "btts", "team_goals"))
+
 DAY = "2026-10-10"
 STAT = ("team_fouls_total", "team_throws_home", "team_offsides_total", "team_shots_home", "team_sot_total")
 

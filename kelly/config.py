@@ -574,7 +574,11 @@ STATS_NEG_MINUTES = _float("STATS_NEG_MINUTES", 20)
 #   ENSEMBLE_ACTIVE_FAMILIES   familles où l'ensemble décide (« goals,h2h,dc,btts » ; « none » : aucune, mode fantôme seulement)
 #   ENSEMBLE_LOG=0             plus de journal des avis ni d'apprentissage (décisions et affichage inchangés)
 ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", True)
-ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts", "team_goals"))   # team_goals = buts d'une équipe (Poisson seul : jamais décidé par le modèle seul)
+# Corners, cartons, jaunes, tirs, tirs cadrés, fautes (ajoutés le 12/10) : choisir seul la ligne où Kelly dépasse le plus la cote 1xBet prenait ses erreurs
+# (tirs : 45 % réalisés pour 65 % annoncés ; résultats seuls : poids du modèle 1 % sur les tirs, 4 % tirs cadrés et fautes, 69 % corners). Mélange
+# moitié-moitié avec 1xBet sans marge au départ (ENSEMBLE_PRIOR_OTHER), poids appris ensuite ; touches et hors-jeu restent en fantôme.
+ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts", "team_goals",      # team_goals = buts d'une équipe (Poisson seul : jamais décidé par le modèle seul)
+                                                             "corners", "cards", "yellow", "shots", "sot", "fouls"))
 ENSEMBLE_LOG = _bool("ENSEMBLE_LOG", True)
 ENSEMBLE_MARGIN = _float("ENSEMBLE_MARGIN", 0.03)             # valeur : cote 1xBet x proba retenue >= 1 + marge
 ENSEMBLE_REQUIRE_MARKET = _bool("ENSEMBLE_REQUIRE_MARKET", True)  # vrai : pas de valeur sans AU MOINS un avis de marché (sharp ou 1xBet sans marge), dans toutes les familles

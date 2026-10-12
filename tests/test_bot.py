@@ -1560,7 +1560,14 @@ def test_quality_floor():
     assert CB.leg_reason(mkleg(4, 1.39, 0.70, edge=-0.03)) == "safe"
     assert CB.leg_reason(mkleg(5, 1.39, 0.70, edge=-0.10)) is None     # sûr, mais payé trop cher (marge > 9 %)
     assert CB.leg_reason(mkleg(5, 1.35, 0.70, edge=-0.055)) == "safe"   # sûr à petite cote : la marge seule ne l'exclut pas
-    assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, market="alternate_totals_corners", pm={"kind": "corners", "pgap": 0.07})) == "stats"
+    corners = mkleg(6, 2.30, 0.45, edge=0.0, market="alternate_totals_corners", pm={"kind": "corners", "pgap": 0.07})
+    assert CB.leg_reason(corners) is None                              # corners : l'ensemble décide depuis le 12/10, le désaccord n'est plus une raison
+    old_fams = C.ENSEMBLE_ACTIVE_FAMILIES
+    C.ENSEMBLE_ACTIVE_FAMILIES = frozenset(("goals", "h2h", "dc", "btts", "team_goals"))
+    try:
+        assert CB.leg_reason(corners) == "stats"                       # famille en fantôme (touches, hors-jeu) : le signal du modèle reste une raison
+    finally:
+        C.ENSEMBLE_ACTIVE_FAMILIES = old_fams
     # buts / 1N2 : l'ensemble décide (le marché a raison quand le modèle s'écarte) : « stats » n'est plus une raison d'entrer (lot modèle, point 4)
     assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, pm={"kind": "goals", "pgap": 0.07})) is None
     assert CB.leg_reason(mkleg(7, 1.74, 0.55, edge=-0.04, pm={"kind": "goals", "pgap": -0.07})) is None   # le modèle est contre

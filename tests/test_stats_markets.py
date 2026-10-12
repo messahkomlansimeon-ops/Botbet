@@ -19,6 +19,10 @@ from kelly.sources import features, fmmatch, footballdata as fd, s365, xbet  # n
 
 from tests import synth  # noqa: E402
 
+# Ces tests vérifient la règle d'avant (meilleure ligne au prix 1xBet sur la seule proba de Kelly), toujours celle des touches et des hors-jeu : familles
+# de l'ensemble d'avant le 12/10. Le mélange avec 1xBet des familles de stats est testé dans tests/test_stats_ensemble.py.
+C.ENSEMBLE_ACTIVE_FAMILIES = frozenset(("goals", "h2h", "dc", "btts", "team_goals"))
+
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sources")
 
 

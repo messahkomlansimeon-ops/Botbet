@@ -25,6 +25,10 @@ import requests  # noqa: E402
 from kelly import app, calib, chat, combos as CB, config as C, custom, fair, fmt, money, played, statswindow, store, telegram, xprice  # noqa: E402,F401
 from kelly.sources import fmmatch, http, state, xbet  # noqa: E402
 
+# Ces tests vérifient la règle d'avant (meilleure ligne au prix 1xBet sur la seule proba de Kelly), toujours celle des touches et des hors-jeu : familles
+# de l'ensemble d'avant le 12/10. Le mélange avec 1xBet des familles de stats est testé dans tests/test_stats_ensemble.py.
+C.ENSEMBLE_ACTIVE_FAMILIES = frozenset(("goals", "h2h", "dc", "btts", "team_goals"))
+
 # la mécanique (bornes, fraîcheur, plafonds, combinés) est testée sur une fenêtre de 4 h relue chaque heure ; la fenêtre large par défaut (24 h, relue
 # toutes les 3 h de loin) est testée dans tests/test_pending_stats.py
 C.STATS_WINDOW_MAX_H, C.STATS_WINDOW_NEAR_H = 4, 4

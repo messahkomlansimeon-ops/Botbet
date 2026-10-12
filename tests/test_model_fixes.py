@@ -241,7 +241,10 @@ def leg(i=1, market="totals", edge=0.0, **kw):
 
 def test_stats_reason_not_in_ensemble_families():
     corners = leg(1, "alternate_totals_corners", pm={"kind": "corners", "pgap": 0.07})
-    assert CB.leg_reason(corners) == "stats", "corners : l'ensemble ne décide pas, le signal du modèle reste une raison"
+    with Cfg(ENSEMBLE_ACTIVE_FAMILIES=C.ENSEMBLE_ACTIVE_FAMILIES | {"corners"}):        # (tests.test_stats_window, importé, garde la règle d'avant)
+        assert CB.leg_reason(corners) is None, "corners : l'ensemble décide depuis le 12/10, le désaccord modèle-marché n'est plus une raison"
+    with Cfg(ENSEMBLE_ACTIVE_FAMILIES=frozenset(("goals", "h2h", "dc", "btts", "team_goals"))):
+        assert CB.leg_reason(corners) == "stats", "famille où l'ensemble ne décide pas : le signal du modèle reste une raison"
     assert CB.leg_reason(leg(2, "totals")) is None, "buts : le désaccord modèle-marché perd 9 à 16 % -> plus une raison"
     assert CB.leg_reason(leg(3, "btts", pm={"kind": "btts", "pgap": 0.07})) is None
     assert CB.leg_reason(leg(4, "h2h", name="Home", pm={"kind": "h2h", "xgd": 0.9}, prob=0.5, odds=1.9)) is None
