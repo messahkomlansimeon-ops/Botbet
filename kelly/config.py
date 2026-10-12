@@ -408,6 +408,7 @@ WATCH_AFTER_LOSS = _bool("WATCH_AFTER_LOSS", True)   # suivi des matchs (kelly/w
 WATCH_DEADLINE_S = _int("WATCH_DEADLINE_S", 400)   # suivi des matchs : le passage arrête ses téléchargements après N s (le runner le coupe à 540 s) ; le reste au passage suivant
 WATCH_FAIL_PASSES = _int("WATCH_FAIL_PASSES", 2)   # panne « douce » du suivi (pas de réponse, délai, erreur) dite sur Telegram après N passages de suite (panne dure : tout de suite)
 WATCH_DETAIL_DAY = _int("WATCH_DETAIL_DAY", 40)   # fiches détaillées 365scores (buteur, penalty ; ~16 Ko chacune) lues au plus par jour aux moments clés ; la prolongation passe outre
+WATCH_SUMMARIES = _bool("WATCH_SUMMARIES", True)   # moments du match : mi-temps, fin, prolongation, carton rouge, penalty, but refusé par la VAR (0 : seulement buts et paris décidés)
 LIVE_OPP_DAY = _int("LIVE_OPP_DAY", 3)              # opportunités live annoncées au plus par jour
 LIVE_OPP_GAP_H = _float("LIVE_OPP_GAP_H", 2)        # ... et au moins N heures entre deux
 LIVE_OPP_GATE = _int("LIVE_OPP_GATE", 8)            # contrôle léger (365scores) : au moins N matchs en cours dans la fenêtre avant de lire 1xBet (~500 Ko)

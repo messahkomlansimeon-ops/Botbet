@@ -1,0 +1,483 @@
+{
+ "game": {
+  "id": 4733558,
+  "sportId": 1,
+  "statusGroup": 4,
+  "statusText": "Ended",
+  "shortStatusText": "Ended",
+  "gameTime": 90.0,
+  "gameTimeDisplay": "",
+  "justEnded": false,
+  "stages": [
+   {
+    "id": 7,
+    "name": "Halftime",
+    "shortName": "HT",
+    "homeCompetitorScore": 3.0,
+    "awayCompetitorScore": 0.0,
+    "isEnded": true
+   },
+   {
+    "id": 9,
+    "name": "End of 90 Minutes",
+    "shortName": "90 Min.",
+    "homeCompetitorScore": 5.0,
+    "awayCompetitorScore": 0.0,
+    "isEnded": true
+   },
+   {
+    "id": 1,
+    "name": "Current",
+    "shortName": "Current",
+    "homeCompetitorScore": 5.0,
+    "awayCompetitorScore": 0.0,
+    "isCurrent": true,
+    "isEnded": true
+   }
+  ],
+  "homeCompetitor": {
+   "id": 8528,
+   "name": "Ludogorets",
+   "score": 5.0
+  },
+  "awayCompetitor": {
+   "id": 52588,
+   "name": "Arda",
+   "score": 0.0
+  },
+  "events": [
+   {
+    "competitorId": 8528,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 1,
+    "num": 1,
+    "gameTime": 18.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "18'",
+    "playerId": 52462682,
+    "isMajor": true,
+    "eventType": {
+     "id": 1,
+     "name": "Goal",
+     "subTypeId": 1,
+     "subTypeName": "Field Goal"
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 2,
+    "num": 1,
+    "gameTime": 21.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "21'",
+    "playerId": 50578373,
+    "isMajor": false,
+    "eventType": {
+     "id": 2,
+     "name": "Yellow Card",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 3,
+    "num": 1,
+    "gameTime": 30.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "30'",
+    "playerId": 71388404,
+    "isMajor": true,
+    "eventType": {
+     "id": 3,
+     "name": "Red Card",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 4,
+    "num": 2,
+    "gameTime": 41.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "41'",
+    "playerId": 52462682,
+    "isMajor": false,
+    "eventType": {
+     "id": 2,
+     "name": "Yellow Card",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 5,
+    "num": 2,
+    "gameTime": 44.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "44'",
+    "playerId": 2614538,
+    "isMajor": true,
+    "eventType": {
+     "id": 1,
+     "name": "Goal",
+     "subTypeId": 1,
+     "subTypeName": "Field Goal"
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 6,
+    "num": 3,
+    "gameTime": 45.0,
+    "addedTime": 3,
+    "gameTimeDisplay": "45'",
+    "playerId": 51191574,
+    "isMajor": false,
+    "eventType": {
+     "id": 2,
+     "name": "Yellow Card",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 6,
+    "stageId": 7,
+    "order": 7,
+    "num": 3,
+    "gameTime": 45.0,
+    "addedTime": 4,
+    "gameTimeDisplay": "45'",
+    "playerId": 2614538,
+    "isMajor": true,
+    "eventType": {
+     "id": 1,
+     "name": "Goal",
+     "subTypeId": 1,
+     "subTypeName": "Field Goal"
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 8,
+    "num": 8,
+    "gameTime": 46.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "45+1'",
+    "playerId": 669295,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 9,
+    "num": 9,
+    "gameTime": 46.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "45+1'",
+    "playerId": 55503138,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 10,
+    "num": 4,
+    "gameTime": 55.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "55'",
+    "playerId": 64666024,
+    "isMajor": true,
+    "eventType": {
+     "id": 1,
+     "name": "Goal",
+     "subTypeId": 1,
+     "subTypeName": "Field Goal"
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 11,
+    "num": 11,
+    "gameTime": 56.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "56'",
+    "playerId": 66303966,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 12,
+    "num": 12,
+    "gameTime": 57.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "57'",
+    "playerId": 69777651,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 13,
+    "num": 13,
+    "gameTime": 63.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "63'",
+    "playerId": 39746507,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 14,
+    "num": 14,
+    "gameTime": 63.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "63'",
+    "playerId": 70783518,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 15,
+    "num": 15,
+    "gameTime": 68.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "68'",
+    "playerId": 71048313,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 16,
+    "num": 4,
+    "gameTime": 68.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "68'",
+    "playerId": 70955550,
+    "isMajor": false,
+    "eventType": {
+     "id": 2,
+     "name": "Yellow Card",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 17,
+    "num": 17,
+    "gameTime": 78.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "79'",
+    "playerId": 288770,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 52588,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 18,
+    "num": 18,
+    "gameTime": 79.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "79'",
+    "playerId": 51090381,
+    "isMajor": false,
+    "eventType": {
+     "id": 1000,
+     "name": "Substitution",
+     "subTypeId": -1
+    }
+   },
+   {
+    "competitorId": 8528,
+    "statusId": 8,
+    "stageId": 9,
+    "order": 19,
+    "num": 5,
+    "gameTime": 86.0,
+    "addedTime": 0,
+    "gameTimeDisplay": "86'",
+    "playerId": 39064818,
+    "isMajor": true,
+    "eventType": {
+     "id": 1,
+     "name": "Goal",
+     "subTypeId": 1,
+     "subTypeName": "Field Goal"
+    }
+   }
+  ],
+  "members": [
+   {
+    "id": 52462682,
+    "name": "Caio Vidal",
+    "shortName": "Caio",
+    "competitorId": 8528
+   },
+   {
+    "id": 64666024,
+    "name": "Rwan Cruz",
+    "shortName": "Rwan",
+    "competitorId": 8528
+   },
+   {
+    "id": 50578373,
+    "name": "Hossam Abdelmaguid",
+    "shortName": "Abdelmaguid",
+    "competitorId": 8528
+   },
+   {
+    "id": 2614538,
+    "name": "Bernard Tekpetey",
+    "shortName": "B. Tekpetey",
+    "competitorId": 8528
+   },
+   {
+    "id": 39064818,
+    "name": "Ivan Zhelizko",
+    "shortName": "Zhelizko",
+    "competitorId": 8528
+   },
+   {
+    "id": 669295,
+    "name": "Amir Hadziahmetovic",
+    "shortName": "Hadziahmetovic",
+    "competitorId": 8528
+   },
+   {
+    "id": 288770,
+    "name": "Ivaylo Chochev",
+    "shortName": "Chochev",
+    "competitorId": 8528
+   },
+   {
+    "id": 55503138,
+    "name": "Aguibou Camara",
+    "shortName": "Camara",
+    "competitorId": 8528
+   },
+   {
+    "id": 66303966,
+    "name": "Erick Marcus",
+    "shortName": "Marcus",
+    "competitorId": 8528
+   },
+   {
+    "id": 71048313,
+    "name": "Nathan Fernandes",
+    "shortName": "Nathan",
+    "competitorId": 8528
+   },
+   {
+    "id": 51191574,
+    "name": "Vyacheslav Velev",
+    "shortName": "Velev",
+    "competitorId": 52588
+   },
+   {
+    "id": 71388404,
+    "name": "Georgi Nikolov",
+    "shortName": "G. Nikolov",
+    "competitorId": 52588
+   },
+   {
+    "id": 70955550,
+    "name": "Viktor Lyubenov",
+    "shortName": "Lyubenov",
+    "competitorId": 52588
+   },
+   {
+    "id": 51090381,
+    "name": "Derick",
+    "shortName": "Derick",
+    "competitorId": 52588
+   },
+   {
+    "id": 39746507,
+    "name": "Bircent Karagaren",
+    "shortName": "Karageren",
+    "competitorId": 52588
+   },
+   {
+    "id": 70783518,
+    "name": "Atanas Kabov",
+    "shortName": "A. Kabov",
+    "competitorId": 52588
+   },
+   {
+    "id": 69777651,
+    "name": "Preslav Bachev",
+    "shortName": "Bachev",
+    "competitorId": 52588
+   }
+  ]
+ }
+}

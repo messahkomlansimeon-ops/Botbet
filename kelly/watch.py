@@ -199,16 +199,79 @@ def _fresh(res):
     return bool(res is not None and res.ok and not res.stale and not res.blocked)
 
 
+ET_WORDS = ("extra", "penalt", "aet", "a.e.t", "after pen", "e.t.")
+
+
 def _status(g):
-    """Statut d'un match 365scores -> {"live", "paused", "ended", "score", "minute"}. Groupe 3 = en cours ; groupe 4 = terminé, SAUF si le texte dit
-    suspendu / reporté / abandonné (PAUSED) : le match n'est pas fini, son score est celui du moment et rien n'est tranché."""
+    """Statut d'un match 365scores -> {"live", "paused", "ended", "score", "minute", "period", "ht", "et", "red", "text"}. Groupe 3 = en cours ; groupe 4 =
+    terminé, SAUF si le texte dit suspendu / reporté / abandonné (PAUSED) : le match n'est pas fini, son score est celui du moment et rien n'est tranché.
+    `ht` : mi-temps (« Halftime » / HT) ; `et` : prolongation ou tirs au but (les paris se règlent sur le score à 90 min) ; `red` : cartons rouges
+    (domicile, extérieur) si 365scores les donne, sinon None (inconnu, pas zéro)."""
     h, a = g.get("homeCompetitor") or {}, g.get("awayCompetitor") or {}
     hs, as_ = h.get("score"), a.get("score")
     ok = hs is not None and as_ is not None and hs >= 0 and as_ >= 0
     txt = str(g.get("statusText") or g.get("shortStatusText") or "").lower()
+    short = str(g.get("shortStatusText") or "").lower()
     paused = g.get("statusGroup") == 4 and any(w in txt for w in PAUSED)
+    minute = int(g.get("gameTime") or 0)
+    ht = txt == "halftime" or short == "ht"
+    et = any(w in txt for w in ET_WORDS) or short in ("aet", "a.e.t.", "pen", "pen.", "et", "et ht") or minute >= 106
+    red = None
+    if "redCards" in h or "redCards" in a:
+        red = (int(h.get("redCards") or 0), int(a.get("redCards") or 0))
+    period = 1 if ("1st" in txt or ht or (minute <= 45 and "2nd" not in txt)) else 2
     return {"live": g.get("statusGroup") == 3, "paused": paused, "ended": g.get("statusGroup") == 4 and ok and not paused,
-            "score": (int(hs), int(as_)) if ok else None, "minute": int(g.get("gameTime") or 0)}
+            "score": (int(hs), int(as_)) if ok else None, "minute": minute, "period": period, "ht": ht, "et": bool(et), "red": red,
+            "text": g.get("statusText") or ""}
+
+
+# ---------- fiche détaillée d'un match (buteur, penalty, carton rouge, VAR, score à 90 min) : aux moments clés seulement ----------
+
+EV_KINDS = {"goal": "goal", "red card": "red", "second yellow": "red", "goal disallowed": "var", "missed penalty": "pen_miss", "penalty missed": "pen_miss"}
+
+
+def parse_detail(payload):
+    """Fiche /game/?gameId=… -> {"events": [{"id", "kind" (goal / red / var / pen_miss), "sub" (« Penalty », « Own Goal »…), "side", "min", "player"}],
+    "s90": (h, a) score à la fin des 90 minutes ou None, "ht": score à la mi-temps ou None, "text"} ; None si illisible."""
+    g = (payload or {}).get("game") if isinstance(payload, dict) else None
+    if not isinstance(g, dict):
+        return None
+    names = {m.get("id"): m.get("shortName") or m.get("name") for m in g.get("members") or [] if isinstance(m, dict)}
+    hid = (g.get("homeCompetitor") or {}).get("id")
+    evs = []
+    for e in g.get("events") or []:
+        et = e.get("eventType") or {}
+        kind = EV_KINDS.get(str(et.get("name") or "").strip().lower())
+        if not kind:
+            continue
+        evs.append({"id": f"{et.get('id')}|{e.get('gameTime')}|{e.get('addedTime')}|{e.get('playerId')}", "kind": kind, "sub": et.get("subTypeName") or "",
+                    "side": "home" if e.get("competitorId") == hid else "away", "min": e.get("gameTimeDisplay") or f"{int(e.get('gameTime') or 0)}'",
+                    "player": names.get(e.get("playerId"))})
+    stages = {s.get("id"): s for s in g.get("stages") or [] if isinstance(s, dict)}
+
+    def sc(st):
+        h, a = (st or {}).get("homeCompetitorScore"), (st or {}).get("awayCompetitorScore")
+        return (int(h), int(a)) if h is not None and a is not None and h >= 0 and a >= 0 else None
+    return {"events": evs, "s90": sc(stages.get(9)), "ht": sc(stages.get(7)), "text": g.get("statusText") or ""}
+
+
+def _detail(s365, g):
+    """Fiche détaillée du match `g` (~16 Ko) -> parse_detail, ou None (pas de réponse fraîche)."""
+    res = http.fetch(s365._url("/game/", gameId=g["id"]), s365.NAME, 120)
+    return parse_detail(s365.read_json(res)) if _fresh(res) else None
+
+
+def _budget_ok(d, now, settle=False):
+    """Une fiche détaillée de plus est-elle permise ? Plafond du jour C.WATCH_DETAIL_DAY (sauf `settle` : score à 90 min d'une prolongation, qui règle
+    tes paris) et données du mois (s365.month_left)."""
+    from .sources import s365
+    b = d["budget"]
+    if b.get("day") != str(now.date()):
+        d["budget"] = b = {"day": str(now.date()), "detail": 0}
+    left = s365.month_left()
+    if left is not None and left <= 0:
+        return False
+    return settle or int(b.get("detail") or 0) < C.WATCH_DETAIL_DAY
 
 
 def find(leg, games):
@@ -246,7 +309,7 @@ def _stats(s365, g):
         except ValueError:
             continue
         home = st.get("competitorId") == g["home"]["id"]
-        for k in (("cards", "yellow") if key == "yc" else ("cards",) if key == "rc" else (key,)):     # cartons = jaunes + rouges ; jaunes seuls à part
+        for k in (("cards", "yellow") if key == "yc" else ("cards", "red") if key == "rc" else (key,)):     # cartons = jaunes + rouges ; jaunes, rouges à part
             h, a = out.get(k, (0, 0))
             out[k] = (h + v, a) if home else (h, a + v)
     return out
@@ -307,23 +370,31 @@ def _ticket_line(t, d):
     return None, f"📊 {won}/{len(st)} gagnés, {len(st) - won} en cours"
 
 
-def _out(d, now, kind, text):
-    """Ajoute une ligne (HTML déjà échappé) au message du passage. `kind` : warn (panne / rétabli), ev (événement), foot (pied de ticket), nf (non suivi).
-    Les lignes restent dans le document jusqu'à leur envoi réussi (ou leur mise en attente par Telegram) : jamais perdues si le passage est coupé."""
+def _out(d, now, kind, text, **extra):
+    """Ajoute une ligne ou un bloc (HTML déjà échappé) au message du passage. `kind` : warn (panne / rétabli), ev (un match : bloc de lignes), danger,
+    last (dernier pari), foot (pied de ticket), nf (non suivi), recap (bilan de la soirée). `extra` : « ht » (résumé court d'une mi-temps, pour le mode
+    compact). Les lignes restent dans le document jusqu'à leur envoi réussi (ou leur mise en attente par Telegram) : jamais perdues si le passage
+    est coupé."""
     if not any(o["text"] == text and o["k"] == kind for o in d["out"]):
-        d["out"].append({"at": now.isoformat(timespec="minutes"), "k": kind, "text": text})
+        d["out"].append({"at": now.isoformat(timespec="minutes"), "k": kind, "text": text, **extra})
 
 
-ORDER = ("warn", "ev", "foot", "nf")
+ORDER = ("warn", "ev", "danger", "last", "foot", "nf", "recap")
+HT_COMPACT = 12                 # plus de mi-temps que ça dans un même message : une seule ligne pour toutes (sans le détail des paris)
 
 
 def compose(out):
-    """Message du passage depuis les lignes à envoyer : avertissement / rétabli, événements, pieds de tickets, paris non suivis ; None si rien."""
+    """Message du passage depuis les lignes à envoyer : avertissement / rétabli, matchs, paris en danger, derniers paris, pieds de tickets, paris non
+    suivis, bilan ; None si rien. Plus de HT_COMPACT mi-temps à la fois : « ⏸️ Mi-temps : A 1-0 B · C 0-0 D … » en une ligne."""
+    hts = [o for o in out if o.get("ht")]
+    compact = len(hts) > HT_COMPACT
     blocks = []
     for kind in ORDER:
-        lines = [o["text"] for o in out if o["k"] == kind]
+        lines = [o["text"] for o in out if o["k"] == kind and not (compact and o.get("ht"))]
+        if kind == "ev" and compact:
+            lines.insert(0, "⏸️ " + fmt.b("Mi-temps") + " : " + " · ".join(o["ht"] for o in hts))
         if lines:
-            blocks.append("\n".join(lines))
+            blocks.append(("\n\n" if kind == "ev" else "\n").join(lines))
     return telegram.Html("\n\n".join(blocks)) if blocks else None
 
 
@@ -404,7 +475,7 @@ def _lower(prev, cur):
     return cur[0] < ph or cur[1] < pa
 
 
-def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None):
+def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, detail_for=None):
     """Le travail d'un passage, sur le document `d` (lignes à envoyer ajoutées à d["out"], document sauvé après chaque match)."""
     from .sources import s365
     ts = [t for day in (now.date(), now.date() - timedelta(days=1)) for t in exposure.tickets(str(day))]
@@ -451,11 +522,11 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None):
                 break
             try:
                 _one_game(d, now, by_game[gid], status.get(gid) or {}, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive,
-                          alive_legs)
+                          alive_legs, detail_for)
             except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
                 print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-            for line in events:
-                _out(d, now, "ev", fmt.esc(line))
+            for text, extra in events.items():
+                _out(d, now, "ev", fmt.esc(text), **{k: fmt.esc(v) for k, v in (extra or {}).items()})
             events.clear()
             store.save(FILE, d)                         # après CHAQUE match : un passage coupé ne perd ni ne répète rien
     for tid, t in touched.items():
@@ -474,9 +545,32 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None):
         _health(d, now, True, open_n=open_n)
 
 
-def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive, alive_legs):
-    """Les paris d'UN match : score, stats si besoin, état de chaque pari ; lignes dans `events`, tickets touchés dans `touched`."""
+def _score_t(txt):
+    try:
+        h, a = (int(x) for x in str(txt).split("-"))
+        return h, a
+    except ValueError:
+        return None
+
+
+def _leg_now(leg, h, a, stats):
+    """Où en est un pari encore en jeu (lignes de mi-temps et de but) : marge de buts, « pour toi pour l'instant », ou la stat du moment."""
+    key, side = need(leg)
+    if key == "goals":
+        return margin(leg, h, a)
+    hv, av = stats.get(key) or (None, None)
+    if hv is None:
+        return ""
+    val = hv + av if side == "total" else hv if side == "home" else av
+    return f"{val} {ONE.get(key, key) if val == 1 else WORD.get(key, key)}"
+
+
+def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive, alive_legs, detail_for=None):
+    """Les paris d'UN match : score, stats si besoin, fiche détaillée aux moments clés (but d'un match d'un ticket en jeu, prolongation), état de chaque
+    pari ; UN bloc de lignes pour ce match dans `events` (titre + lignes des paris), tickets touchés dans `touched`."""
     g = legs[0][3]
+    gs = d["games"].setdefault(str(g["id"]), {})
+    gs["at"] = now.isoformat(timespec="minutes")
     paused = st_g.get("paused")
     ko = min(_ko(x[1]) for x in legs)
     finished = st_g.get("ended") or (not st_g.get("live") and not paused and now - ko >= timedelta(minutes=FINISH_MIN))
@@ -488,53 +582,140 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     if not score:
         return
     sc = f"{score[0]}-{score[1]}"
-    match = f"{legs[0][1]['home']} – {legs[0][1]['away']}"
-    var_said = False
+    home, away = legs[0][1]["home"], legs[0][1]["away"]
+    match = f"{home} – {away}"
+    minute = st_g.get("minute") or 0
+    prev = _score_t(gs.get("score"))
+    up = prev is not None and score[0] + score[1] > prev[0] + prev[1]
+    lower = prev is not None and (score[0] < prev[0] or score[1] < prev[1])
+    et = bool(st_g.get("et") or gs.get("et"))
+    in_play = any(leg["key"] in alive_legs for _, leg, _, _ in legs)
+    # fiche détaillée : sur un but d'un match d'un ticket en jeu (plafond du jour), ou pour le score à 90 min d'une prolongation (hors plafond)
+    det = None
+    want_et = et and not gs.get("s90")
+    if (up and in_play and C.WATCH_SUMMARIES and _budget_ok(d, now)) or (want_et and _budget_ok(d, now, settle=True)):
+        det = (detail_for or (lambda x: _detail(s365, x)))(g)
+        d["budget"]["detail"] = int(d["budget"].get("detail") or 0) + 1
+    seen = set(gs.get("ev") or [])
+    new_ev = [e for e in (det or {}).get("events", []) if e["id"] not in seen]
+    if det:
+        gs["ev"] = sorted(seen | {e["id"] for e in det["events"]})
+        if det.get("s90"):
+            gs["s90"] = f"{det['s90'][0]}-{det['s90'][1]}"
+    if et:
+        gs["et"] = 1
+    s90 = _score_t(gs.get("s90"))
+    block = []                                           # lignes du match, dans l'ordre
+    name = {"home": home, "away": away}
+
+    def who(e):
+        return (e.get("player") or name[e["side"]]) + (" (penalty)" if "penal" in e["sub"].lower() else " (contre son camp)" if "own" in e["sub"].lower() else "")
+    # prolongation : dite une fois ; les paris de buts se règlent sur le score à 90 min
+    if et and not gs.get("et_said") and C.WATCH_SUMMARIES:
+        gs["et_said"] = 1
+        block.append(f"⏱️ Prolongation · {match} : " + (f"{gs['s90']} après 90 min. Tes paris de buts se règlent sur ce score (temps réglementaire)."
+                                                        if s90 else "tes paris de buts se règlent sur le score à 90 min."))
+    # but annulé
+    if lower:
+        block.append(f"↩️ But annulé : {home} {sc} {away} ({minute}e)")
+    elif any(e["kind"] == "var" for e in new_ev):
+        e = next(e for e in new_ev if e["kind"] == "var")
+        block.append(f"↩️ But refusé par la VAR ({e['min']}) · {home} {sc} {away}")
+    # carton rouge (365scores en direct, sinon la fiche, sinon la stat « Red Cards » déjà lue)
+    stats_g = cache_stats.get(g["id"]) or {}
+    red_now = st_g.get("red") or stats_g.get("red")
+    red_prev = tuple(gs["red"]) if isinstance(gs.get("red"), list) else None
+    reds = [e for e in new_ev if e["kind"] == "red"]
+    if reds and C.WATCH_SUMMARIES:
+        for e in reds:
+            block.append(f"🟥 Carton rouge pour {name[e['side']]} ({e['min']}) · {home} {sc} {away}")
+    elif red_now and red_prev and sum(red_now) > sum(red_prev) and C.WATCH_SUMMARIES:
+        side = home if red_now[0] > red_prev[0] else away
+        block.append(f"🟥 Carton rouge pour {side} ({minute}e) · {home} {sc} {away}")
+    if red_now:
+        gs["red"] = list(red_now)
+    for e in new_ev:
+        if e["kind"] == "pen_miss" and C.WATCH_SUMMARIES:
+            block.append(f"🚫 Penalty manqué par {e.get('player') or name[e['side']]} ({e['min']}) · {home} {sc} {away}")
+    goals = [e for e in new_ev if e["kind"] == "goal"]
+    head_goal = None
+    if up and not (et and s90 and score[0] + score[1] > s90[0] + s90[1] and prev[0] + prev[1] >= s90[0] + s90[1]):
+        head_goal = f"⚽ {home} {sc} {away} ({minute}e{', suspendu' if paused else ''})" + (
+            " — " + ", ".join(f"{who(e)} {e['min']}" for e in goals[-max(1, score[0] + score[1] - prev[0] - prev[1]):]) if goals else "")
+    elif up:
+        head_goal = f"⚽ {home} {sc} {away} (prolongation, {minute}e) · sans effet sur tes paris de buts"
+    if head_goal:
+        block.append(head_goal)
+    ht_lines, ft_lines, said = [], [], set()
     for t, leg, k, _ in legs:
-        prev = d["legs"].get(k, {})
+        prevl = d["legs"].get(k, {})
         stats = {}
         if need(leg)[0] not in (None, "goals"):
             if g["id"] not in cache_stats:
                 cache_stats[g["id"]] = (stats_for or (lambda x: _stats(s365, x)))(g)
             stats = cache_stats[g["id"]]
-        st, detail = state(leg, *score, stats, finished)
+        goal_leg = leg.get("market") in GOAL_MARKETS
+        if goal_leg and et:
+            if not s90:
+                continue                                  # prolongation sans le score à 90 min : rien n'est tranché sur un but de prolongation
+            st, detail = state(leg, *s90, stats, True)
+        else:
+            st, detail = state(leg, *score, stats, finished)
         if st is None:
             continue
-        line = None
-        if prev.get("score") and _lower(prev["score"], score) and not var_said:
-            events[f"↩️ But annulé : {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e)"] = None
-            var_said = True
         tag = "" if leg["key"] in alive_legs else " · ticket déjà perdu"
-        if prev.get("prov") and prev.get("state") in ("win", "loss"):
-            if st != prev["state"] and (finished or st == "live" or st in ("win", "loss")):
-                if st in ("win", "loss"):
-                    line = f"⚠️ Corrigé : {match} : {leg.get('pick')} : finalement {'gagné' if st == 'win' else 'perdu'} ({detail}){tag}"
-                else:
-                    line = f"⚠️ Corrigé : {match} : {leg.get('pick')} : de nouveau en jeu ({sc}){tag}"
-        elif st in ("win", "loss"):
-            line = f"{'✅' if st == 'win' else '❌'} {match} : {leg.get('pick')} ({detail}{'' if detail == sc else ', ' + sc}){tag}"
-        elif leg.get("market") in GOAL_MARKETS and prev.get("score") not in (None, sc) and not _lower(prev["score"], score):
-            line = (f"⚽ {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e{', suspendu' if paused else ''}) · {leg.get('pick')} : "
-                    f"{margin(leg, *score)}").rstrip(" :") + tag
+        line = None
+        first = leg["key"] not in said
+        said.add(leg["key"])
+        decided_now = goal_leg and et and s90
+        if prevl.get("prov") and prevl.get("state") in ("win", "loss"):
+            if st != prevl["state"]:
+                line = (f"⚠️ Corrigé : {match} : {leg.get('pick')} : finalement {'gagné' if st == 'win' else 'perdu'} ({detail}){tag}" if st in ("win", "loss")
+                        else f"⚠️ Corrigé : {match} : {leg.get('pick')} : de nouveau en jeu ({sc}){tag}")
+        elif st in ("win", "loss") and prevl.get("state") not in ("win", "loss"):
+            shown = f"{detail} à 90 min" if decided_now else (detail if detail == sc else f"{detail}, {sc}")
+            line = f"{'✅' if st == 'win' else '❌'} {match} : {leg.get('pick')} ({shown}){tag}"
+        elif st == "live" and first:
+            now_txt = _leg_now(leg, *score, stats)
+            if head_goal and goal_leg:
+                block.append(f"   {leg.get('pick')}" + (f" : {now_txt}" if now_txt else "") + tag)
+            if st_g.get("ht") and not gs.get("ht"):
+                ht_lines.append(f"   {fmt.market_icon(leg)} {leg.get('pick')}" + (f" : {now_txt}" if now_txt else "") + tag)
         rec = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
-        if st in ("win", "loss") and not finished:
+        if st in ("win", "loss") and not finished and not decided_now:
             rec["prov"] = 1                              # décidé en cours de match : revu jusqu'à la fin (but annulé)
-        d["legs"][k] = {**{x: prev[x] for x in ("nf",) if x in prev}, **rec}
-        if line:
-            events[line] = None
+        d["legs"][k] = {**{x: prevl[x] for x in ("nf", "danger") if x in prevl}, **rec}
+        if line and first:
+            (ft_lines if finished else block).append(line)
             tid = t.get("tid") or t["what"]
             if tid in alive or line.startswith("⚠️ Corrigé"):     # pied : tickets en jeu, ou ticket déjà tranché dont un pari est corrigé
                 touched[tid] = t
+        elif line:
+            tid = t.get("tid") or t["what"]
+            if tid in alive or line.startswith("⚠️ Corrigé"):
+                touched[tid] = t
+    if st_g.get("ht") and not gs.get("ht") and C.WATCH_SUMMARIES:
+        gs["ht"] = 1
+        events[f"⏸️ Mi-temps · {home} {sc} {away}" + ("\n" + "\n".join(ht_lines) if ht_lines else "")] = {"ht": f"{home} {sc} {away}"}
+    if finished and C.WATCH_SUMMARIES and not gs.get("ft"):
+        gs["ft"] = 1
+        shown = f"{gs['s90']} à 90 min, {sc} au final" if et and s90 and gs["s90"] != sc else sc
+        block.append(f"🏁 Terminé · {home} {shown} {away}")
+    block += ft_lines
+    gs["score"] = sc
+    if block:
+        events["\n".join(block)] = {}
 
 
-def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, keep=False):
-    """Suivi des tickets : -> le message (Html) ou None s'il n'y a rien de neuf. `games` ({id: match}), `live_for(ids)`, `stats_for(g)`, `final_for(g)` :
+def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, keep=False, detail_for=None):
+    """Suivi des tickets : -> le message (Html) ou None s'il n'y a rien de neuf. `games` ({id: match}), `live_for(ids)`, `stats_for(g)`, `final_for(g)`,
+    `detail_for(g)` (fiche détaillée, parse_detail) :
     injectables (tests) ; sinon 365scores via le proxy. `keep` : les lignes restent dans le document jusqu'à leur envoi (tick les retire ensuite) ;
     sinon elles sont rendues et retirées tout de suite. Lève WatchStateError si le document ne peut pas être lu."""
     now = now or _now()
     d = _load()
     _purge(d, now)
-    _follow(d, now, games, live_for, stats_for, final_for)
+    _follow(d, now, games, live_for, stats_for, final_for, detail_for)
     msg = compose(d["out"])
     if not keep:
         d["out"] = []

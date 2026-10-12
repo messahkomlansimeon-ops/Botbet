@@ -54,7 +54,9 @@ def test_states():
     assert watch.state(shots, 0, 0, {}, False) == (None, ""), "pas de stats : rien dit"
     assert watch.state(shots | {"point": 0.5}, 0, 0, {"shots": (0, 1)}, True) == ("loss", "1 tir"), "singulier"
     g = {"statusGroup": 4, "statusText": "Suspended", "gameTime": 25.0, "homeCompetitor": {"score": 0.0}, "awayCompetitor": {"score": 0.0}}
-    assert watch._status(g) == {"live": False, "paused": True, "ended": False, "score": (0, 0), "minute": 25}, "suspendu : pas fini"
+    st = watch._status(g)
+    assert {k: st[k] for k in ("live", "paused", "ended", "score", "minute")} == {"live": False, "paused": True, "ended": False, "score": (0, 0),
+                                                                                  "minute": 25}, "suspendu : pas fini"
     assert watch._status(g | {"statusText": "Ended", "gameTime": 90.0})["ended"] and watch._status(g | {"statusGroup": 3})["live"]
     print("ok  états des paris : buts, les 2 marquent, 1N2 / double chance à la fin, stats en direct")
 
@@ -108,7 +110,7 @@ def test_follow():
     live[2] = {"live": True, "score": (0, 0), "minute": 55}
     kw["stats_for"] = lambda g: {"fouls": (14, 10)}
     msg = str(watch.follow(KO + timedelta(minutes=60), **kw))
-    assert "⚽ H0 2-0 A0 (55e) · Moins de 3,5 buts : encore 1 but de marge" in msg, msg
+    assert "⚽ H0 2-0 A0 (55e)\n   Moins de 3,5 buts : encore 1 but de marge" in msg, msg          # un bloc par match : titre, puis les paris
     assert "✅ FH0 – FA0 : Plus de 22,5 fautes au total (24 fautes, 0-0)" in msg and "🎫 <b>" in msg and "</b> · 📊 1/3 gagnés, 2 en cours" in msg, msg
     assert msg.count("FH0 – FA0") == 1, "un pari dans plusieurs tickets : dit une fois"
     assert watch.follow(KO + timedelta(minutes=62), **kw) is None, "rien de neuf : pas de message"
@@ -117,7 +119,7 @@ def test_follow():
     assert "❌ H0 – A0 : Moins de 3,5 buts (3-1)" in msg and "❌ Ticket perdu." in msg, msg
     live[1] = {"live": True, "score": (5, 0), "minute": 88}
     msg = str(watch.follow(KO + timedelta(minutes=90), **kw))        # ticket perdu : ses autres matchs restent suivis, sans répéter « Ticket perdu »
-    assert msg == "❌ H1 – A1 : Moins de 3,5 buts (5-0) · ticket déjà perdu", msg
+    assert msg == "⚽ H1 5-0 A1 (88e)\n❌ H1 – A1 : Moins de 3,5 buts (5-0) · ticket déjà perdu", msg
     assert watch.follow(KO + timedelta(minutes=92), **kw) is None, "rien de neuf"
     old, C.WATCH_AFTER_LOSS = C.WATCH_AFTER_LOSS, False
     try:
