@@ -63,6 +63,8 @@ kelly <commande>
 
 ### Code du wrapper (`/data/data/com.termux/files/usr/bin/kelly`) :
 
+`stop` attend que le runner et `bot.py` soient vraiment arrêtés (20 s au plus) avant que `restart` relance : sans cette attente, un ancien runner encore en train de s'arrêter garde le verrou `logs/runner.lock` et le nouveau refuse de démarrer.
+
 ```bash
 #!/data/data/com.termux/files/usr/bin/bash
 DIR="$HOME/kelly"
@@ -82,11 +84,16 @@ case "$1" in
     stop)
         pkill -f "termux_runner.py"
         pkill -f "bot.py"
+        # attendre la vraie fin (le runner arrête --serve proprement), 20 s au plus
+        for i in $(seq 1 20); do
+            pgrep -f "termux_runner.py|bot.py" > /dev/null || break
+            sleep 1
+        done
+        pkill -9 -f "termux_runner.py|bot.py" 2>/dev/null
         echo "🛑 Kelly arrêtée."
         ;;
     restart)
         $0 stop
-        sleep 2
         $0 start
         ;;
     update)
