@@ -157,7 +157,7 @@ def test_tracking_follows_the_sent_version():
     with Fakes() as f:
         app.run_xbet_refresh(now=at(13), announce=False, fetch=fetcher(("m1",)))
     assert buttons(f.sent[0]) == [f"joue|v5|{DAY}", f"xmaj|5|{DAY}"] and "Mise indicative" not in f.sent[0]
-    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in f.sent[0] and f.sent[0].markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
+    assert "Mise : fixe ton capital avec « 💼 Mon capital »" in f.sent[0] and f.sent[0].markup["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
     assert "mise" not in fair.load_combos()[0] or fair.load_combos()[0].get("stake") is None
     # injouable : pas de remplaçant (seulement les 4 matchs du combiné), un pari retiré
     setup(pronos=[prono(i) for i in range(4)], stake=500, budget=5000)

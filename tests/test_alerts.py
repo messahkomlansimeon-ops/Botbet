@@ -174,7 +174,7 @@ def test_lag():
     assert "💰 1xBet est en retard : joue maintenant" in msg and "Home1 – Away1" in msg and "19h00" in msg and "Liga" in msg, msg
     assert "Home1 gagne — 1xBet paie <b>1,80</b>" in msg and "(lu à 18:00)" in msg, msg
     assert "1,90 ➜ <b>1,55</b>" in msg and "52 % ➜ 65 % de chances" in msg and "valeur <b>+17 %</b>" in msg, msg
-    assert "💡 Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in msg and " u</b>" not in msg, msg          # sans budget : jamais d'unités
+    assert "💡 Mise conseillée : fixe ton capital avec « 💼 Mon capital »" in msg and " u</b>" not in msg, msg          # sans budget : jamais d'unités
     assert "Code : <code>K7Q2X</code>" in msg, msg
     assert len(f.coupons) == 1 and f.coupons[0][0]["xodds"] == 1.80 and f.coupons[0][0]["xref"] == [9001, 1, 0], f.coupons
     assert calls == [["e1"]], f"un seul match relu en direct : {calls}"

@@ -62,13 +62,13 @@ def test_combo_marks():
                          "🟠 <i>Kelly 62 % · 1xBet 47 % (+15) · mal payé</i>"), blocks[1]       # nom d'équipe échappé
     assert blocks[2] == "🇪🇸 <i>19h00 · Liga</i>\n<b>3. H3 – A3</b>\n🛡️ Double chance : H3 ou Nul · <b>1,90</b>\n🟢 <i>Kelly 78 % · 1xBet 77 %</i>", blocks[2]  # écart < 3 pts
     assert len(blocks) == 4 and blocks[3].startswith("━━━━━━━━━━━━\n<i>🟢 solide · 🟠 moins sûr · 🔗 déjà dans N de tes tickets</i>\n"), blocks
-    assert "<i>💰 Mise : règle ton budget du jour" in blocks[3] and "🎟️ Code : <code>SKU6L</code>" in blocks[3] and "Cotes 1xBet de 08:50" in blocks[3], blocks[3]
+    assert "<i>💰 Mise : fixe ton capital" in blocks[3] and "🎟️ Code : <code>SKU6L</code>" in blocks[3] and "Cotes 1xBet de 08:50" in blocks[3], blocks[3]
     assert "<B>" not in msg and not any(w in msg.lower() for w in fmt.JARGON if w != "score"), msg
     # combiné du matin, avec mise : le montant en tête ; sans pari moins sûr ni match déjà joué, pas de légende
     plain = str(fmt.combo("🛡️ SÛR (cote 5 à 7)", legs[:1], 1.9, 0.66, stake_txt="1 500 FCFA", coupon="AB12"))
     assert plain.startswith("<b>🛡️ SÛR — cote 1,90</b>\n🎯 1 paris · 66 % de chances · espérance +25,4 %\n💰 Mise : <b>1 500 FCFA</b>\n"
                             "🎟️ <code>AB12</code>  <i>touche pour copier</i>\n\n🇪🇸"), plain
-    assert "solide" not in plain and "🔗" not in plain and "\n\n━━━━━━━━━━━━\n🎟️ Code : <code>AB12</code>" in plain and "Mon budget" not in plain, plain
+    assert "solide" not in plain and "🔗" not in plain and "\n\n━━━━━━━━━━━━\n🎟️ Code : <code>AB12</code>" in plain and "Mon capital" not in plain, plain
     # la marque d'écart : négative quand Kelly est sous 1xBet
     assert fmt.chances_line(leg(4, prob=0.40, p_x=0.50)) == "🟢 <i>Kelly 40 % · 1xBet 50 % (−10)</i>"
     assert fmt.chances_line(leg(4, p_x=None), weak=True) == "🟠 <i>Kelly 66 %</i>"

@@ -379,7 +379,7 @@ def test_commands_numbers_guard():
     assert app.handle_command("/combi inf") == "Exemple : /combi 30, ou /combi 20 tirs fautes" and app.handle_command("/combi nan") == "Exemple : /combi 30, ou /combi 20 tirs fautes"
     for arg in ("", " inf", " -5", " 50000"):                  # /bank ne règle plus rien : Kelly travaille en FCFA avec le budget du jour
         r = app.handle_command("/bank" + arg)
-        assert "ne suit plus de bankroll en unités" in r and "FCFA" in r and "Mon budget" in r and not r.startswith("Montant"), r
+        assert "ne suit plus de bankroll en unités" in r and "FCFA" in r and "Mon capital" in r and not r.startswith("Montant"), r
     assert bankroll.load()["bankroll"] == 100.0 and bankroll.load()["initial"] == 100.0
     print("ok  /combi refuse inf / nan ; /bank est inoffensif (FCFA et budget du jour)")
 

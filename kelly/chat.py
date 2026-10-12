@@ -24,10 +24,10 @@ from . import config as C, fmt, money, played, progress, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🎯 Un combiné", "🔴 Live"], ["🔝 Paris du jour", "🧾 Mes paris"], ["📊 Mes résultats", "🩺 Status"], ["💰 Mon budget", "❓ Aide"]]
+MENU = [["🎯 Un combiné", "🔴 Live"], ["🔝 Paris du jour", "🧾 Mes paris"], ["📊 Mes résultats", "🩺 Status"], ["💼 Mon capital", "❓ Aide"]]
 # « 🔄 Mettre à jour tous les paris » n'est plus dans le menu (action rare) : bouton sous « 🔝 Paris du jour » (callback « maj »), et « maj » / ancien bouton marchent
 BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
-           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "❓ Aide": "/aide",      # « À noter » : ancien libellé
+           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "💼 Mon capital": "/capital", "❓ Aide": "/aide",      # « À noter », « Mon budget » : anciens libellés
            "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes",     # anciens libellés du menu
            "🩺 Status": "/status"}
 COMBI_TARGETS = (3, 5, 10, 20, 50)
@@ -39,7 +39,7 @@ LIST_TEXTS = ("mes paris", "mes paris du jour")                                 
 # Kristiansand » sont des équipes) ; clés sans accents ni casse (played.norm)
 WORDS_ARGS = {"live": "/live", "bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "joue": "/joue", "jouer": "/joue", "noter": "/joue",
               "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi", "budget": "/budget",
-              "monde": "/monde"}
+              "monde": "/monde", "capital": "/capital", "objectif": "/objectif", "perte": "/perte", "limite": "/perte"}
 WORDS_ALONE = {"top": "/top", "meilleurs": "/top", "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide",
                "bonjour": "/aide", "salut": "/aide", "bank": "/bank", "bankroll": "/bank", "ligues": "/ligues", "actualiser": "/cotes",
                "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes", "etat": "/etat",

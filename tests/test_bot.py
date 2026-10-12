@@ -893,7 +893,7 @@ def test_special_combo():
         messages, sent, combos = app.build_day(picks, day)
         assert [t for t, _, _ in C.COMBOS][2] == C.SPECIAL
         msg = next(m for m in messages if m.startswith("<b>🎯 SPÉCIAL"))
-        assert "Pas assez" not in msg and "Mise : règle ton budget du jour" in msg and " u</b>" not in msg, msg      # sans budget : jamais d'unités
+        assert "Pas assez" not in msg and "Mise : fixe ton capital" in msg and " u</b>" not in msg, msg      # sans budget : jamais d'unités
         sp = next(c for c in combos if c["tier"] == C.SPECIAL)
         legs = [next(c for c in picks if c["key"] == k) for k in sp["keys"]]
         assert 6.0 <= sp["odds"] <= 15.0 and len(legs) >= 2 and len({c["id"] for c in legs}) == len(legs)
@@ -1867,9 +1867,9 @@ def test_messages_human():
         "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances · espérance +9,4 %\n\n"
         "🇧🇷 <i>21h00 · Brasileirão</i>\n<b>1. Flamengo – Vasco &amp; Fils</b>\n🏆 Flamengo gagne · <b>1,55</b>\n🟢 <i>Kelly 70 %</i>\n"
         "💡 <i>Très probable : 70 % de chances</i>\n\n🌍 <i>22h30 · L</i>\n<b>2. Santos – Gremio</b>\n"), msg
-    assert msg.endswith("\n━━━━━━━━━━━━\n<i>💰 Mise : règle ton budget du jour avec « 💰 Mon budget »</i>"), msg     # sans budget du jour : aucune mise en unités
+    assert msg.endswith("\n━━━━━━━━━━━━\n<i>💰 Mise : fixe ton capital avec « 💼 Mon capital »</i>"), msg     # sans budget du jour : aucune mise en unités
     with_budget = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"}, stake_txt="1 500 FCFA")
-    assert "espérance +9,4 %\n💰 Mise : <b>1 500 FCFA</b>\n\n🇧🇷" in with_budget and "Mon budget" not in with_budget, with_budget
+    assert "espérance +9,4 %\n💰 Mise : <b>1 500 FCFA</b>\n\n🇧🇷" in with_budget and "Mon capital" not in with_budget, with_budget
     assert "Mise conseillée" not in with_budget and "🟠" not in with_budget and "solide" not in with_budget, with_budget     # aucun pari moins sûr : pas de légende
     assert ("⚽ Plus de 2,5 buts · <b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n🟢 <i>Kelly 53 %</i>\n"
             "💡 <i>Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)</i>") in msg, msg
@@ -2065,7 +2065,7 @@ def test_fair_combos():
         msg = fmt.fair_combo(total, cl, prob, CB.fair_stake(total))
         assert isinstance(msg, telegram.Html) and msg.startswith(f"<b>🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini {fmt.odds_txt(total)}</b>\n🎯 {len(cl)} paris · "), msg
         assert msg.count(" · joue si ≥ <b>") == len(cl) and "Mise indicative" not in msg and "ta bankroll" not in msg
-        assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg, msg           # sans budget : aucune mise en unités
+        assert "Mise : fixe ton capital avec « 💼 Mon capital »" in msg, msg           # sans budget : aucune mise en unités
         assert "cote juste" not in msg and not re.search(r"\d\.\d", fmt.plain(msg)) and not re.search(r"\d u\b", fmt.plain(msg))
         assert msg.count("<b>") == msg.count("</b>") and msg.count("<i>") == msg.count("</i>")
     stakes = [CB.fair_stake(t) for _, (_, t, _) in built]
@@ -2159,7 +2159,7 @@ def test_replay_oct8():
         real_ids = {c["id"] for c in sent_picks}
         assert real_ids <= {p["id"] for p in picks}                                      # les combinés réels n'ont que des jambes à vraies cotes
         for fm in fair_msgs:
-            assert "Mise indicative" not in fm and "Mise : règle ton budget du jour" in fm
+            assert "Mise indicative" not in fm and "Mise : fixe ton capital" in fm
         # --- enregistrement : fichier à part, jamais dans bets.json ni dans les mises de la bankroll
         n_rec = fair.record_combos(built, day)
         rows = store.load("fair_combos.json", [])
@@ -2174,7 +2174,7 @@ def test_replay_oct8():
         assert isinstance(reply, telegram.Html) and "Kelly n'a vu aucune cote de 1xBet aujourd'hui : voici un combiné" in reply, reply   # cote mini avant les cotes de référence
         assert "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini 2" in reply and "à vérifier chez 1xBet" in reply
         mini = float(re.search(r"CHEZ 1XBET — cote mini (\d+,\d+)", reply).group(1).replace(",", "."))
-        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and " · joue si ≥ <b>" in reply and "Mise : règle ton budget du jour" in reply
+        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and " · joue si ≥ <b>" in reply and "Mise : fixe ton capital" in reply
         assert "SUR MESURE" not in reply and "Mise indicative" not in reply and "mise conseillée :" not in reply
         # --- une cote hors de portée de TOUS les pronostics solides du jour : impossible, on dit précisément ce qui manque
         huge = int(CB.fair_shortfall(keep, 25)["best_total"] * 5)
@@ -2366,7 +2366,7 @@ def test_played_bets():
         assert "▫️ Sûr · " in todo and "▫️ Pari du jour · " in todo and "▫️ À vérifier (cote mini 5) · " in todo, todo   # 3 paris pas notés
         joue = [b["callback_data"] for r in raw.markup["inline_keyboard"] for b in r if b.get("callback_data", "").startswith("joue|")]
         assert [d.split("|")[1] for d in joue] == ["sur", "pari", "v5"], joue                   # chacun son bouton pour le noter
-        assert "À vérifier (cote mini 5)" in todo and "règle ton budget du jour" in todo, todo
+        assert "À vérifier (cote mini 5)" in todo and "fixe ton capital" in todo, todo
         # sans budget du jour ni mise donnée : la mise est demandée, rien n'est noté (jamais une mise en unités)
         m = app.handle_command("/joue sûr 5,40")
         assert m.startswith("Avec quelle mise en FCFA ?") and "played" not in store.load("bets.json", {})["combos"][0], m
@@ -2595,7 +2595,7 @@ def main():
 
     # --- Journée 1 : envoi + suivi (envoyés + fantômes)
     msgs = app.run_daily(sample=True)
-    assert any("Kelly —" in m for m in msgs) and any("Mise : règle ton budget du jour" in m for m in msgs)
+    assert any("Kelly —" in m for m in msgs) and any("Mise : fixe ton capital" in m for m in msgs)
     rows = track.load()
     assert len(rows) >= 30 and sum(r["sent"] for r in rows) >= 5, (len(rows))
     assert all(r["closed_at"] is None and "heuristic" in r["features"] for r in rows)

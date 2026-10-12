@@ -154,7 +154,7 @@ def test_button():
     assert item["total"] == round(1.55 ** 4, 3) and item["target"] == 5.0 and (item["lo"], item["hi"]) == (5.0, 6.25), item
     assert item["coupon"] == "K7Q2X" and re.fullmatch(r"\d\d:\d\d", item["at"]), item
     assert item["stake"] is None and item["cur"] is None, "sans budget : aucune mise conseillée (jamais d'unités)"
-    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg and "Mise indicative" not in msg and " u</b>" not in msg, msg
+    assert "Mise : fixe ton capital avec « 💼 Mon capital »" in msg and "Mise indicative" not in msg and " u</b>" not in msg, msg
     need = {"key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "xodds", "pick", "start", "league", "odds",
             "xref", "xgid", "min_odds"}
     assert all(need <= set(l) for l in item["legs"]), item["legs"][0]       # de quoi régler seul, refaire le coupon, relire chez 1xBet
@@ -274,7 +274,7 @@ def test_tap_without_budget():
     assert f.last_buttons() == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"], "« ✅ Je l'ai joué » + vérifier"
     todo = played.todo(DAY)
     assert "▫️ Combi sur mesure (cote 5) · cote 1xBet 5,77" in str(todo), str(todo)          # pas noté (son bouton « ✅ Je l'ai joué » : ci-dessous)
-    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in str(todo) and f"joue|vm1|{DAY}|l0" in buttons(todo), str(todo)
+    assert "Mise : fixe ton capital avec « 💼 Mon capital »" in str(todo) and f"joue|vm1|{DAY}|l0" in buttons(todo), str(todo)
     assert "🎟️ <code>K7Q2X</code>" in str(todo)
     # un montant seul est la mise (« 2 000 » n'est PAS ambigu ici : ce n'est pas une cote) ; la cote notée est celle de 1xBet
     for txt, stake in (("1000", 1000), ("1 000", 1000), ("2 000", 2000), ("2000 FCFA", 2000), ("1.500", 1500)):
@@ -347,7 +347,7 @@ def test_tap_unfunded_and_gone():
     assert "Avec quelle mise en FCFA ?" in reply and "À quelle cote" not in reply, reply     # pas de mise conseillée : Kelly demande la mise (la cote 1xBet est connue)
     assert f.last_buttons() == [f"joue|vm1|{DAY}", f"xmaj|m1|{DAY}"] and f.edits[-1][1]["inline_keyboard"][0][0]["text"] == "✅ Je l'ai joué"
     todo = str(played.todo(DAY))                     # mise trop petite pour le budget : aucune mise affichée (ni « règle ton budget » : il est réglé)
-    assert "▫️ Combi sur mesure (cote 5) · " in todo and " · mise " not in todo and "règle ton budget" not in todo, todo
+    assert "▫️ Combi sur mesure (cote 5) · " in todo and " · mise " not in todo and "fixe ton capital" not in todo, todo
     assert money.gain(row | {"result": "win"}) is None
     # identifiant d'un autre jour, inconnu ou mal formé
     reset()
@@ -622,7 +622,7 @@ def test_real_picks_without_budget():
         msg = app.custom_combo(picks, [], 5.0, DAY, when="09:30")
         item = store.load(custom.FILE, {})["items"]["m1"]
         assert item["cur"] is None and item["stake"] is None, item
-        assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg and " u</b>" not in msg and "mise conseillée :" not in msg, msg
+        assert "Mise : fixe ton capital avec « 💼 Mon capital »" in msg and " u</b>" not in msg and "mise conseillée :" not in msg, msg
         reply = chat.on_callback(f"cjoue|m1|{DAY}", 9)
         assert "stake" not in fair.load_combos()[0] and reply.count("Avec quelle mise en FCFA ?") == 1 and "À quelle cote" not in reply, (fair.load_combos()[0], reply)
         out = chat.route("1 000")[1]               # la cote 1xBet (5,06) est connue : un montant seul est la mise

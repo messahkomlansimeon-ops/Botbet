@@ -36,9 +36,11 @@ def test_negative_ev_no_stake():
     # les mots : « Kelly ne conseille pas de miser dessus » pour une espérance négative, « trop petite » sinon
     assert money.stake_words(0, 0.40, 2.0) == money.NO_EDGE and "espérance négative" in money.NO_EDGE
     assert money.stake_words(0, 0.60, 2.0) == "pas de mise (trop petite pour ton budget)" and money.stake_words(0) == "pas de mise (trop petite pour ton budget)"
-    assert money.stake_words(None, 0.4, 2.0) is None and money.stake_words(500, 0.4, 2.0, " (x)") == "500 FCFA (x)"
+    # sans budget ni capital (None) : pas de montant, mais l'espérance négative est quand même dite ; espérance positive : rien
+    assert money.stake_words(None, 0.4, 2.0) == money.NO_EDGE and money.stake_words(None, 0.6, 2.0) is None and money.stake_words(None) is None
+    assert money.stake_words(500, 0.4, 2.0, " (x)") == "500 FCFA (x)"
     assert app._stake_words(0, 0.40, 2.0) == money.NO_EDGE and gapbets.stake_txt(0, {"p_sharp": 0.4, "xodds": 2.0}) == money.NO_EDGE
-    assert gapbets.stake_txt(0, {"p_sharp": 0.6, "xodds": 2.0}).startswith("pas de mise") and gapbets.stake_txt(None, {"p_sharp": 0.4, "xodds": 2.0}) is None
+    assert gapbets.stake_txt(0, {"p_sharp": 0.6, "xodds": 2.0}).startswith("pas de mise") and gapbets.stake_txt(None, {"p_sharp": 0.4, "xodds": 2.0}) == money.NO_EDGE
     # fmt : aucune ligne « Mise : … » pour une espérance négative
     for html in (str(fmt.combo("🛡️ SÛR", [T.pick(1)], 2.0, 0.40, stake_txt=money.NO_EDGE)), str(fmt.single(T.pick(1), stake_txt=money.NO_EDGE)),
                  str(fmt.fair_combo(2.0, [T.prono(1)], 0.4, stake_txt=money.NO_EDGE))):

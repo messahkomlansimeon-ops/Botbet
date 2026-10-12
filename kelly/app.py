@@ -32,8 +32,9 @@ def load_sample(name="sample_events.json"):
 def money_line(combos=None):
     """Ligne du budget pour /bilan : le budget du jour (FCFA) ou, sans budget, de quoi le régler ; puis l'alerte de série de combinés perdus.
     Jamais de bankroll en unités."""
-    lines = [f"💰 Budget du jour : {money.money(money.daily())} (écris « budget 7500 » pour le changer)" if money.active()
-             else f"💡 Pas de budget du jour : Kelly ne donne pas de mise conseillée. {money.NO_BUDGET[0].upper() + money.NO_BUDGET[1:]}."]
+    lines = ([money.capital_line(html=False) + " (écris « capital » pour le détail)"] if money.capital_mode() else
+             [f"💰 Budget du jour : {money.money(money.daily())} (écris « budget 7500 » pour le changer)"] if money.active()
+             else [f"💡 Pas de capital : Kelly ne donne pas de mise conseillée. {money.NO_BUDGET[0].upper() + money.NO_BUDGET[1:]}."])
     streak = bankroll.streak_line(combos or [])
     return "\n".join(lines + ([streak] if streak else []))
 
@@ -164,7 +165,8 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     cur = money.cur()
     if fair_stakes is not None:
         fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple) and k[0] == "fair")})   # 0 compris
-    mise = lambda st, prob=None, odds=None: money.stake_words(st, prob, odds) if money.active() else None    # noqa: E731
+    # sans budget ni capital : pas de montant, mais « Kelly ne conseille pas de miser dessus » reste dit quand le pari perd en moyenne
+    mise = lambda st, prob=None, odds=None: money.stake_words(st if money.active() else None, prob, odds)    # noqa: E731
     if picks:
         n_world = monde.total(world) if world else 0
         seen = (f"{n_world} matchs analysés dans le monde, {n_events} avec des cotes réelles" if n_world
@@ -180,9 +182,11 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                                     else "(cotes relevées chez 1xBet)"))
             else:
                 head.append(f"🎲 {n_f} à vérifier chez 1xBet " + fmt.i("(cotes de Kelly, pas du bookmaker)"))
+        if money.capital_mode():
+            head.append(money.capital_line())
         head.append(money.budget_line(spent, kept, poor) if money.active() else
-                    "💡 " + fmt.i("Écris « budget 5000 » (ou touche « 💰 Mon budget ») pour avoir des mises conseillées en FCFA, prises sur ton "
-                                  "budget du jour. Seuls les paris que tu notes comptent dans tes résultats."))
+                    "💡 " + fmt.i("Écris « capital 50000 » (ou touche « 💼 Mon capital ») pour avoir des mises conseillées en FCFA, prises sur ton "
+                                  "capital avec une limite par jour. Seuls les paris que tu notes comptent dans tes résultats."))
         if stats_note:                               # pronostics stats sans cote 1xBet au matin : la fenêtre des stats (statswindow) les chiffre dans la journée
             head.append(fmt.i(fmt.esc(stats_note)))
         if missing or rejected:
@@ -1455,11 +1459,14 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 🧾 <b>Mes paris</b> : tes paris du jour, à noter quand tu les joues
 📊 <b>Mes résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
 🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage)
-💰 <b>Mon budget</b> : voir ou changer ton budget du jour
+💼 <b>Mon capital</b> : ton capital, ta limite du jour, ce que tu as déjà misé et ton objectif
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
-<b>Ton budget du jour</b>
+<b>Ton capital</b>
+Écris une fois <i>capital 50000</i> (la somme que tu confies à Kelly), <i>perte max 5000</i> (le plus que tu acceptes de perdre en un jour) et, si tu veux, <i>objectif 18000</i>. Le capital suit les paris que tu notes. Chaque jour, Kelly répartit au plus ta limite : ta perte max, ou 10 % du capital s'il a baissé. Elle s'arrête quand tu as misé ta limite du jour et n'augmente jamais une mise pour atteindre l'objectif : elle te montre seulement ce que rapporte sa mise et ce qu'il faudrait pour l'atteindre.
+
+<b>Ou un budget du jour</b>
 Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>, <i>5k</i>) : c'est ce que tu es prêt à miser aujourd'hui. Chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la <b>mise conseillée</b> de chacun, en FCFA. Les jours pauvres, elle en garde une partie. Change-le n'importe quel jour : il reste tel quel jusqu'à ce que tu le changes. Sans budget, pas de mise conseillée.
 
 <b>Les paris que tu joues</b>
@@ -1470,7 +1477,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 
 <b>Tu peux aussi écrire</b>
 • un nom d'équipe : <i>Flamengo</i>
-• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>budget 5000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
+• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>capital 50000</i>, <i>perte max 5000</i>, <i>objectif 18000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
 • <i>état</i> : où en est le passage du matin (pourcentage et heure de fin estimée), réponse immédiate même pendant qu'il tourne
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
@@ -1917,12 +1924,18 @@ def _handle_command(text):
     if cmd in ("/backup", "/sauvegarde"):
         return send_backup()
     if cmd == "/bank":
-        return ("💰 Kelly ne suit plus de bankroll en unités : elle travaille en FCFA, avec ton budget du jour (« 💰 Mon budget » ou écris "
-                "« budget 5000 ») pour les mises conseillées. Seuls les paris que tu notes comptent dans tes résultats (« 📊 Mes résultats »).")
+        return ("💰 Kelly ne suit plus de bankroll en unités : elle travaille en FCFA, avec ton capital (« 💼 Mon capital » ou écris "
+                "« capital 50000 ») pour les mises conseillées. Seuls les paris que tu notes comptent dans tes résultats (« 📊 Mes résultats »).")
     if cmd == "/stats":
         return Html(comma(fmt.esc(fmt_team(sources.team_profile(" ".join(args)) if args else None, " ".join(args)))))
     if cmd == "/budget":
         return money.command(args)
+    if cmd == "/capital":
+        return money.capital_command(args)
+    if cmd == "/perte":
+        return money.max_loss_command(args)
+    if cmd == "/objectif":
+        return money.goal_command(args)
     if cmd in ("/joue", "/joué", "/jouer"):
         now_ = now_utc()
         kday = now_.date() if now_.hour >= C.DAY_END_HOUR else now_.date() - timedelta(days=1)

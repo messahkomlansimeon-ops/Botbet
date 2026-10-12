@@ -10,12 +10,19 @@ jamais de miser sur un pari perdant en moyenne, le plancher CONF_MIN ne vaut que
 réduit dans la même proportion, le budget est entièrement misé. Journée pauvre : Kelly mise moins et garde le reste. Mises arrondies
 (round_step) ; une mise plus petite que l'arrondi est abandonnée.
 
-data/mybudget.json : {"daily": montant, "cur": "FCFA"}. « cur » sur la ligne d'un pari = devise de sa mise (stake) : la mise conseillée du
+Capital (« capital 50000 », mode recommandé, à la place du budget du jour) : la somme confiée à Kelly. Il suit tes résultats (capital de départ +
+gains et pertes des paris notés et réglés depuis qu'il a été fixé). Chaque jour, Kelly répartit au plus la limite du jour : la plus petite de ta perte
+maximale (« perte max 5000 ») et de CAPITAL_DAY_SHARE du capital, moins ce que tu as déjà misé (noté) aujourd'hui. Les mises baissent donc après des
+pertes, jamais l'inverse, et une fois la limite atteinte Kelly ne propose plus de mise ce jour-là. Objectif (« objectif 18000 ») : affiché (ce que
+rapporte la mise conseillée, ce qu'il faudrait miser pour l'atteindre d'un coup, avec un avertissement), jamais utilisé pour grossir une mise.
+
+data/mybudget.json : {"daily": montant, "cur": "FCFA"} ou {"capital": montant, "since": "AAAA-MM-JJ", "max_day": montant, "goal": montant, "cur": "FCFA"}. « cur » sur la ligne d'un pari = devise de sa mise (stake) : la mise conseillée du
 matin, ou celle de la note. Un pari ne compte dans l'argent (gain, bilan) que s'il est NOTÉ (x["played"]) et pas retiré.
 """
 import math
 import re
-from datetime import date, timedelta
+import time
+from datetime import date, datetime, timedelta, timezone
 
 from . import fmt, store
 
@@ -27,6 +34,7 @@ FCFA_WORDS = {"fcfa", "cfa", "xof", "f", "fr", "frs", "franc", "francs"}        
 SHARE = {"pari": 0.25, "🛡️": 0.30, "⚖️": 0.18, "🎯": 0.15, "🔥": 0.08, "💀": 0.04}   # part max du budget par palier
 FAIR_SHARE = ((8, 0.12), (20, 0.08), (math.inf, 0.05))                            # combinés à vérifier, selon la cote mini
 CONF_FULL, CONF_MIN = 0.10, 0.3       # espérance de +10 % ou plus : part entière ; jamais moins de 30 % de la part
+CAPITAL_DAY_SHARE = 0.10              # mode capital : au plus 10 % du capital misé par jour (et jamais plus que la perte maximale choisie)
 
 
 def load():
@@ -44,11 +52,63 @@ def _amount(x):
 
 
 def active():
-    return bool(daily())
+    """Kelly donne des mises conseillées : capital fixé (même limite du jour atteinte : la mise dit alors pourquoi elle est nulle) ou budget du jour."""
+    d = load()
+    return bool(_amount(d.get("capital")) or _amount(d.get("daily")))
+
+
+def capital_mode():
+    return bool(_amount(load().get("capital")))
 
 
 def daily():
-    return _amount(load().get("daily"))
+    """Montant à répartir maintenant : en mode capital, ce qu'il reste de la limite du jour (capital_state) ; sinon le budget du jour."""
+    d = load()
+    if _amount(d.get("capital")):
+        return capital_state()["left"]
+    return _amount(d.get("daily"))
+
+
+def _today():
+    return datetime.now(timezone.utc).date()                 # heure d'Abidjan = UTC
+
+
+def _docs():
+    from . import fair, track
+    return store.load("bets.json", {"picks": [], "combos": []}), track.load(), fair.load_combos()
+
+
+_cap_memo = {}
+
+
+def capital_state(today=None, docs=None):
+    """{"capital": capital actuel, "base", "since", "limit": limite du jour, "staked": misé (noté) aujourd'hui, "left": reste à miser aujourd'hui,
+    "max_day", "goal", "yesterday": gain des paris notés d'hier (None s'il n'y en a pas)} ; {} hors mode capital. Gardé en mémoire tant que les
+    paris et le réglage ne changent pas (relu au plus une fois par seconde)."""
+    d = load()
+    base = _amount(d.get("capital"))
+    if not base:
+        return {}
+    today = today or _today()
+    key = (str(today), tuple(store.version(n) for n in (FILE, "bets.json", "tracked.json", "fair_combos.json")))
+    if docs is None and _cap_memo.get("key") == key and time.monotonic() - _cap_memo.get("at", 0) < 1.0:
+        return _cap_memo["state"]
+    bets, rows, fair_rows = docs or _docs()
+    since, day, yday = str(d.get("since") or "")[:10], str(today), str(today - timedelta(days=1))
+    gains = _counted(bets, rows, fair_rows)
+    capital = max(0.0, base + sum(g for x, g in gains if str(x.get("date") or "")[:10] >= since))
+    yest = [g for x, g in gains if str(x.get("date") or "")[:10] == yday]
+    staked = sum(_amount((x.get("played") or {}).get("stake")) for x in items(bets, rows, fair_rows)
+                 if x.get("played") and not x.get("skipped") and str(x.get("date") or "")[:10] == day)
+    max_day = _amount(d.get("max_day"))
+    limit = min(max_day or math.inf, capital * CAPITAL_DAY_SHARE)
+    step = round_step(limit) if limit >= 1 else 1
+    limit = math.floor(limit / step) * step if limit >= 1 else 0
+    state = {"capital": round(capital, 2), "base": base, "since": since, "limit": limit, "staked": staked, "left": max(0, limit - staked),
+             "max_day": max_day, "goal": _amount(d.get("goal")), "yesterday": sum(yest) if yest else None}
+    if docs is None:
+        _cap_memo.update(key=key, at=time.monotonic(), state=state)
+    return state
 
 
 def safe_cur(c):
@@ -60,6 +120,14 @@ def safe_cur(c):
 def cur():
     """La devise de Kelly : toujours le FCFA (verrouillé : « budget 5k » = 5 000 FCFA, jamais une devise « K » ; voir FCFA_WORDS)."""
     return CUR
+
+
+def _save_capital(**kw):
+    """Met à jour le réglage du mode capital (les autres champs restent)."""
+    d = {k: v for k, v in load().items() if k in ("capital", "since", "max_day", "goal")}
+    d.update(kw)
+    store.save(FILE, {k: v for k, v in d.items() if v} | {"cur": CUR})
+    _cap_memo.clear()
 
 
 def set_daily(amount, currency=None):
@@ -183,23 +251,64 @@ NO_BUDGET = fmt.NO_BUDGET                  # à la place d'une mise, quand il n'
 
 def no_stake_txt(prob=None, odds=None):
     """Mise 0 en mots : « Kelly ne conseille pas de miser dessus (espérance négative) » si le pari n'a pas d'espérance positive (`prob` et `odds`
-    connus), sinon « pas de mise (trop petite pour ton budget) » (la part est plus petite que l'arrondi)."""
+    connus) ; en mode capital, limite du jour atteinte ou capital épuisé ; sinon « pas de mise (trop petite pour ton budget) » (la part est plus
+    petite que l'arrondi)."""
     if prob is not None and odds is not None and not has_edge(prob, odds):
         return NO_EDGE
+    st = capital_state()
+    if st and st["capital"] <= 0:
+        return "pas de mise : capital épuisé (écris « capital 50000 » pour repartir)"
+    if st and st["left"] < round_step(st["limit"] or 1):
+        return f"pas de mise : limite du jour atteinte ({money(st['staked'])} misés aujourd'hui)"
     return "pas de mise (trop petite pour ton budget)"
 
 
 def stake_words(st, prob=None, odds=None, suffix=""):
-    """Mise `st` (allocate) en mots ; None sans budget du jour. 0 : voir no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant."""
+    """Mise `st` (allocate) en mots ; sans budget ni capital (None) : NO_EDGE si le pari perd en moyenne (`prob`, `odds`), None sinon. 0 : voir
+    no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant (pas en mode capital, où la ligne dit ce que rapporte la mise)."""
     if st is None:
-        return None
-    return money(st) + suffix if st else no_stake_txt(prob, odds)
+        return NO_EDGE if prob is not None and odds is not None and not has_edge(prob, odds) else None
+    if not st:
+        return no_stake_txt(prob, odds)
+    if capital_mode():
+        return money(st) + (f" → si ça passe : {signed(st * (odds - 1))}" if odds and odds > 1 else "")
+    return money(st) + suffix
+
+
+def goal_line(odds):
+    """Mode capital avec un objectif : « 🎯 Pour +18 000 FCFA d'un coup : miser 4 500 FCFA (90 % de ta limite du jour) ⚠️ trop risqué » (texte
+    brut) ; '' sans objectif, sans capital ou sans cote. Jamais une mise conseillée : seulement ce qu'il faudrait, et si c'est raisonnable."""
+    st = capital_state()
+    if not st or not st["goal"] or not odds or odds <= 1:
+        return ""
+    step = round_step(st["limit"]) if st["limit"] >= 1 else 1
+    need = math.ceil(st["goal"] / (odds - 1) / step) * step
+    txt = f"🎯 Pour {signed(st['goal'])} d'un coup : il faudrait miser {money(need)}"
+    if need > st["left"]:
+        return txt + f" ⚠️ au-dessus de ce qu'il te reste aujourd'hui ({money(st['left'])})"
+    share = need / st["limit"] if st["limit"] else 1
+    return txt + f" ({round(share * 100)} % de ta limite du jour)" + (" ⚠️ trop risqué" if share > 0.5 else "")
+
+
+def capital_line(html=True):
+    """« 💼 Capital 50 000 FCFA · limite du jour 5 000 FCFA (déjà misé 1 500) · objectif +18 000 FCFA » puis « 📈 Hier : +3 200 FCFA sur 18 000 FCFA »
+    (HTML si `html`) ; '' hors mode capital."""
+    st = capital_state()
+    if not st:
+        return ""
+    b = fmt.b if html else (lambda x: x)
+    e = fmt.esc if html else (lambda x: x)
+    line = f"💼 Capital {b(e(money(st['capital'])))} · limite du jour {e(money(st['limit']))}" \
+        + (f" (déjà misé {e(money(st['staked']))})" if st["staked"] else "") + (f" · objectif {e(signed(st['goal']))}" if st["goal"] else "")
+    if st["yesterday"] is not None:
+        line += f"\n📈 Hier : {e(signed(st['yesterday']))}" + (f" sur {e(money(st['goal']))}" if st["goal"] else "")
+    return line
 
 
 def budget_line(spent, kept, poor=None):
     """« 💰 Budget du jour : 5 000 FCFA · 3 800 répartis, 1 200 gardés (journée pauvre) » (HTML). `poor` (allocate, detail) : Kelly conseille
     moins que le budget parce que ses paris sont peu sûrs ; sinon (journée riche, tout a été réparti) le reste n'est qu'un arrondi."""
-    head = f"💰 Budget du jour : {fmt.b(fmt.esc(money(daily())))}"
+    head = f"💰 {'À répartir aujourd’hui' if capital_mode() else 'Budget du jour'} : {fmt.b(fmt.esc(money(daily())))}"
     if not spent:
         return head + " · aucune mise conseillée aujourd'hui"
     if poor is None:
@@ -301,6 +410,9 @@ def command(args):
     """« budget » : le budget actuel et des boutons pour le changer ; « budget 7500 » (ou « budget 7,5k ») : le fixe, en FCFA ;
     « budget 0 » : le supprime (plus de mise conseillée)."""
     from . import telegram
+    if capital_mode():
+        return ("💼 Tu utilises le mode capital : Kelly calcule elle-même ta limite du jour (écris « capital » pour la voir). Pour revenir au "
+                "budget du jour, écris « capital 0 » puis « budget 5000 ».")
     if not args:
         txt = (f"💰 Ton budget du jour : {money(daily())}.\n{EXPLAIN}"
                if active() else f"💰 Pas encore de budget du jour : Kelly ne donne pas de mise conseillée.\n{EXPLAIN}")
@@ -318,6 +430,88 @@ def command(args):
     set_daily(amount, currency)
     return (f"✅ Budget du jour : {money(amount)}. Kelly en tire ses mises conseillées (demain matin, et tout de suite pour les paris "
             "sans mise). Tu peux le changer quand tu veux ; seuls les paris que tu notes comptent dans tes résultats.")
+
+
+# ---------- commandes « capital », « perte max », « objectif » ----------
+
+CAPITAL_HELP = ("Écris « capital 50000 » (la somme que tu confies à Kelly, que tu acceptes de perdre), « perte max 5000 » (le plus que tu acceptes de "
+                "perdre en un jour) et « objectif 18000 » (ce que tu aimerais gagner par jour : affiché, jamais utilisé pour grossir une mise).")
+
+
+def _amount_arg(args, name):
+    """Montant d'une commande en FCFA -> (montant, None) ou (None, message d'erreur)."""
+    amount, currency = parse_amount(args)
+    if amount is None:
+        return None, f"Montant invalide. Exemple : {name} 5000"
+    if currency and currency.casefold() not in FCFA_WORDS:
+        return None, f"Kelly compte tout en FCFA : écris par exemple {name} 5000 (ou {name} 5k)."
+    return amount, None
+
+
+def capital_status():
+    """Le capital, la limite du jour, ce qui est déjà misé, l'objectif, et comment les changer."""
+    st = capital_state()
+    if not st:
+        return "💼 Pas encore de capital. " + CAPITAL_HELP
+    lines = [capital_line(html=False),
+             f"Départ : {money(st['base'])} le {st['since']} ; le capital suit les paris que tu notes (« ✅ Je l'ai joué »).",
+             f"Limite du jour : la plus petite de ta perte max ({money(st['max_day']) if st['max_day'] else 'non fixée'}) et de "
+             f"{round(CAPITAL_DAY_SHARE * 100)} % du capital. Reste à miser aujourd'hui : {money(st['left'])}."]
+    if not st["max_day"]:
+        lines.append("💡 Fixe ta perte maximale par jour : « perte max 5000 ».")
+    if not st["goal"]:
+        lines.append("💡 Tu peux afficher un objectif : « objectif 18000 ».")
+    return "\n".join(lines)
+
+
+def capital_command(args):
+    """« capital » : l'état ; « capital 50000 » : nouveau capital de départ (compté à partir d'aujourd'hui) ; « capital 0 » : sortie du mode capital."""
+    if not args:
+        return capital_status()
+    amount, err = _amount_arg(args, "capital")
+    if err:
+        return err
+    if amount <= 0:
+        store.save(FILE, {})
+        _cap_memo.clear()
+        return "💼 Mode capital arrêté : plus de mise conseillée. Écris « capital 50000 » pour le reprendre, ou « budget 5000 » pour un budget du jour."
+    _save_capital(capital=amount, since=str(_today()))
+    return "✅ " + capital_status()
+
+
+def max_loss_command(args):
+    """« perte max 5000 » (ou « limite 5000 ») : le plus que Kelly répartit en un jour ; « perte max 0 » : seulement la part du capital."""
+    args = [a for a in args if played_norm(a) not in ("max", "maximum", "maxi", "du", "jour", "par")]
+    if not args:
+        return capital_status()
+    amount, err = _amount_arg(args, "perte max")
+    if err:
+        return err
+    if not capital_mode():
+        return "💼 Fixe d'abord ton capital : « capital 50000 »."
+    _save_capital(max_day=amount if amount > 0 else None)
+    return "✅ " + capital_status()
+
+
+def goal_command(args):
+    """« objectif 18000 » : affiché sous les combinés et le matin, jamais utilisé pour grossir une mise ; « objectif 0 » : retiré."""
+    if not args:
+        return capital_status()
+    amount, err = _amount_arg(args, "objectif")
+    if err:
+        return err
+    if not capital_mode():
+        return "💼 Fixe d'abord ton capital : « capital 50000 »."
+    _save_capital(goal=amount if amount > 0 else None)
+    if amount <= 0:
+        return "✅ Objectif retiré.\n" + capital_status()
+    return ("✅ " + capital_status() + "\n\nKelly n'augmentera jamais une mise pour atteindre l'objectif : sous chaque combiné, elle te dit ce que "
+            "rapporte sa mise conseillée et ce qu'il faudrait miser pour l'atteindre d'un coup, avec un avertissement si c'est trop risqué.")
+
+
+def played_norm(w):
+    from .played import norm
+    return norm(w)
 
 
 # ---------- « ❌ Pas joué » ----------

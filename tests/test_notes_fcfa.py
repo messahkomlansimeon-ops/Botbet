@@ -145,7 +145,7 @@ def texts(msg):
 def no_units(text, what=""):
     """Aucune mise ni aucun gain en « u » / « unités » dans le texte d'un message (HTML retiré) ; le mot seul, dans une explication, est permis."""
     t = fmt.plain(str(text))
-    assert not re.search(r"\d\s?(?:u|unités?)(?![A-Za-zÀ-ÿ])", t) and "💼" not in t and "Bankroll :" not in t, (what, t)      # aucun montant en unités
+    assert not re.search(r"\d\s?(?:u|unités?)(?![A-Za-zÀ-ÿ])", t) and "💼 Bankroll" not in t and "Bankroll :" not in t, (what, t)      # aucun montant en unités
 
 
 def combo(tier, odds_=5.0, stake=None, cur=None, result=None, **kw):
@@ -333,7 +333,7 @@ def test_buttons():
     for m in (m for m in msgs if getattr(m, "markup", None) and "inline_keyboard" in m.markup):
         assert texts(m) == ["✅ Je l'ai joué"], texts(m)
     sur = next(m for m in msgs if "SÛR" in m)
-    assert str(sur).count("Mise : règle ton budget du jour avec « 💰 Mon budget »") == 1 and "💰 mise" not in sur, sur
+    assert str(sur).count("Mise : fixe ton capital avec « 💼 Mon capital »") == 1 and "💰 mise" not in sur, sur
     assert all(c["stake"] is None and "cur" not in c for c in combos2)
     for m in msgs:
         no_units(m, "message du matin sans budget")
@@ -396,7 +396,7 @@ def test_custom_is_a_note():
     # sans mise conseillée (pas de budget) : suivi, puis SEULE la mise est demandée (la cote 1xBet du combiné est connue)
     msg, _ = custom_msg(budget=False)
     no_units(msg, "combi sur mesure sans budget")
-    assert "Mise : règle ton budget du jour avec « 💰 Mon budget »" in msg and store.load(custom.FILE, {})["items"]["m1"]["stake"] is None
+    assert "Mise : fixe ton capital avec « 💼 Mon capital »" in msg and store.load(custom.FILE, {})["items"]["m1"]["stake"] is None
     with Fakes() as f:
         reply = chat.on_callback(f"cjoue|m1|{DAY}", 78)
         row = fair.load_combos()[0]
@@ -468,8 +468,8 @@ def test_no_units_anywhere():
             no_units(m, f"matin (budget {budget})")
         for m in (m for m in msgs if "COMBINÉ" in m):
             assert ("💰 Mise : <b>" in m and "FCFA" in m) if budget else \
-                (str(m).count("💰 Mise : règle ton budget du jour") == 1
-                 and "💰" not in fmt.plain(m).replace("💰 Mise : règle", "").replace("💰 Mon budget", "")), m      # sans budget : aucune autre ligne de mise
+                (str(m).count("💰 Mise : fixe ton capital") == 1
+                 and "💰" not in fmt.plain(m).replace("💰 Mise : fixe", "").replace("💼 Mon capital", "")), m      # sans budget : aucune autre ligne de mise
     # /top, /match, /analyse, aide, budget, bank
     store.save("today.json", {"day": DAY, "picks": [pick(i) for i in range(1, 5)], "pronos": pronos(3)})
     for cmd in ("/top", "/match Home1", "/aide", "/budget", "/bank", "/bank 5000", "/joue", "budget", "bilan"):
@@ -479,7 +479,7 @@ def test_no_units_anywhere():
     store.save(money.FILE, {})
     out = str(app.handle_command("/budget"))
     assert "AUJOURD'HUI" in out and "changer n'importe quel jour" in out and "Seuls les paris que tu notes" in out, out
-    assert "Pas encore de budget" in out and "<b>Mon budget</b>" in str(app.HELP) and "bankroll" not in str(app.HELP)
+    assert "Pas encore de budget" in out and "<b>Mon capital</b>" in str(app.HELP) and "bankroll" not in str(app.HELP)
     assert "Seuls les paris que tu <b>notes</b>" in str(app.HELP) and "✅ Je l'ai joué" in str(app.HELP) and "↩️ Annuler" in str(app.HELP)
     print("ok  5 jamais de « u » ni d'« unités » : messages du matin (avec et sans budget), commandes, aide, budget, bilan")
 
@@ -511,7 +511,7 @@ def test_no_units_refresh_and_alerts():
         items = xalerts.lag_items([(0.3, moved, prev)], today, xalerts.Reader(fake_fetch({"e1": {("h2h", "HOME", None): 1.8}})), at(18))
         assert len(items) == 1
         assert ("💰 Mise conseillée : <b>" in items[0]["text"] and "FCFA (sur ton budget du jour)" in items[0]["text"]) if budget else \
-            "💡 Mise conseillée : règle ton budget du jour avec « 💰 Mon budget »" in items[0]["text"]
+            "💡 Mise conseillée : fixe ton capital avec « 💼 Mon capital »" in items[0]["text"]
         no_units(items[0]["text"], "alerte 💰")
     print("ok  5 relevé 1xBet, combiné renvoyé et alerte 💰 : mise conseillée en FCFA (ou ligne « règle ton budget »), jamais d'unités")
 

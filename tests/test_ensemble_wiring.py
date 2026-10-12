@@ -717,7 +717,7 @@ def test_morning_gap_edge_cases():
         msgs, _ = morning(picks, cands, rec)
         gmsg = next(m for m in msgs if "1xBet paie plus que le marché" in str(m))
         gm = fmt.plain(str(gmsg))
-        assert "💰 Mise conseillée" not in gm and gm.count("Mise : règle ton budget du jour") == 1 and all(st is None for _, _, st, _ in rec[1:])
+        assert "💰 Mise conseillée" not in gm and gm.count("Mise : fixe ton capital") == 1 and all(st is None for _, _, st, _ in rec[1:])
         assert all(" — " not in l for l in labels(gmsg)), "pas de mise dans le bouton"
         # au plus C.SHARPGAP_MAX_SHOWN, les plus gros écarts d'abord
         reset()

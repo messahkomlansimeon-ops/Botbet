@@ -57,7 +57,7 @@ def units(x):
     return f"{trim(x, 1 if abs(x) >= 1 else 2)} u"
 
 
-NO_BUDGET = "règle ton budget du jour avec « 💰 Mon budget »"      # à la place d'une mise, quand il n'y a pas de budget du jour (jamais d'unités)
+NO_BUDGET = "fixe ton capital avec « 💼 Mon capital »"      # à la place d'une mise, quand il n'y a pas de budget du jour (jamais d'unités)
 
 
 NO_EDGE = "Kelly ne conseille pas de miser dessus (espérance négative)"      # à la place d'une mise, quand le pari perd en moyenne à sa cote
@@ -371,11 +371,20 @@ def _foot(stake, weak, shared, tail):
     return "\n\n" + RULE + "".join("\n" + x for x in rows) + ("\n" + tail.lstrip("\n") if tail.strip() else "")
 
 
-def _header(title, chances, stake, note, coupon):
-    """En-tête d'un combiné : le titre en gras (avec sa cote), les chances, la mise quand c'est un montant, `note` (lignes courtes déjà en HTML),
-    le code coupon. -> (texte, ligne de mise à mettre dans le pied ou '')."""
+def _goal(odds):
+    """Ligne de l'objectif du jour (mode capital, money.goal_line), échappée ; '' sans objectif."""
+    from . import money
+    g = money.goal_line(odds)
+    return i(esc(g)) if g else ""
+
+
+def _header(title, chances, stake, note, coupon, odds=None):
+    """En-tête d'un combiné : le titre en gras (avec sa cote), les chances, la mise quand c'est un montant (et, en mode capital avec un objectif, ce
+    qu'il faudrait miser pour l'atteindre d'un coup), `note` (lignes courtes déjà en HTML), le code coupon. -> (texte, ligne de mise à mettre dans
+    le pied ou '')."""
     amount = stake if stake.startswith("💰 Mise : <b>") else ""
-    head = [b(title), chances] + ([amount] if amount else []) + ([note] if note else []) + ([coupon_top(coupon)] if coupon else [])
+    goal = _goal(odds) if amount else ""
+    head = [b(title), chances] + ([amount] if amount else []) + ([goal] if goal else []) + ([note] if note else []) + ([coupon_top(coupon)] if coupon else [])
     return "\n".join(head), ("" if amount else stake)
 
 
@@ -393,19 +402,20 @@ def combo(title, picks, odds_total, prob, stake=None, reasons=None, stake_txt=No
     `extra` : {clé: précision en fin de ligne de chances}."""
     reasons, weak, extra = reasons or {}, set(weak or ()), extra or {}
     head, stake_foot = _header(f"{esc(tier_name(title))} — cote {odds_txt(odds_total)}", f"🎯 {len(picks)} paris · {pct(prob)} de chances · "
-                               f"{expect(prob, odds_total)}", stake_line(stake_txt), note, coupon)
+                               f"{expect(prob, odds_total)}", stake_line(stake_txt), note, coupon, odds_total)
     legs = [leg(k, c, reasons.get(c["key"]), weak=c.get("key") in weak, shared=shared, extra=extra.get(c.get("key"), "")) for k, c in enumerate(picks, 1)]
     return Html(head + "\n\n" + "\n\n".join(legs)
                 + _foot(stake_foot, bool(weak), _shared_ids(shared), coupon_block(coupon, retry) + xbet_note(picks, when)))
 
 
 def single(c, reason=None, title="⭐ PARI DU JOUR", stake_txt=None, coupon=None, when=None, retry=None):
-    """Pari du jour : une seule jambe (et sa mise conseillée sur le budget du jour, `stake_txt`, sinon la ligne « règle ton budget »).
+    """Pari du jour : une seule jambe (et sa mise conseillée sur le budget du jour, `stake_txt`, sinon la ligne « fixe ton capital »).
     `coupon` / `when` / `retry` : voir combo."""
     stake = stake_line(stake_txt)
     amount = stake if stake.startswith("💰 Mise : <b>") else ""
+    goal = _goal(c.get("xodds") or c["odds"]) if amount else ""
     head = [b(f"{title} — cote {odds_txt(c['odds'])}"), f"🎯 {pct(c['prob'])} de chances"] + ([amount] if amount else []) \
-        + ([coupon_top(coupon)] if coupon else [])
+        + ([goal] if goal else []) + ([coupon_top(coupon)] if coupon else [])
     return Html("\n".join(head) + "\n\n" + leg(None, c, reason)
                 + _foot("" if amount else stake, False, False, coupon_block(coupon, retry) + xbet_note([c], when)))
 
@@ -530,7 +540,7 @@ def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, c
     name = title or ("💎 COMBINÉ" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")
     head, stake_foot = _header(f"{name} — {'cote' if real else 'cote mini'} {odds_txt(min_total)}" + (" · " + tail if old or (title and not real) else ""),
                                f"🎯 {len(picks)} paris · {pct(prob)} de chances", stake_line(stake_txt, "" if real else "(si 1xBet paie la cote mini)"),
-                               note, coupon)
+                               note, coupon, min_total)
     foot = i(f"🕒 Cotes du dernier relevé ({esc(when)}) : 1xBet ne répond pas, vérifie-les avant de valider." if old and when else
              "🕒 Cotes du dernier relevé : 1xBet ne répond pas, vérifie-les avant de valider." if old else
              f"🕒 Cotes 1xBet de {esc(when)} : vérifie-les avant de valider." if real and when else

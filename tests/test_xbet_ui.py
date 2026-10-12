@@ -152,7 +152,7 @@ def test_combi_fallthrough():
     with Fakes() as f:
         out = str(app.custom_combo(typ, flat, 4.5, DAY))
     assert out.startswith("Kelly n'a vu aucune cote de 1xBet aujourd'hui") and "À VÉRIFIER CHEZ 1XBET" in out and "SUR MESURE" not in out, out
-    assert "Mise indicative" not in out and "Mise : règle ton budget du jour avec « 💰 Mon budget »" in out, out    # sans budget : jamais d'unités
+    assert "Mise indicative" not in out and "Mise : fixe ton capital avec « 💼 Mon capital »" in out, out    # sans budget : jamais d'unités
     # budget du jour : la mise du combiné demandé est prise dessus
     money.set_daily(5000)
     with Fakes():
