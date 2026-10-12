@@ -857,7 +857,7 @@ def test_apistats_profile_format_and_quality():
     ms = [{"date": "2026-10-0%d" % (d + 1), "home": "A", "away": "B", "hg": 1, "ag": 0, "hs": 10, "as": 8, "hst": 4, "ast": 3, "hf": 11, "af": 12,
            "hc": 5, "ac": 4, "hy": 2, "ay": 1, "hr": 0, "ar": 0, "div": "E0"} for d in range(6)]
     ref = footballdata.team_profiles(ms)["teams"]["A"]["all"]
-    assert set(t["all"]) <= set(ref) and "yellow_for" not in t["all"] and {"corners_for", "cards_against", "sot_for", "fouls_for"} <= set(t["all"])
+    assert set(t["all"]) - {"xg_for", "xg_against", "xg_n"} <= set(ref) and "yellow_for" not in t["all"] and t["all"]["xg_n"] == 0 and {"corners_for", "cards_against", "sot_for", "fouls_for"} <= set(t["all"])
     assert t["home"]["n"] + t["away"]["n"] == t["all"]["n"] and t["sk"] == ["soccer_brazil_campeonato"] and t["id"] == 128
     for k in ("exp_corners", "exp_cards", "exp_shots", "exp_sot", "exp_fouls", "exp_goals_home", "exp_shots_home", "exp_sot_away"):
         assert f.get(k) is not None and k in f["aps_keys"], k

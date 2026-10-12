@@ -12,8 +12,10 @@ impossible d'aller chercher les derniers matchs d'une équipe. Kelly fait donc l
 3. il demande /fixtures/statistics?fixture=ID un match à la fois (jamais /fixtures/players), dans la limite de APISTATS_DAILY requêtes
    par jour et jamais sous la réserve FAIR_API_RESERVE du règlement ; les statistiques d'un match sont gardées pour toujours
    (stats.fixture_stats, cache du disque) et un match déjà ajouté n'est jamais redemandé (clé « seen ») ;
-4. il ajoute le match à l'historique compact des DEUX équipes (buts, tirs, tirs cadrés, corners, fautes, cartons pour et contre,
-   domicile / extérieur, date, ligue), garde les APISTATS_KEEP_MATCHES derniers matchs par équipe.
+4. il ajoute le match à l'historique compact des DEUX équipes (buts, tirs, tirs cadrés, corners, fautes, cartons et buts attendus
+   (xG) pour et contre, domicile / extérieur, date, ligue), garde les APISTATS_KEEP_MATCHES derniers matchs par équipe. Le xG vient
+   de la même requête /fixtures/statistics (« expected_goals » : zéro requête de plus) ; il n'est pas rattrapable (forfait gratuit :
+   hier..demain seulement), il s'accumule à partir de maintenant.
 
 Une équipe est « utilisable » dès APISTATS_MIN_N (3) matchs, avec une confiance réduite (features.aps_quality, poids du modèle
 atténué dans prematch, pronostics seuls), et « bonne » dès APISTATS_GOOD_N (6) : confiance pleine, admise dans les combinés à cote
@@ -28,16 +30,20 @@ quand même, attend STATS_RATE_WAIT (60 s) avant UN nouvel essai ; tout cela dan
 espacées de 6,2 s tiennent en ~340 s). Un second 429 arrête l'API « pour ce passage » (pas pour la journée) ; le délai épuisé s'appelle « time ».
 
 Stockage compact : data/apistats_profiles.json, < 300 Ko. Une ligne de match = [jour AAMMJJ, ligue, domicile (1/0), buts pour, contre,
-tirs pour, contre, tirs cadrés, corners, fautes, cartons (chaque fois pour, contre)] ; None quand l'API n'a pas la statistique.
+tirs pour, contre, tirs cadrés, corners, fautes, cartons, xG (chaque fois pour, contre)] ; None quand l'API n'a pas la statistique.
+Les clés ajoutées plus tard (xg) sont À LA FIN de KEYS : une ligne ancienne, plus courte, se lit avec None aux colonnes manquantes (xG
+inconnu, jamais 0), et une ligne neuve sans xG est écrite sans ces deux colonnes (le fichier reste petit). Aucune migration.
 """
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 
 from . import apileagues, catalogue, config as C, stats, store
 
 FILE = "apistats_profiles.json"
-KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards")        # ordre des paires dans une ligne de match
-FIELD = {"shots": "shots", "sot": "sot", "corners": "corners", "fouls": "fouls", "cards": "cards"}
+KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "xg")  # ordre des paires dans une ligne de match ; nouvelles clés : toujours à la fin
+FIELD = {"shots": "shots", "sot": "sot", "corners": "corners", "fouls": "fouls", "cards": "cards", "xg": "xg"}
+FLOAT_KEYS = ("xg",)                                                 # valeurs décimales, arrondies à 2 décimales dans une ligne
 R_DAY, R_LG, R_HOME, R_STATS = 0, 1, 2, 3                            # indices d'une ligne ; les paires (pour, contre) suivent
 SEEN_DAYS = 5                                                        # un match ne reste visible que 2 jours dans les listes de l'API
 SOON_BONUS = 15                                                      # par équipe qui rejoue aujourd'hui
@@ -65,8 +71,13 @@ def _i2d(i):
     return f"20{i // 10000:02d}-{i // 100 % 100:02d}-{i % 100:02d}"
 
 
-def _num(x):
-    return None if x is None else (int(x) if float(x) == int(x) else round(float(x), 1))
+def _num(x, nd=1):
+    return None if x is None else (int(x) if float(x) == int(x) else round(float(x), nd))
+
+
+def _cell(r, j):
+    """Colonne `j` d'une ligne ; None si la ligne est plus courte (ligne écrite avant l'ajout de la clé : donnée inconnue, jamais 0)."""
+    return r[j] if j < len(r) else None
 
 
 def load():
@@ -94,6 +105,10 @@ def save(d):
     floor = _d2i(str((today - timedelta(days=SEEN_DAYS)).date()))
     d["seen"] = {k: v for k, v in d.get("seen", {}).items() if v >= floor}
     d["v"] = 2
+    while len(d["teams"]) > 1 and len(json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode()) > C.APISTATS_MAX_BYTES:
+        old = sorted(d["teams"], key=lambda k: (d["teams"][k].get("d", ""), len(d["teams"][k]["m"])))      # les xG ajoutent ~15 % par ligne : jamais > 300 Ko
+        for k in old[:max(1, len(old) // 20)]:
+            del d["teams"][k]
     store.save(FILE, d, compact=True)
 
 
@@ -143,9 +158,14 @@ def record(d, e, st):
             f = FIELD[k]
             ok = _usable(mine, f) and _usable(other, f)
             pairs.append((mine[f], other[f]) if ok else (None, None))
-        if all(p == (None, None) for p in pairs[1:]):
-            continue                                  # match sans aucune statistique utilisable
-        row = [day, lgi, home] + [_num(x) for p in pairs for x in p]
+        xg = pairs[KEYS.index("xg")]
+        if xg == (0, 0) and (e.get("gh") or 0) + (e.get("ga") or 0) > 0:
+            pairs[KEYS.index("xg")] = (None, None)   # xG 0 - 0 alors qu'il y a des buts : non suivi par l'API pour ce match, pas un vrai zéro
+        if all(p == (None, None) for k, p in zip(KEYS[1:], pairs[1:]) if k not in FLOAT_KEYS):
+            continue                                  # match sans aucune statistique utilisable (le xG seul ne suffit pas)
+        row = [day, lgi, home] + [_num(x, 2 if k in FLOAT_KEYS else 1) for k, p in zip(KEYS, pairs) for x in p]
+        if pairs[-1] == (None, None):                 # xG (dernière clé) inconnu : colonnes omises, même lecture qu'une ligne ancienne
+            del row[-2:]
         t = d["teams"].setdefault(str(tid), {"m": []})
         lk = e.get("lk")
         t.update(nm=name, lg=label, d=_today(), sk=list(dict.fromkeys([k for k in t.get("sk", []) if k != lk] + ([lk] if lk else [])))[-4:])
@@ -156,8 +176,14 @@ def record(d, e, st):
 
 def _views(rows):
     from .sources import footballdata as fd
-    recs = lambda rs: [{k: (r[R_STATS + 2 * i], r[R_STATS + 2 * i + 1]) for i, k in enumerate(KEYS)} for r in rs]      # noqa: E731
-    view = lambda rs: fd._avg_view(recs(rs), keys=KEYS, min_count=min(C.APISTATS_MIN_N, len(rs)))                         # noqa: E731
+    recs = lambda rs: [{k: (_cell(r, R_STATS + 2 * i), _cell(r, R_STATS + 2 * i + 1)) for i, k in enumerate(KEYS)} for r in rs]   # noqa: E731
+
+    def view(rs):
+        rc = recs(rs)
+        v = fd._avg_view(rc, keys=KEYS, min_count=min(C.APISTATS_MIN_N, len(rs)))
+        v["xg_n"] = sum(1 for r in rc if r["xg"][0] is not None and r["xg"][1] is not None)      # matchs qui portent un xG (comme fmmatch)
+        return v
+
     n = C.APISTATS_LAST
     return {"all": view(rows[-n:]), "home": view([r for r in rows if r[R_HOME]][-n:]), "away": view([r for r in rows if not r[R_HOME]][-n:])}
 

@@ -315,6 +315,14 @@ def _apistats(out, home, away, sport_key):
         hv, av = _expect(ht, at, stat)
         _put_pair(tmp, stat, key, hv, av, total=True)
     new = {k: v for k, v in tmp.items() if k not in out}
+    # xG par match des profils API-Football (même calcul que FotMob : _fm_xg). Priorité d'exp_xg_* : Understat > FotMob matchs > API-Football
+    # matchs > classement FotMob de saison. Les xG d'API-Football ne remplacent donc que ceux du classement ou comblent l'absence d'xG.
+    xg = _fm_xg(ht, at)
+    if xg and (not any(k in out for k in XG_KEYS) or out.get("xg_src") == "fotmob-classement"):
+        new |= xg
+        if out.get("xg_src") == "fotmob-classement" and "FotMob" in out["sources"]:
+            out["sources"].remove("FotMob")              # le classement n'a plus rien fourni
+        out["xg_src"] = "api-football-matchs"
     if not new:
         return
     out.update(new)
@@ -351,7 +359,7 @@ XG_KEYS = ("exp_xg_home", "exp_xg_away", "exp_xg_total")
 
 
 def _xg_view(team, venue):
-    """Vue (domicile / extérieur, sinon toutes) d'un profil fmmatch qui compte au moins XG_MIN_MATCHES matchs avec xG (et dont les
+    """Vue (domicile / extérieur, sinon toutes) d'un profil fmmatch ou API-Football qui compte au moins XG_MIN_MATCHES matchs avec xG (et dont les
     moyennes xg_for / xg_against sont servies : min_count des profils) ; None sinon."""
     for v in (team.get(venue) or {}, team.get("all") or {}):
         if v.get("xg_n", 0) >= C.XG_MIN_MATCHES and v.get("xg_for") is not None and v.get("xg_against") is not None:
@@ -371,7 +379,7 @@ def _xg_part(v, side, goals_side):
 
 
 def _fm_xg(ht, at):
-    """{exp_xg_home, exp_xg_away, exp_xg_total} d'après les xG par match des deux équipes (mêmes mélanges que _expect : l'attaque de l'une
+    """{exp_xg_home, exp_xg_away, exp_xg_total} d'après les xG par match des deux équipes (profils FotMob ou API-Football : mêmes clés) (mêmes mélanges que _expect : l'attaque de l'une
     et la défense de l'autre, à domicile / à l'extérieur) ; {} si l'une des deux a moins de XG_MIN_MATCHES matchs avec xG."""
     h, a = _xg_view(ht, "home"), _xg_view(at, "away")
     if not h or not a:

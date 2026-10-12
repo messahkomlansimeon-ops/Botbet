@@ -634,13 +634,20 @@ def _numn(v):
         return None
 
 
+def _xg_value(v):
+    """Buts attendus (« expected_goals ») d'une équipe pour un match : nombre ou chaîne « 1.62 », arrondi à 2 décimales ; None si l'API
+    ne le donne pas (null, absent, illisible, négatif ou absurde) : un xG inconnu n'est jamais compté comme 0."""
+    x = _numn(v)
+    return round(x, 2) if x is not None and 0 <= x < 20 else None
+
+
 STATS_KEEP_DAYS = 45                                 # statistiques brutes : les matchs plus vieux sont oubliés (profils déjà calculés)
 
 
 def _team_values(t):
     """Totaux d'une équipe pour un match d'après la réponse /fixtures/statistics : corners, cartons (jaunes + rouges), tirs,
     tirs cadrés, fautes (0 si absent, compatibilité du règlement) + « nul » : statistiques que l'API a laissées à null (jamais
-    comptées comme 0 dans les profils). Un null de tirs cadrés avec des tirs connus, ou de jaunes, rouges et corners avec d'autres
+    comptées comme 0 dans les profils) + « xg » (buts attendus, seulement s'il est donné : les entrées de cache anciennes n'en ont pas). Un null de tirs cadrés avec des tirs connus, ou de jaunes, rouges et corners avec d'autres
     statistiques de l'équipe, est un vrai zéro."""
     st = {s["type"]: _numn(s.get("value")) for s in t.get("statistics") or [] if s.get("type")}
     shots, y, r, c = st.get("Total Shots"), st.get("Yellow Cards"), st.get("Red Cards"), st.get("Corner Kicks")
@@ -653,6 +660,9 @@ def _team_values(t):
             "cards": None if y is None and r is None else (y or 0.0) + (r or 0.0), "yel": y if y is not None else (0.0 if r is not None else None)}
     out = {k: (v if v is not None else 0.0) for k, v in vals.items()}
     out["nul"] = [k for k, v in vals.items() if v is None]
+    xg = _xg_value(st.get("expected_goals"))
+    if xg is not None:                              # xG : seulement quand l'API le donne (clé absente = inconnu, jamais 0) ; ne sert à aucun règlement
+        out["xg"] = xg
     return out
 
 

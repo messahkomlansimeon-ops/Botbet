@@ -1508,6 +1508,23 @@ def _stat_block(allv, skip=()):
             if x and k not in skip]
 
 
+def _xg_team_line(p):
+    """Ligne « buts attendus » d'une équipe d'après les xG par match de ses profils (FotMob, puis API-Football : même priorité que
+    features.match_features), avec sa source ; None sous XG_MIN_MATCHES matchs portant un xG. Sans le mot « xG »."""
+    from .sources import features
+    for src, label in ((p.get("fm"), "FotMob"), (p.get("aps"), "API-Football")):
+        v = features._xg_view(src or {}, "all")
+        if v:
+            txt = (f"Buts attendus d'après les occasions ({label}, {v['xg_n']} derniers matchs) : "
+                   f"{v['xg_for']:.2f} pour / {v['xg_against']:.2f} contre")
+            for venue, name in (("home", "domicile"), ("away", "extérieur")):
+                w = (src or {}).get(venue) or {}
+                if w.get("xg_n", 0) >= C.XG_MIN_MATCHES and w.get("xg_for") is not None and w.get("xg_against") is not None:
+                    txt += f" ; {name} {w['xg_for']:.2f}/{w['xg_against']:.2f}"
+            return txt
+    return None
+
+
 def fmt_team(p, query):
     """Texte de /stats : profil d'une équipe (derniers matchs : football-data, Understat, et API-Football pour les championnats
     que football-data ne détaille pas)."""
@@ -1546,6 +1563,10 @@ def fmt_team(p, query):
             if v.get("xg") is not None and v.get("xga") is not None:
                 txt += f" ; {label} {v['xg']:.2f}/{v['xga']:.2f}"
         lines += ["", txt]
+    else:                                                       # pas d'Understat : buts attendus par match des profils FotMob / API-Football
+        xl = _xg_team_line(p)
+        if xl:
+            lines += ["", xl]
     if len(lines) == 1:
         lines.append("Pas assez de matchs récents dans les sources.")
     if p.get("updated"):
@@ -1580,6 +1601,10 @@ def deep_analysis(first):
     return "\n".join(lines[1:] if lines[0].startswith("🔬") else lines)   # l'en-tête est déjà affiché
 
 
+XG_SOURCES = {"understat": "Understat", "fotmob-matchs": "FotMob, matchs récents", "api-football-matchs": "API-Football, matchs récents",
+              "fotmob-classement": "FotMob, classement de saison"}
+
+
 def features_lines(f, only=None, head="Chiffres d'avant-match"):
     """Lignes « corners, cartons, tirs, buts attendus » d'après sources.match_features ; `only` : clés exp_* à montrer."""
     n = lambda k: f.get(k)                                  # noqa: E731
@@ -1599,7 +1624,8 @@ def features_lines(f, only=None, head="Chiffres d'avant-match"):
     if only is None:
         if f.get("exp_xg_total") is not None:
             xg = f"{f['exp_xg_total']:.1f}"
-            lines.append(f"• Buts attendus d'après les occasions (xG) : {fmt.b(xg)}")
+            src = XG_SOURCES.get(f.get("xg_src"))
+            lines.append(f"• Buts attendus d'après les occasions (xG) : {fmt.b(xg)}" + (f" {fmt.i('(' + src + ')')}" if src else ""))
         if f.get("ref_cards") is not None:
             lines.append(f"• Arbitre {fmt.esc(f['referee'])} : {f['ref_cards']:.1f} cartons par match")
     return lines if len(lines) > 4 else []

@@ -216,6 +216,7 @@ APISTATS_MIN_N = 3                                # matchs minimum pour qu'un pr
 APISTATS_GOOD_N = 6                               # à partir de là le profil est « bon » : confiance pleine, admis dans les combinés à cote juste
 APISTATS_SAT_N = 10                               # équipe « saturée » : au moins autant de matchs que la fenêtre des moyennes (APISTATS_LAST)
 APISTATS_MAX_TEAMS = 300                          # équipes gardées dans data/apistats_profiles.json (< 300 Ko avec 15 matchs chacune)
+APISTATS_MAX_BYTES = 285_000                      # taille maximale de data/apistats_profiles.json (marge sous 300 Ko, xG compris) : les équipes les moins récentes sortent d'abord
 APISTATS_KEEP_DAYS = 120                          # équipe oubliée si elle n'a pas joué (ni été mise à jour) depuis
 APISTATS_SECONDS = _int("APISTATS_SECONDS", 360)  # durée maximale du remplissage du matin (55 requêtes x STATS_MIN_GAP = ~340 s)
 STATS_MIN_GAP = _float("STATS_MIN_GAP", 6.2)      # secondes entre deux appels API-Football : le forfait gratuit limite à 10 requêtes par minute (HTTP 429 au-delà)
