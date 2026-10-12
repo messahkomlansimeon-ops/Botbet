@@ -19,10 +19,11 @@ import time
 from datetime import date, timedelta
 
 from . import calib, config as C, fair, fmt, settle, store, strength
-from .sources import features, footballdata as fd, state
+from .sources import features, footballdata as fd, http, state
 
 FILE = calib.BOOT_FILE
 VERSION = 1
+MIN_MATCHES = 100          # en dessous, les CSV du championnat manquaient : il sera refait
 # marchés réglables avec les seuls CSV football-data
 MARKETS = frozenset(("alternate_totals_corners", "alternate_totals_cards", "team_corners_home", "team_corners_away", "team_yellow_total",
                      "team_shots_total", "team_shots_home", "team_shots_away", "team_sot_total", "team_sot_home", "team_sot_away",
@@ -103,25 +104,50 @@ def _total(per_div):
     return out
 
 
+def complete(res):
+    """Un championnat est-il bien rejoué (au moins MIN_MATCHES matchs) ? Sinon ses CSV manquaient : il sera refait."""
+    return bool(res) and res.get("matches", 0) >= MIN_MATCHES
+
+
+def missing(doc=None):
+    """Championnats pas encore (bien) rejoués."""
+    doc = load() if doc is None else doc
+    return [d for d in divs() if not complete((doc.get("divs") or {}).get(d))]
+
+
 def done(doc=None):
     """Le rejeu est-il complet (tous les championnats) ?"""
     doc = load() if doc is None else doc
-    return bool(doc) and set(divs()) <= set(doc.get("divs") or {})
+    return bool(doc) and not missing(doc)
+
+
+def matches(div):
+    """Matchs du championnat sur les trois saisons que lit le modèle (fd.default_seasons) : CSV en cache, et pour une saison absente du cache, un
+    téléchargement (une seule fois : les saisons passées sont gardées pour toujours). Certains championnats ne sont pas rafraîchis le matin."""
+    out = []
+    for season in fd.default_seasons():
+        res = http.cached(fd.url(div, season))
+        rows = fd.parse_csv(res.text, div, season)[0] if res else []
+        if not rows:
+            rows, errs = fd.fetch_season(div, season)
+            for e in errs:
+                print(f"[replay] {e}", file=sys.stderr)
+        out += rows
+    return out
 
 
 def run(seconds=None, force=False, today=None, loader=None, log=None):
     """Rejoue les championnats pas encore faits, dans la limite de `seconds` (None : sans limite). Écrit data/calib_boot.json après chaque
-    championnat. `loader(div)` : matchs du championnat (strength.load_matches par défaut : CSV en cache, aucune requête). -> le document."""
+    championnat. `loader(div)` : matchs du championnat (matches par défaut : CSV en cache, saisons manquantes téléchargées). Un championnat de moins
+    de MIN_MATCHES matchs (CSV absents) est gardé mais refait la fois suivante. -> le document."""
     log = log or (lambda s: None)
     deadline = None if seconds is None else time.monotonic() + seconds
     doc = {} if force else load()
     if not doc:
         to = today or state.now().date()
         doc = {"v": VERSION, "from": str(to - timedelta(days=C.REPLAY_DAYS)), "to": str(to), "divs": {}}
-    loader = loader or strength.load_matches
-    for div in divs():
-        if div in doc["divs"]:
-            continue
+    loader = loader or matches
+    for div in missing(doc):
         t0 = time.monotonic()
         try:
             res = replay_div(div, loader(div), doc["from"], doc["to"], deadline)
@@ -129,7 +155,7 @@ def run(seconds=None, force=False, today=None, loader=None, log=None):
             print(f"[replay] {div} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
             res = {"matches": 0, "picks": 0, "acc": {}, "error": type(e).__name__}
         if res is None:
-            log(f"temps écoulé : reprise au prochain passage ({len(doc['divs'])}/{len(divs())} championnats faits)")
+            log(f"temps écoulé : reprise au prochain passage ({len(divs()) - len(missing(doc))}/{len(divs())} championnats faits)")
             break
         doc["divs"][div] = res
         doc["acc"] = _total(doc["divs"])
@@ -155,7 +181,7 @@ def status_line(doc=None):
     n_m, n_p = totals(doc)
     head = f"📚 Rejeu de la saison passée : {fmt.thousands(n_m)} matchs, {fmt.thousands(n_p)} pronostics"
     if not done(doc):
-        return head + f" · en cours ({len(doc['divs'])}/{len(divs())} championnats)"
+        return head + f" · {len(divs()) - len(missing(doc))}/{len(divs())} championnats"
     return head
 
 
@@ -175,11 +201,17 @@ def family_lines(doc=None):
 
 
 def message(doc=None):
-    """Message Telegram de fin de rejeu (HTML)."""
+    """Message Telegram de fin de rejeu (HTML) ; les championnats sans données sont nommés."""
     doc = load() if doc is None else doc
     n_m, n_p = totals(doc)
+    miss = missing(doc)
     lines = ["📚 <b>Rejeu de la saison passée terminé</b>",
-             fmt.esc(f"{fmt.thousands(n_m)} matchs de {len(doc.get('divs') or {})} championnats, {fmt.thousands(n_p)} pronostics de stats réglés."), ""]
+             fmt.esc(f"{fmt.thousands(n_m)} matchs de {len(divs()) - len(miss)} championnat{'s' if len(divs()) - len(miss) > 1 else ''}, "
+                     f"{fmt.thousands(n_p)} pronostics de stats réglés.")]
+    if miss:
+        names = ", ".join(calib.league_name(fd.DIV_TO_SPORT.get(d, d)) for d in miss)
+        lines.append(fmt.esc(f"⚠️ Pas assez de données pour : {names} (réessayé au prochain « kelly rejeu » et le dimanche)."))
+    lines.append("")
     lines += [fmt.esc(x) for x in family_lines(doc)]
     lines += ["", fmt.i(fmt.esc("Kelly part de ces corrections (×) tant qu'il n'a pas assez de vrais résultats ; dès qu'il en a, ce sont eux qui "
                                 "comptent, sans être mélangés au rejeu. Détail : « bilan détail »."))]
@@ -193,7 +225,7 @@ def main(argv=()):
         print(status_line(doc) or "[replay] rien à rejouer : aucun CSV football-data en cache")
         for x in family_lines(doc):
             print("  " + x)
-        if done(doc) and "--sample" not in argv:
+        if doc.get("divs") and "--sample" not in argv:
             from . import telegram
             if telegram.creds()[0]:
                 telegram.send(message(doc))

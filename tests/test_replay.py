@@ -73,25 +73,47 @@ def test_no_future():
 
 def test_resume_and_force():
     reset()
-    loads = []
-    loader = lambda div: loads.append(div) or (season() if div == "E0" else [])     # noqa: E731
+    loads, have = [], {"E0"}
+    loader = lambda div: loads.append(div) or (season() if div in have else [])     # noqa: E731 - SP1 : CSV absents d'abord
     old_divs = replay.divs
     replay.divs = lambda: ["E0", "SP1"]
     try:
         doc = replay.run(seconds=0, today=TODAY, loader=loader)           # plus de temps dès le premier match : rien d'écrit
         assert not doc["divs"] and not replay.load() and not replay.done()
         doc = replay.run(today=TODAY, loader=loader)
-        assert doc["from"] == "2025-10-12" and doc["to"] == "2026-10-12" and replay.done() and loads == ["E0", "E0", "SP1"], (doc["from"], loads)
-        assert doc["divs"]["SP1"]["picks"] == 0 and doc["acc"]["corners"] == doc["divs"]["E0"]["acc"]["corners"]
-        assert replay.run(today=TODAY + timedelta(days=9), loader=loader)["to"] == "2026-10-12" and loads == ["E0", "E0", "SP1"]   # rien à refaire
+        assert doc["from"] == "2025-10-12" and doc["to"] == "2026-10-12" and loads == ["E0", "E0", "SP1"], (doc["from"], loads)
+        assert doc["divs"]["SP1"]["matches"] == 0 and doc["acc"]["corners"] == doc["divs"]["E0"]["acc"]["corners"]
+        assert not replay.done() and replay.missing() == ["SP1"] and replay.status_line().endswith(" · 1/2 championnats"), replay.status_line()
+        msg = str(replay.message())
+        assert "1 championnats" not in msg and "⚠️ Pas assez de données pour : Liga" in msg, msg
+        have.add("SP1")                                                   # CSV arrivés : seul SP1 est refait, sur la même période
+        doc = replay.run(today=TODAY + timedelta(days=9), loader=loader)
+        assert doc["to"] == "2026-10-12" and loads == ["E0", "E0", "SP1", "SP1"] and replay.done(), loads
+        assert replay.run(today=TODAY + timedelta(days=9), loader=loader) and loads == ["E0", "E0", "SP1", "SP1"]      # rien à refaire
         txt = replay.status_line()
-        assert txt.startswith("📚 Rejeu de la saison passée : ") and " matchs, " in txt and "en cours" not in txt, txt
+        assert txt.startswith("📚 Rejeu de la saison passée : ") and " matchs, " in txt and "championnats" not in txt, txt
+        assert "⚠️" not in str(replay.message())
         assert replay.run(force=True, today=TODAY + timedelta(days=9), loader=loader)["to"] == "2026-10-21"
         lines = replay.family_lines()
         assert lines and all(x[0] in "🟢🔴" and "%" in x for x in lines), lines
     finally:
         replay.divs = old_divs
-    print("ok  rejeu repris championnat par championnat, même période ; --force le refait ; résumé lisible")
+    print("ok  rejeu repris championnat par championnat ; un championnat sans CSV est refait plus tard ; --force refait tout ; résumé lisible")
+
+
+def test_matches_fetches_missing():
+    from kelly.sources import footballdata as fd, http
+    seasons = fd.default_seasons()
+    got = []
+    real = http.cached, fd.fetch_season
+    http.cached = lambda url, headers=None: None if seasons[1] in url else type("R", (), {"text": "Date,HomeTeam,AwayTeam,FTHG,FTAG\n01/09/2026,A,B,1,0\n"})()
+    fd.fetch_season = lambda div, s: got.append((div, s)) or ([{"date": "2025-09-01", "home": "C", "away": "D", "hg": 0, "ag": 0}], [])
+    try:
+        ms = replay.matches("E2")
+    finally:
+        http.cached, fd.fetch_season = real
+    assert got == [("E2", seasons[1])] and len(ms) == 3, (got, ms)          # seule la saison absente du cache est téléchargée
+    print("ok  saisons absentes du cache téléchargées (une fois), les autres lues sur place")
 
 
 def test_prior_not_mixed():
@@ -153,6 +175,7 @@ def test_bilan_shows_replay():
 def main():
     test_no_future()
     test_resume_and_force()
+    test_matches_fetches_missing()
     test_prior_not_mixed()
     test_bilan_shows_replay()
     print("tests rejeu de la saison passée : OK")
