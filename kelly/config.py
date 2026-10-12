@@ -580,6 +580,12 @@ ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", True)
 ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts", "team_goals",      # team_goals = buts d'une équipe (Poisson seul : jamais décidé par le modèle seul)
                                                              "corners", "cards", "yellow", "shots", "sot", "fouls"))
 ENSEMBLE_LOG = _bool("ENSEMBLE_LOG", True)
+# Compteur « depuis la correction » (calib, data["_new"]) : les pronostics de ces familles choisis avec la nouvelle règle (mélange avec 1xBet, « rule » 2
+# dans data/fair.json) sont aussi comptés à part ; dès STATS_NEW_MIN résultats, l'exclusion des combinés (combos.data_ok) se décide sur eux seuls, pas
+# sur les résultats de l'ancienne règle (tirs : 45 % réalisés pour 65 % annoncés, lignes choisies sur le plus gros désaccord avec 1xBet).
+STATS_NEW_FAMILIES = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))
+STATS_NEW_MIN = _int("STATS_NEW_MIN", 30)
+RULE = 2                     # numéro de la règle de choix des lignes, posé sur chaque pronostic suivi (« rule ») : 2 = mélange avec 1xBet (12/10)
 ENSEMBLE_MARGIN = _float("ENSEMBLE_MARGIN", 0.03)             # valeur : cote 1xBet x proba retenue >= 1 + marge
 ENSEMBLE_REQUIRE_MARKET = _bool("ENSEMBLE_REQUIRE_MARKET", True)  # vrai : pas de valeur sans AU MOINS un avis de marché (sharp ou 1xBet sans marge), dans toutes les familles
 ENSEMBLE_MAX_DISAGREE = _float("ENSEMBLE_MAX_DISAGREE", 0.12)  # veto : |proba du modèle - proba du marché| au-delà (familles où le marché pèse beaucoup)

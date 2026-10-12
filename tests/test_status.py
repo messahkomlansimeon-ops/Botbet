@@ -77,7 +77,7 @@ def test_learning():
     store.save(live.CALIB_FILE, {"v": live.CALIB_VERSION, "k": {"h2h|45-60": [12, 9, 8.0], "goals|60-75": [5, 4, 3.5]}})
     lines = status.learning_lines()
     text = "\n".join(lines)
-    assert lines[0] == "🔴 Tirs · 70 · trop confiante (43 % / 65 %) → écartés des combinés", lines        # correction sous VIABLE_MIN_K
+    assert lines[0] == "🔴 Tirs · 70 · trop confiante (43 % / 65 %) → écartés des combinés · nouvelle règle 0/30", lines        # correction sous VIABLE_MIN_K
     assert "⏳ Buts · 29/60" in lines and "⏳ Live 1N2 45-60 · 12/60" in lines and "⏳ Live buts 60-75 · 5/60" in lines, lines
     assert "⚖️ Avis face au marché : buts 0/100, double chance 0/100, les 2 marquent 0/100, 1N2 0/100" in lines, lines
     store.save(calib.FILE, {"goals": [131, 93, 90.4], "dc": [106, 82, 76.3]})

@@ -484,11 +484,11 @@ def record(pronos, day, shown=None):
         if old is None:
             old = slot.get((str(day), c["id"], c["market"]))
             if old is not None and old.get("result") is None:      # la ligne a changé (relevé 1xBet) : même suivi, mis à jour
-                old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")})
+                old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")} | _rule(c))
                 by_key[c["key"]] = old
             elif old is None:
                 by_key[c["key"]] = row = ({k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
-                                          | ({"free": 1} if c["key"] in free else {}))
+                                          | ({"free": 1} if c["key"] in free else {}) | _rule(c))
                 rows.append(row)
                 n += 1
                 continue
@@ -500,6 +500,13 @@ def record(pronos, day, shown=None):
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_KEEP_DAYS))
     store.save(FILE, [r for r in rows if r["date"] >= cut])
     return n
+
+
+def _rule(c):
+    """{"rule": C.RULE} pour un pronostic dont la ligne est choisie par l'ensemble (mélange avec 1xBet) : calib le compte aussi « depuis la
+    correction » (data["_new"]) ; {} sinon."""
+    from . import ensemble
+    return {"rule": C.RULE} if ensemble.is_active(c["market"]) else {}
 
 
 def _stats_extra(cands, taken):

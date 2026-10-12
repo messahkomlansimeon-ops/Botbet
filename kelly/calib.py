@@ -157,6 +157,8 @@ def add(rows, today=None):
     data["_t"] = aged(data, data.get("_t"), today)
     for r in new:
         accumulate(data, r, r["result"] == "win")
+        if r.get("rule") == C.RULE and family(r["market"]) in C.STATS_NEW_FAMILIES:     # compteur « depuis la correction »
+            accumulate(data.setdefault("_new", {}), r, r["result"] == "win")
         r["calib"] = True
         n += 1
     _save(data)
@@ -294,9 +296,54 @@ def rep_market(fam):
 
 
 def family_k(fam, data=None, real_only=False):
-    """Correction de la famille, sans sens ni championnat : celle qu'affichent les bilans (rejeu compris). `real_only` : sur les seuls vrais
-    résultats, celle qui écarte un marché des combinés (combos.data_ok)."""
-    return factor(rep_market(fam), data, base=1.0 if real_only else None)
+    """Correction de la famille, sans sens ni championnat : celle qu'affichent les bilans (rejeu compris). `real_only` : celle qui écarte un
+    marché des combinés (viable_factor : vrais résultats, ceux de la nouvelle règle dès qu'il y en a assez)."""
+    return viable_factor(rep_market(fam), data=data) if real_only else factor(rep_market(fam), data)
+
+
+def new_rule(data=None):
+    """Cumuls « depuis la correction » (data["_new"], même forme que data) : pronostics de C.STATS_NEW_FAMILIES choisis avec la nouvelle règle."""
+    return (data if data is not None else load()).get("_new") or {}
+
+
+def new_count(fam, data=None):
+    acc = new_rule(data).get(fam)
+    return acc[0] if _acc_list(acc) else 0
+
+
+def new_min(fam):
+    """Résultats de la nouvelle règle requis pour juger la famille : C.STATS_NEW_MIN (30), au moins le seuil de la famille (60 pour corners, cartons)."""
+    return max(C.STATS_NEW_MIN, min_need(fam))
+
+
+def judged_on_new(fam, data=None):
+    """L'exclusion des combinés de la famille se décide-t-elle sur les résultats de la nouvelle règle (au moins new_min) ?"""
+    return fam in C.STATS_NEW_FAMILIES and new_count(fam, data) >= new_min(fam)
+
+
+def viable_factor(market, sport_key=None, side=None, p=None, data=None):
+    """k qui décide si un marché reste dans les combinés (combos.data_ok) : sur les seuls vrais résultats (jamais le rejeu), et pour
+    C.STATS_NEW_FAMILIES sur ceux de la nouvelle règle dès qu'il y en a new_min (les résultats de l'ancienne règle n'écartent plus)."""
+    data = data if data is not None else load()
+    src = new_rule(data) if judged_on_new(family(market), data) else data
+    return factor(market, src, sport_key, side, p, base=1.0)
+
+
+def new_rule_note(fam, data=None):
+    """« · nouvelle règle 12/30 » ; « · nouvelle règle : 34 · 63 % / 65 % → de retour dans les combinés » ; '' hors C.STATS_NEW_FAMILIES ou
+    sans résultat."""
+    data = data if data is not None else load()
+    if fam not in C.STATS_NEW_FAMILIES:
+        return ""
+    acc = new_rule(data).get(fam)
+    n = acc[0] if _acc_list(acc) else 0
+    if n < new_min(fam):
+        old_bad = factor(rep_market(fam), data, base=1.0) < C.VIABLE_MIN_K
+        return f" · nouvelle règle {count(n)}/{new_min(fam)}" if (n >= 0.5 or old_bad) else ""
+    txt = f" · nouvelle règle : {count(n)} · {round(acc[1] / n * 100)} % / {round(acc[2] / n * 100)} %"
+    if factor(rep_market(fam), data, base=1.0) < C.VIABLE_MIN_K <= viable_factor(rep_market(fam), data=data):
+        txt += " → de retour dans les combinés"
+    return txt
 
 
 def count(n):

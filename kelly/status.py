@@ -225,7 +225,7 @@ def learning_lines(top=6):
     fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and a[0]), key=lambda x: -x[1][0])
     for f, (n, w, s) in fams[:top]:
         dot, txt = _state(n, w, s, calib.min_need(f), calib.family_k(f, d, real_only=True))
-        out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}")
+        out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}" + calib.new_rule_note(f, d))
     try:
         from . import replay
         rl = replay.status_line()

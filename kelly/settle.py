@@ -540,7 +540,7 @@ def _sum_txt(cs, html=True):
     return fmt.esc(txt) if html else txt
 
 
-def _reliability_lines():
+def _reliability_lines(note=True):
     """Fiabilité de Kelly par famille (pastilles du status : 🟢 / 🔴 / ⏳, réalisé / annoncé) et par championnat (les 2 plus fiables et le moins
     fiable, au plus 3), en texte brut : ([familles], [championnats])."""
     from . import status
@@ -550,7 +550,7 @@ def _reliability_lines():
     out = []
     for f, (n, w, s_) in fams:
         dot, txt = status._state(n, w, s_, calib.min_need(f), calib.family_k(f, d, real_only=True))
-        out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}")
+        out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}" + (calib.new_rule_note(f, d) if note else ""))
     rows = calib.league_rows(d)
     pick = rows if len(rows) <= 3 else rows[:2] + rows[-1:]
     lg = []
@@ -651,7 +651,7 @@ def _bilan_detail(bets, days, rows, picks, combos):
     if el:
         blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(avis de Kelly · part de Pinnacle · résultats)")] + [e(x) for x in el]
                       + [fmt.i("ℹ️ ↑ / ↓ : Kelly pèse plus ou moins que prévu au départ.")])
-    fam, _ = _reliability_lines()
+    fam, _ = _reliability_lines(note=False)
     if fam:
         d = calib.load()
         fams = [f for f, a in sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and len(a) == 3
@@ -664,7 +664,7 @@ def _bilan_detail(bets, days, rows, picks, combos):
                 tag = f" · ×{fmt.num(k)} (rejeu)" if f in calib.boot_acc() and abs(k - 1) >= 0.005 else ""
             else:
                 tag = f" · ×{fmt.num(k)}" if k is not None else ""
-            b.append(e(head + tag + (sep + tail if sep else "")))
+            b.append(e(head + tag + (sep + tail if sep else "") + calib.new_rule_note(f, d)))
         b += [e(f"• {x}") for x in calib.cell_lines()]
         blocks.append(b)
     from . import replay
