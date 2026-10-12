@@ -24,12 +24,12 @@ from . import config as C, fmt, money, played, progress, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🎯 Un combiné", "🔴 Live"], ["🔝 Paris du jour", "🧾 Mes paris"], ["📊 Mes résultats", "🩺 Status"], ["💼 Mon capital", "❓ Aide"]]
+MENU = [["🎯 Un combiné", "🔴 Live"], ["🔝 Paris du jour", "🧾 Mes paris"], ["📊 Mes résultats", "📊 Marchés", "🩺 Status"], ["💼 Mon capital", "❓ Aide"]]
 # « 🔄 Mettre à jour tous les paris » n'est plus dans le menu (action rare) : bouton sous « 🔝 Paris du jour » (callback « maj »), et « maj » / ancien bouton marchent
 BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
            "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "💼 Mon capital": "/capital", "❓ Aide": "/aide",      # « À noter », « Mon budget » : anciens libellés
            "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes",     # anciens libellés du menu
-           "🩺 Status": "/status"}
+           "🩺 Status": "/status", "📊 Marchés": "/marches"}
 COMBI_TARGETS = (3, 5, 10, 20, 50)
 UNIT = r"(?:fcfa|cfa|xof|francs?|frs?|f|k|eur|euros?|usd|dollars?|[€$£¥])"        # unités d'un montant : « 2k », « 2000F », « 50 € »
 NUM = re.compile(rf"^\s*\d[\d\s.,]*(?:\s*{UNIT})?\s*$", re.I)            # « 5,40 », « 5,40 2 000 », « 5,40 2.000 FCFA », « 5,40 2k » (« 05 Mainz », « 1xbet » : pas des montants)
@@ -44,7 +44,7 @@ WORDS_ALONE = {"top": "/top", "meilleurs": "/top", "aide": "/aide", "help": "/ai
                "bonjour": "/aide", "salut": "/aide", "bank": "/bank", "bankroll": "/bank", "ligues": "/ligues", "actualiser": "/cotes",
                "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes", "etat": "/etat",
                "progression": "/etat", "avancement": "/etat", "status": "/status", "statut": "/status", "sante": "/status",
-               "backup": "/backup", "sauvegarde": "/backup", "save": "/backup"}
+               "backup": "/backup", "sauvegarde": "/backup", "save": "/backup", "marches": "/marches", "marche": "/marches"}
 WORDS = WORDS_ARGS | WORDS_ALONE
 YES = {"oui", "o", "ok", "okay", "yes", "y", "confirme", "confirmer", "dac", "ouais"}      # réponse à « cote très éloignée : on la note ? »
 NO = {"non", "n", "no", "nan", "annule", "annuler", "stop", "cancel"}

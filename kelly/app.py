@@ -1459,6 +1459,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 🧾 <b>Mes paris</b> : tes paris du jour, à noter quand tu les joues
 📊 <b>Mes résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
 🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage)
+📊 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
 💼 <b>Mon capital</b> : ton capital, ta limite du jour, ce que tu as déjà misé et ton objectif
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
@@ -1932,6 +1933,9 @@ def _handle_command(text):
         return money.command(args)
     if cmd == "/capital":
         return money.capital_command(args)
+    if cmd == "/marches":
+        from . import markets
+        return markets.card()
     if cmd == "/perte":
         return money.max_loss_command(args)
     if cmd == "/objectif":
