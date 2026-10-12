@@ -226,10 +226,13 @@ def _final(s365, g):
 # ---------- le passage ----------
 
 def _open_legs(ts, d, now):
-    """Paris des tickets encore à suivre (pas décidés, ticket pas perdu, match commencé ou commençant dans l'heure, pas trop vieux)."""
+    """Paris des tickets encore à suivre (pas décidés, match commencé ou commençant dans l'heure, pas trop vieux). Ticket gagné : plus rien à suivre.
+    Ticket déjà perdu : ses autres matchs restent suivis (C.WATCH_AFTER_LOSS) ; avec des tickets de 12 paris, un seul pari raté coupait sinon la
+    moitié de tes matchs (dimanche 11/10 : 43 matchs sur 86 jamais suivis)."""
     out = []
     for t in ts:
-        if d["tickets"].get(t["what"]) in ("won", "lost"):
+        verdict = d["tickets"].get(t["what"])
+        if verdict == "won" or (verdict == "lost" and not C.WATCH_AFTER_LOSS):
             continue
         for leg in t["legs"]:
             k = f"{t['what']}|{leg['key']}"
@@ -264,6 +267,8 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None):
     todo = _open_legs(ts, d, now)
     if not todo:
         return None
+    alive = {t["what"] for t in ts if d["tickets"].get(t["what"]) not in ("won", "lost")}         # tickets encore en jeu avant ce passage
+    alive_legs = {leg["key"] for t in ts if t["what"] in alive for leg in t["legs"]}
     # message : chaque pari décidé ou but UNE fois (même dans 7 tickets), puis une ligne par ticket touché (« 🎫 Combi … · 📊 1/7 gagnés, 6 en cours »)
     events, touched = {}, {}                          # ligne -> None (ordre, sans doublon) ; ticket -> t
     with (_NoProxy() if games is not None else s365._via_proxy(settle=True)) as why:     # tes tickets (~1 Ko par match) passent avant la lecture de fond
@@ -306,8 +311,11 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None):
                 line = f"⚽ {leg['home']} {sc} {leg['away']} ({st_g.get('minute')}e{', suspendu' if paused else ''}) · {leg.get('pick')} : {margin(leg, *score)}".rstrip(" :")
             d["legs"][k] = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
             if line:
+                if leg["key"] not in alive_legs:          # pari seulement dans des tickets déjà perdus : dit, mais sans compter
+                    line += " · ticket déjà perdu"
                 events[line] = None
-                touched[t["what"]] = t
+                if t["what"] in alive:                    # pied de ticket : seulement les tickets encore en jeu (« ❌ Ticket perdu » une seule fois)
+                    touched[t["what"]] = t
     feet = []
     for what, t in touched.items():
         verdict, foot = _ticket_line(t, d)
@@ -315,7 +323,7 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None):
             d["tickets"][what] = verdict
         feet.append(f"🎫 {fmt.b(fmt.esc(t['name']))} · {fmt.esc(foot)}")
     store.save(FILE, d)
-    return telegram.Html("\n".join(fmt.esc(x) for x in events) + "\n\n" + "\n".join(feet)) if events else None
+    return telegram.Html("\n".join(fmt.esc(x) for x in events) + ("\n\n" + "\n".join(feet) if feet else "")) if events else None
 
 
 class _NoProxy:

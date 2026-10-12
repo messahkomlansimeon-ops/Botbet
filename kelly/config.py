@@ -404,6 +404,7 @@ QUIET_HOURS = os.environ.get("QUIET_HOURS", "23-7")   # heures calmes des alerte
 # Suivi des tickets et opportunités live (kelly/watch.py, `bot.py --watch`, kelly-watch.timer toutes les 10 min)
 LIVE_OPP = _bool("LIVE_OPP", True)                  # 0 : plus d'« 🔴 Opportunité live »
 LIVE_OPP_HOURS = os.environ.get("LIVE_OPP_HOURS", "12-23")   # heures (Abidjan) où Kelly cherche des opportunités live
+WATCH_AFTER_LOSS = _bool("WATCH_AFTER_LOSS", True)   # suivi des matchs (kelly/watch.py) : continuer les matchs d'un ticket déjà perdu (tickets de 12 paris : perdus tôt, la moitié de tes matchs se taisaient)
 LIVE_OPP_DAY = _int("LIVE_OPP_DAY", 3)              # opportunités live annoncées au plus par jour
 LIVE_OPP_GAP_H = _float("LIVE_OPP_GAP_H", 2)        # ... et au moins N heures entre deux
 LIVE_OPP_GATE = _int("LIVE_OPP_GATE", 8)            # contrôle léger (365scores) : au moins N matchs en cours dans la fenêtre avant de lire 1xBet (~500 Ko)
