@@ -2549,7 +2549,9 @@ def test_buttons_and_free_text():
         assert cmd is None and [b["callback_data"] for b in reply.markup["inline_keyboard"][0]] == [f"combi|{t}" for t in chat.COMBI_TARGETS]
         cmd, reply = chat.route("blablabla xyz")
         assert cmd is None and "pas compris" in reply and reply.markup["keyboard"]
-        assert "Appuie d'abord" in chat.route("5,40")[1]                    # une cote sans pari en attente
+        assert "Appuie d'abord" not in str(chat.route("5,40")[1])           # juste après « 🎯 Un combiné » : la cote écrite est celle du combiné
+        chat.clear_pending()
+        assert "Appuie d'abord" in chat.route("5,40")[1]                    # une cote sans question ouverte : le rappel des paris joués
         aide = app.handle_command("aide")
         assert "mode d'emploi" in aide and [[b["text"] for b in row] for row in aide.markup["keyboard"]] == chat.MENU
         assert app.handle_command("bilan").markup["inline_keyboard"][0][0]["callback_data"] == "bilan|detail"
