@@ -95,10 +95,14 @@ def test_last_leg():
     t = ticket("vm1", [leg(0, point=0.5), leg(1, point=1.5, ko=later)], stake=1000, odds=18.4)
     with tickets([t]):
         run(20, {0: live((0, 0), 20)})
-        msg = str(run(31, {0: live((1, 0), 31)}))
-        assert "❗ Il ne manque que H1 – A1 (Plus de 1,5 buts) pour gagner 18 400 FCFA avec Combi vm1 · coup d'envoi 21h00 UTC" in msg, msg
-        assert "❗" not in str(run(40, {0: live((1, 0), 40)})), "une fois par ticket"
-    print("ok  dernier pari restant : une fois, avec le gain et l'heure du coup d'envoi")
+        out = run(31, {0: live((1, 0), 31)})
+        last = str(out.more[0])
+        assert last == ("🔥 <b>PLUS QU'UN MATCH !</b> · 🎫 Combi vm1\n✅ 1/2 déjà gagnés\n⏳ H1 – A1 · Plus de 1,5 buts · coup d'envoi 21h00 UTC\n"
+                        "💰 Si ça passe : <b>18 400 FCFA</b>"), last
+        assert "PLUS QU'UN MATCH" not in watch.all_text(run(40, {0: live((1, 0), 40)})), "une fois par ticket"
+        msg = watch.all_text(run(KO.hour * 0 + 135, {0: live((1, 0), 90), 1: live((1, 0), 15)}))
+        assert "🔥 dernier match du coupon" not in msg or "H1 – A1" in msg
+    print("ok  plus qu'un match : un message à part, une fois, avec le gain et l'heure du coup d'envoi")
 
 
 def test_recap_once():

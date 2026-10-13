@@ -146,9 +146,13 @@ def test_follow_won_after_end():
     live = {}
     kw = {"games": games, "live_for": lambda ids: live, "stats_for": lambda g: {"fouls": (12, 12)},
           "final_for": lambda g: {0: (1, 1), 1: (0, 0), 2: (0, 0)}[g["id"]]}
-    msg = str(watch.follow(KO + timedelta(minutes=130), **kw))        # sortis de la liste en cours : matchs finis, scores par les résultats
-    assert msg.count("✅") == 3 and "🏆 Ticket GAGNÉ ! 3,60 × 100 FCFA = 360 FCFA" in msg, msg
-    print("ok  match fini : score final retrouvé, 🏆 ticket gagné avec le gain")
+    out = watch.follow(KO + timedelta(minutes=130), **kw)             # sortis de la liste en cours : matchs finis, scores par les résultats
+    msg, won = str(out), str(out.more[0])
+    assert msg.count("✅") == 3 and "Ticket GAGNÉ" not in msg and len(out.more) == 1, msg            # le coupon gagné : un message à part
+    assert won.startswith("🎉🏆 <b>COUPON GAGNÉ !</b> 🏆🎉\n🎫 <b>Combi sur mesure (cote 5)</b> · 🎟️ C1\n✅ H0 – A0 · Moins de 3,5 buts (1-1)") and won.count("✅") == 3, won
+    assert "💰 100 FCFA × 3,60 = <b>360 FCFA</b> encaissés (+260 FCFA)" in won, won
+    assert out.more[0].markup["inline_keyboard"][0][0]["text"] == "🎫 C1" and out.more[0].markup["inline_keyboard"][0][0]["callback_data"].startswith("tk|")
+    print("ok  match fini : score final retrouvé, 🎉 coupon gagné dans un message à part (paris, scores, gain), bouton du coupon")
 
 
 def test_opportunity():

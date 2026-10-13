@@ -10,6 +10,9 @@ sont relus (/games/?games=…, ~1 Ko par match : score, minute, statut), puis :
   - 🏆 ticket gagné (avec le gain) ou ❌ ticket perdu, une seule fois ; sinon « 📊 3/8 gagnés, 5 en cours ».
   - 🟢 coup d'envoi de chaque match de tes tickets, avec ses paris et leurs coupons (C.WATCH_KICKOFF) ; un match reste suivi jusqu'à la fin, même
     quand ses paris sont décidés (décision provisoire, revue jusqu'au coup de sifflet final) ;
+  - par coupon, un message À PART (en réponse au message du coupon quand Kelly le connaît, avec son bouton « 🎫 ») : ⏰ « Dans 5 min » avant son 1er
+    match (matchs à la même heure groupés ; le runner déclenche le passage à l'heure voulue, data/watch_next.json), 🔥 « plus qu'un match », 🎉 coupon
+    gagné (paris, scores, gain, capital et objectif du mois) ; sous le message groupé, un bouton « 🎫 » par coupon concerné : sa fiche à jour ;
   - 365scores muet (proxy en panne, 365scores en panne ou bloqué) : SECOURS FotMob (C.WATCH_FM_BACKUP) : une page de championnat par passage pour tes
     matchs en cours, lue en direct (FotMob n'a pas besoin du proxy) : scores, mi-temps, fins de match et paris de buts ; ni buteur, ni corners, ni
     tirs (au règlement du matin). L'avertissement dit la vraie cause (« le proxy ne répond pas », « 365scores en panne (erreur 504) ») et le secours.
@@ -19,10 +22,13 @@ chercher. Le règlement officiel (le lendemain matin) ne change pas : ce suivi n
 Opportunités live : entre C.LIVE_OPP_HOURS, au plus C.LIVE_OPP_DAY par jour et une toutes les C.LIVE_OPP_GAP_H heures : un contrôle léger (365scores :
 assez de matchs en cours dans la fenêtre C.LIVE_MIN_MINUTE-C.LIVE_MAX_MINUTE, 30e-80e), puis la liste live de 1xBet (kelly/live.py) ; si un bon combiné live est possible, « 🔴 Opportunité
 live » avec des boutons de cote. Heures calmes (kelly/quiet.py) : les messages de la nuit sont gardés pour le réveil. Ne lève jamais."""
+import hashlib
+import json
 import math
 import os
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
 from . import config as C, exposure, fmt, inplay, livedata, quiet, store, telegram
@@ -438,6 +444,37 @@ def _ticket_line(t, d):
     return None, f"📊 {won}/{len(st)} gagnés, {len(st) - won} en cours"
 
 
+WON_LEGS_MAX = 12               # coupon gagné : paris listés au plus (au-delà : « … et N autres »)
+
+
+def _won_text(t, d):
+    """🎉 Coupon gagné (HTML) : le coupon, chaque pari avec son score, la mise x la cote = ce qui est encaissé (et le bénéfice) ; en mode capital, le
+    capital après le règlement du lendemain et l'avancée de l'objectif du mois ; après un gros gain (5 % du capital ou plus), un conseil de discipline.
+    Chiffres du suivi : le règlement officiel du matin fait foi."""
+    from . import money
+    stake, odds = float(t.get("stake") or 0), float(t.get("odds") or 0)
+    pay = round(stake * odds)
+    profit = pay - stake
+    lines = ["🎉🏆 " + fmt.b("COUPON GAGNÉ !") + " 🏆🎉",
+             f"🎫 {fmt.b(fmt.esc(t['name']))}" + (fmt.esc(f" · 🎟️ {t['coupon']}") if t.get("coupon") else "")]
+    for leg in t["legs"][:WON_LEGS_MAX]:
+        cur = d["legs"].get(f"{t['what']}|{leg['key']}", {})
+        lines.append(fmt.esc(f"✅ {leg.get('home')} – {leg.get('away')} · {leg.get('pick')}" + (f" ({cur['score']})" if cur.get("score") else "")))
+    if len(t["legs"]) > WON_LEGS_MAX:
+        lines.append(fmt.esc(f"✅ … et {len(t['legs']) - WON_LEGS_MAX} autres"))
+    lines.append(fmt.esc(f"💰 {money.money(round(stake))} × {fmt.odds_txt(odds)} = ") + fmt.b(fmt.esc(money.money(pay)))
+                 + fmt.esc(f" encaissés ({money.signed(round(profit))})"))
+    st = money.capital_state()
+    if st:
+        line = f"💼 Capital après le règlement de demain matin : {money.money(round(st['capital'] + profit))}"
+        if st.get("goal"):
+            line += f" · objectif du mois {money._bar(((st.get('month') or 0) + profit) / st['goal'])}"
+        lines.append(fmt.esc(line))
+        if st["capital"] > 0 and profit >= 0.05 * st["capital"]:
+            lines.append(fmt.i("💡 Beau gain : mets-en une partie de côté (la moitié par exemple). Ta limite du jour reste à 3 % du capital."))
+    return "\n".join(lines)
+
+
 def _out(d, now, kind, text, **extra):
     """Ajoute une ligne ou un bloc (HTML déjà échappé) au message du passage. `kind` : warn (panne / rétabli), ev (un match : bloc de lignes), danger,
     last (dernier pari), foot (pied de ticket), nf (non suivi), recap (bilan de la soirée). `extra` : « ht » (résumé court d'une mi-temps, pour le mode
@@ -447,23 +484,69 @@ def _out(d, now, kind, text, **extra):
         d["out"].append({"at": now.isoformat(timespec="minutes"), "k": kind, "text": text, **extra})
 
 
-ORDER = ("warn", "ev", "danger", "last", "foot", "nf", "recap")
+ORDER = ("warn", "ev", "danger", "foot", "nf", "recap")
+SEPARATE = ("pre", "last", "won")   # un message À PART chacun (⏰ avant le 1er match, 🔥 plus qu'un match, 🎉 coupon gagné), sous le bouton de son coupon et
+                                    # en réponse au message du coupon quand Kelly le connaît (toucher la citation y ramène)
 HT_COMPACT = 12                 # plus de mi-temps que ça dans un même message : une seule ligne pour toutes (sans le détail des paris)
+BUTTONS_MAX = 6                 # boutons « 🎫 » de coupons au plus sous le message groupé
+
+
+def _hid(tid):
+    """Identifiant court d'un ticket pour le bouton « 🎫 » (callback « tk|<id> », 64 octets au plus)."""
+    return hashlib.sha1(str(tid).encode()).hexdigest()[:10]
+
+
+def _tk(t):
+    """[id court, libellé du bouton (code coupon, sinon le ticket), id du message du coupon] : le bouton « 🎫 » d'un ticket et le message auquel répondre."""
+    return [_hid(t.get("tid") or t["what"]), t.get("coupon") or t["what"], t.get("msg")]
+
+
+def _buttons(tks):
+    """Boutons « 🎫 AB12 » (3 par ligne, BUTTONS_MAX au plus, sans doublon) : un appui donne la fiche du coupon (ticket_card) ; None sans ticket."""
+    seen, btns = set(), []
+    for h, lab, _ in tks or []:
+        if h not in seen and len(btns) < BUTTONS_MAX:
+            seen.add(h)
+            btns.append((f"🎫 {lab}", f"tk|{h}"))
+    return telegram.inline([btns[i:i + 3] for i in range(0, len(btns), 3)]) if btns else None
 
 
 def compose(out):
-    """Message du passage depuis les lignes à envoyer : avertissement / rétabli, matchs, paris en danger, derniers paris, pieds de tickets, paris non
-    suivis, bilan ; None si rien. Plus de HT_COMPACT mi-temps à la fois : « ⏸️ Mi-temps : A 1-0 B · C 0-0 D … » en une ligne."""
-    hts = [o for o in out if o.get("ht")]
+    """Messages du passage depuis les lignes à envoyer -> le premier (Html), les suivants dans son attribut `more` (telegram.send les envoie à la suite) ;
+    None si rien. Le message groupé : avertissement / rétabli, matchs, paris en danger, pieds de tickets, paris non suivis, bilan, avec les boutons
+    « 🎫 » des coupons concernés ; plus de HT_COMPACT mi-temps à la fois : « ⏸️ Mi-temps : A 1-0 B · C 0-0 D … » en une ligne. Puis un message à part
+    par ligne SEPARATE (⏰, 🔥, 🎉), avec le bouton de son coupon et en réponse à son message."""
+    main_out = [o for o in out if o["k"] not in SEPARATE]
+    hts = [o for o in main_out if o.get("ht")]
     compact = len(hts) > HT_COMPACT
     blocks = []
     for kind in ORDER:
-        lines = [o["text"] for o in out if o["k"] == kind and not (compact and o.get("ht"))]
+        lines = [o["text"] for o in main_out if o["k"] == kind and not (compact and o.get("ht"))]
         if kind == "ev" and compact:
             lines.insert(0, "⏸️ " + fmt.b("Mi-temps") + " : " + " · ".join(o["ht"] for o in hts))
         if lines:
             blocks.append(("\n\n" if kind == "ev" else "\n").join(lines))
-    return telegram.Html("\n\n".join(blocks)) if blocks else None
+    msgs = []
+    if blocks:
+        main = telegram.Html("\n\n".join(blocks))
+        main.markup = _buttons([tk for o in main_out for tk in (o.get("tk") or [])])
+        msgs.append(main)
+    for o in out:
+        if o["k"] in SEPARATE:
+            m = telegram.Html(o["text"])
+            tks = o.get("tk") or []
+            m.markup = _buttons(tks)
+            m.reply_to = tks[0][2] if len(tks) == 1 and tks[0][2] else None
+            msgs.append(m)
+    if not msgs:
+        return None
+    msgs[0].more = msgs[1:]
+    return msgs[0]
+
+
+def all_text(msg):
+    """Tout le texte d'un passage (message groupé puis messages à part) : pour les tests et les journaux."""
+    return "\n\n".join(str(m) for m in [msg, *getattr(msg, "more", ())]) if msg else ""
 
 
 def _dur(td):
@@ -559,6 +642,7 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
     """Le travail d'un passage, sur le document `d` (lignes à envoyer ajoutées à d["out"], document sauvé après chaque match)."""
     from .sources import s365
     ts = [t for day in (now.date(), now.date() - timedelta(days=1)) for t in exposure.tickets(str(day))]
+    _prekick(d, now, ts)                                 # ⏰ 5 min avant le 1er match de chaque coupon (aucune requête)
     todo = _open_legs(ts, d, now)
     open_n = len({leg.get("id") or leg["key"] for _, leg, _ in todo})
     if not todo:
@@ -574,6 +658,8 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
             lab = (_label(t), (t.get("tid") or t["what"]) in alive)
             if lab not in tix.setdefault(leg["key"], []):
                 tix[leg["key"]].append(lab)
+            if _tk(t) not in tix.setdefault(("tk", leg["key"]), []):      # boutons « 🎫 » des coupons de ce pari
+                tix[("tk", leg["key"])].append(_tk(t))
     if games is None:
         why = _blocked_why()
         if why:
@@ -625,8 +711,13 @@ def _run(d, now, found, status, stats_for, final_for, detail_for, s365, alive, a
     by_game = {}
     for x in found:
         by_game.setdefault(x[3]["id"], []).append(x)
-    for text in _kickoffs(d, now, by_game, status, tix):
-        _out(d, now, "ev", fmt.esc(text))
+    def game_tk(gid):
+        out = []
+        for _, leg, _, _ in by_game[gid]:
+            out += [tk for tk in tix.get(("tk", leg["key"]), []) if tk not in out]
+        return out
+    for text, gids in _kickoffs(d, now, by_game, status, tix):
+        _out(d, now, "ev", fmt.esc(text), tk=[tk for gid in gids for tk in game_tk(gid)])
     order = sorted(by_game, key=lambda gid: (not (status.get(gid) or {}).get("live"), min(_ko(x[1]) for x in by_game[gid])))
     cache_stats, cache_final, events = {}, {}, {}
     for gid in order:
@@ -639,7 +730,7 @@ def _run(d, now, found, status, stats_for, final_for, detail_for, s365, alive, a
         except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
             print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
         for text, extra in events.items():
-            _out(d, now, "ev", fmt.esc(text), **{k: fmt.esc(v) for k, v in (extra or {}).items()})
+            _out(d, now, "ev", fmt.esc(text), tk=game_tk(gid), **{k: fmt.esc(v) for k, v in (extra or {}).items()})
         events.clear()
         store.save(FILE, d)                         # après CHAQUE match : un passage coupé ne perd ni ne répète rien
     return False
@@ -651,13 +742,20 @@ def _after(d, now, ts, alive, touched, open_n, late=False, backup=None, hard=Fal
     for tid, t in touched.items():
         verdict, foot = _ticket_line(t, d)
         old = d["tickets"].get(tid)
+        if verdict == "won" and old != "won":            # 🎉 coupon gagné : un message à part, festif
+            d["tickets"][tid] = verdict
+            _out(d, now, "won", _won_text(t, d), tk=[_tk(t)])
+            continue
+        if verdict == "won":                             # déjà fêté : rien de plus
+            continue
         if old and verdict != old:                       # verdict revu (but annulé, décision provisoire corrigée)
             foot = ("⚠️ Ticket corrigé : de nouveau en jeu. " if not verdict else "⚠️ Ticket corrigé. ") + foot
         if verdict:
             d["tickets"][tid] = verdict
         else:
             d["tickets"].pop(tid, None)
-        _out(d, now, "foot", f"🎫 {fmt.b(fmt.esc(t['name']))}" + (fmt.esc(f" · 🎟️ {t['coupon']}") if t.get("coupon") else "") + f" · {fmt.esc(foot)}")
+        _out(d, now, "foot", f"🎫 {fmt.b(fmt.esc(t['name']))}" + (fmt.esc(f" · 🎟️ {t['coupon']}") if t.get("coupon") else "") + f" · {fmt.esc(foot)}",
+             tk=[_tk(t)])
     if backup:
         _health(d, now, False, backup, open_n, hard=hard, backup=True)
     elif late:
@@ -686,7 +784,7 @@ KICKOFF_LATE = 15               # vu pour la première fois après la 15e (passa
 def _kickoffs(d, now, by_game, status, tix):
     """🟢 Coup d'envoi des matchs de tes tickets vus en cours pour la première fois : un bloc par match (le match, puis ses paris et leurs coupons) ;
     plus de HT_COMPACT à la fois : une seule ligne. Un match découvert après la KICKOFF_LATE e minute, à la mi-temps ou fini n'est pas annoncé (marqué
-    vu). -> [textes]."""
+    vu), ni un match déjà annoncé par « ⏰ Dans 5 min ». -> [(texte, [ids des matchs])]."""
     out = []
     for gid, xs in by_game.items():
         st_g = status.get(gid) or {}
@@ -696,15 +794,126 @@ def _kickoffs(d, now, by_game, status, tix):
         gs["ko"] = 1
         if not C.WATCH_KICKOFF or st_g.get("ended") or st_g.get("ht") or int(st_g.get("minute") or 0) > KICKOFF_LATE or gs.get("score"):
             continue
+        if all(d["legs"].get(x[2], {}).get("pre") for x in xs):         # déjà annoncé 5 min avant (⏰) : pas deux fois
+            continue
         block, seen = [f"🟢 Coup d'envoi · {xs[0][1]['home']} – {xs[0][1]['away']}"], set()
         for _, leg, _, _ in xs:
             if leg["key"] not in seen:
                 seen.add(leg["key"])
                 block.append(f"   {fmt.market_icon(leg)} {leg.get('pick')}" + _from(leg["key"], tix))
-        out.append("\n".join(block))
+        out.append(("\n".join(block), [gid]))
     if len(out) > HT_COMPACT:
-        return ["🟢 Coup d'envoi : " + " · ".join(b.split("\n")[0].removeprefix("🟢 Coup d'envoi · ") for b in out)]
+        return [("🟢 Coup d'envoi : " + " · ".join(b.split("\n")[0].removeprefix("🟢 Coup d'envoi · ") for b, _ in out), [g for _, gs_ in out for g in gs_])]
     return out
+
+
+PREKICK_MIN = 5                 # ⏰ annonce d'un coupon : 5 min avant son 1er match (le runner déclenche un passage à cette heure, voir plan_next)
+PREKICK_EARLY = 8               # ... envoyée par le 1er passage tombé dans les 8 dernières minutes avant le match (jamais après le coup d'envoi)
+NEXT_FILE = "watch_next.json"   # data/watch_next.json : {"at": instant du prochain passage voulu} (lu par termux_runner.py, hors de la base)
+
+
+def _wave(t, now):
+    """(heure du 1er match du coupon `t` pas encore commencé, [ses paris à cette heure], [heures des matchs suivants]) ; None sans match à venir."""
+    kos = sorted({k for k in (_ko(l) for l in t["legs"]) if k and k > now})
+    if not kos:
+        return None
+    return kos[0], [l for l in t["legs"] if _ko(l) == kos[0]], [k for l in t["legs"] for k in [_ko(l)] if k and k > kos[0]]
+
+
+def _prekick(d, now, ts):
+    """⏰ « Dans 5 min » (message à part par coupon, groupé : tous les matchs du coupon qui commencent à la même heure) : avant le 1er match d'un coupon
+    encore en jeu, une fois par coupon (d["flags"]["<tid>|pre"]), avec les matchs suivants et ce que rapporte le coupon s'il passe. Ces matchs n'ont
+    pas de « 🟢 coup d'envoi » en plus. Aucune requête : tout vient de tes tickets."""
+    if not C.WATCH_PREKICK:
+        return
+    from . import money
+    for t in ts:
+        tid = t.get("tid") or t["what"]
+        if _verdict(d, t) in ("won", "lost") or d["flags"].get(f"{tid}|pre"):
+            continue
+        if any(_ko(l) and _ko(l) <= now for l in t["legs"]):            # déjà commencé : trop tard pour « avant le 1er match »
+            continue
+        w = _wave(t, now)
+        if not w or w[0] - now > timedelta(minutes=PREKICK_EARLY):
+            continue
+        first, wave, later = w
+        d["flags"][f"{tid}|pre"] = first.isoformat(timespec="minutes")
+        mins = max(1, round((first - now).total_seconds() / 60))
+        head = "⏰ " + fmt.b(f"Dans {mins} min") + fmt.esc(f" · 🎫 {t['name']}" + (f" · 🎟️ {t['coupon']}" if t.get("coupon") else ""))
+        lines = [head, fmt.esc(f"{len(wave)} match{'s' if len(wave) > 1 else ''} à {first:%Hh%M} :")]
+        for l in wave:
+            lines.append(fmt.esc(f"   {fmt.market_icon(l)} {l.get('home')} – {l.get('away')} · {l.get('pick')}"))
+            d["legs"].setdefault(f"{t['what']}|{l['key']}", {})["pre"] = 1
+        pay = money.money(round((t.get("odds") or 0) * (t.get("stake") or 0)))
+        tail = (f"Puis {len(later)} match{'s' if len(later) > 1 else ''} (le dernier à {max(later):%Hh%M}) · " if later else "") + "si tout passe : "
+        lines.append(fmt.esc(tail) + fmt.b(fmt.esc(pay)))
+        _out(d, now, "pre", "\n".join(lines), tk=[_tk(t)])
+
+
+def plan_next(now=None, ts=None, d=None):
+    """Heure du prochain passage voulu : 5 min avant le 1er match du prochain coupon pas encore annoncé (⏰), écrite dans data/watch_next.json pour le
+    runner (qui sinon passe toutes les 10 min). Appelée à la fin de chaque passage et quand un pari est noté. -> l'instant (epoch) ou None. Ne lève jamais."""
+    try:
+        now = now or _now()
+        d = d if d is not None else _load()
+        ts = ts if ts is not None else [t for day in (now.date(), now.date() - timedelta(days=1)) for t in exposure.tickets(str(day))]
+        at = None
+        for t in ts:
+            tid = t.get("tid") or t["what"]
+            if d["flags"].get(f"{tid}|pre") or _verdict(d, t) in ("won", "lost") or any(_ko(l) and _ko(l) <= now for l in t["legs"]):
+                continue
+            w = _wave(t, now)
+            if w:
+                x = (w[0] - timedelta(minutes=PREKICK_MIN)).timestamp()
+                at = x if at is None else min(at, x)
+        tmp = store.path(NEXT_FILE + ".tmp")
+        os.makedirs(os.path.dirname(tmp), exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"at": at}, f)
+        os.replace(tmp, store.path(NEXT_FILE))
+        return at
+    except Exception as e:                          # noqa: BLE001 - sans lui, le passage ordinaire de 10 min envoie l'annonce un peu plus tôt
+        print(f"[suivi] prochain passage non planifié : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def ticket_card(h, now=None):
+    """Fiche d'un coupon (bouton « 🎫 » d'une alerte) : son nom, son code (en <code> : un appui le copie), cote, mise, ce qu'il rapporte s'il passe, puis
+    chaque pari : ✅ gagné / ❌ perdu (avec le score), ⏳ en cours (score et minute du dernier passage), 🕘 à venir (heure) ; et le compte. Html."""
+    from . import money
+    now = now or _now()
+    t = next((t for day in (now.date(), now.date() - timedelta(days=1), now.date() - timedelta(days=2)) for t in exposure.tickets(str(day))
+              if _hid(t.get("tid") or t["what"]) == h), None)
+    if t is None:
+        return "Ce coupon n'est plus suivi (il date de plus de 2 jours)."
+    try:
+        d = _load()
+    except WatchStateError:
+        d = {"legs": {}, "games": {}}
+    pay = money.money(round((t.get("odds") or 0) * (t.get("stake") or 0)))
+    lines = [f"🎫 {fmt.b(fmt.esc(t['name']))}" + (f" · 🎟️ {fmt.code(t['coupon'])}" if t.get("coupon") else ""),
+             fmt.esc(f"cote {fmt.odds_txt(t.get('odds') or 0)} · mise {money.money(round(t.get('stake') or 0))} · si tout passe : {pay}"), ""]
+    n = {"win": 0, "loss": 0, "live": 0, "soon": 0}
+    for leg in sorted(t["legs"], key=lambda l: (_ko(l) or now).isoformat()):
+        cur = d["legs"].get(f"{t['what']}|{leg['key']}", {})
+        ko = _ko(leg)
+        gs = (d.get("games") or {}).get(str(cur.get("gid")), {}) if cur.get("gid") is not None else {}
+        match = f"{leg.get('home')} – {leg.get('away')}"
+        if cur.get("state") in ("win", "loss"):
+            n[cur["state"]] += 1
+            line = f"{'✅' if cur['state'] == 'win' else '❌'} {match} {cur.get('score') or ''} · {leg.get('pick')}"
+        elif ko and ko > now:
+            n["soon"] += 1
+            line = f"🕘 {match} {ko:%Hh%M} · {leg.get('pick')}"
+        else:
+            n["live"] += 1
+            sc = gs.get("score") or cur.get("score")
+            line = f"⏳ {match}" + (f" {sc}" + (f" ({gs['min']}e)" if gs.get("min") and not gs.get("ft") else "") if sc else "") + f" · {leg.get('pick')}"
+        lines.append(fmt.esc(" ".join(line.split())))
+    parts = [f"{n['win']} gagné{'s' if n['win'] > 1 else ''}"] + ([f"{n['loss']} perdu{'s' if n['loss'] > 1 else ''}"] if n["loss"] else []) \
+        + ([f"{n['live']} en cours"] if n["live"] else []) + ([f"{n['soon']} à venir"] if n["soon"] else [])
+    lines += ["", fmt.esc("📊 " + ", ".join(parts) + (" · coupon perdu" if n["loss"] else ""))]
+    return telegram.Html("\n".join(lines))
 
 
 def _score_t(txt):
@@ -794,6 +1003,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     g = legs[0][3]
     gs = _gs(d, g["id"], legs)
     gs["at"] = now.isoformat(timespec="minutes")
+    gs["min"] = int(st_g.get("minute") or 0) if st_g.get("live") else gs.get("min")      # minute du dernier passage (fiche du coupon)
     paused = st_g.get("paused")
     ko = min(_ko(x[1]) for x in legs)
     finished = st_g.get("ended") or (not st_g.get("live") and not paused and now - ko >= timedelta(minutes=FINISH_MIN))
@@ -872,6 +1082,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     if head_goal:
         block.append(head_goal)
     ht_lines, ft_lines, live_lines, dec_lines, said = [], [], [], [], set()
+    lastof = {v for f, v in d["flags"].items() if f.endswith("|last") and isinstance(v, str)}       # paris qui sont le dernier match d'un coupon en jeu
     for t, leg, k, _ in legs:
         prevl = d["legs"].get(k, {})
         stats = {}
@@ -889,6 +1100,8 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
         if st is None:
             continue
         tag = _from(leg["key"], tix)                     # « · 🎟️ 4G2MJ, LJVKJ (perdu) » : de quels coupons vient ce pari
+        if leg["key"] in lastof and leg["key"] in alive_legs:
+            tag += " · 🔥 dernier match du coupon"
         line = None
         first = leg["key"] not in said
         said.add(leg["key"])
@@ -916,7 +1129,8 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
             if (p is not None and p0 and leg["key"] in alive_legs and p < C.WATCH_DANGER_P and p0 - p >= DANGER_DROP and int(st_g.get("minute") or 0) >= 20
                     and not prevl.get("danger")):
                 _out(d, now, "danger", fmt.esc(f"⚠️ Pari en danger · {match} ({st_g.get('minute')}e, {sc}) : {leg.get('pick')} · {inplay.pct(p)} "
-                                               f"({inplay.pct(p0)} avant le match)" + _from(leg["key"], tix, alive_only=True)))
+                                               f"({inplay.pct(p0)} avant le match)" + _from(leg["key"], tix, alive_only=True)),
+                     tk=list((tix or {}).get(("tk", leg["key"]), [])))
                 for t2, l2, k2, _ in legs:
                     if l2["key"] == leg["key"]:
                         d["legs"].setdefault(k2, {})["danger"] = 1
@@ -925,7 +1139,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
         if st in ("win", "loss") and not finished and not decided_now:
             rec["prov"] = 1                              # décidé en cours de match : revu jusqu'à la fin (but annulé)
         cur = d["legs"].get(k, {})
-        d["legs"][k] = {**{x: cur[x] for x in ("nf", "danger", "p") if x in cur and (x != "p" or st == "live")}, **rec}
+        d["legs"][k] = {**{x: cur[x] for x in ("nf", "danger", "p", "pre") if x in cur and (x != "p" or st == "live")}, **rec}
         if line and first:
             (ft_lines if finished else dec_lines).append(line)
             tid = t.get("tid") or t["what"]
@@ -950,8 +1164,8 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
 
 
 def _last_legs(d, now, ts, alive):
-    """« ❗ Il ne manque que … pour gagner X FCFA » : un ticket encore en jeu (au moins 2 paris) dont tous les paris sont gagnés sauf UN encore en jeu ; une
-    fois par ticket (d["flags"]["<tid>|last"])."""
+    """« 🔥 PLUS QU'UN MATCH ! » (message à part) : un ticket encore en jeu (au moins 2 paris) dont tous les paris sont gagnés sauf UN encore en jeu, avec
+    ce que rapporte le coupon s'il passe ; une fois par ticket (d["flags"]["<tid>|last"]). Ensuite la ligne de ce pari dit « 🔥 dernier match du coupon »."""
     from . import money
     for t in ts:
         tid = t.get("tid") or t["what"]
@@ -964,15 +1178,17 @@ def _last_legs(d, now, ts, alive):
         leg, cur = rest[0]
         ko = _ko(leg)
         gain = money.money(round((t.get("odds") or 0) * (t.get("stake") or 0)))
-        txt = (f"❗ Il ne manque que {leg.get('home')} – {leg.get('away')} ({leg.get('pick')}) pour gagner {gain} avec {t['name']}"
-               + (f" (🎟️ {t['coupon']})" if t.get("coupon") else ""))
+        where = f"⏳ {leg.get('home')} – {leg.get('away')} · {leg.get('pick')}"
         if need(leg)[0] is None:
-            txt += " (pas suivi en direct)"
+            where += " (pas suivi en direct)"
         elif ko and ko > now:
-            txt += f" · coup d'envoi {ko:%Hh%M} UTC"
-        elif cur.get("p") is not None:
-            txt += f" · {inplay.pct(cur['p'])} de chances"
-        _out(d, now, "last", fmt.esc(txt))
+            where += f" · coup d'envoi {ko:%Hh%M} UTC"
+        else:
+            where += (f" ({cur['score']})" if cur.get("score") else "") + (f" · {inplay.pct(cur['p'])} de chances" if cur.get("p") is not None else "")
+        txt = "\n".join(["🔥 " + fmt.b("PLUS QU'UN MATCH !") + fmt.esc(f" · 🎫 {t['name']}" + (f" · 🎟️ {t['coupon']}" if t.get("coupon") else "")),
+                         fmt.esc(f"✅ {len(t['legs']) - 1}/{len(t['legs'])} déjà gagnés"), fmt.esc(where),
+                         fmt.esc("💰 Si ça passe : ") + fmt.b(fmt.esc(gain))])
+        _out(d, now, "last", txt, tk=[_tk(t)])
         d["flags"][f"{tid}|last"] = leg["key"]
 
 
@@ -1052,6 +1268,7 @@ def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, 
     d = _load()
     _purge(d, now)
     _follow(d, now, games, live_for, stats_for, final_for, detail_for, fm_for)
+    plan_next(now, d=d)                              # ⏰ le prochain « dans 5 min » : le runner déclenche un passage à cette heure
     try:
         _recap(d, now)
     except Exception as e:                          # noqa: BLE001 - le bilan ne bloque jamais le suivi
@@ -1159,7 +1376,10 @@ def _tickets(now):
     except WatchStateError:
         return
     sent_lines = list(d["out"])
-    ok = quiet.send(msg, now, kind="suivi") if C.WATCH_QUIET else telegram.send(msg)      # par défaut : à toute heure, même la nuit
+    if C.WATCH_QUIET:                                    # gardé pour le réveil la nuit : chaque message (groupé, puis ⏰ 🔥 🎉 à part) l'un après l'autre
+        ok = all([quiet.send(m, now, kind="suivi") for m in [msg, *getattr(msg, "more", ())]])
+    else:
+        ok = telegram.send(msg)                          # par défaut : à toute heure, même la nuit (le groupé, puis ses messages à part)
     queued = telegram.LAST_QUEUED
     if ok or queued:
         d["out"] = [o for o in d["out"] if o not in sent_lines]

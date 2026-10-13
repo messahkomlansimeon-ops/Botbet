@@ -593,6 +593,9 @@ def on_callback(data, message_id=None):
     """Réponse à un appui sur un bouton sous un message (voir les callback_data de ce module)."""
     from . import app
     parts = (data or "").split("|")
+    if parts[0] == "tk" and len(parts) == 2:              # « 🎫 AB12 » sous une alerte du suivi des matchs : la fiche du coupon, à jour
+        from . import watch
+        return watch.ticket_card(parts[1])
     if parts[0] == "joue" and len(parts) in (3, 4):
         what, day, page = parts[1], parts[2], _page(parts[3]) if len(parts) == 4 else None
         t = played.find(what, day)
@@ -600,6 +603,9 @@ def on_callback(data, message_id=None):
             return t or "Ce pari n'existe plus."
         if t.item.get("result") is not None:
             return f"Le {t.label} est déjà réglé : trop tard pour le noter."
+        if message_id and page is None and not t.item.get("msg"):     # le message du coupon lui-même (pas la liste « Mes paris ») : les alertes du
+            t.item["msg"] = message_id                              # suivi des matchs y répondront (toucher la citation y ramène)
+            t.save()
         if t.item.get("played") and _double_tap(what, day, message_id):      # le même appui, deux fois de suite : rien de plus (aucune question ouverte)
             return ""                                # réponse vide : rien n'est envoyé (telegram._handle)
         if t.known and not t.item.get("played") and not played.is_stale(t):     # cote 1xBet connue ET récente : jamais demandée (trop vieille : « à quelle cote ? »)

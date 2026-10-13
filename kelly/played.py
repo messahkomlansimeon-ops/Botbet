@@ -372,6 +372,11 @@ def note(t, odds, stake, now=None, ref_at=None):
         lines.append("⚠️ 1xBet paie moins que la cote mini : Kelly conseillait de passer ton chemin.")
     elif gap < -0.15:
         lines.append("⚠️ Cote bien plus basse que prévu : vérifie la cote saisie, ou les cotes de 1xBet ont bougé.")
+    try:                                            # ⏰ « dans 5 min » de ce coupon : le runner déclenche un passage du suivi à la bonne heure
+        from . import watch
+        watch.plan_next()
+    except Exception:                               # noqa: BLE001 - facultatif : le passage de 10 min l'annonce quand même
+        pass
     return "\n".join(lines)
 
 

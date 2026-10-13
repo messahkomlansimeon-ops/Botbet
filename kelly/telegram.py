@@ -161,9 +161,12 @@ def _transient(e):
     return e.code is None or e.code == 429 or e.code >= 500
 
 
-def _deliver(part, is_html, markup, chat_id):
-    """Un morceau de message -> réponse de l'API ; lève TelegramError. HTML refusé par Telegram : repli en texte brut."""
+def _deliver(part, is_html, markup, chat_id, reply_to=None):
+    """Un morceau de message -> réponse de l'API ; lève TelegramError. HTML refusé par Telegram : repli en texte brut. `reply_to` : id d'un message
+    auquel celui-ci répond (toucher la citation y ramène) ; message disparu : envoyé quand même, sans citation."""
     extra = {"reply_markup": markup} if markup else {}
+    if reply_to:
+        extra |= {"reply_to_message_id": reply_to, "allow_sending_without_reply": True}
     if is_html:
         try:
             return api("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True, **extra)
@@ -175,13 +178,14 @@ def _deliver(part, is_html, markup, chat_id):
     return api("sendMessage", chat_id=chat_id, text=part, **extra)
 
 
-def _enqueue(parts, is_html, markup, chat_id):
-    """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier). Ajout ATOMIQUE (store.update) : le bot Telegram et le suivi
-    des matchs peuvent ajouter en même temps sans s'écraser. LAST_QUEUED passe à vrai (le message n'est pas perdu : il partira plus tard)."""
+def _enqueue(parts, is_html, markup, chat_id, reply_to=None):
+    """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier, la citation `reply_to` sur le premier). Ajout ATOMIQUE
+    (store.update) : le bot Telegram et le suivi des matchs peuvent ajouter en même temps sans s'écraser. LAST_QUEUED passe à vrai (le message n'est
+    pas perdu : il partira plus tard)."""
     global LAST_QUEUED
     now = time.time()
     new = [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
-           for i, p in enumerate(parts)]
+           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) for i, p in enumerate(parts)]
 
     def add(box):
         box = (box if isinstance(box, list) else []) + new
@@ -210,16 +214,17 @@ def _send_one(text, chat_id=None, queue=True):
         return True
     is_html = isinstance(text, Html)
     parts, markup, sent = _chunks(str(text)), getattr(text, "markup", None), True
+    reply_to = getattr(text, "reply_to", None)
     explicit = chat_id if chat_id != chat else None
     if queue and store.load(OUTBOX, []):                        # des messages plus anciens attendent : d'abord eux
         if time.monotonic() - _last_fail[0] > 60:
             flush_outbox()
         if store.load(OUTBOX, []):
-            _enqueue(parts, is_html, markup, explicit)
+            _enqueue(parts, is_html, markup, explicit, reply_to)
             return False
     for i, part in enumerate(parts):
         try:
-            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id)
+            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id, reply_to if i == 0 else None)
         except TelegramError as e:
             LAST_ERROR = f"{e} (code {e.code})" if e.code else str(e)
             print(f"[telegram] envoi échoué : {LAST_ERROR}", file=sys.stderr)
@@ -230,7 +235,7 @@ def _send_one(text, chat_id=None, queue=True):
                     _enqueue(parts[i + 1:], is_html, markup, explicit)
             elif queue and _transient(e):
                 _last_fail[0] = time.monotonic()
-                _enqueue(parts[i:], is_html, markup, explicit)
+                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None)
             return False
     return (sent or {}).get("message_id", True) if isinstance(sent, dict) else True
 
@@ -294,7 +299,7 @@ def _flush(box, chat):
         try:
             if not target:
                 raise TelegramError("TELEGRAM_CHAT_ID absent")
-            _deliver(text, e.get("html"), e.get("markup"), target)
+            _deliver(text, e.get("html"), e.get("markup"), target, e.get("reply_to"))
         except TelegramError as err:
             if err.maybe_sent:                       # issue inconnue : abandonné plutôt que doublé (note sur stderr), la suite continue
                 print(f"[telegram] message en attente sans réponse (peut-être livré), abandonné : {err}", file=sys.stderr)

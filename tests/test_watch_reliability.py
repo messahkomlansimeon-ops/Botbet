@@ -62,10 +62,11 @@ def test_tid_no_inheritance():
     with tickets(ts):
         assert watch.follow(KO + timedelta(minutes=20), **kw(live)) is None
         live[2] = {"live": True, "score": (2, 0), "minute": 50}
-        msg = str(watch.follow(KO + timedelta(minutes=50), **kw(live)))
+        out = watch.follow(KO + timedelta(minutes=50), **kw(live))
+        msg, all_ = str(out), watch.all_text(out)
     d = store.load(watch.FILE, {})
     assert "vm1" not in d["tickets"] and d["v"] == 2, d["tickets"]                       # ancien verdict sans date oublié (migration)
-    assert "✅ H2 – A2" in msg and "déjà perdu" not in msg and "🏆 Ticket GAGNÉ" in msg, msg     # le vm1 d'hier gagné ne cache pas celui du jour
+    assert "✅ H2 – A2" in msg and "déjà perdu" not in msg and "COUPON GAGNÉ" in all_, all_     # le vm1 d'hier gagné ne cache pas celui du jour
     assert d["tickets"] == {f"{DAY}|pari|{leg(2)['key']}": "won", f"{str(KO.date() - timedelta(days=1))}|vm1": "won"}, d["tickets"]   # l'autre pari seul : à part
     print("ok  verdicts par identifiant daté : le m1 du jour n'hérite pas de celui d'hier, deux paris seuls ne se confondent pas")
 
@@ -208,8 +209,8 @@ def test_var_and_correction():
     with tickets(ts):
         watch.follow(KO + timedelta(minutes=30), **kw(live))
         live[0] = {"live": True, "score": (2, 0), "minute": 60}
-        msg = str(watch.follow(KO + timedelta(minutes=60), **kw(live)))
-        assert "✅ H0 – A0" in msg and "🏆 Ticket GAGNÉ" in msg, msg
+        msg = watch.all_text(watch.follow(KO + timedelta(minutes=60), **kw(live)))
+        assert "✅ H0 – A0" in msg and "COUPON GAGNÉ" in msg, msg
         assert store.load(watch.FILE, {})["legs"][f"vm1|{leg(0)['key']}"]["prov"] == 1, "décidé en cours de match : provisoire"
         live[0] = {"live": True, "score": (1, 0), "minute": 63}        # but annulé par la VAR
         msg = str(watch.follow(KO + timedelta(minutes=70), **kw(live)))
@@ -300,9 +301,11 @@ def test_coupon_on_each_bet():
     with tickets(ts):
         watch.follow(KO + timedelta(minutes=20), **kw(live))
         live[0] = {"live": True, "score": (2, 0), "minute": 50}
-        msg = str(watch.follow(KO + timedelta(minutes=50), **kw(live)))
+        out = watch.follow(KO + timedelta(minutes=50), **kw(live))
+        msg = watch.all_text(out)
     assert "✅ H0 – A0 : totals Over 1.5 (2-0) · 🎟️ CODE1, 🎟️ CODE2, 🎟️ CODE3 +2" in msg, msg        # en jeu d'abord, au plus 3, puis +N
-    assert "🎫 <b>Combi vm1</b> · 🎟️ CODE1 · 🏆 Ticket GAGNÉ" in msg, msg
+    assert "🎫 <b>Combi vm1</b> · 🎟️ CODE1" in msg and msg.count("COUPON GAGNÉ") == 4, msg           # 4 coupons gagnés : 4 messages festifs
+    assert [b["text"] for row in out.markup["inline_keyboard"] for b in row] == [f"🎫 CODE{i}" for i in range(1, 6)], out.markup      # boutons des coupons
     assert watch._from(leg(0)["key"], {leg(0)["key"]: [("🎟️ A", True), ("🎟️ B", False)]}) == " · 🎟️ A, 🎟️ B (perdu)"
     print("ok  chaque pari dit de quel(s) coupon(s) il vient (code 1xBet), le perdu marqué")
 

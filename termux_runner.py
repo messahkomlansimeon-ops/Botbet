@@ -341,13 +341,23 @@ class Runner:
             mark_done(self.state, args, now, time.time(), rc)
             save_state(self.state)
 
+    def _watch_wanted(self):
+        """Un passage du suivi est-il demandé avant les 10 min (⏰ 5 min avant le 1er match d'un coupon) ? data/watch_next.json (watch.plan_next) donne
+        l'instant voulu : dû s'il est passé et qu'aucun passage n'a commencé depuis. Fichier absent ou illisible : non."""
+        try:
+            with open(os.path.join(os.environ.get("DATA_DIR") or os.path.join(ROOT, "data"), "watch_next.json"), encoding="utf-8") as f:
+                at = json.load(f).get("at")
+            return isinstance(at, (int, float)) and self.state["watch_at"] < at <= time.time()
+        except (OSError, ValueError, AttributeError):
+            return False
+
     def watch_loop(self):
         """Toutes les WATCH_EVERY s, le suivi des matchs (--watch), en parallèle des autres passages : il ne prend pas le verrou des données (sa
         file de messages et ses compteurs s'écrivent de façon atomique), un --track de 25 min ou le matin ne le retardent plus."""
         while not STOP.is_set():
             try:
                 with self.state_lock:
-                    due = time.time() - self.state["watch_at"] >= WATCH_EVERY
+                    due = time.time() - self.state["watch_at"] >= WATCH_EVERY or self._watch_wanted()
                 if due:
                     rc = self.run(["--watch"])
                     self._done(["--watch"], datetime.now(timezone.utc), rc)
