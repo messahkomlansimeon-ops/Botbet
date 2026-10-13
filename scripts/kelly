@@ -66,6 +66,12 @@ case "$1" in
             echo "   Pour suivre : kelly rejeu-log"
         fi
         ;;
+    marches|marchés)
+        # marchés par championnat (coupes comprises) et par sens : kelly marches [tirs | corners | ldc…] (lecture seule)
+        cd "$DIR" || exit 1
+        shift
+        python tools/marches.py "$@"
+        ;;
     suivi)
         # contrôle du suivi des matchs et des notifications (lecture seule)
         cd "$DIR" || exit 1
@@ -108,7 +114,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|rejeu|rejeu-log}"
+        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log}"
         exit 1
         ;;
 esac

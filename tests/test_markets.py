@@ -65,10 +65,34 @@ def test_typed_odds_after_picker():
     print("ok  cote écrite juste après « 🎯 Un combiné » / « 🔴 Live » : comprise comme la cote voulue")
 
 
+def test_by_league():
+    from kelly import fair
+    def r(i, sk, market, name, won, p=0.65):
+        return {"key": f"m{i}|{market}||24.5|{name}", "id": f"m{i}", "sport_key": sk, "market": market, "name": name, "home": "H", "away": "A",
+                "date": "2026-10-12", "p0": p, "result": "win" if won else "loss"}
+    rows = [r(i, "soccer_germany_bundesliga", "team_shots_total", "Over", True) for i in range(9)]
+    rows += [r(10 + i, "soccer_germany_bundesliga", "team_shots_total", "Under", i < 3) for i in range(12)]
+    rows += [r(30 + i, "soccer_uefa_champs_league", "totals", "Over", i % 2 == 0, 0.6) for i in range(4)]
+    rows += [r(40, "soccer_uefa_champs_league", "totals", "Over", True, 0.6) | {"result": None}]            # pas réglé : jamais compté
+    store.save(fair.FILE, rows)
+    out = telegram.plain(app.handle_command("marchés détail"))
+    assert chat.route("marchés détail tirs")[0] == "/marches détail tirs" and chat.route("📊 Marchés")[0] == "/marches"
+    assert out.startswith("📊 Marchés par championnat (10 derniers jours)"), out
+    assert "Bundesliga · 21\n  🎯 Tirs : moins ⚠️ 25 % / 65 % (12) · plus 100 % / 65 % (9)" in out, out
+    assert "Ligue des champions · 4\n  ⚽ Buts : plus 50 % / 60 % (4)" in out, out
+    ldc = telegram.plain(app.handle_command("marchés détail ldc"))
+    assert "Ligue des champions" in ldc and "Bundesliga" not in ldc, ldc
+    shots = telegram.plain(app.handle_command("marchés détail tirs"))
+    assert "Bundesliga" in shots and "Ligue des champions" not in shots, shots
+    assert "Aucun pronostic réglé" in telegram.plain(app.handle_command("marchés détail fautes"))
+    print("ok  marchés détail : par championnat (coupes comprises) et par sens, filtre par famille ou championnat (ldc)")
+
+
 def main():
     test_button_and_words()
     test_typed_odds_after_picker()
     test_card()
+    test_by_league()
     print("tests bouton Marchés : OK")
 
 

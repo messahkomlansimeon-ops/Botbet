@@ -1484,6 +1484,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
 • <i>backup</i> (ou <i>sauvegarde</i>) : recevoir la base de données kelly.db directement ici pour la sauvegarder sur ton PC
+• <i>marchés détail</i> (ou <i>marchés détail tirs</i>, <i>marchés détail ldc</i>) : chaque championnat et coupe, marché par marché, en plus et en moins
 • <i>réglé vm3 gagné 12/10</i> : donner toi-même le résultat d'un ticket noté que Kelly ne trouve pas (petite ligue sans stats) : gagné, perdu ou remboursé
 
 <i>Les anciennes commandes marchent toujours : /top, /combi, /bilan, /joue, /match, /analyse, /stats, /monde, /ligues, /etat, /status, /live, /bank, /backup.</i>""")
@@ -1937,7 +1938,7 @@ def _handle_command(text):
         return money.capital_command(args)
     if cmd == "/marches":
         from . import markets
-        return markets.card()
+        return markets.by_league(args) if args else markets.card()      # « marchés détail [tirs | ldc…] » : par championnat et par sens
     if cmd == "/perte":
         return money.max_loss_command(args)
     if cmd == "/objectif":

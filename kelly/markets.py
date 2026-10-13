@@ -116,5 +116,84 @@ def card():
             blocks.append([title] + lines)
     if len(blocks) == 1:
         blocks.append(["Aucun résultat pour l'instant : les marchés apparaîtront dès les premiers pronostics réglés."])
-    blocks.append([fmt.i("📚 rejeu : la saison passée rejouée (point de départ des corrections). Détail chiffré : « bilan détail ».")])
+    blocks.append([fmt.i("📚 rejeu : la saison passée rejouée (point de départ des corrections). Détail chiffré : « bilan détail ». Par championnat "
+                         "et par sens (plus / moins) : « marchés détail », « marchés détail tirs », « marchés détail ldc ».")])
     return Html("\n\n".join("\n".join(b) for b in blocks))
+
+
+# ---------- « marchés détail » : par championnat (coupes comprises) et par sens ----------
+
+FAM_WORDS = {"buts": "goals", "but": "goals", "equipe": "team_goals", "1n2": "h2h", "dc": "dc", "double": "dc", "btts": "btts", "marquent": "btts",
+             "corners": "corners", "corner": "corners", "cartons": "cards", "carton": "cards", "jaunes": "yellow", "tirs": "shots", "tir": "shots",
+             "cadres": "sot", "fautes": "fouls", "faute": "fouls", "touches": "throws", "horsjeu": "offsides", "hors-jeu": "offsides"}
+LEAGUE_ALIAS = {"ldc": "champions", "c1": "champions", "c3": "europa", "europa": "europa", "c4": "conference", "cdm": "coupe du monde"}
+CELL_MIN = 3                    # résultats d'un sens dans un championnat pour l'afficher
+SMALL = 30                      # sous ce nombre : simple indication (marge d'erreur de ±18 points ou plus)
+
+
+def _settled(days_rows=None):
+    """Pronostics réglés (gagnés / perdus) des 10 derniers jours : data/fair.json et le journal de l'ensemble (beaucoup plus de lignes), sans doublon
+    (jour + clé) -> [{sport_key, market, side, won, p}] ; p = la proba annoncée par Kelly (p0, sinon pm, sinon prob)."""
+    from . import fair, store
+    rows = days_rows if days_rows is not None else (fair.load() + store.load(ensemble.LOG_FILE, []))
+    seen, out = set(), []
+    for r in rows:
+        if r.get("result") not in ("win", "loss"):
+            continue
+        k = (str(r.get("date") or r.get("commence") or "")[:10], r.get("key"))
+        if k in seen:
+            continue
+        seen.add(k)
+        p = r.get("p0") if r.get("p0") is not None else r.get("pm") if r.get("pm") is not None else r.get("prob")
+        sd = calib.side(r)
+        if p is None or not sd:
+            continue
+        out.append({"sport_key": r.get("sport_key") or "?", "market": r.get("market") or "", "side": sd, "won": r["result"] == "win", "p": float(p)})
+    return out
+
+
+def by_league(words=(), rows=None):
+    """« marchés détail [tirs | corners | ldc | Premier…] » (HTML) : par championnat (coupes comprises), chaque famille avec son détail par sens :
+    « ⚽ Buts : plus 72 % / 65 % (18) · moins ⚠️ 55 % / 68 % (11) » (réalisé / annoncé, nombre). `words` : une famille (buts, corners, tirs…) et / ou un
+    bout de nom de championnat (ldc = Ligue des champions). Petits nombres : une indication, pas une preuve."""
+    from . import catalogue, played
+    from .telegram import Html
+    fam_f, lg_f = None, []
+    for w in words or ():
+        n = played.norm(w)
+        if n in FAM_WORDS:
+            fam_f = FAM_WORDS[n]
+        elif n not in ("detail", "details"):
+            lg_f.append(LEAGUE_ALIAS.get(n, n))
+    groups = {}
+    for r in _settled() if rows is None else rows:
+        fam = calib.family(r["market"])
+        if fam_f and fam != fam_f:
+            continue
+        name = catalogue.name(r["sport_key"]) if r["sport_key"] != "?" else "Championnat inconnu"
+        if lg_f and not all(x in played.norm(name) or x in r["sport_key"] for x in lg_f):
+            continue
+        cell = groups.setdefault(name, {}).setdefault(fam, {}).setdefault(r["side"], [0, 0, 0.0])
+        cell[0] += 1
+        cell[1] += r["won"]
+        cell[2] += r["p"]
+    lines = ["📊 " + fmt.b("Marchés par championnat") + fmt.esc(" (10 derniers jours)"),
+             fmt.i(fmt.esc(f"réalisé / annoncé (nombre) · ⚠️ 10 points sous l'annoncé · moins de {SMALL} résultats : simple indication"))]
+    order = sorted(groups, key=lambda g: -sum(c[0] for f in groups[g].values() for c in f.values()))
+    for name in order:
+        fams = groups[name]
+        block = []
+        for fam in sorted(fams, key=lambda f: ORDER.index(f) if f in ORDER else 99):
+            cells = [(sd, c) for sd, c in sorted(fams[fam].items(), key=lambda kv: -kv[1][0]) if c[0] >= CELL_MIN]
+            if not cells:
+                continue
+            parts = [f"{sd} {'⚠️ ' if c[0] >= 10 and c[1] / c[0] <= c[2] / c[0] - 0.10 else ''}{fmt.pct(c[1] / c[0])} / {fmt.pct(c[2] / c[0])} ({c[0]})"
+                     for sd, c in cells]
+            icon = fmt.market_icon({"market": calib.rep_market(fam)})
+            block.append(fmt.esc(f"  {icon} {calib.LABELS.get(fam, fam).capitalize()} : " + " · ".join(parts)))
+        if block:
+            total = sum(c[0] for f in fams.values() for c in f.values())
+            lines += ["", fmt.b(fmt.esc(name)) + fmt.esc(f" · {total}")] + block
+    if len(lines) == 2:
+        lines.append(fmt.esc("Aucun pronostic réglé ne correspond (10 derniers jours)."))
+    return Html("\n".join(lines))

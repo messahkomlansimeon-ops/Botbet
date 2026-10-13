@@ -396,6 +396,8 @@ def _command_words(words):
         return "/cotes"
     if head in ("bilan", "resultats", "resultat") and any(played.norm(w).startswith("detail") for w in rest):
         return "/bilan détail " + " ".join(w for w in rest if w.isdigit())
+    if head in ("marches", "marche") and rest and played.norm(rest[0]).startswith("detail"):     # « marchés détail [tirs | ldc…] »
+        return ("/marches détail " + " ".join(rest[1:])).strip()
     if head in WORDS_ARGS:
         return (WORDS_ARGS[head] + (" " + " ".join(rest) if rest else "")).strip()
     if head in WORDS_ALONE and all(w.isdigit() for w in rest):         # « top », « top 5 » ; pas « Top Oss »
