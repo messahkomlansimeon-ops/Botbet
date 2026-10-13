@@ -324,7 +324,9 @@ def phone_lines(now=None, root=ROOT):
     day = str(now.date())
     done = store.load("daily_done.json", {})
     if isinstance(done, dict) and done.get("day") == day:
-        out.append(f"🌅 Matin fait à {str(done.get('at', ''))[11:16].replace(':', 'h')} UTC")
+        pr = store.load("progress.json", {})
+        end = pr.get("finished") if isinstance(pr, dict) and str(pr.get("started") or "")[:10] == day else None
+        out.append(f"🌅 Matin fait à {str(end or done.get('at', ''))[11:16].replace(':', 'h')} UTC")
     elif st.get("daily_try_day") == day and st.get("daily_tries", 0) >= 3:
         out.append("❌ Matin raté aujourd'hui (3 essais) : kelly logs")
     elif now.hour >= 5:
@@ -341,10 +343,13 @@ def phone_lines(now=None, root=ROOT):
     else:
         out.append("⚪ Surveillance extérieure non réglée (HC_PING_URL dans .env, voir DEPLOY_TERMUX.md)")
     boot = os.path.exists(os.path.expanduser("~/.termux/boot/kelly"))
-    guard = _guard_alive()
-    if not (boot and guard):
-        out.append(("✅" if guard else "⚠️") + f" Garde {'active' if guard else 'absente (kelly restart)'} · "
-                   + ("✅ relance au démarrage" if boot else "⚠️ relance au démarrage absente (Termux:Boot)"))
+    used = os.path.exists(os.path.join(logs, "boot.log"))           # écrit par le script de démarrage lui-même : la preuve que Termux:Boot l'a lancé
+    if not _guard_alive():
+        out.append("⚠️ Garde absente : Kelly ne serait pas relancée si elle s'arrête (kelly restart)")
+    if not boot:
+        out.append("⚠️ Relance au démarrage absente (kelly restart, et Termux:Boot installé)")
+    elif not used:
+        out.append("⚪ Relance au démarrage prête, jamais encore utilisée : vérifie que l'appli Termux:Boot est installée et ouverte une fois")
     pend = st.get("pending") or {}
     if pend:
         out.append(f"⏳ {len(pend)} alerte(s) en attente d'envoi (réseau ?)")
@@ -356,7 +361,12 @@ def xbet_lines(now=None):
     from .sources import http, state
     now = now or datetime.now(timezone.utc)
     allst = state._all()
-    h, run = state.health("xbet"), (allst.get("xbet") or {}).get("run") or {}
+    h, run = state.health("xbet"), (allst.get("xbet") or {}).get("cut") or {}
+    try:
+        recent_cut = now - datetime.fromisoformat(run["at"]) < timedelta(hours=6)
+    except (KeyError, TypeError, ValueError):
+        recent_cut = False
+    run = run if recent_cut else {}
     out = []
     if h["blocked_until"]:
         out.append(f"❌ 1xBet : {(h['last_error'] or 'accès refusé')[:110]}")
@@ -367,8 +377,8 @@ def xbet_lines(now=None):
     else:
         at = _at(h["last_success"], now)
         out.append(f"✅ 1xBet · {_num(h['rows'])} matchs lus" + (f" · {at}" if at else ""))
-    if run.get("cut"):
-        out.append(f"⚠️ 1xBet : dernier relevé coupé ({run['cut']}), {run.get('read', 0)} lus, {run.get('left', 0)} pas lus")
+    if run.get("why"):
+        out.append(f"⚠️ 1xBet : relevé coupé à {run['at'][11:16].replace(':', 'h')} UTC ({run['why']}), {run.get('read', 0)} lus, {run.get('left', 0)} pas lus")
     if run.get("format"):
         out.append("❌ 1xBet répond sans cotes : format du site changé ?")
     p = allst.get("proxy") or {}

@@ -1,6 +1,7 @@
 """⚠️ Ce matin : ce qui cloche dans le passage du matin, une ligne chacun, en tête des messages du matin (rien quand tout va bien) :
-- journée inhabituelle : un compte (matchs au programme, championnats, paris avec cotes réelles, pronostics, matchs lus chez 1xBet) sous la moitié de sa
-  médiane des derniers matins (MIN_DAYS matins connus au moins, médiane d'au moins MIN_MEDIAN) : une source a sans doute lâché ;
+- journée inhabituelle : le programme est normal (matchs au programme au moins NORMAL de leur médiane des derniers matins : une trêve internationale,
+  un jour creux ne comptent pas) mais les matchs lus chez 1xBet ou les pronostics tombent sous la moitié de leur médiane (MIN_DAYS matins connus au
+  moins, médiane d'au moins MIN_MEDIAN) : une source a sans doute lâché (les paris avec cotes réelles varient trop d'un jour à l'autre : jamais) ;
 - relevé 1xBet coupé (délai, plafond, panne) ou format du site suspect (xbet._note_run) ;
 - proxy qui refuse le mot de passe ou forfait Webshare épuisé (http.proxy_refusal).
 Les comptes du jour sont gardés (day_counts.json, KEEP jours) : c'est la référence des matins suivants."""
@@ -12,7 +13,8 @@ from . import fmt, store
 from .sources import state
 
 FILE = "day_counts.json"
-KEEP, WINDOW, MIN_DAYS, MIN_MEDIAN, DROP = 21, 7, 4, 5, 0.5
+KEEP, WINDOW, MIN_DAYS, MIN_MEDIAN, DROP, NORMAL = 21, 7, 4, 5, 0.5, 0.7
+WATCHED = ("xbet", "pronos")        # comptes surveillés quand le programme est normal
 LABELS = {"matches": "matchs au programme", "leagues": "championnats", "picks": "paris avec cotes réelles", "pronos": "pronostics",
           "xbet": "matchs lus chez 1xBet"}
 FRESH_H = 3                     # relevé 1xBet ou refus du proxy de moins de 3 h : celui de ce matin
@@ -38,19 +40,24 @@ def record(day, c):
 
 
 def unusual(day, c, hist=None):
-    """Comptes du jour sous la moitié de leur médiane des WINDOW derniers matins (avant `day`) -> [« 14 matchs au programme (d'habitude ~120) »]."""
+    """Programme normal mais matchs lus chez 1xBet ou pronostics sous la moitié de leur médiane des WINDOW derniers matins (avant `day`) ->
+    [« 3 matchs lus chez 1xBet (d'habitude ~50) »] ; [] si le programme lui-même est maigre (trêve, jour creux) ou sans assez d'historique."""
     hist = hist if hist is not None else store.load(FILE, {})
     past = [v for k, v in sorted((hist or {}).items()) if k < str(day) and isinstance(v, dict)][-WINDOW:]
     if len(past) < MIN_DAYS:
         return []
-    out = []
-    for k, label in LABELS.items():
+
+    def med(k):
         vals = [v[k] for v in past if isinstance(v.get(k), (int, float))]
-        if len(vals) < MIN_DAYS:
-            continue
-        med = median(vals)
-        if med >= MIN_MEDIAN and c.get(k, 0) < DROP * med:
-            out.append(f"{c.get(k, 0)} {label} (d'habitude ~{med:.0f})")
+        return median(vals) if len(vals) >= MIN_DAYS else None
+    m = med("matches")
+    if m is None or c.get("matches", 0) < NORMAL * m:
+        return []
+    out = []
+    for k in WATCHED:
+        mk = med(k)
+        if mk is not None and mk >= MIN_MEDIAN and c.get(k, 0) < DROP * mk:
+            out.append(f"{c.get(k, 0)} {LABELS[k]} (d'habitude ~{mk:.0f})")
     return out
 
 
@@ -63,13 +70,13 @@ def _fresh(iso, now):
 
 
 def xbet_lines(now):
-    """Relevé 1xBet de ce matin coupé ou suspect -> lignes."""
-    run = (state._all().get("xbet") or {}).get("run") or {}
+    """Relevé 1xBet de ce matin coupé, sauté ou suspect (xbet._note_run, clé « cut ») -> lignes."""
+    run = (state._all().get("xbet") or {}).get("cut") or {}
     if not run or not _fresh(run.get("at"), now):
         return []
     out = []
-    if run.get("cut"):
-        out.append(f"relevé 1xBet coupé ({run['cut']}) : {run.get('read', 0)} matchs lus, {run.get('left', 0)} pas lus")
+    if run.get("why"):
+        out.append(f"relevé 1xBet coupé ({run['why']}) : {run.get('read', 0)} matchs lus, {run.get('left', 0)} pas lus")
     if run.get("format"):
         out.append("1xBet répond sans cotes : le format de son site a peut-être changé (cotes 1xBet absentes ce matin)")
     return out
@@ -90,7 +97,7 @@ def message(day, c, now=None):
     try:
         low = unusual(day, c)
         if low:
-            lines.append("Journée inhabituelle : " + ", ".join(low) + ". Une source a peut-être lâché (🩺 status).")
+            lines.append("Journée inhabituelle : programme normal mais " + ", ".join(low) + ". Une source a peut-être lâché (🩺 status).")
         lines += xbet_lines(now) + proxy_lines(now)
     except Exception as e:                          # noqa: BLE001
         print(f"[matin] contrôle du jour ignoré : {type(e).__name__}: {e}", file=sys.stderr)

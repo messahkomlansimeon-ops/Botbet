@@ -66,9 +66,12 @@ def test_proxy_breaker_and_cause():
     http.PROXIES["x.test"] = proxy
     try:
         r = http.fetch("https://x.test/a", "test", 60, check_robots=False)
-        assert not r.ok and len(calls) == 2, calls                            # 2 échecs de suite (1 minute) : le serveur du proxy est tenu pour en panne
+        assert not r.ok and len(calls) == 2 and not http._proxy_down, calls    # une requête (ses 2 essais) = UNE coupure : pas encore en panne
         r = http.fetch("https://x.test/b", "test", 60, check_robots=False)
-        assert not r.ok and "proxy injoignable" in r.error and len(calls) == 2, (r, calls)     # tenu pour en panne : rien n'attend
+        assert not r.ok and "proxy injoignable" in r.error and len(calls) == 3, (r, calls)     # 2e requête ratée en 1 min : en panne, 2e essai épargné
+        assert "ConnectTimeout" in r.error, r.error                            # la 1re cause reste dite
+        r = http.fetch("https://x.test/b2", "test", 60, check_robots=False)
+        assert not r.ok and len(calls) == 3, calls                             # tenu pour en panne : rien n'attend
         assert http.cause(r.error) == "le proxy ne répond pas"
         http._proxy_down.clear()
         calls.clear()
@@ -88,7 +91,17 @@ def test_proxy_breaker_and_cause():
         http.reset()
         http.PROXIES["x.test"] = proxy
         r = http.fetch("https://x.test/e", "test", 60, check_robots=False)
-        assert http._proxy_down and "connexion au proxy impossible" in r.error, r.error        # serveur du proxy refusé 2 fois : en panne 2 min
+        assert not http._proxy_down and "connexion impossible" in r.error, r.error              # une requête refusée : une coupure
+        http.fetch("https://x.test/f", "test", 60, check_robots=False)
+        assert http._proxy_down                                                                 # 2 requêtes refusées en 1 min : en panne 2 min
+        http.reset()
+        calls.clear()
+        requests.Session = lambda: _Ses(requests.exceptions.ProxyError("Unable to connect to proxy', ConnectTimeoutError(<conn>, 'Connection to proxy timed out')"), calls)
+        http._sessions.clear()
+        http.PROXIES["x.test"] = proxy
+        r = http.fetch("https://x.test/g", "test", 60, check_robots=False)
+        http.fetch("https://x.test/h", "test", 60, check_robots=False)
+        assert http._proxy_down and "lecture trop lente" in r.error, r.error                   # délai de connexion au proxy (emballé dans ProxyError)
     finally:
         requests.Session = old
         http.PROXIES.pop("x.test", None)

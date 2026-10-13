@@ -14,8 +14,11 @@ install_boot() {
     mkdir -p "$HOME/.termux/boot" 2>/dev/null || return 0
     printf '%s\n' '#!/data/data/com.termux/files/usr/bin/sh' \
         '# Kelly relancée au démarrage du téléphone (Termux:Boot). Écrit par « kelly start » : ne pas modifier.' \
-        'termux-wake-lock' 'sleep 20' \
-        '/data/data/com.termux/files/usr/bin/kelly start >> /data/data/com.termux/files/home/kelly/logs/boot.log 2>&1' > "$BOOT.tmp" &&
+        'sleep 20' \
+        'L=/data/data/com.termux/files/home/kelly/logs; mkdir -p $L; date -u "+démarrage du téléphone %Y-%m-%d %H:%M UTC" >> $L/boot.log' \
+        '[ -f $L/stopped ] && { echo "Kelly arrêtée par kelly stop : pas relancée" >> $L/boot.log; exit 0; }' \
+        'termux-wake-lock' \
+        '/data/data/com.termux/files/usr/bin/kelly start >> $L/boot.log 2>&1' > "$BOOT.tmp" &&
         chmod +x "$BOOT.tmp" && mv -f "$BOOT.tmp" "$BOOT"
 }
 
@@ -90,6 +93,7 @@ case "$1" in
         keep_mirror
         echo "🔄 Mise à jour du dépôt..."
         if ! git pull; then
+            git merge --abort 2>/dev/null
             put_mirror
             echo "❌ Mise à jour impossible (réseau ou conflit) : Kelly continue avec la version actuelle."
             exit 1
@@ -182,8 +186,10 @@ case "$1" in
         if running; then echo "✅ Kelly tourne (runner PID: $(pgrep -f termux_runner.py | head -n1))"; else echo "❌ Kelly est arrêtée : kelly start"; fi
         if has termux-wake-lock; then echo "✅ Commande termux-wake-lock disponible"; else echo "❌ termux-wake-lock absente : pkg install termux-tools"; fi
         if pgrep -f "kelly guard" > /dev/null; then echo "✅ Garde active (relance Kelly si elle s'arrête)"; else echo "⚠️ Garde absente : kelly restart"; fi
-        if [ -x "$BOOT" ]; then echo "✅ Relance au démarrage du téléphone (Termux:Boot) installée"; else echo "⚠️ Relance au démarrage absente : installe Termux:Boot (F-Droid), ouvre-le une fois, puis kelly restart"; fi
-        if grep -q "^HC_PING_URL=." "$DIR/.env" 2>/dev/null; then echo "✅ Surveillance extérieure (healthchecks.io) réglée"; else echo "⚠️ Surveillance extérieure non réglée : HC_PING_URL absent du .env"; fi
+        if [ ! -x "$BOOT" ]; then echo "⚠️ Relance au démarrage absente : installe Termux:Boot (F-Droid), ouvre-le une fois, puis kelly restart"
+        elif [ -f "$DIR/logs/boot.log" ]; then echo "✅ Relance au démarrage du téléphone : déjà utilisée ($(tail -n 1 "$DIR/logs/boot.log" | cut -c1-60))"
+        else echo "⚪ Relance au démarrage prête, jamais encore utilisée : vérifie que l'appli Termux:Boot est installée et ouverte une fois"; fi
+        if grep -Eq "^(export )?HC_PING_URL[=:]." "$DIR/.env" 2>/dev/null; then echo "✅ Surveillance extérieure (healthchecks.io) réglée"; else echo "⚠️ Surveillance extérieure non réglée : HC_PING_URL absent du .env"; fi
         [ -f "$LOG" ] && grep "signal de vie\|Surveillance extérieure" "$LOG" | tail -n 1 | cut -c1-160
         if [ -f "$LOG" ]; then
             grep -q "wake-lock demandé" "$LOG" && echo "✅ Wake-lock demandé au démarrage" || echo "⚠️ Wake-lock non demandé au dernier démarrage : kelly restart"

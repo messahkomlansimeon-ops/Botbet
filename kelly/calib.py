@@ -428,9 +428,11 @@ def combo_changes(data=None):
     """Familles sorties des combinés ou revenues depuis le dernier matin -> lignes (« 📏 Tirs : retirés des combinés, réussite 45 % pour 65 % annoncés… ») ;
     mémorise l'état du jour. Seulement les familles assez suivies pour le bilan (SHOW_MIN) ; le tout premier matin : rien (référence)."""
     data = data if data is not None else load()
+    if FILE in store._unreadable:                   # cumul illisible : la référence n'est pas touchée
+        return []
     now = {f: in_combos(f, data) for f, a in data.items() if not f.startswith("_") and _acc_list(a) and a[0] >= SHOW_MIN}
     old = store.load(COMBO_FILE, None)
-    store.save(COMBO_FILE, now)
+    store.save(COMBO_FILE, (old if isinstance(old, dict) else {}) | now)     # une famille passée sous SHOW_MIN garde son dernier état connu
     if not isinstance(old, dict):
         return []
     out = []

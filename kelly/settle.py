@@ -225,7 +225,7 @@ def match_total(fst, k):
     return fst.get(k)
 
 
-NEVER_ZERO = ("shots", "fouls", "throws")      # un match a toujours des corners, des tirs, des fautes, des touches : 0 = stats manquantes
+NEVER_ZERO = ("shots", "fouls", "throws", "corners")   # un match a toujours des corners, des tirs, des fautes, des touches : 0 = stats manquantes
 
 
 def zero_stats(b, fst):
@@ -239,7 +239,10 @@ def zero_stats(b, fst):
 
 
 def _has_stat(b, fst):
-    """`fst` donne-t-il la valeur dont le marché de `b` a besoin (corners / cartons du match, ou la stat d'une équipe) ?"""
+    """`fst` donne-t-il la valeur dont le marché de `b` a besoin (corners / cartons du match, ou la stat d'une équipe) ? Un total à 0 là où il y en a
+    toujours (zero_stats) : non, la source suivante est essayée."""
+    if zero_stats(b, fst):
+        return False
     if b["market"] in FD_MARKETS:
         return match_total(fst, "corners" if "corners" in b["market"] else "cards") is not None
     if b["market"] in SHOT_MARKETS:
@@ -283,24 +286,65 @@ def match_stats(b, fdata, stats_for=None):
         if fstats and fx:                              # tirs de chaque équipe : les marchés « par équipe » en ont besoin
             teams = fstats.get("teams") or {}
             fstats = dict(fstats, side={"home": teams.get(str(fx["home_id"])), "away": teams.get(str(fx["away_id"]))})
-    need = "corners" if "corners" in b["market"] else "cards"
-    if soccer and b["market"] in FD_MARKETS and match_total(fstats, need) is None:
-        fstats = fdata.stats(b) or fstats              # API-Football absent ou quota épuisé : football-data
-    elif soccer and b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None:
-        fstats = fdata.stats(b) or fstats
-    if soccer and (b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None
-                   or b["market"] in FD_MARKETS and match_total(fstats, need) is None):
+    stat_mk = b["market"] in FD_MARKETS or b["market"] in SHOT_MARKETS
+    if soccer and stat_mk and not _has_stat(b, fstats):
+        fstats = fdata.stats(b) or fstats              # API-Football absent, quota épuisé ou stats à 0 : football-data
+    if soccer and stat_mk and not _has_stat(b, fstats):
         try:                                           # touches, hors-jeu (FotMob seul les a), ou rien ailleurs : page du match FotMob
             fstats = fmmatch.match_stats(b) or fstats
         except Exception as e:                         # noqa: BLE001 - facultatif
             print(f"[settle] FotMob ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-    if soccer and (b["market"] in SHOT_MARKETS and shot_value(b["market"], fstats or {}) is None
-                   or b["market"] in FD_MARKETS and (fstats or {}).get(need) is None):
+    if soccer and stat_mk and not _has_stat(b, fstats):
         try:                                           # ligues sans FotMob détaillé : stats du match chez 365scores
             fstats = s365.match_stats(b) or fstats
         except Exception as e:                         # noqa: BLE001 - facultatif
             print(f"[settle] 365scores ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+    if soccer and stat_mk and not _has_stat(b, fstats):
+        fstats = watch_stats(b) or fstats              # pari joué : les stats finales vues en direct par le suivi des matchs
     return fstats
+
+
+def watch_stats(b):
+    """Stats finales du match d'un pari JOUÉ vues par le suivi des matchs (watch.final_stats) ; None sinon. Ne lève jamais."""
+    try:
+        from . import watch
+        return watch.final_stats(b)
+    except Exception as e:                          # noqa: BLE001 - repli facultatif
+        print(f"[settle] stats du suivi ignorées : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+_S365_DAYS = {}         # jour -> {id: match} : liste du jour de 365scores relue (avec les scores finaux) une fois par passage
+
+
+def s365_score(b, now=None):
+    """Score final d'après la liste du jour de 365scores, relue une fois par passage après les matchs (scores des matchs terminés, livedata) : petits
+    championnats que ni API-Football, ni football-data, ni FotMob ne règlent (Paraguay, Uruguay, Chine D2...). Prolongation, match suspendu : jamais.
+    Au format de settle_pick ; None sinon. Ne lève jamais."""
+    try:
+        now = now or datetime.now(timezone.utc)
+        ko = datetime.fromisoformat(str(b["commence"]).replace("Z", "+00:00"))
+        if now - ko < timedelta(hours=2, minutes=45):
+            return None
+        day = ko.date()
+        if day not in _S365_DAYS:
+            from . import cache as kcache, livedata
+            games = []
+            if s365.enabled() and not kcache.OFFLINE:
+                with s365._via_proxy(settle=True) as why:
+                    if not why:
+                        ld = livedata.load()
+                        games = livedata._day_list(s365, ld, datetime(day.year, day.month, day.day), now, min_at=now - timedelta(minutes=10))
+                        livedata.save_lists(ld)
+            _S365_DAYS[day] = {g["id"]: g for g in games}
+        from . import watch
+        g = watch.find(b, _S365_DAYS[day])
+        sc = (g or {}).get("sc")
+        return sc and {"id": b.get("id"), "completed": True,
+                       "scores": [{"name": b["home"], "score": str(sc[0])}, {"name": b["away"], "score": str(sc[1])}]}
+    except Exception as e:                          # noqa: BLE001 - repli facultatif
+        print(f"[settle] score 365scores ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
 
 
 def watch_score(b):
@@ -337,7 +381,7 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
         soccer = b["group"] == "soccer"
         ev = next((e for e in scores_by_sport.get(b["sport_key"], []) if e["id"] == b["id"] and e.get("completed")), None)
         if not ev and soccer:                      # API-Football, puis CSV football-data, FotMob, et le score final vu par le suivi des matchs (365scores)
-            ev = (football_score(b) if stats.enabled() else None) or fdata.score(b) or fdata.fotmob_score(b) or watch_score(b)
+            ev = (football_score(b) if stats.enabled() else None) or fdata.score(b) or fdata.fotmob_score(b) or watch_score(b) or s365_score(b, now)
         free = soccer and stats.enabled() and not stats.halted()       # API-Football en panne : le repli payant redevient possible
         if (not ev and not free and (not soccer or b["market"] in GOAL_MARKETS)
                 and b["sport_key"] not in scores_by_sport):
@@ -397,7 +441,7 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
     full = {"group": "soccer", "who": None} | b            # lignes de fair.json allégées : champs de settle_pick ajoutés
     stat_market = b["market"] in FD_MARKETS or b["market"] in SHOT_MARKETS
     old = ko < now - timedelta(days=C.WAIT_DAYS_STATS if stat_market else C.WAIT_DAYS)
-    ev = (football_score(full) if stats.enabled() else None) or fdata.score(full) or fdata.fotmob_score(full)
+    ev = (football_score(full) if stats.enabled() else None) or fdata.score(full) or fdata.fotmob_score(full) or watch_score(full) or s365_score(full, now)
     if ev:
         fst = match_stats(full, fdata, stats_for)
         if zero_stats(full, fst):                      # stats à 0 là où il y en a toujours : manquantes (rien appris de faux)

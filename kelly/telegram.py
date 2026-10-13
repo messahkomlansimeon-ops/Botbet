@@ -382,6 +382,29 @@ def unpin(message_id, chat_id=None):
         return False
 
 
+GONE = ("message to edit not found", "message can't be edited", "message_id_invalid", "message not found")
+
+
+def edit_text(message_id, text, chat_id=None):
+    """Remplace le texte d'un message (tableau du jour) -> "ok" (fait, ou déjà identique), "gone" (message effacé ou plus modifiable : en envoyer un
+    autre), "fail" (panne passagère : réessayer plus tard, SURTOUT pas un 2e message). Ne lève jamais."""
+    token, chat = creds()
+    if not (token and (chat_id or chat) and message_id):
+        return "fail"
+    payload = dict(chat_id=chat_id or chat, message_id=message_id, text=str(text), disable_web_page_preview=True)
+    if isinstance(text, Html):
+        payload["parse_mode"] = "HTML"
+    try:
+        api("editMessageText", **payload)
+        return "ok"
+    except TelegramError as e:
+        low = str(e).lower()
+        if "not modified" in low:
+            return "ok"
+        print(f"[telegram] texte non modifié : {e}", file=sys.stderr)
+        return "gone" if any(g in low for g in GONE) else "fail"
+
+
 def edit_message(message_id, text, markup=None, chat_id=None):
     """Remplace le texte ET les boutons d'un message déjà envoyé (la liste « Mes paris » après une note : ses lignes disent « joué à … »). Texte trop
     long pour un message (plus de 4096 caractères) ou refusé par Telegram : seuls les boutons sont remplacés. Ne lève jamais."""

@@ -144,7 +144,7 @@ def proxy_refusal(e):
 
 
 HOST_DOWN = ("NewConnectionError", "Failed to establish a new connection", "Connection refused", "NameResolution", "getaddrinfo",
-             "Name or service not known")
+             "Name or service not known", "ConnectTimeoutError")      # par un proxy, urllib3 emballe le délai de connexion dans ProxyError
 
 
 def _host_unreachable(e):
@@ -154,21 +154,21 @@ def _host_unreachable(e):
 
 
 def why_net(e):
-    """Précision d'un échec réseau, sans adresse ni mot de passe : « coupure du proxy », « tunnel 502 », « connexion au proxy impossible »… ; ''."""
+    """Précision d'un échec réseau, sans adresse ni mot de passe : « tunnel 502 », « connexion impossible », « connexion coupée en route »… ; ''."""
     s = str(e)
     m = re.search(r"Tunnel connection failed: (\d{3})", s)
     if m:
         return f"tunnel {m.group(1)}"
-    for keys, txt in ((("NameResolution", "getaddrinfo", "Name or service not known"), "adresse du proxy introuvable"),
-                      (("NewConnectionError", "Failed to establish a new connection", "Connection refused"), "connexion au proxy impossible"),
+    for keys, txt in ((("NameResolution", "getaddrinfo", "Name or service not known"), "adresse introuvable (DNS)"),
+                      (("NewConnectionError", "Failed to establish a new connection", "Connection refused"), "connexion impossible"),
                       (("RemoteDisconnected", "Connection aborted", "Connection reset"), "connexion coupée en route"),
-                      (("timed out",), "délai dépassé")):
+                      (("timed out",), "lecture trop lente")):
         if any(k in s for k in keys):
             return txt
     return ""
 
 
-def _proxy_failed(proxy, e):
+def _proxy_failed(proxy, e, count=True):
     """Échec par le proxy. Refus du proxy (mot de passe, forfait) : tenu pour en panne tout de suite (aucune session ne marchera). Serveur du proxy
     injoignable : tenu pour en panne PROXY_DOWN_S s seulement au HOST_FAILS-ième échec en HOST_FAIL_WINDOW s (une coupure isolée ne bloque plus
     rien). Session Webshare en panne, coupure en route : jamais (une autre session peut marcher : xbet)."""
@@ -176,7 +176,7 @@ def _proxy_failed(proxy, e):
     if proxy_refusal(e):
         _proxy_down[host] = now + PROXY_DOWN_S
         return
-    if not _host_unreachable(e):
+    if not _host_unreachable(e) or not count:      # `count` : un seul échec compté par requête (ses 2 essais à 1 s d'écart = une seule coupure)
         return
     recent = [t for t in _host_fails.get(host, ()) if now - t < HOST_FAIL_WINDOW] + [now]
     if len(recent) >= HOST_FAILS:
@@ -196,7 +196,7 @@ def _no_direct(domain, proxy):
 def cause(error, who="365scores"):
     """Cause d'un échec de lecture en mots simples, pour un avertissement : « le proxy ne répond pas », « 365scores en panne (erreur 504) »…"""
     e = str(error or "")
-    if NO_PROXY in e or "proxy introuvable" in e:
+    if NO_PROXY in e or "proxy introuvable (XBET_PROXY" in e:
         return "proxy absent : rien n'est lu (jamais en direct)"
     if "mot de passe refusé" in e:
         return "le proxy refuse le mot de passe (vérifie XBET_PROXY)"
@@ -432,7 +432,7 @@ def _wait(domain):
 def _request(url, headers=None):
     domain = urlparse(url).netloc.lower()
     h = {"User-Agent": UA, "Accept": "*/*"} | (headers or {})
-    r, err = None, None
+    r, err, counted = None, None, False
     for attempt in (0, 1):
         proxy = PROXIES.get(domain)
         stop = _no_direct(domain, proxy)
@@ -446,14 +446,17 @@ def _request(url, headers=None):
             else:
                 r = requests.get(url, headers=h, timeout=TIMEOUT)
             _count(domain, r)
+            if proxy:
+                _host_fails.pop(_phost(proxy), None)       # le serveur du proxy a répondu : les échecs d'avant ne comptent plus
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
+            counted_before, counted = counted, True     # une seule coupure comptée par requête (ses 2 essais)
             refused, detail = proxy_refusal(e), why_net(e)
             r, err = None, refused or f"réseau indisponible ({type(e).__name__}{', ' + detail if detail else ''})"
             if refused:                             # gardé pour le status et le message du matin (state « proxy »)
                 with contextlib.suppress(Exception):
                     state._put("proxy", refused=refused, refused_at=state._iso(state.now()))
             if proxy:
-                _proxy_failed(proxy, e)
+                _proxy_failed(proxy, e, count=not counted_before)
             stale = _sessions.pop(domain, None)     # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
             if stale:
                 stale.close()
@@ -537,7 +540,7 @@ def _post_result(url, r, source):
             state.block(source, f"HTTP {code}, Cloudflare", cloudflare=True)
             return Result(url, None, code, blocked=True, error="Cloudflare bloque les robots")
         if code in (403, 429):
-            state.block(source, f"HTTP {code}")
+            state.block(source, f"HTTP {code}", hours=state.RATE_HOURS if code == 429 else None)
             return Result(url, None, code, blocked=True, error=f"HTTP {code} : accès refusé")
         if body and not body.lstrip().startswith((b"{", b"[")) and is_challenge(body):
             state.block(source, "page de vérification anti-robot")
@@ -566,12 +569,16 @@ def _load_robots(scheme, domain):
     else:
         r, err = _request(url)
         if r is None or r.status_code >= 500:
-            return None, False
-        code = r.status_code
-        text = r.content.decode("utf-8", "replace") if code == 200 else ""
-        _write(_key(url), {"fetched_at": state.clock(), "status": code}, text.encode())
+            if cached:                              # robots.txt périmé mais connu : repris tel quel (une coupure ne bloque pas la source)
+                text, code = cached[1].decode("utf-8", "replace"), cached[0].get("status", 200)
+            else:
+                return None, False, err or f"HTTP {r.status_code}"
+        else:
+            code = r.status_code
+            text = r.content.decode("utf-8", "replace") if code == 200 else ""
+            _write(_key(url), {"fetched_at": state.clock(), "status": code}, text.encode())
     if code in (401, 403, 429):
-        return None, True
+        return None, True, None
     rp = robotparser.RobotFileParser()
     rp.parse(text.splitlines() if code == 200 else [])
     try:
@@ -579,7 +586,7 @@ def _load_robots(scheme, domain):
         _crawl[domain] = float(cd) if cd else 0.0
     except (TypeError, ValueError):
         pass
-    return rp, False
+    return rp, False, None
 
 
 def allowed(url):
@@ -587,11 +594,11 @@ def allowed(url):
     domain = p.netloc.lower()
     ent = _robots.get(domain)
     if ent is None or state.clock() - ent[0] > ROBOTS_TTL:
-        rp, blocked = _load_robots(p.scheme, domain)
+        rp, blocked, err = _load_robots(p.scheme, domain)
         if blocked:
             return False, f"robots.txt refusé par {domain}", True
-        if rp is None:
-            return False, f"robots.txt de {domain} injoignable", False
+        if rp is None:                              # la cause réseau reste dite : xbet change de session Webshare sur « ProxyError »
+            return False, f"robots.txt de {domain} injoignable" + (f" : {err}" if err else ""), False
         ent = _robots[domain] = (state.clock(), rp)
     if ent[1].can_fetch(ROBOTS_TOKEN, url):
         return True, None, False

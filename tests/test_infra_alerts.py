@@ -123,7 +123,7 @@ def test_runner_helpers():
     assert sent[0][0] == "https://api.telegram.org/bott/sendMessage" and sent[0][1]["text"] == "bonjour" and "disable_notification" not in sent[0][1]
     sv = R.ServeSupervisor(["x"], clock=Clock())
     hb = R.Heartbeat("u", sv, proxy=lambda: "http://p:1")
-    assert hb.status()[0] and "TELEGRAM_TOKEN" in hb.status()[1]                 # sans clés Telegram : « en panne » tout de suite
+    assert R.ENV_FILE is None and hb.status()[0] and "TELEGRAM_TOKEN" in hb.status()[1]      # tests : jamais le vrai .env ; sans clés : « en panne »
     os.environ.update(TELEGRAM_TOKEN="t", TELEGRAM_CHAT_ID="c")
     try:
         assert not hb.status()[0]
@@ -160,14 +160,21 @@ def test_xbet_cut_and_format():
     xbet.prices = lambda g, m, h, a: {}                                   # 1xBet répond, mais sans aucune cote
     try:
         xbet.fetch_day([ev(i) for i in range(6)])
-        run = state._all()["xbet"]["run"]
-        assert run["format"] and run["read"] == 6 and not run["cut"], run
+        cut = state._all()["xbet"]["cut"]
+        assert cut["format"] and cut["read"] == 6 and not cut["why"], cut
         xbet.prices = lambda g, m, h, a: {"k": 2.0}
         xbet.fetch_day([ev(i) for i in range(6)], deadline=time.monotonic() - 1)
-        run = state._all()["xbet"]["run"]
-        assert run["cut"] == "délai dépassé" and run["read"] == 0 and run["left"] == 6 and not run["format"], run
+        cut = state._all()["xbet"]["cut"]
+        assert cut["why"] == "délai dépassé" and cut["read"] == 0 and cut["left"] == 6 and not cut["format"], cut
+        xbet.fetch_day([ev(i) for i in range(2)])                          # relevé suivant sans coupure (paris réels, en cache) : la coupure reste
+        allx = state._all()["xbet"]
+        assert allx["cut"]["why"] == "délai dépassé" and allx["run"]["read"] == 2, allx
+        Ses.why = "le proxy ne répond pas : aucun relevé (nouvel essai dans 2 min), jamais en direct"
+        xbet.fetch_day([ev(i) for i in range(4)])                          # relevé sauté (proxy, plafond, blocage) : noté aussi
+        assert state._all()["xbet"]["cut"]["why"] == "le proxy ne répond pas" and state._all()["xbet"]["cut"]["left"] == 4
     finally:
         xbet._Session, xbet.prices = old
+        Ses.why = None
     old_get = xbet._get_json
     xbet._get_json = lambda address, ttl: [{"sports": [{"id": 4, "ligas": []}]}]
     try:
@@ -209,12 +216,13 @@ def test_dayhealth():
         dayhealth.record(day - timedelta(days=5 - i), normal)
     assert dayhealth.message(day - timedelta(days=2), normal) is None              # 3 matins : pas encore de référence
     assert dayhealth.message(day - timedelta(days=1), normal) is None
-    bad = normal | {"matches": 14, "xbet": 3}
+    assert dayhealth.message(day, normal | {"matches": 14, "xbet": 3, "pronos": 5}, datetime(2030, 1, 10, 5, 0, tzinfo=UTC)) is None   # trêve : rien
+    bad = normal | {"xbet": 3, "picks": 2}
     msg = telegram.plain(dayhealth.message(day, bad, datetime(2030, 1, 10, 5, 0, tzinfo=UTC)))
-    assert msg.startswith("⚠️ Ce matin\n• Journée inhabituelle : 14 matchs au programme (d'habitude ~120), 3 matchs lus chez 1xBet (d'habitude ~50)"), msg
+    assert msg.startswith("⚠️ Ce matin\n• Journée inhabituelle : programme normal mais 3 matchs lus chez 1xBet (d'habitude ~50)."), msg     # paris : jamais
     assert store.load(dayhealth.FILE, {})[str(day)] == bad
     now = datetime.now(UTC)
-    state._put("xbet", run={"at": now.isoformat(), "read": 40, "want": 62, "cut": "délai dépassé", "left": 22, "format": False})
+    state._put("xbet", cut={"at": now.isoformat(), "read": 40, "why": "délai dépassé", "left": 22, "format": False})
     state._put("proxy", refused="proxy : forfait épuisé (402)", refused_at=now.isoformat())
     msg = telegram.plain(dayhealth.message(day + timedelta(days=1), normal, now))
     assert "• Relevé 1xBet coupé (délai dépassé) : 40 matchs lus, 22 pas lus" in msg and "• Le proxy : forfait épuisé : 1xBet et 365scores ne sont plus lus" in msg, msg
@@ -261,10 +269,10 @@ def test_status_phone():
     assert "❌ Surveillance extérieure : dernier signal il y a 60 min (proxy en panne ?)" in lines and any("4 essais ratés" in x for x in lines), lines
     # 1xBet, FotMob bloqué, forfait Webshare
     store.save(state.FILE, {"xbet": {"ok": True, "rows": 38, "last_success": "2030-01-01T04:31:00+00:00",
-                                     "run": {"cut": "délai dépassé", "read": 38, "left": 24, "format": False}},
+                                     "cut": {"at": "2030-01-01T10:31:00+00:00", "why": "délai dépassé", "read": 38, "left": 24, "format": False}},
                             "fotmob": {"ok": False, "blocked_until": "2099-01-01T00:00:00+00:00", "last_error": "FotMob bloque les robots (Cloudflare)"}})
     xl = status.xbet_lines(now)
-    assert xl == ["✅ 1xBet · 38 matchs lus · 04h31", "⚠️ 1xBet : dernier relevé coupé (délai dépassé), 38 lus, 24 pas lus"], xl
+    assert xl == ["✅ 1xBet · 38 matchs lus · 04h31", "⚠️ 1xBet : relevé coupé à 10h31 UTC (délai dépassé), 38 lus, 24 pas lus"], xl
     assert any(x.startswith("❌ FotMob : FotMob bloque les robots") for x in status.source_lines(now)), status.source_lines(now)
     assert any(x.startswith(("✅", "⚠️")) and "Forfait Webshare (Kelly)" in x for x in status.api_lines()), status.api_lines()
     store.save(state.FILE, {})

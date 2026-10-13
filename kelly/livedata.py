@@ -96,15 +96,16 @@ def save_lists(d):
     return True
 
 
-def _day_list(s365, d, day, now):
-    """Matchs 365scores du jour `day` (« JJ/MM/AAAA » pour la requête), relus au plus toutes les C.LIVE_PREP_LIST_H heures."""
+def _day_list(s365, d, day, now, min_at=None):
+    """Matchs 365scores du jour `day` (« JJ/MM/AAAA » pour la requête), relus au plus toutes les C.LIVE_PREP_LIST_H heures ; `min_at` : relue si elle date
+    d'avant (règlement : la liste d'après les matchs, avec leurs scores finaux « sc »)."""
     key = day.strftime("%Y-%m-%d")
     cur = d["lists"].get(key)
     at = _when(cur.get("at")) if cur else None
-    if cur and at and now - at < timedelta(hours=C.LIVE_PREP_LIST_H):
+    if cur and at and now - at < timedelta(hours=C.LIVE_PREP_LIST_H) and not (min_at and at < min_at):
         return cur["games"]
     url = s365._url("/games/allscores/", sports=1, startDate=day.strftime("%d/%m/%Y"), endDate=day.strftime("%d/%m/%Y"), showOdds="false")
-    res = http.fetch(url, s365.NAME, int(C.LIVE_PREP_LIST_H * 3600))
+    res = http.fetch(url, s365.NAME, 600 if min_at else int(C.LIVE_PREP_LIST_H * 3600))
     data = s365.read_json(res, url)
     if not isinstance(data, dict) or not isinstance(data.get("games"), list):
         if res.ok and not getattr(res, "stale", False):
@@ -116,10 +117,17 @@ def _day_list(s365, d, day, now):
         h, a = g.get("homeCompetitor") or {}, g.get("awayCompetitor") or {}
         if h.get("id") and a.get("id") and g.get("startTime"):
             games.append({"id": g.get("id"), "comp": comps.get(g.get("competitionId")) or "", "start": g["startTime"],
-                          "home": {"id": h["id"], "name": h.get("name") or ""}, "away": {"id": a["id"], "name": a.get("name") or ""}})
+                          "home": {"id": h["id"], "name": h.get("name") or ""}, "away": {"id": a["id"], "name": a.get("name") or ""}} | _final(g))
     d["lists"][key] = {"at": now.isoformat(timespec="minutes"), "games": games}
     d["lists"] = dict(sorted(d["lists"].items())[-2:])
     return games
+
+
+def _final(g):
+    """{"sc": [domicile, extérieur]} pour un match TERMINÉ normalement (ni prolongation, ni suspendu : watch._status) ; {} sinon."""
+    from . import watch
+    st = watch._status(g)
+    return {"sc": list(st["score"])} if st["ended"] and not st["et"] and st["score"] else {}
 
 
 def _results(s365, cid):

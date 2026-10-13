@@ -188,17 +188,34 @@ def _repair(name):
     il est alors gelé, voir load). Note la réparation (REPAIRS, annoncée sur Telegram par le matin). Ne lève jamais."""
     try:
         with _db() as con:
-            snaps = [r for r in con.execute("SELECT name, body FROM docs WHERE substr(name, 1, ?)=? ORDER BY name DESC", (len(SNAP), SNAP))
-                     if r[0].endswith("/" + name)]
-            obj = day = None
-            for snap, body in snaps:
+            con.execute("BEGIN IMMEDIATE")              # relu ET remis d'un coup : un autre processus qui l'a déjà réparé (puis réécrit) n'est jamais écrasé
+            try:
+                cur = con.execute("SELECT body FROM docs WHERE name=?", (name,)).fetchone()
+                broken = True
                 try:
-                    obj, day = json.loads(body), snap.split("/")[1]
-                    break
+                    json.loads(cur[0]) if cur else None
+                    broken = False
                 except ValueError:
-                    continue
-            if day is not None:
-                con.execute("UPDATE docs SET body=?, updated=?, version=version+1 WHERE name=?", (_dump(obj), _now(), name))
+                    pass
+                obj = day = None
+                if not broken:                          # déjà réparé ailleurs : la version actuelle fait foi
+                    con.execute("COMMIT")
+                    return json.loads(cur[0]) if cur else None
+                snaps = [r for r in con.execute("SELECT name, body FROM docs WHERE substr(name, 1, ?)=? ORDER BY name DESC", (len(SNAP), SNAP))
+                         if r[0].endswith("/" + name)]
+                for snap, body in snaps:
+                    try:
+                        obj, day = json.loads(body), snap.split("/")[1]
+                        break
+                    except ValueError:
+                        continue
+                if day is not None:
+                    con.execute("UPDATE docs SET body=?, updated=?, version=version+1 WHERE name=? AND body=?", (_dump(obj), _now(), name, cur[0]))
+                con.execute("COMMIT")
+            except BaseException:
+                with contextlib.suppress(sqlite3.Error):
+                    con.execute("ROLLBACK")
+                raise
         print(f"[store] {name} illisible : " + (f"remis tel qu'il était le {day}" if day else "aucun instantané, document gelé (plus aucune écriture)"),
               file=sys.stderr)
         def note(r):                                # une seule entrée pas encore annoncée par document (un document gelé est relu souvent)

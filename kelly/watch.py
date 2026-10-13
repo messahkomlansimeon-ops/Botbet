@@ -993,7 +993,10 @@ def board(now=None):
         text, h = _board_text(ts, d, now)
         if b.get("day") == day and b.get("hash") == h:
             return
-        if b.get("day") == day and b.get("msg") and telegram.edit_message(b["msg"], text):
+        res = telegram.edit_text(b["msg"], text) if b.get("day") == day and b.get("msg") else "gone"
+        if res == "fail":                                # panne passagère : on réessaie au prochain passage (jamais un 2e tableau)
+            return
+        if res == "ok":
             b["hash"] = h
         else:
             if b.get("msg") and b.get("pinned") and b.get("day") != day:
@@ -1259,8 +1262,19 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     gs["score"] = sc
     if finished:
         gs["done"] = 1                                   # score final sûr : repli du règlement des paris joués (final_score)
+        fin = {k: [v[0], v[1]] for k, v in (cache_stats.get(g["id"]) or {}).items()
+               if isinstance(v, (list, tuple)) and len(v) == 2 and v[0] is not None and v[1] is not None}
+        if fin and not et:                               # stats à la fin du match (jamais après prolongation : les paris se règlent sur 90 min)
+            gs["fst"] = fin
     if block:
         events["\n".join(block)] = {}
+
+
+def _gid_for(d, b):
+    """Match 365scores (gid) suivi pour le pari `b` : par sa clé, sinon par son id de match (un autre pari joué du même match) ; None sinon."""
+    legs = [(k, v) for k, v in (d.get("legs") or {}).items() if isinstance(v, dict) and v.get("gid") is not None]
+    key, mid = str(b.get("key") or ""), str(b.get("id") or "")
+    return next((v["gid"] for k, v in legs if key and k.endswith("|" + key)), None) or next((v["gid"] for k, v in legs if mid and f"|{mid}|" in f"|{k}"), None)
 
 
 def final_score(b):
@@ -1268,10 +1282,9 @@ def final_score(b):
     football-data et FotMob n'ont rien. Seulement un match TERMINÉ ; en cas de prolongation, le score à 90 minutes (sinon rien : les paris se règlent sur
     les 90 minutes). Au format de settle_pick ; None sinon."""
     d = store.load(FILE, {})
-    if not isinstance(d, dict) or not b.get("key"):
+    if not isinstance(d, dict):
         return None
-    gid = next((v.get("gid") for k, v in (d.get("legs") or {}).items() if k.endswith("|" + b["key"]) and isinstance(v, dict) and v.get("gid") is not None),
-               None)
+    gid = _gid_for(d, b)
     gs = (d.get("games") or {}).get(str(gid)) or {} if gid is not None else {}
     if not gs.get("done"):
         return None
@@ -1279,6 +1292,29 @@ def final_score(b):
     if not sc:
         return None
     return {"id": b.get("id"), "completed": True, "scores": [{"name": b["home"], "score": str(sc[0])}, {"name": b["away"], "score": str(sc[1])}]}
+
+
+FINAL_STATS = ("corners", "shots", "sot", "fouls", "throws", "offsides", "yellow")     # stats finales reprises par le règlement (les cartons : jamais,
+                                                                                          # 365scores ne compte pas comme 1xBet)
+
+
+def final_stats(b):
+    """Stats finales du match d'un pari JOUÉ `b` (son id de match) vues par ce suivi à la fin du match (365scores), au format du règlement
+    ({stat: total du match, "side": {"home": {stat: n}, "away": {...}}}) : repli quand API-Football, football-data, FotMob et 365scores n'ont rien
+    (12/10 : Racing de Córdoba – Los Andes, corners vus en direct, introuvables au règlement). None sinon (pas suivi, pas fini, prolongation)."""
+    d = store.load(FILE, {})
+    if not isinstance(d, dict):
+        return None
+    gid = _gid_for(d, b)
+    gs = (d.get("games") or {}).get(str(gid)) or {} if gid is not None else {}
+    fin = gs.get("fst") if gs.get("done") and not gs.get("et") else None
+    if not isinstance(fin, dict):
+        return None
+    fin = {k: v for k, v in fin.items() if k in FINAL_STATS}
+    if not fin:
+        return None
+    return {k: v[0] + v[1] for k, v in fin.items()} | {"side": {"home": {k: v[0] for k, v in fin.items()}, "away": {k: v[1] for k, v in fin.items()}},
+                                                       "src": "suivi des matchs (365scores)"}
 
 
 def _last_legs(d, now, ts, alive):
@@ -1494,11 +1530,12 @@ def _tickets(now):
     except WatchStateError:
         return
     sent_lines = list(d["out"])
-    for m in [msg, *getattr(msg, "more", ())]:          # en attente plus de 2 h (réseau coupé) : abandonné, jamais une rafale de buts périmés
-        try:
-            m.ttl = C.WATCH_LIVE_TTL_MIN * 60
-        except AttributeError:
-            pass
+    for m in [msg, *getattr(msg, "more", ())]:          # en attente plus de 2 h (réseau coupé) : le groupé (buts, mi-temps) et « ⏰ » abandonnés ;
+        if m is msg or str(m).startswith("⏰"):           # 🎉 coupon gagné, 🔥 dernier match : gardés comme les autres messages
+            try:
+                m.ttl = C.WATCH_LIVE_TTL_MIN * 60
+            except AttributeError:
+                pass
     if C.WATCH_QUIET:                                    # gardé pour le réveil la nuit : chaque message (groupé, puis ⏰ 🔥 🎉 à part) l'un après l'autre
         ok = all([quiet.send(m, now, kind="suivi") for m in [msg, *getattr(msg, "more", ())]])
     else:

@@ -7,6 +7,7 @@ import atexit
 import fcntl
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -37,6 +38,7 @@ TIMEOUTS = {"--watch": 540, "--track": 1500, "--daily": 5400, "--xbet": 1500, "-
 HC_EVERY = 300               # signal de vie à healthchecks.io (HC_PING_URL dans .env) toutes les 5 min, PAR LE PROXY (ton IP n'est jamais révélée) ...
 SERVE_DOWN_FAIL = 900        # ... « en panne » (/fail) si l'écoute Telegram est arrêtée depuis 15 min : healthchecks te prévient sur Telegram par son propre bot
 PROXY_FILE = os.path.expanduser("~/.config/scrap_stat/sofa.env")
+PENDING_MAX_S = 2 * 86400    # alerte restée sans réseau plus de 2 jours : abandonnée
 HEALTH_EVERY = 60            # surveillance du runner (alertes Telegram, une fois chacune) : écoute plantée, disque, base, alertes en attente
 DISK_LOW_MB, DISK_OK_MB = 200, 400       # place libre du téléphone : alerte sous 200 Mo, « libérée » au-dessus de 400 Mo
 DBCHECK_HOUR = 3             # contrôle quotidien de la base (PRAGMA quick_check) dès 03:00 UTC, avant le matin
@@ -331,6 +333,11 @@ class ServeSupervisor:
                 log(f"surveillance de --serve : {type(e).__name__}: {e}", err=True)
 
 
+    def stable(self):
+        """L'écoute tourne-t-elle depuis au moins STABLE_SECS (une relance qui replante aussitôt n'est pas un retour) ?"""
+        p = self.proc
+        return p is not None and p.poll() is None and self.clock() - self.started >= STABLE_SECS
+
     def down_for(self):
         """Secondes depuis lesquelles l'écoute Telegram ne tourne pas (ou plante en boucle) ; 0 si elle tourne."""
         d = self.down_since
@@ -339,9 +346,10 @@ class ServeSupervisor:
 
 # ---------- alertes Telegram du runner ----------
 
-def telegram_say(text, env=os.environ, post=None):
+def telegram_say(text, env=None, post=None):
     """Message Telegram envoyé DIRECTEMENT par le runner (sans le code de Kelly : marche même si bot.py est cassé ou si l'écoute plante) -> True s'il est
     parti. Jamais l'adresse dans le journal (elle contient le token)."""
+    env = env if env is not None else env_now()
     token, chat = env.get("TELEGRAM_TOKEN"), env.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
         return False
@@ -356,9 +364,9 @@ def telegram_say(text, env=os.environ, post=None):
         return False
 
 
-def quiet_now(now=None, env=os.environ):
+def quiet_now(now=None, env=None):
     """Heures calmes (QUIET_HOURS, « 23-7 » par défaut, heure d'Abidjan = UTC ; « off » : jamais) : les alertes du runner arrivent alors sans sonnerie."""
-    spec = (env.get("QUIET_HOURS") or "23-7").strip().lower()
+    spec = ((env if env is not None else env_now()).get("QUIET_HOURS") or "23-7").strip().lower()
     try:
         a, b = (int(x) for x in spec.split("-"))
     except ValueError:
@@ -379,6 +387,9 @@ def disk_free_mb(path=ROOT):
         return None
 
 
+BUSY = "occupée"
+
+
 def db_check(path=None):
     """Contrôle rapide de la base (PRAGMA quick_check, lecture seule) -> None si elle va bien (ou n'existe pas), sinon ce qui ne va pas."""
     import sqlite3
@@ -392,7 +403,7 @@ def db_check(path=None):
         finally:
             con.close()
     except sqlite3.OperationalError as e:
-        return None if "locked" in str(e) else str(e)[:120]       # occupée : on réessaiera
+        return BUSY if "locked" in str(e) else str(e)[:120]       # occupée : on réessaiera
     except sqlite3.Error as e:
         return str(e)[:120]
     return None if res and res[0] == "ok" else str(res[0] if res else "contrôle impossible")[:120]
@@ -400,8 +411,22 @@ def db_check(path=None):
 
 # ---------- signal de vie (healthchecks.io) ----------
 
-def proxy_url(env=os.environ, path=PROXY_FILE):
+ENV_FILE = None             # le .env lu par le runner : posé par main() SEULEMENT (les tests ne lisent jamais les vraies clés, rien n'est envoyé)
+
+
+def env_now():
+    """Environnement + clés du .env (relu à chaque appel : une clé corrigée est prise sans redémarrer), l'environnement d'abord. Jamais écrit dans
+    os.environ : les passages (bot.py) relisent .env eux-mêmes. Hors main() (tests) : l'environnement seul."""
+    try:
+        from kelly import envfile
+        return (envfile.read(ENV_FILE) if ENV_FILE else {}) | {k: v for k, v in os.environ.items() if v}
+    except Exception:                                   # noqa: BLE001 - paquet kelly cassé : l'environnement seul
+        return dict(os.environ)
+
+
+def proxy_url(env=None, path=PROXY_FILE):
     """Proxy Webshare de 1xBet (comme kelly.sources.xbet.proxy) : XBET_PROXY, sinon la ligne XBET_PROXY= du fichier de scrap_stat ; None sinon."""
+    env = env if env is not None else env_now()
     if env.get("XBET_PROXY"):
         return env["XBET_PROXY"].strip()
     try:
@@ -415,6 +440,25 @@ def proxy_url(env=os.environ, path=PROXY_FILE):
     return None
 
 
+HC_SESSIONS = 3             # sessions Webshare essayées par signal de vie
+
+
+def session_no(url):
+    m = re.match(r"^.*-[A-Z]{2}-(\d+):", url or "")
+    return int(m.group(1)) if m else None
+
+
+def sessions(url, last=None, n=HC_SESSIONS):
+    """Adresses du proxy à essayer : la dernière session qui a marché, puis celle de XBET_PROXY et les suivantes (« user-GB-20 » -> 21, 22) ;
+    l'adresse seule si elle n'a pas de numéro de session (comme kelly.sources.xbet.with_session)."""
+    m = re.match(r"^(.*-[A-Z]{2}-)(\d+)(:.*)$", url or "")
+    if not m:
+        return [url]
+    base = int(m.group(2))
+    nums = ([last] if isinstance(last, int) else []) + list(range(base, base + n))
+    return [f"{m.group(1)}{k}{m.group(3)}" for k in dict.fromkeys(nums)][:n + 1]
+
+
 class Heartbeat:
     """Signal de vie envoyé à healthchecks.io toutes les HC_EVERY s (fil à part : jamais retardé par un passage de 30 min). Sans signal pendant la
     « période + délai de grâce » réglés sur le site (15 + 45 min conseillés), healthchecks te prévient : téléphone éteint, sans réseau, Termux tué,
@@ -423,7 +467,7 @@ class Heartbeat:
 
     def __init__(self, url, serve, proxy=proxy_url, post=None, on_ok=None):
         self.url, self.serve, self.proxy, self._post, self.on_ok = (url or "").strip().rstrip("/"), serve, proxy, post, on_ok
-        self.failing, self.said = False, set()
+        self.failing, self.said, self.last = False, set(), None
 
     def _say_once(self, key, msg):
         if key not in self.said:
@@ -432,7 +476,8 @@ class Heartbeat:
 
     def status(self):
         """(en panne ?, texte envoyé avec le signal)."""
-        if not (os.environ.get("TELEGRAM_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")):
+        env = env_now()
+        if not (env.get("TELEGRAM_TOKEN") and env.get("TELEGRAM_CHAT_ID")):
             return True, "TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID absent du .env : Kelly ne peut rien t'envoyer"
         down = self.serve.down_for()
         if down >= SERVE_DOWN_FAIL:
@@ -448,16 +493,22 @@ class Heartbeat:
             self._say_once("proxy", "signal de vie non envoyé : proxy introuvable (jamais en direct)")
             return False
         fail, text = force or self.status()
-        try:
-            post = self._post
-            if post is None:
-                import requests
-                post = requests.post
-            r = post(self.url + ("/fail" if fail else ""), data=text.encode("utf-8"), proxies={"http": px, "https": px}, timeout=(10, 20))
-            ok = getattr(r, "status_code", 200) < 400
-        except Exception as e:                          # noqa: BLE001 - réseau, proxy : on réessaie au prochain signal
-            ok = False
-            self._say_once("err", f"signal de vie non envoyé ({type(e).__name__}) ; nouvel essai toutes les {HC_EVERY // 60} min")
+        post = self._post
+        if post is None:
+            import requests
+            post = requests.post
+        ok, err = False, None
+        for p in sessions(px, self.last):              # session Webshare morte (« tunnel 502 ») : les suivantes, comme le relevé 1xBet
+            try:
+                r = post(self.url + ("/fail" if fail else ""), data=text.encode("utf-8"), proxies={"http": p, "https": p}, timeout=(10, 20))
+                ok = getattr(r, "status_code", 200) < 400
+            except Exception as e:                      # noqa: BLE001 - réseau, proxy : session suivante, puis prochain signal
+                err = e
+                continue
+            self.last = session_no(p)
+            break
+        if not ok and err is not None:
+            self._say_once("err", f"signal de vie non envoyé ({type(err).__name__}) ; nouvel essai toutes les {HC_EVERY // 60} min")
         if ok:
             self.said.discard("err")
             if self.on_ok:
@@ -522,10 +573,11 @@ class Runner:
         self.state = state if state is not None else load_state()
         self.watch_thread = watch_thread                # suivi des matchs (--watch) dans son propre fil : jamais bloqué par --track, --daily, --xbet...
         self.state_lock = threading.Lock()
-        self.heartbeat = Heartbeat(os.environ.get("HC_PING_URL"), self.serve, on_ok=self._hc_ok)
+        self.heartbeat = Heartbeat(env_now().get("HC_PING_URL"), self.serve, on_ok=self._hc_ok)
         self.say = telegram_say                         # alertes du runner (remplaçable : tests)
         self.disk, self.dbcheck = disk_free_mb, db_check
         self._disk_at = 0.0
+        self._flush_lock = threading.Lock()
 
     def _hc_ok(self):
         """Dernier signal de vie parti (montré par 🩺 status)."""
@@ -538,16 +590,27 @@ class Runner:
         with self.state_lock:
             if key in self.state["said"] or key in self.state["pending"]:
                 return
-            self.state["pending"][key] = text
+            self.state["pending"][key] = {"text": text, "at": time.time()}
             save_state(self.state)
         log(f"alerte : {text[:120]}", err=True)
         self.flush_alerts()
 
     def flush_alerts(self):
+        if not self._flush_lock.acquire(blocking=False):    # déjà en cours dans un autre fil : jamais deux envois de la même alerte
+            return
+        try:
+            self._flush()
+        finally:
+            self._flush_lock.release()
+
+    def _flush(self):
         with self.state_lock:
+            old = [k for k, v in self.state["pending"].items() if isinstance(v, dict) and time.time() - v.get("at", 0) > PENDING_MAX_S]
+            for k in old:                               # plus de 2 jours sans réseau : périmée (le status et healthchecks ont pris le relais)
+                self.state["pending"].pop(k, None)
             todo = list(self.state["pending"].items())
-        for key, text in todo:
-            if not self.say(text):
+        for key, v in todo:
+            if not self.say(v["text"] if isinstance(v, dict) else v):
                 return                                  # réseau ou Telegram en panne : on réessaie au prochain contrôle
             with self.state_lock:
                 self.state["pending"].pop(key, None)
@@ -557,9 +620,10 @@ class Runner:
                 save_state(self.state)
 
     def forget(self, key):
-        """`key` n'est plus en cours (l'écoute est revenue, la place est libérée) : True s'il avait été annoncé."""
+        """`key` n'est plus en cours (l'écoute est revenue, la place est libérée) -> "said" s'il avait été annoncé, "pending" s'il attendait encore
+        (retiré sans rien dire), None sinon."""
         with self.state_lock:
-            was = self.state["said"].pop(key, None) is not None or self.state["pending"].pop(key, None) is not None
+            was = "said" if self.state["said"].pop(key, None) is not None else "pending" if self.state["pending"].pop(key, None) is not None else None
             if was:
                 save_state(self.state)
         return was
@@ -573,7 +637,7 @@ class Runner:
         if down >= SERVE_DOWN_FAIL:
             self.alert("serve", f"⚠️ Kelly : l'écoute Telegram plante en boucle depuis {down / 60:.0f} min, tes commandes et boutons ne sont pas lus. "
                                 "Les passages (matin, suivi des matchs) continuent. Détail : kelly logs (dans Termux).")
-        elif down == 0 and self.forget("serve"):
+        elif self.serve.stable() and self.forget("serve") == "said":         # annoncée en panne, et de nouveau stable depuis 2 min
             self.alert(f"serve-ok|{now:%Y-%m-%d %H:%M}", "✅ Kelly : l'écoute Telegram est rétablie, tes commandes sont de nouveau lues.")
         if time.time() - self._disk_at >= 600:
             self._disk_at = time.time()
@@ -581,11 +645,13 @@ class Runner:
             if free is not None and free < DISK_LOW_MB:
                 self.alert("disk", f"⚠️ Kelly : plus que {free:.0f} Mo de libre sur le téléphone, elle risque de ne plus pouvoir écrire ses données. "
                                    "Libère de la place (photos, vidéos, applis).")
-            elif free is not None and free > DISK_OK_MB and self.forget("disk"):
+            elif free is not None and free > DISK_OK_MB and self.forget("disk") == "said":
                 self.alert(f"disk-ok|{now:%Y-%m-%d}", f"✅ Kelly : place libérée sur le téléphone ({free:.0f} Mo libres).")
         day = str(now.date())
         if now.hour >= DBCHECK_HOUR and self.state["dbcheck_day"] != day:
             bad = self.dbcheck()
+            if bad == BUSY:                             # base occupée (un passage écrit) : contrôle refait au tour suivant
+                return
             with self.state_lock:
                 self.state["dbcheck_day"] = day
                 save_state(self.state)
@@ -659,11 +725,15 @@ class Runner:
         rotate_log()
         self.serve.check()
         now, epoch = datetime.now(timezone.utc), time.time()
-        if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()) and self.state["daily_try_day"] != str(now.date()):
-            log(f"⚠️ le matin du {now.date()} n'a pas tourné (téléphone éteint ?) ; prochain passage demain à {DAILY_HOUR:02d}:00 UTC", err=True)
-            self.state["daily_try_day"], self.state["daily_tries"] = str(now.date()), DAILY_MAX_TRIES
-            self.alert(f"nodaily|{now.date()}", f"⚠️ Kelly : le passage du matin du {now:%d/%m} n'a pas tourné (téléphone éteint ou Kelly arrêtée jusqu'à "
-                                                f"{DAILY_LAST_HOUR}h UTC). Prochain passage demain à {DAILY_HOUR:02d}h00.")
+        if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()):
+            tried = self.state["daily_try_day"] == str(now.date())
+            if not tried:
+                log(f"⚠️ le matin du {now.date()} n'a pas tourné (téléphone éteint ?) ; prochain passage demain à {DAILY_HOUR:02d}:00 UTC", err=True)
+                self.state["daily_try_day"], self.state["daily_tries"] = str(now.date()), DAILY_MAX_TRIES
+            if f"daily|{now.date()}" not in self.state["said"]:      # raté 1 ou 2 fois puis plus le temps : dit aussi (une fois)
+                self.alert(f"nodaily|{now.date()}", f"⚠️ Kelly : le passage du matin du {now:%d/%m} n'a pas pu se faire ("
+                                                    + ("pas tourné : téléphone éteint ou Kelly arrêtée" if not tried else "essais ratés, puis trop tard")
+                                                    + f" avant {DAILY_LAST_HOUR}h UTC). Prochain passage demain à {DAILY_HOUR:02d}h00.")
         with self.state_lock:
             todo = [a for a in self.plan(now, self.state, epoch) if not (self.watch_thread and a[0] == "--watch")]
         for args in todo:
@@ -671,6 +741,8 @@ class Runner:
                 break
             if args[0] == "--daily" and now.hour > DAILY_HOUR:
                 log(f"rattrapage du matin à {now:%H:%M} UTC (pas fait à {DAILY_HOUR:02d}:00)")
+            if args[0] == "--daily":                    # n° de l'essai du jour, pour bot.py : son dernier essai part toujours (MorningRetry)
+                os.environ["KELLY_DAILY_TRY"] = str((self.state["daily_tries"] if self.state["daily_try_day"] == str(now.date()) else 0) + 1)
             rc = self.run(args)
             self._done(args, now, rc)
             self.serve.check()
@@ -683,12 +755,13 @@ LOCK_WAIT = 30                                 # secondes d'attente du verrou au
 def test_alert():
     """`kelly test-alerte` : envoie un signal « en panne » à healthchecks.io (par le proxy) pour vérifier que l'alerte arrive bien sur Telegram ; le
     prochain signal de vie de Kelly (5 min au plus) la remet « ok ». -> code de sortie."""
-    from kelly import envfile
-    envfile.load()
-    if not os.environ.get("HC_PING_URL"):
+    global ENV_FILE
+    ENV_FILE = os.path.join(ROOT, ".env")
+    url = env_now().get("HC_PING_URL")
+    if not url:
         print("❌ HC_PING_URL absent du .env : voir DEPLOY_TERMUX.md (surveillance extérieure).")
         return 1
-    hb = Heartbeat(os.environ["HC_PING_URL"], ServeSupervisor([]))
+    hb = Heartbeat(url, ServeSupervisor([]))
     if hb.beat(force=(True, "test de l'alerte (kelly test-alerte) : tout va bien, Kelly la remet « ok » dans 5 min")):
         print("✅ Signal « en panne » envoyé : l'alerte de healthchecks.io doit arriver sur Telegram d'ici 1 à 2 min, puis « ok » d'ici 5 min.")
         return 0
@@ -697,6 +770,8 @@ def test_alert():
 
 
 def main():
+    global ENV_FILE
+    ENV_FILE = os.path.join(ROOT, ".env")
     if "--test-alerte" in sys.argv:
         os.chdir(ROOT)
         return test_alert()
@@ -711,11 +786,6 @@ def main():
     if lock is None:
         log("❌ un autre termux_runner.py tourne déjà (verrou logs/runner.lock) : arrêt", err=True)
         return 1
-    try:                                       # HC_PING_URL, XBET_PROXY... du fichier .env (sans écraser l'environnement)
-        from kelly import envfile
-        envfile.load()
-    except Exception as e:                     # noqa: BLE001 - le runner tourne même si le paquet kelly est cassé
-        log(f"⚠️ .env non lu ({type(e).__name__}: {e})", err=True)
     log("🔥 Démarrage de Kelly sur GrapheneOS / Termux..."
         + (" (wake-lock demandé)" if os.environ.get("KELLY_WAKELOCK") == "1" else " (sans wake-lock : le téléphone peut mettre Kelly en veille)"))
     kill_stale_serve(os.path.join(LOGS, "serve.pid"))

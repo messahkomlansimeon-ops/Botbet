@@ -7,7 +7,7 @@ from .. import store
 FILE = "sources_state.json"
 BLOCK_HOURS = 24
 BLOCK_MAX_HOURS = 24 * 7    # blocages de suite (sans réussite entre) : 24 h, 48 h, 96 h... au plus 7 jours (FBref bloqué chaque jour)
-KEEP_TRYING = ("xbet", "s365")      # sources essentielles : jamais plus de 24 h de pause
+KEEP_TRYING = ("xbet", "s365", "fotmob")      # sources essentielles (cotes, suivi des matchs et son secours, règlement) : jamais plus de 24 h de pause
 RATE_HOURS = 1              # HTTP 429 (trop de requêtes) : une pause d'une heure suffit (un 403, un refus, coupe 24 h)
 CLOUDFLARE_HOURS = 24 * 7
 LABELS = {"footballdata": "football-data", "understat": "Understat", "fbref": "FBref",
@@ -104,6 +104,8 @@ def block(name, reason, cloudflare=False, hours=None):
     n = int((_all().get(name) or {}).get("blocks") or 0) + 1
     if not hours and not cloudflare and name not in KEEP_TRYING:
         hours = min(BLOCK_HOURS * 2 ** (n - 1), BLOCK_MAX_HOURS)
+    if name in KEEP_TRYING:                         # même Cloudflare (une adresse de sortie du proxy signalée) : 24 h au plus
+        hours = min(hours or BLOCK_HOURS, BLOCK_HOURS)
     until = _iso(now() + timedelta(hours=hours or (CLOUDFLARE_HOURS if cloudflare else BLOCK_HOURS)))
     when = until[:16].replace("T", " ")
     if cloudflare:
@@ -125,10 +127,9 @@ def record_run(name, rows, errors, stale=0):
         kw["last_error"] = " ; ".join(errors[:3]) + (f" (+{len(errors) - 3})" if len(errors) > 3 else "")
     else:
         kw["last_error"] = None
-    if rows > 0:
+    if rows > 0:                                    # des données lues : pas des blocages « de suite » (la pause repart de 24 h)
         kw["last_success"] = _iso(now())
-        if not blocked:
-            kw["blocks"] = 0
+        kw["blocks"] = 0
     _put(name, **kw)
     return health(name)
 

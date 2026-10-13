@@ -8,6 +8,7 @@
   (kelly.db.avant-restauration-<date>), la nouvelle installée ; `kelly restaurer <fichier>` arrête Kelly avant et la relance après.
 
 Jamais dans la sauvegarde : le fichier .env (token Telegram, clés, proxy) : à garder ailleurs (gestionnaire de mots de passe)."""
+import contextlib
 import os
 import shutil
 import sqlite3
@@ -126,16 +127,26 @@ def restore(path, now=None):
         n = _check(src)
         db = store.db_path()
         os.makedirs(os.path.dirname(db), exist_ok=True)
-        kept = ""
-        if os.path.exists(db):
-            kept = f"{db}.avant-restauration-{now:%Y%m%d-%H%M%S}"
-            shutil.move(db, kept)
-        for ext in ("-wal", "-shm", "-journal"):
-            if os.path.exists(db + ext):
-                os.remove(db + ext)
-        shutil.copyfile(src, db)
+        new = db + ".restauration"
+        shutil.copyfile(src, new)                   # d'abord la copie complète à côté (disque plein : rien n'est touché)
+        _check(new)
+        kept = f"{db}.avant-restauration-{now:%Y%m%d-%H%M%S}" if os.path.exists(db) else ""
+        moved = []
+        try:
+            for ext in ("", "-journal", "-wal", "-shm"):   # l'ancienne base ET son journal, ensemble (jamais un journal effacé : il complète la base)
+                if os.path.exists(db + ext):
+                    os.replace(db + ext, (kept or db + ".ancienne") + ext)
+                    moved.append(ext)
+            os.replace(new, db)
+        except OSError:
+            for ext in moved:                       # retour à l'ancienne base
+                with contextlib.suppress(OSError):
+                    os.replace((kept or db + ".ancienne") + ext, db + ext)
+            raise
         return f"✅ Sauvegarde restaurée ({n} documents)." + (f" Ancienne base gardée : {os.path.basename(kept)}" if kept else "")
     except (OSError, zipfile.BadZipFile) as e:
+        with contextlib.suppress(OSError):
+            os.remove(store.db_path() + ".restauration")
         raise BackupError(f"{type(e).__name__}: {e}") from None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

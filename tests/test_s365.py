@@ -611,12 +611,12 @@ def test_blocked_sources_stop_everything():
     NET.routes[s365.list_url(UR)] = Resp(200, b"<html><head><title>Just a moment...</title></head><body>cf_chl_opt</body></html>")
     rep = s365.fill(leagues=[UR])
     assert rep.get("blocked") and "anti-robot" in state.health("s365")["last_error"]
-    # Cloudflare : bloqué une semaine
+    # Cloudflare : bloqué, mais 24 h au plus pour 365scores (source essentielle : une adresse de sortie du proxy signalée n'est pas toutes)
     fresh()
     NET.routes[s365.list_url(UR)] = Resp(503, b"", {"cf-mitigated": "challenge"})
     s365.fill(leagues=[UR])
     until = datetime.fromisoformat(state.health("s365")["blocked_until"])
-    assert until - state.now() > timedelta(days=6)
+    assert timedelta(hours=23) < until - state.now() <= timedelta(hours=24, minutes=1)
     # robots.txt qui répond 403 : bloqué, aucune donnée demandée
     fresh()
     NET.routes[ROBOTS] = Resp(403)

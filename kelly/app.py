@@ -643,10 +643,15 @@ class MorningRetry(Exception):
 
 
 def _scan_failed(day, error):
-    """Note un essai raté faute de liste des matchs -> True s'il faut réessayer plus tard (moins de C.DAILY_SCAN_TRIES essais aujourd'hui)."""
+    """Note un essai raté faute de liste des matchs -> (réessayer plus tard ?, n° de l'essai). Le runner donne le n° de l'essai du jour (KELLY_DAILY_TRY :
+    TOUS ses essais, même ceux coupés pour une autre raison) : le dernier essai qu'il accorde part toujours. Sans lui : les essais ratés notés ici."""
     t = store.load(TRY_FILE, {})
     n = (t.get("n", 0) if isinstance(t, dict) and t.get("day") == str(day) else 0) + 1
     store.save(TRY_FILE, {"day": str(day), "n": n, "error": str(error)[:200]})
+    try:
+        n = max(n, int(os.environ.get("KELLY_DAILY_TRY") or 0))
+    except ValueError:
+        pass
     return n < C.DAILY_SCAN_TRIES, n
 
 
@@ -703,7 +708,8 @@ def announce_repairs():
         lines = ["🛠️ " + fmt.b("Kelly a réparé sa mémoire")]
         for x in new:
             what = REPAIR_LABELS.get(x["name"], x["name"])
-            lines.append(fmt.esc(f"• {what} : document abîmé, remis tel qu'il était le {fmt.fr_day(x['from'])} (rien d'autre n'est perdu)" if x.get("from")
+            lines.append(fmt.esc(f"• {what} : document abîmé, remis tel qu'il était le {fmt.fr_day(x['from'])} (ce qui a changé depuis est perdu)"
+                                 if x.get("from")
                                  else f"• {what} : document abîmé et pas encore de copie : Kelly n'y écrit plus. Restaure la dernière sauvegarde "
                                       "reçue ici (kelly restaurer dans Termux)."))
         msg = telegram.Html("\n".join(lines))
