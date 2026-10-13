@@ -488,13 +488,12 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
         return
     alive = {t.get("tid") or t["what"] for t in ts if _verdict(d, t) not in ("won", "lost")}            # tickets encore en jeu avant ce passage
     alive_legs = {leg["key"] for t in ts if (t.get("tid") or t["what"]) in alive for leg in t["legs"]}
-    names = {}
-    for t in ts:
-        if (t.get("tid") or t["what"]) in alive:
-            for leg in t["legs"]:
-                names.setdefault(leg["key"], [])
-                if t["name"] not in names[leg["key"]]:
-                    names[leg["key"]].append(t["name"])
+    tix = {}                                             # pari -> [(étiquette du ticket, encore en jeu ?)] : de quel coupon vient chaque pari
+    for t in sorted(ts, key=lambda t: (t.get("tid") or t["what"]) not in alive):
+        for leg in t["legs"]:
+            lab = (_label(t), (t.get("tid") or t["what"]) in alive)
+            if lab not in tix.setdefault(leg["key"], []):
+                tix[leg["key"]].append(lab)
     if games is None:
         why = _blocked_why()
         if why:
@@ -529,7 +528,7 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
                 break
             try:
                 _one_game(d, now, by_game[gid], status.get(gid) or {}, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive,
-                          alive_legs, detail_for, names)
+                          alive_legs, detail_for, tix)
             except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
                 print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
             for text, extra in events.items():
@@ -546,7 +545,7 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
             d["tickets"][tid] = verdict
         else:
             d["tickets"].pop(tid, None)
-        _out(d, now, "foot", f"🎫 {fmt.b(fmt.esc(t['name']))} · {fmt.esc(foot)}")
+        _out(d, now, "foot", f"🎫 {fmt.b(fmt.esc(t['name']))}" + (fmt.esc(f" · 🎟️ {t['coupon']}") if t.get("coupon") else "") + f" · {fmt.esc(foot)}")
     if late:
         _health(d, now, False, f"passage trop long (plus de {C.WATCH_DEADLINE_S} s), le reste au prochain passage", open_n)
     else:
@@ -571,6 +570,23 @@ def _leg_now(leg, h, a, stats):
         return ""
     val = hv + av if side == "total" else hv if side == "home" else av
     return f"{val} {ONE.get(key, key) if val == 1 else WORD.get(key, key)}"
+
+
+FROM_MAX = 3                    # coupons cités au plus sur la ligne d'un pari (les autres : « +N »)
+
+
+def _label(t):
+    """Repère d'un ticket : son code coupon 1xBet (« 🎟️ 4G2MJ », le seul sûr : trois « Combi sur mesure (cote 1000) » le même jour), sinon son nom."""
+    return f"🎟️ {t['coupon']}" if t.get("coupon") else f"🎫 {t['name']}"
+
+
+def _from(key, tix, alive_only=False):
+    """« · 🎟️ 4G2MJ, 🎟️ LJVKJ (perdu) +2 » : les tickets d'où vient le pari `key` (encore en jeu d'abord) ; '' sans ticket."""
+    labs = [(lab, ok) for lab, ok in (tix or {}).get(key, []) if ok or not alive_only]
+    if not labs:
+        return ""
+    shown = [lab + ("" if ok else " (perdu)") for lab, ok in labs[:FROM_MAX]]
+    return " · " + ", ".join(shown) + (f" +{len(labs) - FROM_MAX}" if len(labs) > FROM_MAX else "")
 
 
 DANGER_DROP = 0.15              # « pari en danger » : la chance a baissé d'au moins 15 points depuis l'avant-match
@@ -617,7 +633,7 @@ def _ch_txt(p, leg):
 
 
 def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive, alive_legs, detail_for=None,
-              names=None):
+              tix=None):
     """Les paris d'UN match : score, stats si besoin, fiche détaillée aux moments clés (but d'un match d'un ticket en jeu, prolongation), état de chaque
     pari ; UN bloc de lignes pour ce match dans `events` (titre + lignes des paris), tickets touchés dans `touched`."""
     g = legs[0][3]
@@ -717,7 +733,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
             st, detail = state(leg, *score, stats, finished)
         if st is None:
             continue
-        tag = "" if leg["key"] in alive_legs else " · ticket déjà perdu"
+        tag = _from(leg["key"], tix)                     # « · 🎟️ 4G2MJ, LJVKJ (perdu) » : de quels coupons vient ce pari
         line = None
         first = leg["key"] not in said
         said.add(leg["key"])
@@ -744,9 +760,8 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
             p0 = leg.get("prob")
             if (p is not None and p0 and leg["key"] in alive_legs and p < C.WATCH_DANGER_P and p0 - p >= DANGER_DROP and int(st_g.get("minute") or 0) >= 20
                     and not prevl.get("danger")):
-                tks = ", ".join((names or {}).get(leg["key"], [])) or ""
                 _out(d, now, "danger", fmt.esc(f"⚠️ Pari en danger · {match} ({st_g.get('minute')}e, {sc}) : {leg.get('pick')} · {inplay.pct(p)} "
-                                               f"({inplay.pct(p0)} avant le match)" + (f" · {tks}" if tks else "")))
+                                               f"({inplay.pct(p0)} avant le match)" + _from(leg["key"], tix, alive_only=True)))
                 for t2, l2, k2, _ in legs:
                     if l2["key"] == leg["key"]:
                         d["legs"].setdefault(k2, {})["danger"] = 1
@@ -794,7 +809,8 @@ def _last_legs(d, now, ts, alive):
         leg, cur = rest[0]
         ko = _ko(leg)
         gain = money.money(round((t.get("odds") or 0) * (t.get("stake") or 0)))
-        txt = f"❗ Il ne manque que {leg.get('home')} – {leg.get('away')} ({leg.get('pick')}) pour gagner {gain} avec {t['name']}"
+        txt = (f"❗ Il ne manque que {leg.get('home')} – {leg.get('away')} ({leg.get('pick')}) pour gagner {gain} avec {t['name']}"
+               + (f" (🎟️ {t['coupon']})" if t.get("coupon") else ""))
         if need(leg)[0] is None:
             txt += " (pas suivi en direct)"
         elif ko and ko > now:

@@ -83,7 +83,7 @@ def test_danger_once():
     with tickets([ticket("vm1", [leg(0, point=1.5, prob=0.7)]), ticket("vm2", [leg(0, point=1.5, prob=0.7)])]):
         assert "danger" not in str(run(15, {0: live((0, 0), 15)})), "avant la 20e : jamais"
         msg = str(run(70, {0: live((0, 0), 70)}))
-        assert "⚠️ Pari en danger · H0 – A0 (70e, 0-0) : Plus de 1,5 buts · " in msg and "(70 % avant le match) · Combi vm1, Combi vm2" in msg, msg
+        assert "⚠️ Pari en danger · H0 – A0 (70e, 0-0) : Plus de 1,5 buts · " in msg and "(70 % avant le match) · 🎫 Combi vm1, 🎫 Combi vm2" in msg, msg
         assert msg.count("Pari en danger") == 1, "un pari dans 2 tickets : dit une fois"
         assert "danger" not in str(run(80, {0: live((0, 0), 80)})), "une fois par pari"
     print("ok  pari en danger : une fois, avec les tickets concernés, jamais avant la 20e")

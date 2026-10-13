@@ -293,6 +293,20 @@ def test_status_lines():
     print("ok  status : bloc « 🎫 Suivi des matchs » (actif, en panne, passage trop vieux, lignes en attente)")
 
 
+def test_coupon_on_each_bet():
+    reset({"tickets": {f"{DAY}|vm5": "lost"}})
+    ts = [ticket(f"vm{i}", [leg(0)]) | {"coupon": f"CODE{i}"} for i in range(1, 6)]
+    live = {0: {"live": True, "score": (0, 0), "minute": 20}}
+    with tickets(ts):
+        watch.follow(KO + timedelta(minutes=20), **kw(live))
+        live[0] = {"live": True, "score": (2, 0), "minute": 50}
+        msg = str(watch.follow(KO + timedelta(minutes=50), **kw(live)))
+    assert "✅ H0 – A0 : totals Over 1.5 (2-0) · 🎟️ CODE1, 🎟️ CODE2, 🎟️ CODE3 +2" in msg, msg        # en jeu d'abord, au plus 3, puis +N
+    assert "🎫 <b>Combi vm1</b> · 🎟️ CODE1 · 🏆 Ticket GAGNÉ" in msg, msg
+    assert watch._from(leg(0)["key"], {leg(0)["key"]: [("🎟️ A", True), ("🎟️ B", False)]}) == " · 🎟️ A, 🎟️ B (perdu)"
+    print("ok  chaque pari dit de quel(s) coupon(s) il vient (code 1xBet), le perdu marqué")
+
+
 def main():
     test_tid_no_inheritance()
     test_never_silent()
@@ -305,6 +319,7 @@ def main():
     test_quiet_digest()
     test_outbox_two_processes()
     test_status_lines()
+    test_coupon_on_each_bet()
     print("tests fiabilité du suivi des matchs : OK")
 
 

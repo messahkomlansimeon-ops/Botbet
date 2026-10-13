@@ -25,7 +25,8 @@ def _leg(id_, key, prob, home="", away="", src=None):
 
 
 def tickets(day):
-    """Tickets joués du jour `day` : [{"what", "tid", "name", "legs": [{id, key, prob, home, away, ...FIELDS}], "stake", "odds"}]. `tid` : identifiant
+    """Tickets joués du jour `day` : [{"what", "tid", "name", "coupon" (code coupon 1xBet ou None), "legs": [{id, key, prob, home, away, ...FIELDS}],
+    "stake", "odds"}]. `tid` : identifiant
     STABLE du ticket, daté (« 2026-10-12|vm1 », « 2026-10-12|pari|<clé> ») : les combis sur mesure repartent à m1 chaque jour et tous les paris seuls
     s'appellent « pari » ; le suivi des matchs (kelly/watch.py) range ses verdicts par tid. Une ligne abîmée est sautée (note sur stderr), jamais
     les autres tickets."""
@@ -55,7 +56,7 @@ def tickets(day):
                 what = played.norm(fmt.tier_word(c["tier"]))
                 legs = [_leg(k.split("|")[0], k, (by_key.get(k) or {}).get("prob"), (by_key.get(k) or {}).get("home", ""),
                              (by_key.get(k) or {}).get("away", ""), by_key.get(k)) for k in c.get("keys") or []]
-                return {"what": what, "tid": f"{day}|{what}", "name": fmt.tier_word(c["tier"]), "legs": legs,
+                return {"what": what, "tid": f"{day}|{what}", "name": fmt.tier_word(c["tier"]), "legs": legs, "coupon": c.get("coupon"),
                         "stake": c["played"]["stake"], "odds": c["played"]["odds"]}
             one(morning, c.get("tier"))
     try:
@@ -69,6 +70,7 @@ def tickets(day):
                 what = played.gap_what(r) if r.get("sharpgap") and r.get("gap_n") and r.get("single") is not True else "pari"
                 tid = f"{day}|pari|{r['key']}" if what == "pari" else f"{day}|{what}"
                 return {"what": what, "tid": tid, "name": r.get("pick") or "pari du jour", "stake": r["played"]["stake"], "odds": r["played"]["odds"],
+                        "coupon": r.get("coupon"),
                         "legs": [_leg(r.get("id") or r["key"].split("|")[0], r["key"], r.get("prob"), r.get("home", ""), r.get("away", ""), r)]}
             one(single, r.get("key"))
     for c in combos_rows:
@@ -78,7 +80,7 @@ def tickets(day):
                 return {"what": what, "tid": f"{day}|{what}",
                         "name": played.custom_name(c) if played.is_custom(c)
                         else played._fair_name(c["tier"], played.is_real(c), c),      # « Stats », « Tirs cadrés »... : jamais la clé interne (« ts5 »)
-                        "stake": c["played"]["stake"], "odds": c["played"]["odds"],
+                        "stake": c["played"]["stake"], "odds": c["played"]["odds"], "coupon": c.get("coupon"),
                         "legs": [_leg(l.get("id"), l.get("key"), l.get("prob"), l.get("home", ""), l.get("away", ""), l) for l in c.get("legs") or []],
                         "live": c.get("src") == "live", "date": c.get("date")}
             one(combo, c.get("tier"))
