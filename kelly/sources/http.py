@@ -46,6 +46,10 @@ PROXY_DOWN_S = 120
 DNS_WAIT = 8.0                    # secondes au plus pour trouver l'adresse du proxy (la résolution DNS n'a pas de délai dans requests)
 DNS_OK_S = 600                    # adresse trouvée : pas re-vérifiée avant 10 min
 _proxy_down = {}                  # « hôte:port » du proxy -> instant (monotonic) jusqu'auquel il est tenu pour injoignable
+# Un SEUL échec ne met jamais tout le proxy en panne (13/10 13h06 : une coupure isolée bloquait 2 min tous les relevés 1xBet, rotation des sessions
+# Webshare comprise) : il en faut HOST_FAILS en HOST_FAIL_WINDOW s, et seulement ceux qui disent que le serveur du proxy lui-même est injoignable.
+HOST_FAILS, HOST_FAIL_WINDOW = 2, 60
+_host_fails = {}                  # « hôte:port » -> instants (monotonic) des derniers échecs « serveur du proxy injoignable »
 _dns_ok = {}                      # hôte du proxy -> instant de la dernière résolution réussie
 _sessions = {}
 _sleep = time.sleep
@@ -83,7 +87,7 @@ def cache_dir():
 
 
 def reset():
-    _last.clear(), _crawl.clear(), _robots.clear(), _proxy_down.clear(), _dns_ok.clear()
+    _last.clear(), _crawl.clear(), _robots.clear(), _proxy_down.clear(), _dns_ok.clear(), _host_fails.clear()
 
 
 def require_proxy(domain):
@@ -139,12 +143,45 @@ def proxy_refusal(e):
     return PROXY_REFUSED.get(m.group(1)) if m else None
 
 
+HOST_DOWN = ("NewConnectionError", "Failed to establish a new connection", "Connection refused", "NameResolution", "getaddrinfo",
+             "Name or service not known")
+
+
+def _host_unreachable(e):
+    """L'échec dit-il que le SERVEUR du proxy est injoignable (connexion impossible ou trop lente, adresse introuvable) ? Une coupure en cours de
+    route (« RemoteDisconnected »), un tunnel refusé par la sortie Webshare (« Tunnel connection failed: 502 ») : non, une autre session peut marcher."""
+    return isinstance(e, requests.ConnectTimeout) or (isinstance(e, requests.exceptions.ProxyError) and any(k in str(e) for k in HOST_DOWN))
+
+
+def why_net(e):
+    """Précision d'un échec réseau, sans adresse ni mot de passe : « coupure du proxy », « tunnel 502 », « connexion au proxy impossible »… ; ''."""
+    s = str(e)
+    m = re.search(r"Tunnel connection failed: (\d{3})", s)
+    if m:
+        return f"tunnel {m.group(1)}"
+    for keys, txt in ((("NameResolution", "getaddrinfo", "Name or service not known"), "adresse du proxy introuvable"),
+                      (("NewConnectionError", "Failed to establish a new connection", "Connection refused"), "connexion au proxy impossible"),
+                      (("RemoteDisconnected", "Connection aborted", "Connection reset"), "connexion coupée en route"),
+                      (("timed out",), "délai dépassé")):
+        if any(k in s for k in keys):
+            return txt
+    return ""
+
+
 def _proxy_failed(proxy, e):
-    """Échec par le proxy : le proxy LUI-MÊME est injoignable (connexion impossible ou trop lente, adresse introuvable) -> tenu pour en panne
-    PROXY_DOWN_S s. Une session Webshare en panne (« Tunnel connection failed: 502 ») ne compte pas : une autre session peut marcher (xbet)."""
-    if (isinstance(e, requests.ConnectTimeout) or proxy_refusal(e)       # refus du proxy : aucune session ne marchera
-            or (isinstance(e, requests.exceptions.ProxyError) and "Tunnel connection failed" not in str(e))):
-        _proxy_down[_phost(proxy)] = time.monotonic() + PROXY_DOWN_S
+    """Échec par le proxy. Refus du proxy (mot de passe, forfait) : tenu pour en panne tout de suite (aucune session ne marchera). Serveur du proxy
+    injoignable : tenu pour en panne PROXY_DOWN_S s seulement au HOST_FAILS-ième échec en HOST_FAIL_WINDOW s (une coupure isolée ne bloque plus
+    rien). Session Webshare en panne, coupure en route : jamais (une autre session peut marcher : xbet)."""
+    host, now = _phost(proxy), time.monotonic()
+    if proxy_refusal(e):
+        _proxy_down[host] = now + PROXY_DOWN_S
+        return
+    if not _host_unreachable(e):
+        return
+    recent = [t for t in _host_fails.get(host, ()) if now - t < HOST_FAIL_WINDOW] + [now]
+    if len(recent) >= HOST_FAILS:
+        _proxy_down[host], recent = now + PROXY_DOWN_S, []
+    _host_fails[host] = recent
 
 
 def _no_direct(domain, proxy):
@@ -400,7 +437,7 @@ def _request(url, headers=None):
         proxy = PROXIES.get(domain)
         stop = _no_direct(domain, proxy)
         if stop:                                    # jamais en direct pour 1xBet / 365scores ; proxy injoignable : on n'attend pas
-            return None, stop
+            return None, f"{err} ; {stop}" if err else stop        # la 1re cause reste dite
         _wait(domain)
         try:
             if proxy:
@@ -410,8 +447,8 @@ def _request(url, headers=None):
                 r = requests.get(url, headers=h, timeout=TIMEOUT)
             _count(domain, r)
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
-            refused = proxy_refusal(e)
-            r, err = None, refused or f"réseau indisponible ({type(e).__name__})"
+            refused, detail = proxy_refusal(e), why_net(e)
+            r, err = None, refused or f"réseau indisponible ({type(e).__name__}{', ' + detail if detail else ''})"
             if refused:                             # gardé pour le status et le message du matin (state « proxy »)
                 with contextlib.suppress(Exception):
                     state._put("proxy", refused=refused, refused_at=state._iso(state.now()))

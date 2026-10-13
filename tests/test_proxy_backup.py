@@ -66,9 +66,9 @@ def test_proxy_breaker_and_cause():
     http.PROXIES["x.test"] = proxy
     try:
         r = http.fetch("https://x.test/a", "test", 60, check_robots=False)
-        assert not r.ok and len(calls) == 1, calls                            # proxy muet : pas de 2e essai qui attendrait encore
+        assert not r.ok and len(calls) == 2, calls                            # 2 échecs de suite (1 minute) : le serveur du proxy est tenu pour en panne
         r = http.fetch("https://x.test/b", "test", 60, check_robots=False)
-        assert not r.ok and "proxy injoignable" in r.error and len(calls) == 1, (r, calls)     # tenu pour en panne : rien n'attend
+        assert not r.ok and "proxy injoignable" in r.error and len(calls) == 2, (r, calls)     # tenu pour en panne : rien n'attend
         assert http.cause(r.error) == "le proxy ne répond pas"
         http._proxy_down.clear()
         calls.clear()
@@ -76,6 +76,19 @@ def test_proxy_breaker_and_cause():
         http._sessions.clear()
         http.fetch("https://x.test/c", "test", 60, check_robots=False)
         assert len(calls) == 2 and not http._proxy_down, calls                 # session Webshare en panne : une autre peut marcher (xbet), pas le proxy entier
+        # 13/10 13h06 : UNE coupure en route ne met plus tout le proxy en panne (les relevés suivants et la rotation des sessions continuent)
+        calls.clear()
+        requests.Session = lambda: _Ses(requests.exceptions.ProxyError("Unable to connect to proxy', RemoteDisconnected('Remote end closed connection')"), calls)
+        http._sessions.clear()
+        r = http.fetch("https://x.test/d", "test", 60, check_robots=False)
+        assert not http._proxy_down and len(calls) == 2 and "connexion coupée en route" in r.error, (r.error, calls)
+        calls.clear()
+        requests.Session = lambda: _Ses(requests.exceptions.ProxyError("Unable to connect to proxy', NewConnectionError('Failed to establish a new connection: [Errno 111] Connection refused')"), calls)
+        http._sessions.clear()
+        http.reset()
+        http.PROXIES["x.test"] = proxy
+        r = http.fetch("https://x.test/e", "test", 60, check_robots=False)
+        assert http._proxy_down and "connexion au proxy impossible" in r.error, r.error        # serveur du proxy refusé 2 fois : en panne 2 min
     finally:
         requests.Session = old
         http.PROXIES.pop("x.test", None)
