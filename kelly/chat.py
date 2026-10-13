@@ -174,13 +174,18 @@ COMBI_ASK = "combi"          # question ouverte « quelle cote ? » (bouton « �
 
 
 def combi_picker():
-    return telegram.with_buttons("🎯 Quelle cote veux-tu pour ton combiné ?",
+    """Sélecteur de cote du combiné (« 🎯 Un combiné », « combi ») : un nombre écrit juste après est la cote voulue (question ouverte COMBI_ASK),
+    comme après « ✏️ Autre cote »."""
+    set_pending(COMBI_ASK, "", None)
+    return telegram.with_buttons("🎯 Quelle cote veux-tu pour ton combiné ? Touche une cote, ou écris-la (par exemple 1900).",
                                  telegram.inline([[(f"cote {t}", f"combi|{t}") for t in COMBI_TARGETS],
                                                   [("✏️ Autre cote (écris-la)", "combi|autre")]]))
 
 
 def live_picker():
-    return telegram.with_buttons("🔴 Combiné live : quelle cote ?\n" + fmt.i("Matchs en cours de la 30e à la 88e minute, chances recalculées avec le score."),
+    """Sélecteur de cote du combiné live : un nombre écrit juste après est la cote live voulue (question ouverte LIVE_ASK)."""
+    set_pending(LIVE_ASK, "", None)
+    return telegram.with_buttons("🔴 Combiné live : quelle cote ? Touche une cote, ou écris-la (par exemple 20).\n" + fmt.i("Matchs en cours de la 30e à la 88e minute, chances recalculées avec le score."),
                                  telegram.inline([[(f"cote {t}", f"live|{t}") for t in COMBI_TARGETS], [("✏️ Autre cote (écris-la)", "live|autre")]]))
 
 
@@ -636,11 +641,13 @@ def on_callback(data, message_id=None):
         if parts[1] == "autre":
             set_pending(LIVE_ASK, "", message_id)
             return "✏️ Écris ta cote live, par exemple 20."
+        clear_pending()                                 # cote choisie au bouton : la question « quelle cote ? » est fermée
         return app.handle_command(f"/live {parts[1]}")
     if parts[0] == "combi" and len(parts) == 2 and parts[1] == "autre":     # « ✏️ Autre cote » : la cote écrite ensuite (route -> _combi_answer)
         set_pending(COMBI_ASK, "", message_id)
         return "✏️ Écris ta cote, par exemple 1900."
     if parts[0] == "combi" and len(parts) == 2:       # cote choisie : les cases à cocher des types de paris
+        clear_pending()                                 # la question « quelle cote ? » est fermée
         if app.combi_target([parts[1]]) is None:
             return app.handle_command(f"/combi {parts[1]}")
         text, markup = app.kinds_picker(app.combi_target([parts[1]]))

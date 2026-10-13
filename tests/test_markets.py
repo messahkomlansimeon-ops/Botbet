@@ -50,8 +50,24 @@ def test_card():
     print("ok  carte des marchés : solides / à problème / en attente, écartés et compteur, Kelly ou 1xBet selon la force du signal, rejeu")
 
 
+def test_typed_odds_after_picker():
+    """Après « 🎯 Un combiné » (ou « 🔴 Live »), une cote ÉCRITE (sans toucher de bouton) est la cote voulue : jamais « Appuie d'abord sur ✅ Je l'ai
+    joué »."""
+    cmd, reply = chat.route("🎯 Un combiné")
+    assert cmd is None and "écris-la" in str(reply), reply
+    cmd, reply = chat.route("20")
+    assert "Appuie d'abord" not in str(reply or "") and (cmd or reply), (cmd, reply)
+    chat.route("🔴 Live")
+    cmd, reply = chat.route("20")
+    assert cmd == "/live 20" and reply is None, (cmd, reply)
+    chat.clear_pending()
+    assert "Appuie d'abord" in str(chat.route("5,40")[1]), "sans question ouverte : le rappel des paris joués"
+    print("ok  cote écrite juste après « 🎯 Un combiné » / « 🔴 Live » : comprise comme la cote voulue")
+
+
 def main():
     test_button_and_words()
+    test_typed_odds_after_picker()
     test_card()
     print("tests bouton Marchés : OK")
 
