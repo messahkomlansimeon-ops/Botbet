@@ -1252,8 +1252,28 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
         block.append(f"🏁 Terminé · {home} {shown} {away}")
     block += ft_lines
     gs["score"] = sc
+    if finished:
+        gs["done"] = 1                                   # score final sûr : repli du règlement des paris joués (final_score)
     if block:
         events["\n".join(block)] = {}
+
+
+def final_score(b):
+    """Score final du match d'un pari JOUÉ `b` (clé, id, home, away) d'après ce suivi : repli du règlement (settle.watch_score) quand API-Football,
+    football-data et FotMob n'ont rien. Seulement un match TERMINÉ ; en cas de prolongation, le score à 90 minutes (sinon rien : les paris se règlent sur
+    les 90 minutes). Au format de settle_pick ; None sinon."""
+    d = store.load(FILE, {})
+    if not isinstance(d, dict) or not b.get("key"):
+        return None
+    gid = next((v.get("gid") for k, v in (d.get("legs") or {}).items() if k.endswith("|" + b["key"]) and isinstance(v, dict) and v.get("gid") is not None),
+               None)
+    gs = (d.get("games") or {}).get(str(gid)) or {} if gid is not None else {}
+    if not gs.get("done"):
+        return None
+    sc = _score_t(gs.get("s90")) if gs.get("et") else _score_t(gs.get("score"))
+    if not sc:
+        return None
+    return {"id": b.get("id"), "completed": True, "scores": [{"name": b["home"], "score": str(sc[0])}, {"name": b["away"], "score": str(sc[1])}]}
 
 
 def _last_legs(d, now, ts, alive):

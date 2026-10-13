@@ -17,7 +17,14 @@ from contextlib import closing, contextmanager
 DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DB_FILE = "kelly.db"
 BACKUP_DIR = "sauvegarde"
-NO_EXPORT = ("strength_", "progress.json", "telegram_later.json")      # caches recalculés, progression du passage en cours, messages en attente : pas dans la sauvegarde
+NO_EXPORT = ("strength_", "progress.json", "telegram_later.json", "snap/")     # caches recalculés, progression, messages en attente, instantanés : pas dans la sauvegarde
+# Documents précieux (apprentissage, tes paris, ton capital) : un instantané par jour (snapshot, SNAP_DAYS jours) ; s'il devient illisible (JSON abîmé), il
+# est remis tel qu'il était au dernier instantané (load), jamais remplacé en silence par un document vide ; chaque réparation est notée (REPAIRS).
+PROTECTED = ("calib.json", "calib_boot.json", "means.json", "ensemble.json", "live_calib.json", "tuning.json", "model.json",
+             "bets.json", "tracked.json", "fair.json", "fair_combos.json", "mybudget.json")
+RECOMPUTED = ("tuning.json", "model.json")     # refaits en entier à chaque calcul : abîmés sans instantané, le prochain calcul les remplace (jamais gelés)
+SNAP, SNAP_DAYS = "snap/", 3
+REPAIRS = "repairs.json"        # [{"name", "at", "from" (jour de l'instantané) ou None (aucun : document gelé), "said"}]
 NOT_DOCS = ("stats_cache.json",)  # fichier lu directement par stats.py (tests, --sample) : jamais importé
 
 
@@ -164,7 +171,74 @@ def load(name, default, strict=False):
         return default
     except ValueError as e:
         print(f"[store] lecture de {name} impossible : {e}", file=sys.stderr)
+        if name in PROTECTED:                       # jamais remplacé en silence : remis au dernier instantané, sinon gelé (save refusé)
+            fixed = _repair(name)
+            if fixed is not None:
+                return fixed
+            if name not in RECOMPUTED:
+                _unreadable.add(name)
+                if strict:
+                    raise OSError(f"{name} abîmé") from None
         return default
+
+
+def _repair(name):
+    """Remet `name` (document précieux devenu illisible) tel qu'il était à son dernier instantané lisible -> le document, ou None (aucun instantané :
+    il est alors gelé, voir load). Note la réparation (REPAIRS, annoncée sur Telegram par le matin). Ne lève jamais."""
+    try:
+        with _db() as con:
+            snaps = [r for r in con.execute("SELECT name, body FROM docs WHERE substr(name, 1, ?)=? ORDER BY name DESC", (len(SNAP), SNAP))
+                     if r[0].endswith("/" + name)]
+            obj = day = None
+            for snap, body in snaps:
+                try:
+                    obj, day = json.loads(body), snap.split("/")[1]
+                    break
+                except ValueError:
+                    continue
+            if day is not None:
+                con.execute("UPDATE docs SET body=?, updated=?, version=version+1 WHERE name=?", (_dump(obj), _now(), name))
+        print(f"[store] {name} illisible : " + (f"remis tel qu'il était le {day}" if day else "aucun instantané, document gelé (plus aucune écriture)"),
+              file=sys.stderr)
+        def note(r):                                # une seule entrée pas encore annoncée par document (un document gelé est relu souvent)
+            r = r if isinstance(r, list) else []
+            if any(x.get("name") == name and not x.get("said") for x in r if isinstance(x, dict)):
+                return None, None
+            return r[-19:] + [{"name": name, "at": _now(), "from": day}], None
+        if day is not None or name not in RECOMPUTED:       # refait en entier au prochain calcul : rien à annoncer
+            update(REPAIRS, note, [])
+        return obj
+    except Exception as e:                          # noqa: BLE001 - la réparation ne doit jamais casser une lecture
+        print(f"[store] réparation de {name} impossible : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def snapshot(day, keep=SNAP_DAYS):
+    """Instantané du jour `day` des documents précieux (PROTECTED) lisibles, dans la base (« snap/<jour>/<nom> ») ; seuls les `keep` derniers jours sont
+    gardés. Appelé à la fin du matin. -> nombre de documents copiés. Lève OSError (base refusée)."""
+    n = 0
+    with _db() as con:
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            for name in PROTECTED:
+                row = con.execute("SELECT body FROM docs WHERE name=?", (name,)).fetchone()
+                try:
+                    if not row or json.loads(row[0]) in (None, {}, []):
+                        continue
+                except ValueError:                  # jamais l'instantané d'un document abîmé
+                    continue
+                con.execute("INSERT INTO docs (name, body, updated) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET body=excluded.body,"
+                            " updated=excluded.updated, version=docs.version+1", (f"{SNAP}{day}/{name}", row[0], _now()))
+                n += 1
+            days = sorted({r[0].split("/")[1] for r in con.execute("SELECT name FROM docs WHERE substr(name, 1, ?)=?", (len(SNAP), SNAP))})
+            for old in days[:-keep] if keep else days:
+                con.execute("DELETE FROM docs WHERE substr(name, 1, ?)=?", (len(f"{SNAP}{old}/"), f"{SNAP}{old}/"))
+            con.execute("COMMIT")
+        except BaseException:
+            with contextlib.suppress(sqlite3.Error):
+                con.execute("ROLLBACK")
+            raise
+    return n
 
 
 def load_doc(name, default):
@@ -293,8 +367,12 @@ def export(dest=None):
         if name.startswith(NO_EXPORT):
             continue
         p = os.path.join(dest, name)
-        keep.add(os.path.normpath(p))
-        text = json.dumps(json.loads(body), ensure_ascii=False, indent=0)
+        keep.add(os.path.normpath(p))               # gardé même abîmé : sa dernière bonne copie lisible reste dans le miroir
+        try:
+            text = json.dumps(json.loads(body), ensure_ascii=False, indent=0)
+        except ValueError:
+            print(f"[store] {name} abîmé : pas copié (sa copie précédente reste dans {dest})", file=sys.stderr)
+            continue
         try:
             with open(p, encoding="utf-8") as f:
                 if f.read() == text:

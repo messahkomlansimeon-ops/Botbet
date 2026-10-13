@@ -36,6 +36,13 @@ L'orchestrateur centralisé en Python ([`termux_runner.py`](termux_runner.py)) r
    **Sauvegarde sur Telegram (`--backup-auto`)** : tous les 2 jours dès 12:00 UTC, la base (vérifiée, zippée, `kelly_backup_<date>.zip`) arrive dans la conversation **sans sonnerie** ; envoi raté (réseau) : nouvel essai toutes les heures. Elle ne contient jamais `.env`.
 8. **Réglage hebdomadaire (`--tune`)** : chaque dimanche entre 02:00 et 04:00 UTC (avant le matin).
 
+**Jamais mort en silence** :
+- **Garde** (`kelly guard`, lancée par `kelly start`) : toutes les 5 min, relance Kelly si elle s'est arrêtée sans `kelly stop` (plantage, processus tué). `kelly stop` l'arrête aussi (fichier `logs/stopped`).
+- **Termux:Boot** (appli F-Droid, à ouvrir une fois) : `kelly start` écrit `~/.termux/boot/kelly`, qui relance Kelly au démarrage du téléphone, après le premier déverrouillage. Sur un téléphone dédié à Kelly, désactiver le **redémarrage automatique** de GrapheneOS (Paramètres, chercher « redémarrage automatique » / « auto reboot ») : après un redémarrage, le téléphone reste verrouillé et rien ne peut tourner tant qu'il n'a pas été déverrouillé une fois.
+- **Surveillance extérieure (healthchecks.io)** : le runner envoie un signal de vie toutes les 5 min, **toujours par le proxy** (jamais en direct). Sans signal pendant 1 h (téléphone éteint, sans réseau, Termux tué), healthchecks.io prévient sur Telegram par son propre bot ; l'écoute Telegram de Kelly arrêtée depuis 15 min : alerte « en panne » tout de suite. Réglage : sur le site, un « check » avec Période 15 min et Délai de grâce 45 min, intégration Telegram ; son adresse de ping dans `.env` (`HC_PING_URL=https://hc-ping.com/…`), puis `kelly restart`. Vérifier : `kelly test-alerte` (alerte « en panne » de test, puis « ok » 5 min après).
+- **Mise à jour sûre** : `kelly update` teste la nouvelle version (imports et matin d'essai hors ligne) avant de la lancer ; si elle ne marche pas, retour automatique à la version d'avant et message sur Telegram. Le miroir `data/sauvegarde/` n'est jamais touché par git pendant la mise à jour.
+- `kelly doctor` montre la garde, Termux:Boot et la surveillance extérieure.
+
 **Robustesse du runner** :
 - **Une seule instance** : verrou `logs/runner.lock` ; un second `termux_runner.py` refuse de démarrer. Au démarrage, un ancien `bot.py --serve` resté orphelin (runner tué brutalement, `logs/serve.pid`) est arrêté avant d'en lancer un autre (sinon conflits Telegram 409).
 - **Arrêt propre** : SIGTERM, SIGHUP (session fermée, sauf sous `nohup`) et Ctrl+C arrêtent `--serve` et le passage en cours.
@@ -62,6 +69,7 @@ kelly <commande>
 - `kelly logs` : Suit les logs en temps réel (`tail -f logs/termux.log`).
 - `kelly logs-avant` : Le journal du lancement précédent (gardé à chaque `kelly start` / `restart` / `update` ; au-delà de 5 Mo, le journal est aussi tourné en `termux.log.1`).
 - `kelly status` : Vérifie si le runner et le bot sont actifs (affiche les PIDs).
+- `kelly test-alerte` : vérifie la surveillance extérieure (healthchecks.io doit t'écrire sur Telegram).
 - `kelly restaurer [fichier.zip]` : installe une sauvegarde reçue sur Telegram (sans fichier : la plus récente de tes téléchargements). Kelly est arrêtée pendant ce temps puis relancée ; la sauvegarde est vérifiée avant d'être installée, et l'ancienne base gardée à côté (`data/kelly.db.avant-restauration-…`).
 
 ### Le wrapper (`$PREFIX/bin/kelly`)

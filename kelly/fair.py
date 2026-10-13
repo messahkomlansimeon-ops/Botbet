@@ -501,9 +501,12 @@ def record(pronos, day, shown=None):
     extra += [c for c in rest if c["market"].startswith(("team_corners_", "team_yellow_"))][:TRACK_NEW]
     stats_extra, free = _stats_extra([c for c in rest if c not in extra], main + extra)
     extra += stats_extra
+    born = set()                                                    # (jour, match, marché) suivis pour la première fois dans CE passage
     for c in main + extra:
         old = by_key.get(c["key"])
         if old is None:
+            if (str(day), c["id"], c["market"]) in born:            # 2e ligne du même match et marché dans ce passage : la 1re (mieux classée) suffit
+                continue
             old = slot.get((str(day), c["id"], c["market"]))
             if old is not None and old.get("result") is None:      # la ligne a changé (relevé 1xBet) : même suivi, mis à jour
                 old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")} | _rule(c))
@@ -514,6 +517,7 @@ def record(pronos, day, shown=None):
                 by_key[c["key"]] = row = ({k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
                                           | ({"free": 1} if c["key"] in free else {}) | _rule(c))
                 rows.append(row)
+                born.add((str(day), c["id"], c["market"]))
                 n += 1
                 continue
             else:                                                   # déjà réglé : on n'y touche pas

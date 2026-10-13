@@ -323,7 +323,7 @@ def test_daily_guard():
     # daily_entry : ignoré (code 0, run_daily non appelé) sauf --force ; code 1 si rien n'a pu partir
     calls, real_run, real_now = [], app.run_daily, app.now_utc
     app.now_utc = lambda: d(2026, 10, 11, 8)
-    app.run_daily = lambda sample=False: calls.append(sample) or app.DELIVERY.update(sent=2, failed=0) or []
+    app.run_daily = lambda sample=False, **k: calls.append(sample) or app.DELIVERY.update(sent=2, failed=0) or []
     try:
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
@@ -331,11 +331,11 @@ def test_daily_guard():
         assert app.daily_entry(force=True) == 0 and calls == [False]
         app.now_utc = lambda: d(2026, 10, 12, 8)                                 # nouveau jour : tourne sans --force
         assert app.daily_entry() == 0 and calls == [False, False]
-        app.run_daily = lambda sample=False: app.DELIVERY.update(sent=0, failed=3) or []
+        app.run_daily = lambda sample=False, **k: app.DELIVERY.update(sent=0, failed=3) or []
         assert app.daily_entry() == 1                                            # rien n'est parti : systemd doit le voir
-        app.run_daily = lambda sample=False: app.DELIVERY.update(sent=1, failed=2) or []
+        app.run_daily = lambda sample=False, **k: app.DELIVERY.update(sent=1, failed=2) or []
         assert app.daily_entry() == 0                                            # au moins un message livré
-        app.run_daily = lambda sample=False: calls.append(("s", sample)) or app.DELIVERY.update(sent=0, failed=0) or []
+        app.run_daily = lambda sample=False, **k: calls.append(("s", sample)) or app.DELIVERY.update(sent=0, failed=0) or []
         store.save(app.DAILY_FILE, {"day": "2026-10-12"})
         assert app.daily_entry(sample=True) == 0 and calls[-1] == ("s", True)    # --sample ne tient pas compte du garde-fou
     finally:

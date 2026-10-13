@@ -4,13 +4,53 @@
 DIR="$HOME/kelly"
 LOG="$DIR/logs/termux.log"
 
+STOPPED="$DIR/logs/stopped"      # « kelly stop » : la garde ne relance plus Kelly
+BOOT="$HOME/.termux/boot/kelly"
 running() { pgrep -f "termux_runner.py" > /dev/null; }
 has() { command -v "$1" > /dev/null 2>&1; }
+
+# Termux:Boot : Kelly relancée au démarrage du téléphone (après le premier déverrouillage)
+install_boot() {
+    mkdir -p "$HOME/.termux/boot" 2>/dev/null || return 0
+    printf '%s\n' '#!/data/data/com.termux/files/usr/bin/sh' \
+        '# Kelly relancée au démarrage du téléphone (Termux:Boot). Écrit par « kelly start » : ne pas modifier.' \
+        'termux-wake-lock' 'sleep 20' \
+        '/data/data/com.termux/files/usr/bin/kelly start >> /data/data/com.termux/files/home/kelly/logs/boot.log 2>&1' > "$BOOT.tmp" &&
+        chmod +x "$BOOT.tmp" && mv -f "$BOOT.tmp" "$BOOT"
+}
+
+# garde : relance Kelly toutes les 5 min si elle s'est arrêtée sans « kelly stop » (plantage, processus tué)
+start_guard() {
+    pgrep -f "kelly guard" > /dev/null || nohup "$0" guard > /dev/null 2>&1 &
+}
+
+# test d'une nouvelle version avant de la lancer : imports, puis matin d'essai hors ligne (données fictives, dossier temporaire, aucun envoi)
+selftest() {
+    local d rc
+    d=$(mktemp -d)
+    ( cd "$DIR" && unset TELEGRAM_TOKEN TELEGRAM_CHAT_ID XBET_PROXY
+      DATA_DIR="$d" QUIET_HOURS=off timeout 300 python -c "import termux_runner, kelly.app, kelly.watch, kelly.chat, kelly.backup" &&
+      DATA_DIR="$d" QUIET_HOURS=off timeout 900 python bot.py --sample ) > "$DIR/logs/update_test.log" 2>&1
+    rc=$?
+    rm -rf "$d"
+    return $rc
+}
+
+# miroir de la base (data/sauvegarde, réécrit chaque soir) : mis de côté pendant la mise à jour, git n'y touche jamais
+keep_mirror() { rm -rf "$DIR/logs/.miroir"; [ -d "$DIR/data/sauvegarde" ] && cp -a "$DIR/data/sauvegarde" "$DIR/logs/.miroir"; git -C "$DIR" checkout -q -- data/sauvegarde 2>/dev/null; true; }
+put_mirror() { [ -d "$DIR/logs/.miroir" ] && mkdir -p "$DIR/data/sauvegarde" && cp -a "$DIR/logs/.miroir/." "$DIR/data/sauvegarde/" && rm -rf "$DIR/logs/.miroir"; true; }
+
+notify() {      # message Telegram depuis le script (code de n'importe quelle version : seulement telegram.send)
+    ( cd "$DIR" && python -c "import sys; from kelly import envfile; envfile.load(); from kelly import telegram; telegram.send(sys.argv[1])" "$1" ) > /dev/null 2>&1
+}
 
 case "$1" in
     start)
         cd "$DIR" || exit 1
         mkdir -p logs
+        rm -f "$STOPPED"
+        install_boot
+        start_guard
         if running; then
             echo "⚠️ Kelly est déjà en cours d'exécution."
         else
@@ -26,6 +66,8 @@ case "$1" in
         fi
         ;;
     stop)
+        mkdir -p "$DIR/logs" && touch "$STOPPED"
+        pkill -f "kelly guard"
         pkill -f "termux_runner.py"
         pkill -f "bot.py"
         for i in $(seq 1 20); do
@@ -41,11 +83,46 @@ case "$1" in
         "$0" start
         ;;
     update)
+        # mise à jour SÛRE : la nouvelle version est testée avant d'être lancée ; si elle ne marche pas, retour automatique à la version d'avant
         cd "$DIR" || exit 1
+        mkdir -p logs
+        old=$(git rev-parse HEAD)
+        keep_mirror
         echo "🔄 Mise à jour du dépôt..."
-        git pull || exit 1
+        if ! git pull; then
+            put_mirror
+            echo "❌ Mise à jour impossible (réseau ou conflit) : Kelly continue avec la version actuelle."
+            exit 1
+        fi
+        put_mirror
+        if [ "$(git rev-parse HEAD)" != "$old" ]; then
+            echo "🧪 Test de la nouvelle version..."
+            if ! selftest; then
+                keep_mirror
+                git reset -q --hard "$old"
+                put_mirror
+                echo "❌ La nouvelle version ne démarre pas : retour automatique à la version d'avant (Kelly continue comme avant)."
+                echo "   Détail : tail -n 30 $DIR/logs/update_test.log"
+                notify "⚠️ Mise à jour refusée : la nouvelle version ne démarrait pas sur le téléphone. Kelly continue avec la version d'avant, rien n'a changé pour toi."
+                exit 1
+            fi
+            echo "✅ Nouvelle version testée."
+        else
+            echo "✅ Déjà à jour."
+        fi
         cp "$DIR/scripts/kelly" "$PREFIX/bin/kelly" && chmod +x "$PREFIX/bin/kelly"
         exec "$PREFIX/bin/kelly" restart
+        ;;
+    guard)
+        # interne (lancé par « kelly start ») : toutes les 5 min, relance Kelly si elle s'est arrêtée sans « kelly stop »
+        cd "$DIR" || exit 1
+        while sleep 300; do
+            [ -f "$STOPPED" ] && break
+            if ! running; then
+                echo "[garde $(date -u '+%Y-%m-%d %H:%M:%S')Z] Kelly s'était arrêtée sans « kelly stop » : relance" >> "$LOG"
+                KELLY_LOG="$LOG" nohup python -u termux_runner.py >> "$LOG" 2>&1 &
+            fi
+        done
         ;;
     logs)
         tail -n 50 -f "$LOG"
@@ -92,6 +169,11 @@ case "$1" in
         cd "$DIR" || exit 1
         python tools/suivi.py
         ;;
+    test-alerte)
+        # vérifie la surveillance extérieure : healthchecks.io doit t'écrire sur Telegram « en panne » (test), puis « ok » 5 min après
+        cd "$DIR" || exit 1
+        python termux_runner.py --test-alerte
+        ;;
     rejeu-log)
         tail -n 30 -f "$DIR/logs/replay.log"
         ;;
@@ -99,6 +181,10 @@ case "$1" in
         echo "🩺 Diagnostic de Kelly"
         if running; then echo "✅ Kelly tourne (runner PID: $(pgrep -f termux_runner.py | head -n1))"; else echo "❌ Kelly est arrêtée : kelly start"; fi
         if has termux-wake-lock; then echo "✅ Commande termux-wake-lock disponible"; else echo "❌ termux-wake-lock absente : pkg install termux-tools"; fi
+        if pgrep -f "kelly guard" > /dev/null; then echo "✅ Garde active (relance Kelly si elle s'arrête)"; else echo "⚠️ Garde absente : kelly restart"; fi
+        if [ -x "$BOOT" ]; then echo "✅ Relance au démarrage du téléphone (Termux:Boot) installée"; else echo "⚠️ Relance au démarrage absente : installe Termux:Boot (F-Droid), ouvre-le une fois, puis kelly restart"; fi
+        if grep -q "^HC_PING_URL=." "$DIR/.env" 2>/dev/null; then echo "✅ Surveillance extérieure (healthchecks.io) réglée"; else echo "⚠️ Surveillance extérieure non réglée : HC_PING_URL absent du .env"; fi
+        [ -f "$LOG" ] && grep "signal de vie\|Surveillance extérieure" "$LOG" | tail -n 1 | cut -c1-160
         if [ -f "$LOG" ]; then
             grep -q "wake-lock demandé" "$LOG" && echo "✅ Wake-lock demandé au démarrage" || echo "⚠️ Wake-lock non demandé au dernier démarrage : kelly restart"
             last=$(grep -E "matin|--daily" "$LOG" | tail -n 1)

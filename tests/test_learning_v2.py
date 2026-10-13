@@ -25,7 +25,7 @@ def reset():
 
 
 def rows(n, won, p0, market="alternate_totals_corners", name="Over", sk="soccer_brazil_campeonato"):
-    return [{"key": f"e{i}|{market}||9.5|{name}", "market": market, "name": name, "sport_key": sk, "p0": p0, "prob": p0,
+    return [{"key": f"e{i}{name[:1]}|{market}||9.5|{name}", "market": market, "name": name, "sport_key": sk, "p0": p0, "prob": p0,
              "result": "win" if i < won else "loss"} for i in range(n)]
 
 

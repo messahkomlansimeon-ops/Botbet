@@ -562,6 +562,7 @@ BOOT_REFRESH_DAYS = 7      # le fichier est reconstruit au plus une fois par sem
 # ~2 fois par semaine : corners et cartons attendent plus longtemps que les buts.
 WAIT_DAYS = 3
 WAIT_DAYS_STATS = 8
+DAILY_SCAN_TRIES = 3        # matin sans liste des matchs (The Odds API injoignable à 04:00) : refait jusqu'à 3 fois (30 min d'écart), puis part quand même
 
 MARKET_LABELS = {
     "h2h": "1N2", "double_chance": "double chance", "totals": "buts/points", "spreads": "handicap",

@@ -58,6 +58,11 @@ def enabled():
     return bool(os.environ.get("STATS_API_KEY"))
 
 
+def halted():
+    """Vrai si API-Football a renvoyé une erreur pendant cette exécution (plus aucun appel) : elle ne règle plus rien, les replis prennent le relais."""
+    return _halted
+
+
 def _warn(msg):
     print(f"stats : {msg}", file=sys.stderr)
 

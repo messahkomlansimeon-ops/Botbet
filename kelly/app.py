@@ -621,8 +621,33 @@ def daily_entry(sample=False, force=False):
         if why:
             print(f"[daily] ignoré : {why}. Relance avec --force pour le refaire.", file=sys.stderr)
             return 0
-    run_daily(sample)
+    try:
+        run_daily(sample, retry=not force)
+    except MorningRetry as e:
+        print(f"[daily] {e} : rien n'a été fait ni envoyé, nouvel essai dans 30 min (essai {e.n}/{C.DAILY_SCAN_TRIES}).", file=sys.stderr)
+        return RETRY_RC
     return 1 if DELIVERY["failed"] and not DELIVERY["sent"] else 0
+
+
+RETRY_RC = 75                       # code de sortie « réessaie plus tard » (le runner relance le matin 30 min après)
+TRY_FILE = "daily_try.json"         # {"day", "n", "error"} : essais du matin ratés faute de liste des matchs
+
+
+class MorningRetry(Exception):
+    """La liste des matchs du jour (The Odds API) est injoignable : le matin s'arrête AVANT tout règlement et tout message, pour être refait 30 min plus
+    tard (une mauvaise minute à 04:00 ne perd plus la journée). Au C.DAILY_SCAN_TRIES-ième essai, il part quand même (le message le dit)."""
+
+    def __init__(self, error, n):
+        super().__init__(f"liste des matchs injoignable ({str(error)[:120]})")
+        self.n = n
+
+
+def _scan_failed(day, error):
+    """Note un essai raté faute de liste des matchs -> True s'il faut réessayer plus tard (moins de C.DAILY_SCAN_TRIES essais aujourd'hui)."""
+    t = store.load(TRY_FILE, {})
+    n = (t.get("n", 0) if isinstance(t, dict) and t.get("day") == str(day) else 0) + 1
+    store.save(TRY_FILE, {"day": str(day), "n": n, "error": str(error)[:200]})
+    return n < C.DAILY_SCAN_TRIES, n
 
 
 def log_opinions(rows, day, now=None):
@@ -654,12 +679,51 @@ def morning_gaps(picks, pronos, day, odds_at):
         return []
 
 
-def run_daily(sample=False):
+REPAIR_LABELS = {"calib.json": "la fiabilité par marché", "calib_boot.json": "le rejeu de la saison passée", "means.json": "les moyennes des stats",
+                 "ensemble.json": "les poids modèle / marché", "live_calib.json": "la correction du direct", "tuning.json": "le réglage des championnats",
+                 "model.json": "le modèle de classement", "bets.json": "tes paris et combinés", "tracked.json": "les paris suivis",
+                 "fair.json": "les pronostics suivis", "fair_combos.json": "les combinés à cote juste", "mybudget.json": "ton capital"}
+
+
+def announce_repairs():
+    """🛠️ Documents précieux trouvés abîmés (store._repair) pas encore annoncés : UN message, puis marqués annoncés. Ne lève jamais."""
+    try:
+        new = []
+
+        def mark(r):
+            r = r if isinstance(r, list) else []
+            for x in r:
+                if isinstance(x, dict) and not x.get("said"):
+                    new.append(dict(x))
+                    x["said"] = 1
+            return (r if new else None), None
+        store.update(store.REPAIRS, mark, [])
+        if not new:
+            return None
+        lines = ["🛠️ " + fmt.b("Kelly a réparé sa mémoire")]
+        for x in new:
+            what = REPAIR_LABELS.get(x["name"], x["name"])
+            lines.append(fmt.esc(f"• {what} : document abîmé, remis tel qu'il était le {fmt.fr_day(x['from'])} (rien d'autre n'est perdu)" if x.get("from")
+                                 else f"• {what} : document abîmé et pas encore de copie : Kelly n'y écrit plus. Restaure la dernière sauvegarde "
+                                      "reçue ici (kelly restaurer dans Termux)."))
+        msg = telegram.Html("\n".join(lines))
+        telegram.send(msg)
+        return msg
+    except Exception as e:                          # noqa: BLE001
+        print(f"[store] annonce des réparations ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def run_daily(sample=False, retry=False):
+    """Le passage du matin. `retry` (lancé par le runner, pas --force) : liste des matchs injoignable -> MorningRetry (rien n'est fait ni envoyé) tant
+    que C.DAILY_SCAN_TRIES essais n'ont pas eu lieu aujourd'hui."""
     now = now_utc()
     scan = None
     DELIVERY.update(sent=0, failed=0)
     migrate.ensure()                                # données d'avant le mode « je note en FCFA » (une seule fois)
     telegram.flush_outbox()                         # messages restés en attente (réseau coupé à l'heure prévue) : avant les nouveaux
+    if not sample:
+        announce_repairs()                          # 🛠️ mémoire réparée depuis le dernier matin
     cache.reset()
     if sample:
         events = load_sample()
@@ -669,11 +733,15 @@ def run_daily(sample=False):
     else:
         progress.start()                            # « [progression] 45 % · … », systemctl status, « état » sur Telegram
         refresh_sources()                           # avant le bilan : le règlement gratuit lit les CSV à jour
+        day, after = now.date(), now
+        scan = odds.scan_today(day, after)          # gratuit : toutes les ligues en saison, jouées ou non ; AVANT le bilan (voir MorningRetry)
+        if retry and scan.get("error"):
+            again, n = _scan_failed(day, scan["error"])
+            if again:
+                raise MorningRetry(scan["error"], n)
         progress.step("bilan")
         report, model = morning_report(now)
-        day, after = now.date(), now
         progress.step("monde")
-        scan = odds.scan_today(day, after)          # gratuit : toutes les ligues en saison, jouées ou non
         progress.step("profils")
         fill_profiles(day, scan)                    # stats mondiales API-Football : avant l'achat des cotes (elles guident les marchés payés)
         progress.step("cotes")
@@ -740,6 +808,7 @@ def run_daily(sample=False):
     deliver_morning(report + messages, day, now, sample)          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
     print(cache.line(), file=sys.stderr)
     if not sample:
+        _step("instantané de la mémoire", lambda: store.snapshot(str(day)))     # copie du jour des documents précieux (3 jours gardés)
         progress.step("cloture")
         run_track()
     cache.flush()

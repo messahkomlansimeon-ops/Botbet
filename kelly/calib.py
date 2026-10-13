@@ -152,18 +152,59 @@ def band(p):
     return sum(p >= e for e in C.CALIB_BANDS)
 
 
+VERSION = 2         # cumuls : 2 = chaque MATCH compte une fois par famille (ses k lignes pèsent 1/k chacune) ; 1 = chaque ligne comptait 1 (3 lignes de tirs
+                    # d'un même match comptaient 3 fois : les tirs sont sortis des combinés sur 30 matchs comptés 43)
+
+
+def _mkey(r):
+    """(jour, match, famille) d'un pronostic : ses lignes d'une même famille sont liées (Plus de 8,5 et de 9,5 corners du même match). Sans
+    identifiant de match : la ligne compte seule."""
+    mid = r.get("id") or str(r.get("key") or "").split("|")[0]
+    return str(r.get("date") or "")[:10], str(mid) if mid else f"#{id(r)}", family(r["market"])
+
+
+def _migrate(data, rows):
+    """Cumuls de la version 1 (comptés par ligne) -> version 2 (par match) : chaque famille est ramenée au rapport matchs / lignes mesuré sur les
+    pronostics déjà comptés encore gardés (fair.json, 10 jours). Réussite et probas annoncées gardent leurs proportions : seule la quantité de preuve
+    baisse (la correction se rapproche un peu de son point de départ). Une fois (data["_v"])."""
+    if data.get("_v", 1) >= VERSION:
+        return
+    from collections import Counter
+    per = Counter(_mkey(r) for r in rows if r.get("calib") and r.get("market"))
+    lines, matches = Counter(), Counter()
+    for (_, _, fam), k in per.items():
+        lines[fam] += k
+        matches[fam] += 1
+    for fam, nl in lines.items():
+        f = matches[fam] / nl
+        if f >= 0.999:
+            continue
+        for doc in (data, data.get("_new") or {}):
+            accs = [doc.get(fam)] + [lg.get(fam) for lg in (doc.get("_lg") or {}).values() if isinstance(lg, dict)]
+            accs += [v for k, v in (doc.get("_cell") or {}).items() if k.split("|")[0] == fam]
+            for acc in accs:
+                if isinstance(acc, list) and len(acc) == 3:
+                    acc[:] = [round(x * f, 4) for x in acc]
+    data["_v"] = VERSION
+
+
 def add(rows, today=None):
     """Ajoute au cumul les pronostics réglés (gagnés ou perdus) pas encore comptés (marqués « calib ») : famille, championnat, sens et tranche
-    (data["_cell"]), après avoir vieilli les cumuls (C.CALIB_HALF_LIFE). -> nombre ajouté."""
+    (data["_cell"]), après avoir vieilli les cumuls (C.CALIB_HALF_LIFE). Chaque match compte UNE fois par famille : ses k lignes réglées ensemble pèsent
+    1/k chacune (comme ensemble.learn et new_roi). -> nombre ajouté."""
+    from collections import Counter
     data, n = load(), 0
     new = [r for r in rows if not r.get("calib") and r.get("result") in ("win", "loss")]
     if not new or FILE in store._unreadable:        # cumul illisible : rien n'est compté ni marqué (sinon perdu : save() refuserait d'écrire)
         return 0
+    _migrate(data, rows)
     data["_t"] = aged(data, data.get("_t"), today)
+    per = Counter(_mkey(r) for r in new)
     for r in new:
-        accumulate(data, r, r["result"] == "win")
+        w = 1.0 / per[_mkey(r)]
+        accumulate(data, r, r["result"] == "win", w)
         if r.get("rule") == C.RULE and family(r["market"]) in C.STATS_NEW_FAMILIES:     # compteur « depuis la correction » : la proba ANNONCÉE
-            accumulate(data.setdefault("_new", {}), r | {"p0": r["prob"]}, r["result"] == "win")      # (mélange avec 1xBet), pas celle du modèle seul
+            accumulate(data.setdefault("_new", {}), r | {"p0": r["prob"]}, r["result"] == "win", w)      # (mélange avec 1xBet), pas celle du modèle seul
             if r.get("xodds"):                                                         # gain réel à la cote 1xBet, par match (new_roi)
                 data.setdefault("_new_rows", []).append([str(r.get("date") or "")[:10], str(r.get("id") or r["key"].split("|")[0]), family(r["market"]),
                                                          round(float(r["xodds"]), 3), 1 if r["result"] == "win" else 0])
@@ -175,8 +216,9 @@ def add(rows, today=None):
     return n
 
 
-def accumulate(data, r, won):
-    """Compte un pronostic réglé `r` (market, p0 ou prob, sport_key, name, home, away) dans `data` : famille, championnat, sens et tranche."""
+def accumulate(data, r, won, w=1.0):
+    """Compte un pronostic réglé `r` (market, p0 ou prob, sport_key, name, home, away) dans `data` : famille, championnat, sens et tranche. `w` : son
+    poids (1/k pour k lignes liées du même match, voir add)."""
     fam, p0 = family(r["market"]), r.get("p0") or r["prob"]
     accs = [data.setdefault(fam, [0, 0, 0.0])]
     if r.get("sport_key"):
@@ -186,9 +228,9 @@ def accumulate(data, r, won):
         cells = data.setdefault("_cell", {})
         accs += [cells.setdefault(f"{fam}|{sd}", [0, 0, 0.0]), cells.setdefault(f"{fam}|{sd}|{band(p0)}", [0, 0, 0.0])]
     for acc in accs:
-        acc[0] = round(acc[0] + 1, 4)
-        acc[1] = round(acc[1] + won, 4)
-        acc[2] = round(acc[2] + p0, 4)
+        acc[0] = round(acc[0] + w, 4)
+        acc[1] = round(acc[1] + w * won, 4)
+        acc[2] = round(acc[2] + w * p0, 4)
 
 
 def add_combo_legs(legs, today=None):

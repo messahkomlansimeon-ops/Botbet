@@ -33,6 +33,10 @@ TUNE_WEEKDAY, TUNE_HOURS = 6, (2, 3)    # dimanche 02:00-03:59 UTC (avant le mat
 # délai maximal par passage (s) : un appel réseau figé ne bloque plus tout le runner (--daily dure ~30 min, attente du verrou comprise)
 TIMEOUTS = {"--watch": 540, "--track": 1500, "--daily": 5400, "--xbet": 1500, "--evening": 1500, "--export": 900, "--tune": 2400, "--backup-auto": 600}
 
+HC_EVERY = 300               # signal de vie à healthchecks.io (HC_PING_URL dans .env) toutes les 5 min, PAR LE PROXY (ton IP n'est jamais révélée) ...
+SERVE_DOWN_FAIL = 900        # ... « en panne » (/fail) si l'écoute Telegram est arrêtée depuis 15 min : healthchecks te prévient sur Telegram par son propre bot
+PROXY_FILE = os.path.expanduser("~/.config/scrap_stat/sofa.env")
+
 BACKOFF_BASE, BACKOFF_CAP, STABLE_SECS = 15, 900, 120      # relance de --serve : 15 s, 30 s, 1 min ... 15 min ; stable après 2 min de vie
 STOP = threading.Event()
 SIGNALS = []                 # signaux reçus (le journal s'écrit hors du gestionnaire)
@@ -246,6 +250,7 @@ class ServeSupervisor:
     def __init__(self, cmd, pidfile=None, cwd=ROOT, clock=time.monotonic):
         self.cmd, self.pidfile, self.cwd, self.clock = cmd, pidfile, cwd, clock
         self.proc, self.fails, self.started, self.next_start, self.stopped = None, 0, 0.0, 0.0, False
+        self.down_since = None                          # arrêtée (ou relancée en boucle sans tenir) depuis cet instant (clock) ; None : elle tourne
         self.lock = threading.Lock()
 
     def _spawn(self):
@@ -275,9 +280,11 @@ class ServeSupervisor:
                 return
             rc = self.proc.poll()
             if rc is None:
-                if self.fails and now - self.started >= STABLE_SECS:
-                    self.fails = 0                          # a tenu assez longtemps : on repart de zéro
+                if now - self.started >= STABLE_SECS:
+                    self.fails, self.down_since = 0, None   # a tenu assez longtemps : on repart de zéro
                 return
+            if self.down_since is None:
+                self.down_since = now
             up = now - self.started
             self.fails = 0 if up >= STABLE_SECS else self.fails + 1
             delay = backoff_delay(self.fails)
@@ -305,6 +312,87 @@ class ServeSupervisor:
                 self.check()
             except Exception as e:                          # noqa: BLE001 - le fil ne meurt jamais
                 log(f"surveillance de --serve : {type(e).__name__}: {e}", err=True)
+
+
+    def down_for(self):
+        """Secondes depuis lesquelles l'écoute Telegram ne tourne pas (ou plante en boucle) ; 0 si elle tourne."""
+        d = self.down_since
+        return 0 if d is None else max(0.0, self.clock() - d)
+
+
+# ---------- signal de vie (healthchecks.io) ----------
+
+def proxy_url(env=os.environ, path=PROXY_FILE):
+    """Proxy Webshare de 1xBet (comme kelly.sources.xbet.proxy) : XBET_PROXY, sinon la ligne XBET_PROXY= du fichier de scrap_stat ; None sinon."""
+    if env.get("XBET_PROXY"):
+        return env["XBET_PROXY"].strip()
+    try:
+        with open(env.get("XBET_PROXY_FILE") or path, encoding="utf-8") as f:
+            for line in f:
+                k, _, v = line.strip().partition("=")
+                if k.strip() == "XBET_PROXY" and v.strip():
+                    return v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return None
+
+
+class Heartbeat:
+    """Signal de vie envoyé à healthchecks.io toutes les HC_EVERY s (fil à part : jamais retardé par un passage de 30 min). Sans signal pendant la
+    « période + délai de grâce » réglés sur le site (15 + 45 min conseillés), healthchecks te prévient : téléphone éteint, sans réseau, Termux tué,
+    Kelly arrêtée. L'écoute Telegram arrêtée depuis SERVE_DOWN_FAIL s : signal « en panne » (/fail) avec la raison, tout de suite. TOUJOURS par le proxy
+    (jamais en direct : ton IP n'est pas révélée) ; sans proxy ou sans HC_PING_URL : rien n'est envoyé. L'adresse n'est jamais écrite dans le journal."""
+
+    def __init__(self, url, serve, proxy=proxy_url, post=None):
+        self.url, self.serve, self.proxy, self._post = (url or "").strip().rstrip("/"), serve, proxy, post
+        self.failing, self.said = False, set()
+
+    def _say_once(self, key, msg):
+        if key not in self.said:
+            self.said.add(key)
+            log(msg, err=True)
+
+    def status(self):
+        """(en panne ?, texte envoyé avec le signal)."""
+        down = self.serve.down_for()
+        if down >= SERVE_DOWN_FAIL:
+            return True, f"écoute Telegram arrêtée depuis {down / 60:.0f} min (plantages répétés : kelly logs)"
+        return False, "ok · écoute Telegram active" if self.serve.proc is not None else "ok"
+
+    def beat(self, force=None):
+        """Envoie un signal (succès ou /fail) -> True s'il est parti. `force` : (en panne ?, texte) imposés (kelly test-alerte)."""
+        if not self.url:
+            return False
+        px = self.proxy()
+        if not px:
+            self._say_once("proxy", "signal de vie non envoyé : proxy introuvable (jamais en direct)")
+            return False
+        fail, text = force or self.status()
+        try:
+            post = self._post
+            if post is None:
+                import requests
+                post = requests.post
+            r = post(self.url + ("/fail" if fail else ""), data=text.encode("utf-8"), proxies={"http": px, "https": px}, timeout=(10, 20))
+            ok = getattr(r, "status_code", 200) < 400
+        except Exception as e:                          # noqa: BLE001 - réseau, proxy : on réessaie au prochain signal
+            ok = False
+            self._say_once("err", f"signal de vie non envoyé ({type(e).__name__}) ; nouvel essai toutes les {HC_EVERY // 60} min")
+        if ok:
+            self.said.discard("err")
+            if fail != self.failing:
+                log(("⚠️ signal « en panne » envoyé à healthchecks : " + text) if fail else "signal de vie : de nouveau « ok »", err=fail)
+            self.failing = fail
+        return ok
+
+    def loop(self, every=HC_EVERY):
+        while True:
+            try:
+                self.beat()
+            except Exception as e:                      # noqa: BLE001 - le fil ne meurt jamais
+                _safe_log(f"signal de vie : {type(e).__name__}: {e}")
+            if STOP.wait(every):
+                return
 
 
 # ---------- passages ----------
@@ -352,6 +440,7 @@ class Runner:
         self.state = state if state is not None else load_state()
         self.watch_thread = watch_thread                # suivi des matchs (--watch) dans son propre fil : jamais bloqué par --track, --daily, --xbet...
         self.state_lock = threading.Lock()
+        self.heartbeat = Heartbeat(os.environ.get("HC_PING_URL"), self.serve)
 
     def _done(self, args, now, rc):
         with self.state_lock:
@@ -389,6 +478,8 @@ class Runner:
         threading.Thread(target=self.serve.watch, args=(self.watch_every,), daemon=True).start()
         if self.watch_thread:
             threading.Thread(target=self.watch_loop, daemon=True).start()
+        if self.heartbeat.url:
+            threading.Thread(target=self.heartbeat.loop, daemon=True).start()
         while not STOP.is_set():
             try:
                 self._pass()
@@ -420,7 +511,26 @@ class Runner:
 LOCK_WAIT = 30                                 # secondes d'attente du verrou au démarrage
 
 
+def test_alert():
+    """`kelly test-alerte` : envoie un signal « en panne » à healthchecks.io (par le proxy) pour vérifier que l'alerte arrive bien sur Telegram ; le
+    prochain signal de vie de Kelly (5 min au plus) la remet « ok ». -> code de sortie."""
+    from kelly import envfile
+    envfile.load()
+    if not os.environ.get("HC_PING_URL"):
+        print("❌ HC_PING_URL absent du .env : voir DEPLOY_TERMUX.md (surveillance extérieure).")
+        return 1
+    hb = Heartbeat(os.environ["HC_PING_URL"], ServeSupervisor([]))
+    if hb.beat(force=(True, "test de l'alerte (kelly test-alerte) : tout va bien, Kelly la remet « ok » dans 5 min")):
+        print("✅ Signal « en panne » envoyé : l'alerte de healthchecks.io doit arriver sur Telegram d'ici 1 à 2 min, puis « ok » d'ici 5 min.")
+        return 0
+    print("❌ Signal non envoyé (proxy introuvable ou injoignable, adresse HC_PING_URL refusée) : voir kelly logs.")
+    return 1
+
+
 def main():
+    if "--test-alerte" in sys.argv:
+        os.chdir(ROOT)
+        return test_alert()
     os.chdir(ROOT)
     os.makedirs(LOGS, exist_ok=True)
     lock = acquire_single_instance(os.path.join(LOGS, "runner.lock"))
@@ -432,10 +542,16 @@ def main():
     if lock is None:
         log("❌ un autre termux_runner.py tourne déjà (verrou logs/runner.lock) : arrêt", err=True)
         return 1
+    try:                                       # HC_PING_URL, XBET_PROXY... du fichier .env (sans écraser l'environnement)
+        from kelly import envfile
+        envfile.load()
+    except Exception as e:                     # noqa: BLE001 - le runner tourne même si le paquet kelly est cassé
+        log(f"⚠️ .env non lu ({type(e).__name__}: {e})", err=True)
     log("🔥 Démarrage de Kelly sur GrapheneOS / Termux..."
         + (" (wake-lock demandé)" if os.environ.get("KELLY_WAKELOCK") == "1" else " (sans wake-lock : le téléphone peut mettre Kelly en veille)"))
     kill_stale_serve(os.path.join(LOGS, "serve.pid"))
     runner = Runner()
+    log("📡 Surveillance extérieure (healthchecks.io) : " + ("active, par le proxy" if runner.heartbeat.url else "non réglée (HC_PING_URL absent du .env)"))
     atexit.register(runner.shutdown)
     install_signals()
     try:

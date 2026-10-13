@@ -290,6 +290,17 @@ def match_stats(b, fdata, stats_for=None):
     return fstats
 
 
+def watch_score(b):
+    """Score final d'un pari JOUÉ vu par le suivi des matchs (365scores, ou FotMob en secours ; data/ticket_watch.json, gardé 3 jours) : le score à
+    90 minutes s'il y a eu prolongation. Au format de settle_pick ; None sinon (pari pas suivi, match pas terminé, suivi illisible)."""
+    try:
+        from . import watch
+        return watch.final_score(b)
+    except Exception as e:                          # noqa: BLE001 - repli facultatif
+        print(f"[settle] score du suivi ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
 def settle_pending(now=None, scores_by_sport=None, stats_for=None):
     """Règle les paris suivis passés (envoyés d'abord). Le foot se règle gratuitement : API-Football d'abord,
     puis les CSV football-data en cache (buts, corners, cartons, quand API-Football est absent ou son quota
@@ -312,9 +323,9 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
         old = datetime.fromisoformat(b["commence"].replace("Z", "+00:00")) < now - timedelta(days=wait)
         soccer = b["group"] == "soccer"
         ev = next((e for e in scores_by_sport.get(b["sport_key"], []) if e["id"] == b["id"] and e.get("completed")), None)
-        if not ev and soccer:
-            ev = (football_score(b) if stats.enabled() else None) or fdata.score(b)
-        free = soccer and stats.enabled()
+        if not ev and soccer:                      # API-Football, puis CSV football-data, FotMob, et le score final vu par le suivi des matchs (365scores)
+            ev = (football_score(b) if stats.enabled() else None) or fdata.score(b) or fdata.fotmob_score(b) or watch_score(b)
+        free = soccer and stats.enabled() and not stats.halted()       # API-Football en panne : le repli payant redevient possible
         if (not ev and not free and (not soccer or b["market"] in GOAL_MARKETS)
                 and b["sport_key"] not in scores_by_sport):
             try:                                   # repli payant, une fois par sport et par exécution
