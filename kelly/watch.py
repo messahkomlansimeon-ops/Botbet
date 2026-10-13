@@ -13,6 +13,7 @@ sont relus (/games/?games=…, ~1 Ko par match : score, minute, statut), puis :
   - par coupon, un message À PART (en réponse au message du coupon quand Kelly le connaît, avec son bouton « 🎫 ») : ⏰ « Dans 5 min » avant son 1er
     match (matchs à la même heure groupés ; le runner déclenche le passage à l'heure voulue, data/watch_next.json), 🔥 « plus qu'un match », 🎉 coupon
     gagné (paris, scores, gain, capital et objectif du mois) ; sous le message groupé, un bouton « 🎫 » par coupon concerné : sa fiche à jour ;
+  - 📌 tableau du jour (board, C.WATCH_BOARD) : UN message épinglé, modifié sur place à chaque passage où quelque chose change, avec tous tes coupons ;
   - 365scores muet (proxy en panne, 365scores en panne ou bloqué) : SECOURS FotMob (C.WATCH_FM_BACKUP) : une page de championnat par passage pour tes
     matchs en cours, lue en direct (FotMob n'a pas besoin du proxy) : scores, mi-temps, fins de match et paris de buts ; ni buteur, ni corners, ni
     tirs (au règlement du matin). L'avertissement dit la vraie cause (« le proxy ne répond pas », « 365scores en panne (erreur 504) ») et le secours.
@@ -66,7 +67,8 @@ class WatchStateError(Exception):
 
 V = 2                           # version du document : verdicts des tickets par identifiant daté (tid), santé, lignes à envoyer
 KEEP_DAYS = 3                   # paris, tickets et drapeaux oubliés au-delà
-DEFAULTS = (("legs", {}), ("tickets", {}), ("games", {}), ("flags", {}), ("out", []), ("health", {}), ("budget", {}), ("recap", {}), ("opp", {}))
+DEFAULTS = (("legs", {}), ("tickets", {}), ("games", {}), ("flags", {}), ("out", []), ("health", {}), ("budget", {}), ("recap", {}), ("opp", {}),
+            ("board", {}))
 
 
 def _load():
@@ -895,25 +897,116 @@ def ticket_card(h, now=None):
              fmt.esc(f"cote {fmt.odds_txt(t.get('odds') or 0)} · mise {money.money(round(t.get('stake') or 0))} · si tout passe : {pay}"), ""]
     n = {"win": 0, "loss": 0, "live": 0, "soon": 0}
     for leg in sorted(t["legs"], key=lambda l: (_ko(l) or now).isoformat()):
-        cur = d["legs"].get(f"{t['what']}|{leg['key']}", {})
-        ko = _ko(leg)
-        gs = (d.get("games") or {}).get(str(cur.get("gid")), {}) if cur.get("gid") is not None else {}
-        match = f"{leg.get('home')} – {leg.get('away')}"
-        if cur.get("state") in ("win", "loss"):
-            n[cur["state"]] += 1
-            line = f"{'✅' if cur['state'] == 'win' else '❌'} {match} {cur.get('score') or ''} · {leg.get('pick')}"
-        elif ko and ko > now:
-            n["soon"] += 1
-            line = f"🕘 {match} {ko:%Hh%M} · {leg.get('pick')}"
-        else:
-            n["live"] += 1
-            sc = gs.get("score") or cur.get("score")
-            line = f"⏳ {match}" + (f" {sc}" + (f" ({gs['min']}e)" if gs.get("min") and not gs.get("ft") else "") if sc else "") + f" · {leg.get('pick')}"
-        lines.append(fmt.esc(" ".join(line.split())))
-    parts = [f"{n['win']} gagné{'s' if n['win'] > 1 else ''}"] + ([f"{n['loss']} perdu{'s' if n['loss'] > 1 else ''}"] if n["loss"] else []) \
-        + ([f"{n['live']} en cours"] if n["live"] else []) + ([f"{n['soon']} à venir"] if n["soon"] else [])
-    lines += ["", fmt.esc("📊 " + ", ".join(parts) + (" · coupon perdu" if n["loss"] else ""))]
+        state, line = _leg_line(t, leg, d, now)
+        n[state] += 1
+        lines.append(fmt.esc(line))
+    lines += ["", fmt.esc("📊 " + _counts(n) + (" · coupon perdu" if n["loss"] else ""))]
     return telegram.Html("\n".join(lines))
+
+
+def _leg_line(t, leg, d, now):
+    """(état, ligne) d'un pari de coupon : win « ✅ A – B 2-1 · pari », loss « ❌ … », live « ⏳ A – B 1-0 (63e) · pari », soon « 🕘 A – B 21h00 · pari »."""
+    cur = d["legs"].get(f"{t['what']}|{leg['key']}", {})
+    ko = _ko(leg)
+    gs = (d.get("games") or {}).get(str(cur.get("gid")), {}) if cur.get("gid") is not None else {}
+    match = f"{leg.get('home')} – {leg.get('away')}"
+    if cur.get("state") in ("win", "loss"):
+        state, line = cur["state"], f"{'✅' if cur['state'] == 'win' else '❌'} {match} {cur.get('score') or ''} · {leg.get('pick')}"
+    elif ko and ko > now:
+        state, line = "soon", f"🕘 {match} {ko:%Hh%M} · {leg.get('pick')}"
+    else:
+        sc = gs.get("score") or cur.get("score")
+        state = "live"
+        line = f"⏳ {match}" + (f" {sc}" + (f" ({gs['min']}e)" if gs.get("min") and not gs.get("ft") else "") if sc else "") + f" · {leg.get('pick')}"
+    return state, " ".join(line.split())
+
+
+BOARD_MAX = 3900                # caractères au plus du tableau (un message Telegram : 4 096) ; au-delà, il se resserre
+BOARD_SOON_MIN = 60             # le tableau du jour naît quand un match d'un coupon commence dans l'heure (ou est en cours)
+
+
+def _board_tickets(d, now):
+    """Coupons du tableau du jour : ceux d'aujourd'hui, et ceux d'hier encore en jeu (matchs d'après minuit)."""
+    today = [t for t in exposure.tickets(str(now.date()))]
+    return today + [t for t in exposure.tickets(str(now.date() - timedelta(days=1))) if _verdict(d, t) is None]
+
+
+def _board_text(ts, d, now, detail=2):
+    """(Html du tableau, empreinte du contenu sans l'heure de mise à jour). `detail` : 2 = chaque pari de chaque coupon en jeu, 1 = seulement les paris
+    en cours, 0 = une ligne par coupon (tableau trop long)."""
+    from . import money
+    order = {None: 0, "won": 1, "lost": 2}
+    body, stake_in, pay_in, won = [], 0.0, 0.0, 0.0
+    for t in sorted(ts, key=lambda t: (order.get(_verdict(d, t), 3), min((_ko(l) or now) for l in t["legs"]).isoformat())):
+        verdict = _verdict(d, t)
+        stake, pay = float(t.get("stake") or 0), round(float(t.get("stake") or 0) * float(t.get("odds") or 0))
+        head = f"🎫 {fmt.b(fmt.esc(t['name']))}" + (fmt.esc(f" · 🎟️ {t['coupon']}") if t.get("coupon") else "")
+        rows = sorted(((leg, *_leg_line(t, leg, d, now)) for leg in t["legs"]), key=lambda x: (_ko(x[0]) or now).isoformat())
+        if verdict == "won":
+            won += pay - stake
+            body.append(head + fmt.esc(f" · 🏆 gagné {money.signed(round(pay - stake))}"))
+        elif verdict == "lost":
+            lost = [line for _, st, line in rows if st == "loss"]
+            body.append(head + fmt.esc(" · ❌ perdu" + (f" ({lost[0].removeprefix('❌ ')})" if lost and detail else "")))
+        else:
+            stake_in, pay_in = stake_in + stake, pay_in + pay
+            n = {"win": 0, "loss": 0, "live": 0, "soon": 0}
+            for _, st, _ in rows:
+                n[st] += 1
+            body.append(head + fmt.esc(f" · {_counts(n)} · si tout passe {money.money(pay)}"))
+            body += [fmt.esc("   " + line) for _, st, line in rows if detail >= 2 or (detail == 1 and st == "live")]
+    foot = []
+    if stake_in:
+        foot.append(fmt.esc(f"💰 En jeu : mise {money.money(round(stake_in))} · gains possibles {money.money(round(pay_in))}"))
+    if won:
+        foot.append(fmt.esc(f"🏆 Gagné aujourd'hui : {money.signed(round(won))}"))
+    content = "\n".join(body + ([""] + foot if foot else []))
+    head = "📌 " + fmt.b("Tableau du jour") + fmt.esc(f" · {fmt.fr_day(now.date())} · mis à jour {now:%Hh%M} UTC")
+    text = telegram.Html(head + "\n\n" + content)
+    if len(text) > BOARD_MAX and detail > 0:
+        return _board_text(ts, d, now, detail - 1)
+    return text, hashlib.sha1(content.encode()).hexdigest()[:16]
+
+
+def board(now=None):
+    """📌 Tableau du jour : UN message, épinglé sans notification, qui montre tous tes coupons du jour (chaque pari : ✅ ❌ ⏳ score et minute, 🕘 heure),
+    ce qui est en jeu et ce qui est gagné ; il naît quand un match d'un coupon commence dans l'heure, puis il est MODIFIÉ (jamais renvoyé) à chaque
+    passage où quelque chose change. Le tableau de la veille est désépinglé. Message effacé : un nouveau est envoyé. d["board"] = {day, msg, hash,
+    pinned}. Ne lève jamais."""
+    if not C.WATCH_BOARD:
+        return
+    try:
+        now = now or _now()
+        d = _load()
+        ts = _board_tickets(d, now)
+        b, day = d.get("board") or {}, str(now.date())
+        if not ts:
+            return
+        active = any(k and now - timedelta(hours=12) <= k <= now + timedelta(minutes=BOARD_SOON_MIN) for t in ts for k in (_ko(l) for l in t["legs"]))
+        if b.get("day") != day and not active:
+            return
+        text, h = _board_text(ts, d, now)
+        if b.get("day") == day and b.get("hash") == h:
+            return
+        if b.get("day") == day and b.get("msg") and telegram.edit_message(b["msg"], text):
+            b["hash"] = h
+        else:
+            if b.get("msg") and b.get("pinned") and b.get("day") != day:
+                telegram.unpin(b["msg"])
+            mid = telegram.send(text, queue=False)
+            if type(mid) is not int:                     # pas envoyé (ou hors ligne) : au prochain passage
+                return
+            b = {"day": day, "msg": mid, "hash": h, "pinned": telegram.pin(mid)}
+        d["board"] = b
+        store.save(FILE, d)
+    except Exception as e:                          # noqa: BLE001 - le tableau ne bloque jamais le suivi
+        print(f"[suivi] tableau du jour ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def _counts(n):
+    """« 2 gagnés, 1 perdu, 1 en cours, 3 à venir »."""
+    return ", ".join([f"{n['win']} gagné{'s' if n['win'] > 1 else ''}"] + ([f"{n['loss']} perdu{'s' if n['loss'] > 1 else ''}"] if n["loss"] else [])
+                     + ([f"{n['live']} en cours"] if n["live"] else []) + ([f"{n['soon']} à venir"] if n["soon"] else []))
 
 
 def _score_t(txt):
@@ -1419,6 +1512,7 @@ def tick(now=None):
         except Exception as e:                      # noqa: BLE001
             print(f"[suivi] alertes de la nuit ignorées : {http.err(e)}", file=sys.stderr)
         _tickets(now)
+        board(now)                                  # 📌 le tableau du jour, modifié sur place
         try:
             msg = opportunity(now)
             if msg:

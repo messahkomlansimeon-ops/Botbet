@@ -355,6 +355,32 @@ def edit_buttons(message_id, markup, chat_id=None):
         return False
 
 
+def pin(message_id, chat_id=None):
+    """Épingle un message sans notification (le tableau du jour du suivi des matchs). -> vrai si c'est fait. Ne lève jamais."""
+    token, chat = creds()
+    if not (token and (chat_id or chat) and message_id):
+        return False
+    try:
+        api("pinChatMessage", chat_id=chat_id or chat, message_id=message_id, disable_notification=True)
+        return True
+    except TelegramError as e:
+        print(f"[telegram] message non épinglé : {e}", file=sys.stderr)
+        return False
+
+
+def unpin(message_id, chat_id=None):
+    """Désépingle un message (le tableau de la veille). Ne lève jamais."""
+    token, chat = creds()
+    if not (token and (chat_id or chat) and message_id):
+        return False
+    try:
+        api("unpinChatMessage", chat_id=chat_id or chat, message_id=message_id)
+        return True
+    except TelegramError as e:
+        print(f"[telegram] message non désépinglé : {e}", file=sys.stderr)
+        return False
+
+
 def edit_message(message_id, text, markup=None, chat_id=None):
     """Remplace le texte ET les boutons d'un message déjà envoyé (la liste « Mes paris » après une note : ses lignes disent « joué à … »). Texte trop
     long pour un message (plus de 4096 caractères) ou refusé par Telegram : seuls les boutons sont remplacés. Ne lève jamais."""
