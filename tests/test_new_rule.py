@@ -14,6 +14,8 @@ os.environ["QUIET_HOURS"] = "off"
 
 from kelly import calib, combos as CB, config as C, fair, settle, status, store  # noqa: E402
 
+C.SHOTS_TRIAL = False           # ici : la règle normale et la nouvelle règle seules (l'essai des tirs « plus de » : tests/test_shots_trial.py)
+
 DAY = "2026-10-13"
 OLD = {"shots": [67, 30, 43.5]}                       # ancienne règle : 45 % réalisés pour 65 % annoncés
 

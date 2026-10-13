@@ -262,7 +262,27 @@ def market_prob(legs):
     return math.prod(ps) if ps and all(p is not None for p in ps) else None
 
 
+def _trial_leg(c):
+    """Jambe reprise PAR l'essai (tirs « plus de » qui ne passeraient pas la règle normale) : seules celles-là sont limitées par combiné."""
+    from . import calib
+    return calib.trial_ok(c) and calib.viable_factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0"),
+                                                     shown=c.get("prob")) < C.VIABLE_MIN_K
+
+
 def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs=None):
+    """_best_combo, avec au plus C.SHOTS_TRIAL_MAX_LEGS jambes de l'essai (tirs vers le but « plus de ») : au-delà, seules les plus sûres restent et le
+    combiné est refait."""
+    res = _best_combo(legs, min_odds, max_odds, max_legs, step, min_legs)
+    if not res or not C.SHOTS_TRIAL:
+        return res
+    trial = sorted((c for c in res[0] if _trial_leg(c)), key=lambda c: -c["prob"])
+    if len(trial) <= C.SHOTS_TRIAL_MAX_LEGS:
+        return res
+    keep = {id(c) for c in trial[:C.SHOTS_TRIAL_MAX_LEGS]}
+    return _best_combo([c for c in legs if not _trial_leg(c) or id(c) in keep], min_odds, max_odds, max_legs, step, min_legs)
+
+
+def _best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs=None):
     """Combiné de cote totale dans [min_odds, max_odds] qui maximise la probabilité (combo_prob : produit des probas, prudence par jambe), au plus une
     jambe par match, au moins 2 jambes ; `max_legs` (C.MAX_LEGS par défaut, une borne de sécurité ; ou le nombre de paris choisi : « combi 20 max 4 »)
     et `min_legs` (« combi 20 pile 4 » : min = max) bornent le nombre de jambes. -> (jambes triées par heure, cote, proba) ou None. Optimisation exacte à
@@ -466,8 +486,8 @@ def data_ok(c):
         return False
     # sur les seuls vrais résultats (le rejeu corrige les probas, il n'écarte jamais un marché à lui seul) ; corners, cartons, tirs... : sur ceux de la
     # nouvelle règle de choix des lignes dès qu'il y en a assez (calib.viable_factor), et sur leur gain réel à la cote 1xBet (calib.new_rule_ok)
-    return calib.viable_factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0"), shown=c.get("prob")) >= C.VIABLE_MIN_K \
-        and calib.new_rule_ok(calib.family(c["market"]))
+    return (calib.viable_factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0"), shown=c.get("prob")) >= C.VIABLE_MIN_K
+            or calib.trial_ok(c)) and calib.new_rule_ok(calib.family(c["market"]))      # essai : tirs vers le but « plus de » (C.SHOTS_TRIAL)
 
 
 def best_per_match(pronos):

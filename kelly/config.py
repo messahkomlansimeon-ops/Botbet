@@ -282,6 +282,13 @@ S365_BACKFILL_DELAY = _float("S365_BACKFILL_DELAY", 1.5)      # ... et écart en
 VIABLE_MIN_P = _float("VIABLE_MIN_P", 0.58)       # chances minimales (après correction de fiabilité)
 VIABLE_MIN_N = _int("VIABLE_MIN_N", 4)            # matchs de données minimum pour chacune des deux équipes
 VIABLE_MIN_Q = _float("VIABLE_MIN_Q", 0.25)       # qualité minimale des données (0 à 1)
+# Essai du 13/10 (choix de l'utilisateur) : tirs vers le but « plus de » repris dans les combinés malgré leur fiabilité (60 % réussis pour 65 % annoncés),
+# avec la chance corrigée par LEURS résultats, au plus SHOTS_TRIAL_MAX_LEGS par combiné, hors des championnats faibles au rejeu ; arrêt automatique
+# si leurs résultats tombent sous SHOTS_TRIAL_STOP_RATE après SHOTS_TRIAL_STOP_N matchs (cote 1xBet ~1,85 : sous ~54 %, on perd)
+SHOTS_TRIAL = _bool("SHOTS_TRIAL", True)
+SHOTS_TRIAL_EXCLUDE = ("soccer_greece_super_league", "soccer_germany_bundesliga2", "soccer_spain_la_liga")
+SHOTS_TRIAL_MAX_LEGS = _int("SHOTS_TRIAL_MAX_LEGS", 1)
+SHOTS_TRIAL_STOP_N, SHOTS_TRIAL_STOP_RATE = 30, 0.53
 VIABLE_MIN_K = _float("VIABLE_MIN_K", 0.85)       # marché (ou championnat) où Kelly s'est montrée trop sûre d'elle : écarté
 FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une jambe
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)

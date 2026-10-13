@@ -235,6 +235,9 @@ def learning_lines(top=6):
     for f, (n, w, s) in fams[:top]:
         dot, txt = _state(n, w, s, calib.min_need(f), out_=not calib.in_combos(f, d))
         out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}" + calib.new_rule_note(f, d))
+    tl = calib.trial_line(d)
+    if tl:
+        out.append(tl)
     try:
         from . import replay
         rl = replay.status_line()
