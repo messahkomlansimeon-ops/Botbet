@@ -69,14 +69,21 @@ def _hm(at):
         return ""
 
 
-def flush(now=None):
+def flush(now=None, follow_only=False):
     """Hors des heures calmes : envoie les alertes gardées pendant la nuit. Le suivi des matchs part en UN résumé (« 🌙 Tes matchs pendant la nuit »,
     chaque passage précédé de son heure), puis les autres alertes, dans l'ordre, précédées d'un mot. La file est vidée d'un coup (atomique) avant
-    l'envoi : un message qui échoue est mis en attente par Telegram (data/outbox.json), jamais perdu. -> nombre d'alertes envoyées."""
-    if is_quiet(now):
+    l'envoi : un message qui échoue est mis en attente par Telegram (data/outbox.json), jamais perdu. `follow_only` : à toute heure, seulement le
+    suivi des matchs gardé (C.WATCH_QUIET éteint : le suivi ignore les heures calmes) ; les autres alertes restent pour le réveil. -> nombre envoyé."""
+    if is_quiet(now) and not follow_only:
         return 0
+
+    def take(h):
+        h = h if isinstance(h, list) else []
+        if not follow_only:
+            return [], h
+        return [x for x in h if x.get("kind") != "suivi"], [x for x in h if x.get("kind") == "suivi"]
     try:
-        held = store.update(FILE, lambda h: ([], h if isinstance(h, list) else []), [])
+        held = store.update(FILE, take, [])
     except OSError as e:
         print(f"[calme] alertes de la nuit non relues : {e}", file=sys.stderr)
         return 0

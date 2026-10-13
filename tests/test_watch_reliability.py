@@ -152,8 +152,8 @@ def test_unreadable_doc():
             return default
         return old(name, default, strict)
     sent = []
-    store.load, old_send = bad, quiet.send
-    quiet.send = lambda *a, **k: sent.append(a) or True
+    store.load, old_send = bad, telegram.send
+    telegram.send = lambda *a, **k: sent.append(a) or True
     try:
         try:
             watch.follow(KO)
@@ -162,7 +162,7 @@ def test_unreadable_doc():
             pass
         watch._tickets(KO)
     finally:
-        store.load, quiet.send = old, old_send
+        store.load, telegram.send = old, old_send
     assert sent == [], "document illisible : rien envoyé (sinon tous les ✅ / ❌ déjà dits repartiraient)"
     print("ok  document du suivi illisible : aucun message")
 
@@ -174,18 +174,18 @@ def test_lines_kept_until_sent():
     def fake(d, now, *a, **k):
         watch._out(d, now, "ev", "⚽ H0 1-0 A0 (10e)")
     watch._follow = fake
-    old_send = quiet.send
+    old_send = telegram.send                       # le suivi des matchs envoie directement (il ignore les heures calmes : C.WATCH_QUIET éteint)
     try:
-        quiet.send = lambda *a, **k: False
+        telegram.send = lambda *a, **k: False
         telegram.LAST_QUEUED = False
         watch._tickets(KO)
         assert [o["text"] for o in store.load(watch.FILE, {})["out"]] == ["⚽ H0 1-0 A0 (10e)"], "envoi raté : gardé pour le passage suivant"
         got = []
-        quiet.send = lambda msg, *a, **k: got.append(str(msg)) or True
+        telegram.send = lambda msg, *a, **k: got.append(str(msg)) or True
         watch._tickets(KO + timedelta(minutes=10))
         assert got == ["⚽ H0 1-0 A0 (10e)"] and store.load(watch.FILE, {})["out"] == [], got
     finally:
-        watch._follow, quiet.send = real, old_send
+        watch._follow, telegram.send = real, old_send
     print("ok  lignes gardées tant qu'elles ne sont pas parties (ni envoyées ni mises en attente)")
 
 
@@ -307,6 +307,30 @@ def test_coupon_on_each_bet():
     print("ok  chaque pari dit de quel(s) coupon(s) il vient (code 1xBet), le perdu marqué")
 
 
+def test_follow_ignores_quiet_hours():
+    old_hours = C.QUIET_HOURS
+    C.QUIET_HOURS = "23-7"
+    night = KO.replace(hour=2)
+    store.save(quiet.FILE, [{"text": "⚽ gardé avant", "html": True, "markup": None, "kind": "suivi", "at": night.isoformat()},
+                            {"text": "📈 autre alerte", "html": False, "markup": None, "kind": "autre", "at": night.isoformat()}])
+    reset()
+    real, sent, old_send = watch._follow, [], telegram.send
+
+    def fake(d, now, *a, **k):
+        watch._out(d, now, "ev", "⚽ H0 1-0 A0 (10e)")
+    watch._follow, telegram.send = fake, (lambda text, *a, **k: sent.append(str(text)) or True)
+    try:
+        watch.tick(night)
+    finally:
+        watch._follow, telegram.send, C.QUIET_HOURS = real, old_send, old_hours
+    assert any("Tes matchs pendant la nuit" in x and "⚽ gardé avant" in x for x in sent), sent          # le suivi gardé part tout de suite
+    assert "⚽ H0 1-0 A0 (10e)" in sent, sent                                                           # le suivi du passage : envoyé la nuit
+    assert [h["text"] for h in store.load(quiet.FILE, [])] == ["📈 autre alerte"], "les autres alertes attendent le réveil"
+    assert store.load(watch.FILE, {})["out"] == []
+    store.save(quiet.FILE, [])
+    print("ok  le suivi des matchs ignore les heures calmes (même ce qui était gardé) ; les autres alertes attendent le réveil")
+
+
 def main():
     test_tid_no_inheritance()
     test_never_silent()
@@ -320,6 +344,7 @@ def main():
     test_outbox_two_processes()
     test_status_lines()
     test_coupon_on_each_bet()
+    test_follow_ignores_quiet_hours()
     print("tests fiabilité du suivi des matchs : OK")
 
 

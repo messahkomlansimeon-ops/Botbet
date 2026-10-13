@@ -1004,7 +1004,7 @@ def _tickets(now):
     except WatchStateError:
         return
     sent_lines = list(d["out"])
-    ok = quiet.send(msg, now, kind="suivi")
+    ok = quiet.send(msg, now, kind="suivi") if C.WATCH_QUIET else telegram.send(msg)      # par défaut : à toute heure, même la nuit
     queued = telegram.LAST_QUEUED
     if ok or queued:
         d["out"] = [o for o in d["out"] if o not in sent_lines]
@@ -1037,6 +1037,8 @@ def tick(now=None):
     try:
         try:
             n = quiet.flush(now)
+            if not C.WATCH_QUIET:                       # suivi des matchs gardé avant ce réglage (ou par un ancien passage) : part tout de suite
+                n += quiet.flush(now, follow_only=True)
             if n:
                 print(f"[suivi] alertes de la nuit : {n} envoyée(s)", file=sys.stderr)
         except Exception as e:                      # noqa: BLE001

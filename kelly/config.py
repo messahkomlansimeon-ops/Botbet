@@ -411,6 +411,7 @@ WATCH_DETAIL_DAY = _int("WATCH_DETAIL_DAY", 40)   # fiches détaillées 365score
 WATCH_SUMMARIES = _bool("WATCH_SUMMARIES", True)   # moments du match : mi-temps, fin, prolongation, carton rouge, penalty, but refusé par la VAR (0 : seulement buts et paris décidés)
 WATCH_CHANCES = _bool("WATCH_CHANCES", True)       # chances en direct de tes paris (kelly/inplay.py) sur les buts, la mi-temps et les alertes
 WATCH_DANGER_P = _float("WATCH_DANGER_P", 0.25)    # « ⚠️ pari en danger » : chance sous ce seuil (et 15 points sous l'avant-match, dès la 20e), une fois par pari
+WATCH_QUIET = _bool("WATCH_QUIET", False)          # 0 (défaut) : le suivi des matchs de tes paris ignore les heures calmes (QUIET_HOURS) ; 1 : gardé pour le réveil comme les autres alertes
 WATCH_RECAP = _bool("WATCH_RECAP", True)           # 🌙 bilan de la soirée, une fois par jour
 WATCH_RECAP_HOUR = _int("WATCH_RECAP_HOUR", 22)    # heure UTC à partir de laquelle le bilan part (quand plus aucun match de tes tickets n'est en cours ; 3 h au plus tard)
 LIVE_OPP_DAY = _int("LIVE_OPP_DAY", 3)              # opportunités live annoncées au plus par jour
