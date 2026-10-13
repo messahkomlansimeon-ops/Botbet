@@ -597,6 +597,11 @@ def on_callback(data, message_id=None):
     """Réponse à un appui sur un bouton sous un message (voir les callback_data de ce module)."""
     from . import app
     parts = (data or "").split("|")
+    if parts[0] == "rg" and len(parts) == 4:              # « ✅ Gagné / ❌ Perdu / ↩️ Remboursé » sous « ❓ Résultat introuvable » (played.ask_messages)
+        reply = played.answer(parts[1], parts[2], parts[3], str(datetime.now(timezone.utc).date()))
+        if message_id and reply.startswith(("✅", "Le ")):     # réglé (ou déjà réglé) : les boutons disparaissent, plus de double appui
+            telegram.edit_buttons(message_id, {"inline_keyboard": []})
+        return reply
     if parts[0] == "tk" and len(parts) == 2:              # « 🎫 AB12 » sous une alerte du suivi des matchs : la fiche du coupon, à jour
         from . import watch
         return watch.ticket_card(parts[1])

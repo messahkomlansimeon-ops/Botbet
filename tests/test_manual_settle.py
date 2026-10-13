@@ -56,6 +56,35 @@ def test_manual_settle():
     print("ok  réglé à la main : gagné (jambes ouvertes gagnées, cote notée), perdu, remboursé ; bon jour ; jamais un ticket déjà réglé ou pas noté")
 
 
+def test_ask_buttons():
+    from datetime import datetime, timezone
+    store.save(played.ASK_FILE, {})
+    reset([combo("m3", "2026-10-12", ["win"] * 4 + [None]), combo("m1", TODAY, [None, None], stake=100, odds=5.0)])
+    app.handle_command("capital 50000")
+    money._save_capital(since="2026-10-01")
+    early = played.ask_messages(datetime(2026, 10, 13, 12, 0, tzinfo=timezone.utc))
+    assert early == [], "matchs commencés il y a moins de 24 h : le règlement du matin a encore sa chance"
+    msgs = played.ask_messages(datetime(2026, 10, 14, 4, 30, tzinfo=timezone.utc))
+    assert len(msgs) == 1, msgs                                                # le combi du 13 : pas encore (moins de 24 h)
+    m = msgs[0]
+    txt = str(m)
+    assert txt.startswith("❓ <b>Résultat introuvable</b> · combi sur mesure") and "❓ H4 – A4 · Moins de 8,5 corners" in txt, txt
+    assert [b["callback_data"] for b in m.markup["inline_keyboard"][0]] == ["rg|vm3|2026-10-12|w", "rg|vm3|2026-10-12|l", "rg|vm3|2026-10-12|v"]
+    assert played.ask_messages(datetime(2026, 10, 14, 4, 30, tzinfo=timezone.utc)) == []          # une seule fois
+    edits = []
+    old = chat.telegram.edit_buttons
+    chat.telegram.edit_buttons = lambda mid, markup, chat_id=None: edits.append((mid, markup))
+    try:
+        out = chat.on_callback("rg|vm3|2026-10-12|w", 77)
+        assert out.startswith("✅ Réglé à la main · combi sur mesure (cote 26,9) du lundi 12 octobre : gagné → +12 945 FCFA"), out
+        assert edits == [(77, {"inline_keyboard": []})]                       # les boutons disparaissent
+        assert "déjà réglé" in chat.on_callback("rg|vm3|2026-10-12|l", 77)   # double appui : rien ne change
+    finally:
+        chat.telegram.edit_buttons = old
+    assert played.unsettled(datetime(2026, 10, 20, 4, 30, tzinfo=timezone.utc))[0][0] == "vm1"      # réglé : plus jamais demandé ; celui du 13 l'est ensuite
+    print("ok  ❓ résultat introuvable : demandé une fois, 24 h après le dernier match, avec ses matchs ; un appui règle (✅ ❌ ↩️), les boutons disparaissent")
+
+
 def test_gain_whole_fcfa():
     x = {"result": "win", "odds": 3.0, "played": {"odds": 3.075, "stake": 500}}
     assert bankroll.played_gain(x) == 1038.0                                    # 1 037,5 -> 1 038 : au franc près, comme 1xBet
@@ -64,6 +93,7 @@ def test_gain_whole_fcfa():
 
 def main():
     test_manual_settle()
+    test_ask_buttons()
     test_gain_whole_fcfa()
     print("tests règlement à la main : OK")
 

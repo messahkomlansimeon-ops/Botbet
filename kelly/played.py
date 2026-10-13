@@ -447,6 +447,82 @@ def settle_command(args, day, now=None):
     return out
 
 
+ASK_FILE = "settle_asked.json"      # {"<jour>|<quoi>": jour de la question} : un pari sans résultat n'est demandé qu'une fois
+ASK_AFTER_H = 24                    # tous ses matchs ont commencé il y a au moins 24 h : le règlement du matin a déjà eu sa chance (deux fois)
+ANSWERS = {"w": "gagné", "l": "perdu", "v": "remboursé"}
+
+
+def _ko(x):
+    try:
+        return datetime.fromisoformat(str(x["commence"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def unsettled(now=None):
+    """Paris NOTÉS (joués) encore sans résultat, ou « non vérifiables », dont tous les matchs ont commencé il y a au moins ASK_AFTER_H h ->
+    [(quoi, jour, pari, ses jambes)] : combinés du matin, pari du jour, « 1xBet en retard », combinés aux cotes 1xBet et combis sur mesure."""
+    now = now or datetime.now(timezone.utc)
+    bets = store.load_doc("bets.json", {"picks": [], "combos": []})
+    rows = track.load()
+    by_key = {r["key"]: r for r in rows}
+    cand = [(norm(fmt.tier_word(c["tier"])), c, [by_key[k] for k in c.get("keys") or [] if k in by_key]) for c in bets["combos"]]
+    cand += [("pari", r, [r]) for r in single_rows(rows, bets["combos"])]
+    cand += [(gap_what(r), r, [r]) for r in gap_rows(rows)]
+    cand += [(f"v{c['tier']}", c, list(c.get("legs") or [])) for c in fair.load_combos()]
+    out = []
+    for what, x, legs in cand:
+        if not x.get("played") or x.get("skipped") or x.get("result") not in (None, "unknown") or not legs:
+            continue
+        kos = [_ko(leg) for leg in legs]
+        if None in kos or now - max(kos) < timedelta(hours=ASK_AFTER_H):
+            continue
+        out.append((what, str(x["date"])[:10], x, legs))
+    return out
+
+
+def _leg_line(leg):
+    """« ✅ AEK Larnaca – Omonia 1-0 · Moins de 2,5 buts » ; ❓ pour une jambe sans résultat."""
+    icon = {"win": "✅", "loss": "❌", "void": "↩️", "push": "↩️"}.get(leg.get("result"), "❓")
+    pick = leg.get("pick") or (fair.pick_label(leg) if leg.get("market") else "")
+    return " ".join(f"{icon} {leg.get('home')} – {leg.get('away')} {leg.get('final') or ''} · {pick}".split())
+
+
+def ask_messages(now=None):
+    """« ❓ Résultat introuvable » : un message par pari joué que Kelly n'arrive pas à régler (unsettled), avec ses matchs et trois boutons ✅ Gagné ·
+    ❌ Perdu · ↩️ Remboursé (callback « rg|<quoi>|<jour>|w/l/v », chat.on_callback -> answer) : un appui au lieu de « réglé vm3 gagné 12/10 ». Chaque pari
+    n'est demandé qu'une fois (ASK_FILE) ; ses boutons restent valables tant qu'il n'est pas réglé. -> [messages]."""
+    now = now or datetime.now(timezone.utc)
+    asked = store.load(ASK_FILE, {})
+    asked = asked if isinstance(asked, dict) else {}
+    out = []
+    for what, day, x, legs in unsettled(now):
+        key = f"{day}|{what}"
+        if key in asked:
+            continue
+        t = find(what, day)
+        label = t.label if isinstance(t, Target) else f"pari « {what} » du {fmt.fr_day(day)}"
+        stake, odds = (x.get("played") or {}).get("stake"), (x.get("played") or {}).get("odds")
+        head = f"❓ {fmt.b('Résultat introuvable')} · {fmt.esc(label)}" + (f" · 🎟️ {fmt.code(x['coupon'])}" if x.get("coupon") else "")
+        lines = [head, fmt.esc(f"Joué : cote {fmt.odds_txt(odds or 0)} · mise {M.money(round(M._amount(stake) or 0), x.get('cur'))}"), ""]
+        lines += [fmt.esc(_leg_line(leg)) for leg in legs]
+        lines += ["", fmt.i(fmt.esc("Kelly ne trouve pas le résultat de ce pari. Regarde-le dans ton historique 1xBet, puis touche le bon bouton."))]
+        out.append(telegram.with_buttons(Html("\n".join(lines)), telegram.inline([[("✅ Gagné", f"rg|{what}|{day}|w"), ("❌ Perdu", f"rg|{what}|{day}|l"),
+                                                                                   ("↩️ Remboursé", f"rg|{what}|{day}|v")]])))
+        asked[key] = str(now.date())
+    if out:
+        cut = str(now.date() - timedelta(days=30))
+        store.save(ASK_FILE, {k: v for k, v in asked.items() if v >= cut})
+    return out
+
+
+def answer(what, day, code, today):
+    """Bouton « ✅ Gagné / ❌ Perdu / ↩️ Remboursé » d'un « ❓ Résultat introuvable » : comme « réglé <quoi> <résultat> <jour> »."""
+    if code not in ANSWERS:
+        return SETTLE_HELP
+    return settle_command([what, ANSWERS[code], f"{day[8:10]}/{day[5:7]}"], today)
+
+
 PAGE = 12            # paris par page de « Mes paris » : une longue liste part en plusieurs messages, chacun avec son en-tête, son pied et ses boutons
 
 

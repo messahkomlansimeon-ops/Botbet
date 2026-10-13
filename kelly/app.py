@@ -750,6 +750,7 @@ def run_daily(sample=False, retry=False):
         moved = _step("marchés entrés / sortis des combinés", calib.combo_changes, [])
         if moved:
             report = report + [Html("\n".join(fmt.esc(x) for x in moved))]
+        report = report + _step("paris joués sans résultat", lambda: played.ask_messages(now), [])     # ❓ un appui : gagné / perdu / remboursé
         progress.step("monde")
         progress.step("profils")
         fill_profiles(day, scan)                    # stats mondiales API-Football : avant l'achat des cotes (elles guident les marchés payés)
