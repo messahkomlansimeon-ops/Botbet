@@ -98,6 +98,55 @@ def test_league_factor():
     print("ok  correction par championnat : rapprochée de celle de la famille tant qu'il a peu de matchs ; appliquée aux moyennes ; affichée dès 15 matchs")
 
 
+def _nb(rng, mu, alpha):
+    """Tirage binomial négatif de moyenne `mu`, dispersion `alpha` (variance mu + alpha mu²) : Poisson d'une loi gamma."""
+    import math
+    lam = rng.gammavariate(1 / alpha, alpha * mu)
+    k, p, u = 0, math.exp(-lam), rng.random()
+    c = p
+    while u > c:
+        k += 1
+        p *= lam / k
+        c += p
+    return k
+
+
+def test_replay_prior_and_dispersion():
+    import random
+    from kelly import replay
+    rng = random.Random(7)
+    acc = {}
+    for _ in range(3000):                                                            # la vraie moyenne est 8 % au-dessus de celle du modèle,
+        mu = rng.uniform(18, 30)                                                     # et les matchs 3 fois plus dispersés qu'il ne le croit
+        val = _nb(rng, mu * 1.08, 0.06)
+        replay._add_means(acc, {"shots": [1, val, mu, val * val, val * mu, mu * mu, 0.02 * mu * mu]})
+    boot = {"fam": {"shots": acc["shots"]}, "lg": {"shots": {"soccer_epl": [b * 0.3 for b in acc["shots"]]}}}
+    k, d = means.boot_factor("shots", boot=boot), means.dispersion("shots", boot=boot)
+    assert 1.06 < k < 1.10 and 2.2 < d < 3.2, (k, d)                                  # moyenne x1,08 et dispersion x3 retrouvées
+    reset()
+    assert abs(means.factor("shots", boot=boot) - k) < 1e-12, "sans vrais résultats : le point de départ, celui du rejeu"
+    rows = [row(i, 23.0, 23.0) for i in range(400)]                                   # tes vrais résultats : aucun écart
+    means.learn(rows, DAY)
+    assert 1.0 < means.factor("shots", boot=boot) < 1 + (k - 1) * 0.15, means.factor("shots", boot=boot)     # 400 matchs réels : ils l'emportent
+    assert "moyenne ×" in means.boot_note("shots", boot) and "variance ×" in means.boot_note("shots", boot), means.boot_note("shots", boot)
+    v = means.var_ratio(acc["shots"])
+    assert 1.45 < v < 1.9, v                                                          # vraie variance (alpha 0,06 : ~66) contre celle du modèle (0,02 : ~40)
+    with means.off():
+        assert means.factor("shots", boot=boot) == 1.0 and means.dispersion("shots", boot=boot) == 1.0
+    assert means.boot_factor("fouls", boot=boot) == 1.0 and means.dispersion("fouls", boot=boot) == 1.0
+    print("ok  rejeu : moyenne (x1,08) et dispersion (x3) retrouvées sur des matchs simulés ; point de départ, puis tes vrais résultats l'emportent")
+
+
+def test_replay_keeps_old_until_redone():
+    from kelly import replay
+    old = {"v": replay.VERSION, "from": "2025-10-13", "to": "2026-10-13", "divs": {d: {"matches": 300, "picks": 3000, "acc": {"shots": [10, 5, 6.0]}}
+                                                                                 for d in replay.divs()}}
+    assert replay.missing(old) == replay.divs(), "rejoués avant la mesure des moyennes : à refaire"
+    old["divs"]["E0"]["means"] = {}
+    assert "E0" not in replay.missing(old) and replay.complete(old["divs"]["E1"]), "l'ancien résultat compte en attendant"
+    print("ok  rejeu : les championnats rejoués avant la mesure des moyennes sont refaits, leur ancien résultat compte en attendant")
+
+
 def test_settlement_sets_actual():
     b = {"market": "team_shots_total", "home": "H", "away": "A", "group": "soccer", "who": None}
     fst = {"side": {"home": {"shots": 14}, "away": {"shots": 12}}}
@@ -125,6 +174,8 @@ def main():
     test_learn_and_factor()
     test_applied_to_means()
     test_league_factor()
+    test_replay_prior_and_dispersion()
+    test_replay_keeps_old_until_redone()
     test_settlement_sets_actual()
     test_market_card_lines()
     print("tests correction des moyennes : OK")

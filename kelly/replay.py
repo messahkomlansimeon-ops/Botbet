@@ -11,6 +11,12 @@ data/calib_boot.json : {v, from, to, built, divs: {div: {matches, picks, acc}}, 
 (championnat par championnat) ; --force le refait. calib.factor part de la correction qu'il mesure (au lieu de « pas de correction ») ; les vrais
 résultats s'en écartent dès qu'ils sont assez nombreux. Ils ne sont jamais mélangés.
 
+Moyennes et dispersion (kelly/means.py) : pour chaque match et chaque famille de stats, le nombre que le modèle attendait (brut) contre le réel du CSV,
+et de quoi mesurer la dispersion (le modèle croit-il les matchs plus réguliers qu'ils ne le sont ?) : divs[div]["means"] = {famille: [n, Σ réel, Σ attendu,
+Σ réel², Σ réel x attendu, Σ attendu², Σ dispersion du modèle x attendu²]}, et doc["means"] la somme. Point de départ de la correction des moyennes
+(par famille et par championnat) et de la dispersion. Un championnat rejoué avant (sans « means ») est refait au prochain rejeu ; en attendant, son
+ancien résultat reste compté.
+
 Limites : pas d'xG, pas de cotes 1xBet (la ligne est celle que Kelly choisit seule), pas les buts (déjà mesurés sur les vrais résultats). Le rejeu est un
 point de départ ; les vrais résultats prennent le dessus à mesure qu'ils arrivent.
 """
@@ -40,12 +46,46 @@ def load():
     return d if isinstance(d, dict) and d.get("v") == VERSION else {}
 
 
-def picks(model, m, sport_key, on):
+ACTUAL = {"corners": ("hc", "ac"), "yellow": ("hy", "ay"), "shots": ("hs", "as"), "sot": ("hst", "ast"), "fouls": ("hf", "af")}
+
+
+def actual(m, fam):
+    """Nombre réel d'une famille de stats dans le match `m` (CSV football-data) : total des deux équipes ; cartons = jaunes + rouges ; None s'il manque."""
+    if fam == "cards":
+        vals = [m.get(k) for k in ("hy", "ay", "hr", "ar")]
+        return float(sum(vals)) if all(v is not None for v in vals) else None
+    cols = ACTUAL.get(fam)
+    if not cols or m.get(cols[0]) is None or m.get(cols[1]) is None:
+        return None
+    return float(m[cols[0]] + m[cols[1]])
+
+
+def mean_stats(pred, m, acc):
+    """Ajoute à `acc` ({famille: [n, Σ réel, Σ attendu, Σ réel², Σ réel x attendu, Σ attendu², Σ dispersion x attendu²]}) les familles de stats du match :
+    attendu = moyenne BRUTE du modèle (h + a), dispersion = celle du total (« at ») ; réel = le CSV."""
+    from . import means
+    for fam, st in (pred.get("stats") or {}).items():
+        if fam not in means.FAMILIES:
+            continue
+        val, mu = actual(m, fam), (st.get("h") or 0) + (st.get("a") or 0)
+        if val is None or mu <= 0:
+            continue
+        a = acc.setdefault(fam, [0.0] * 7)
+        for i, x in enumerate((1, val, mu, val * val, val * mu, mu * mu, float(st.get("at") or 0) * mu * mu)):
+            a[i] = round(a[i] + x, 4)
+
+
+def picks(model, m, sport_key, on, means_acc=None, pred=None, fix=None):
     """Pronostics de stats du match `m` (CSV football-data) avec le modèle `model` (ajusté avant `on`), réglés : [(pronostic, gagné)]. Push et non
-    réglables ignorés."""
-    pred = strength.predict(model, m["home"], m["away"], on, m.get("referee")) if model else None
+    réglables ignorés. `pred` : prévision déjà faite ; `fix` : (facteurs des moyennes, de la dispersion) à lui appliquer (rejeu en deux temps)."""
+    from . import means
+    pred = pred or (strength.predict(model, m["home"], m["away"], on, m.get("referee")) if model else None)
     if not pred:
         return []
+    if means_acc is not None:
+        mean_stats(pred, m, means_acc)
+    if fix:
+        pred = means.apply(pred, *fix)
     f = {"sources": []}
     features.fill_deep(f, pred)
     home, away = pred["home"], pred["away"]
@@ -66,26 +106,51 @@ def replay_div(div, matches, frm, to, deadline=None):
     """Rejoue les matchs de `div` joués dans [frm, to[ (« AAAA-MM-JJ »). -> {matches, picks, acc}, ou None si `deadline` (time.monotonic) est
     dépassé avant la fin (le championnat sera repris en entier la fois suivante)."""
     sk = fd.DIV_TO_SPORT.get(div)
-    acc, n_m, n_p = {}, 0, 0
+    acc, n_m, n_p, macc = {}, 0, 0, {}
     hl = strength.hl_for(div)
     upper = strength.upper_matches(div)                               # division du dessus : les relégués n'ont pas l'a priori des promus
     model, start = None, None
     todo = sorted((m for m in matches if frm <= m["date"] < to and m.get("hg") is not None and m.get("ag") is not None),
                   key=lambda m: (m["date"], m["home"]))
-    for m in todo:
+    from . import means
+    preds = []
+    for m in todo:                                  # 1er temps : prévisions (le modèle ne voit que le passé) et moyennes attendu / réel
         if deadline is not None and time.monotonic() > deadline:
             return None
         d = date.fromisoformat(m["date"])
         if start is None or d >= start + timedelta(days=C.REPLAY_STEP_DAYS):
             start = d
             model = strength.build(matches, d, hl, div=div, upper=upper)          # matchs joués AVANT d seulement
-        got = picks(model, m, sk, d)
-        if got:
-            n_m += 1
-        for r, won in got:
-            calib.accumulate(acc, r, won)
-            n_p += 1
-    return {"matches": n_m, "picks": n_p, "acc": acc}
+        pred = strength.predict(model, m["home"], m["away"], d, m.get("referee")) if model else None
+        if pred:
+            one = {}
+            mean_stats(pred, m, one)
+            _add_means(macc, one)
+            preds.append((m, d, pred, one))
+    # 2e temps : les pronostics avec les moyennes et la dispersion corrigées comme en direct, pour que la fiabilité rejouée soit celle des chances
+    # corrigées (sinon le direct serait corrigé deux fois). Corrections mesurées sur les seuls matchs des JOURS D'AVANT (jamais l'avenir).
+    run, pending, day = {}, {}, None
+    with means.off():
+        for m, d, pred, one in preds:
+            if d != day:
+                _add_means(run, pending)
+                pending, day = {}, d
+            fix = ({f: a[1] / a[2] for f, a in run.items() if a[0] >= means.BOOT_MIN and a[2] > 0}, {f: means.disp_of(a) for f, a in run.items()})
+            got = picks(None, m, sk, d, pred=pred, fix=fix)
+            _add_means(pending, one)
+            if got:
+                n_m += 1
+            for r, won in got:
+                calib.accumulate(acc, r, won)
+                n_p += 1
+    return {"matches": n_m, "picks": n_p, "acc": acc, "means": macc}
+
+
+def _add_means(dst, src):
+    """Ajoute les cumuls de moyennes `src` ({famille: [7 sommes]}) à `dst`."""
+    for f, a in src.items():
+        have = dst.setdefault(f, [0.0] * len(a))
+        dst[f] = [round(x + y, 4) for x, y in zip(have, a)]
 
 
 def _total(per_div):
@@ -111,9 +176,22 @@ def complete(res):
 
 
 def missing(doc=None):
-    """Championnats pas encore (bien) rejoués."""
+    """Championnats à (re)jouer : pas encore bien rejoués, ou rejoués avant la mesure des moyennes (sans « means » : leur ancien résultat reste compté
+    en attendant)."""
     doc = load() if doc is None else doc
-    return [d for d in divs() if not complete((doc.get("divs") or {}).get(d))]
+    return [d for d in divs() if not complete((doc.get("divs") or {}).get(d)) or "means" not in (doc.get("divs") or {}).get(d, {})]
+
+
+def _total_means(per_div):
+    """Moyennes et dispersion du rejeu : {"fam": {famille: somme}, "lg": {famille: {championnat: cumul}}}."""
+    fam, lg = {}, {}
+    for div, v in per_div.items():
+        sk = fd.DIV_TO_SPORT.get(div, div)
+        for f, a in (v.get("means") or {}).items():
+            have = fam.setdefault(f, [0.0] * len(a))
+            fam[f] = [round(x + y, 4) for x, y in zip(have, a)]
+            lg.setdefault(f, {})[sk] = list(a)
+    return {"fam": fam, "lg": lg}
 
 
 def done(doc=None):
@@ -163,6 +241,7 @@ def run(seconds=None, force=False, today=None, loader=None, log=None):
             doc["divs"] = {d: v for d, v in (cur.get("divs") or {}).items() if complete(v)} | {d: v for d, v in doc["divs"].items() if complete(v) or d not in cur.get("divs", {})}
         doc["divs"][div] = res
         doc["acc"] = _total(doc["divs"])
+        doc["means"] = _total_means(doc["divs"])
         doc["built"] = str(today or state.now().date())
         store.save(FILE, doc, compact=True)
         log(f"{div} ({calib.league_name(fd.DIV_TO_SPORT.get(div, div))}) : {res['matches']} matchs, {res['picks']} pronostics "

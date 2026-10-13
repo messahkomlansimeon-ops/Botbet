@@ -14,8 +14,16 @@ peu de matchs (n / (n + PRIOR_LG)). Les sources de stats diffèrent selon le cha
 championnat à l'autre. Jamais par équipe : une équipe joue un match par semaine, ce serait du bruit (ses tendances sont déjà dans le modèle). Appliqué aux moyennes de la famille AVANT le calcul des chances (fair.deep_options : modèle approfondi et sa référence
 « match moyen » ; fair._stat_options : profils). « mu » reste la moyenne BRUTE (avant correction) : le facteur mesure le biais du modèle, pas le sien.
 
+Point de départ (rejeu de la saison passée, kelly/replay.py, data/calib_boot.json « means ») : avant tes résultats réels, la correction part de ce que le
+rejeu a mesuré sur des milliers de matchs (18 championnats européens aux stats complètes), au lieu de 1 ; un championnat rejoué part de son propre écart
+au rejeu (relatif à sa famille). Les résultats réels prennent le dessus à mesure qu'ils arrivent (mêmes n / (n + PRIOR)). Le rejeu mesure aussi la
+DISPERSION (dispersion(fam)) : si les matchs varient plus que le modèle ne le croit, ses lignes « sûres » des deux sens sont trop confiantes ; la
+dispersion du modèle est alors multipliée d'autant (bornée à DISP_BOUNDS). Limites : le rejeu compte les stats comme football-data ; les autres
+sources et 1xBet peuvent compter autrement, ce que seuls les vrais résultats révèlent.
+
 data/means.json : {"fam": {famille: [n, Σ réel, Σ attendu]}, "lg": {famille: {championnat: [n, Σ réel, Σ attendu]}}, "t": jour du dernier
 vieillissement, "done": {jour|match|marché: jour}}."""
+import contextlib
 import copy
 from datetime import date, timedelta
 
@@ -26,11 +34,26 @@ FAMILIES = ("corners", "cards", "yellow", "shots", "sot", "fouls", "throws", "of
 PRIOR_N = 40                    # matchs : la correction mesurée ne pèse qu'à proportion de n / (n + 40)
 PRIOR_LG = 30                   # matchs d'un championnat : sa propre correction ne pèse qu'à proportion de n / (n + 30) face à celle de la famille
 LG_SHOW = 15                    # matchs d'un championnat avant de l'afficher (📊 Marchés)
+BOOT_MIN = 100                  # matchs rejoués d'une famille (ou d'un championnat) pour servir de point de départ
+BOOT_LG_PRIOR = 100             # écart d'un championnat au rejeu, cru à proportion de n / (n + 100)
+DISP_MIN = 200                  # matchs rejoués d'une famille pour mesurer sa dispersion
+DISP_BOUNDS = (0.3, 4.0)        # dispersion du modèle multipliée au plus par 4 (fautes au rejeu du 13/10 : 3,5), divisée au plus par 3
 BOUNDS = (0.80, 1.25)           # jamais plus de 20 % de baisse ni 25 % de hausse
 HALF_LIFE = 90                  # jours : un match vieux de 90 jours compte moitié moins
 DONE_DAYS = 12                  # jours de mémoire des matchs déjà comptés
 SHOW_MIN = 15                   # matchs avant d'afficher la correction (📊 Marchés)
 _memo = {}
+_OFF = [False]                  # vrai pendant le rejeu : il applique ses propres corrections (replay.replay_div), jamais celles du direct
+
+
+@contextlib.contextmanager
+def off():
+    """Corrections du direct coupées (factor et dispersion rendent 1) le temps d'un bloc : le rejeu de la saison passée."""
+    old, _OFF[0] = _OFF[0], True
+    try:
+        yield
+    finally:
+        _OFF[0] = old
 
 
 def load():
@@ -109,17 +132,72 @@ def learn(rows, today=None):
         return 0
 
 
-def factor(fam, sport_key=None, data=None):
-    """Facteur appliqué aux moyennes de la famille `fam` : réel / attendu, rapproché de 1 selon le nombre de matchs ; puis, pour le championnat
-    `sport_key`, son propre réel / attendu rapproché de celui de la famille ; borné ; 1 sans données ou C.MEANS_CORRECT éteint."""
-    if not C.MEANS_CORRECT or fam not in FAMILIES:
+def _boot(boot=None):
+    """Moyennes du rejeu ({"fam": {famille: [n, Σ réel, Σ attendu, …]}, "lg": {famille: {championnat: […]}}}) ; {} sans rejeu ou C.REPLAY_PRIOR à 0."""
+    if boot is not None:
+        return boot
+    if not C.REPLAY_PRIOR:
+        return {}
+    return calib.boot().get("means") or {}
+
+
+def _ratio(a, min_n):
+    return a[1] / a[2] if a and len(a) >= 3 and a[0] >= min_n and a[2] > 0 else None
+
+
+def boot_factor(fam, sport_key=None, boot=None):
+    """Point de départ de la correction : ce que le rejeu a mesuré (réel / attendu) pour la famille, puis l'écart du championnat à sa famille (relatif,
+    rapproché de 0 selon ses matchs rejoués) ; 1 sans rejeu suffisant."""
+    b = _boot(boot)
+    kf = _ratio((b.get("fam") or {}).get(fam), BOOT_MIN) or 1.0
+    if not sport_key:
+        return kf
+    lg = ((b.get("lg") or {}).get(fam) or {}).get(sport_key)
+    rl = _ratio(lg, BOOT_MIN)
+    if rl is None or not _ratio((b.get("fam") or {}).get(fam), BOOT_MIN):
+        return kf
+    return kf * (1 + (rl / kf - 1) * lg[0] / (lg[0] + BOOT_LG_PRIOR))
+
+
+def dispersion(fam, boot=None):
+    """Multiplicateur de la dispersion du modèle pour la famille : dispersion mesurée sur le rejeu (méthode des moments, autour de la moyenne
+    corrigée) / dispersion moyenne du modèle, borné à DISP_BOUNDS ; 1 sans rejeu suffisant (DISP_MIN matchs) ou C.MEANS_CORRECT éteint."""
+    if not C.MEANS_CORRECT or fam not in FAMILIES or _OFF[0]:
+        return 1.0
+    return disp_of((_boot(boot).get("fam") or {}).get(fam))
+
+
+def disp_of(a, min_n=DISP_MIN):
+    """Multiplicateur de dispersion d'un cumul du rejeu [n, Σ réel, Σ attendu, Σ réel², Σ réel x attendu, Σ attendu², Σ dispersion x attendu²] ; 1 sous
+    `min_n` matchs."""
+    if not a or len(a) < 7 or a[0] < min_n or a[2] <= 0 or a[5] <= 0 or a[6] <= 0:
+        return 1.0
+    n, sv, sm, svv, svm, smm, sam = a
+    k = sv / sm
+    resid = svv - 2 * k * svm + k * k * smm                      # Σ (réel - k x attendu)²
+    alpha = (resid - k * sm) / (k * k * smm)                     # binomiale négative : variance = moyenne + alpha x moyenne²
+    model = sam / smm                                            # dispersion moyenne du modèle (pesée comme les moyennes²)
+    if model <= 0:
+        return 1.0
+    return max(DISP_BOUNDS[0], min(DISP_BOUNDS[1], alpha / model)) if alpha > 0 else DISP_BOUNDS[0]
+
+
+def factor(fam, sport_key=None, data=None, boot=None):
+    """Facteur appliqué aux moyennes de la famille `fam` : réel / attendu, rapproché du point de départ (le rejeu, sinon 1) selon le nombre de matchs ;
+    puis, pour le championnat `sport_key`, son propre réel / attendu rapproché de celui de la famille (au départ : son écart au rejeu) ; borné ; 1 sans
+    données ou C.MEANS_CORRECT éteint."""
+    if not C.MEANS_CORRECT or fam not in FAMILIES or _OFF[0]:
         return 1.0
     data = data if data is not None else load()
-    k = 1.0
+    k0 = boot_factor(fam, None, boot)
+    k = k0
     acc = (data.get("fam") or {}).get(fam)
     if acc and acc[0] > 0 and acc[2] > 0:
         n, sv, sm = acc
-        k = 1 + (sv / sm - 1) * n / (n + PRIOR_N)
+        k = k0 + (sv / sm - k0) * n / (n + PRIOR_N)
+    if sport_key:
+        bf = boot_factor(fam, sport_key, boot)
+        k = k * (bf / k0 if k0 > 0 else 1.0)                     # écart du championnat au rejeu, avant ses vrais résultats
     lg = ((data.get("lg") or {}).get(fam) or {}).get(sport_key) if sport_key else None
     if lg and lg[0] > 0 and lg[2] > 0:
         n, sv, sm = lg
@@ -129,14 +207,23 @@ def factor(fam, sport_key=None, data=None):
 
 def scaled(pred, sport_key=None):
     """Prévision du modèle approfondi (strength.predict) avec les moyennes de stats corrigées pour le championnat `sport_key` (et celles du « match
-    moyen » de référence, pour que la comparaison au match moyen reste juste) ; la même si aucune correction ne s'applique."""
+    moyen » de référence, pour que la comparaison au match moyen reste juste) et la dispersion corrigée (dispersion : « al », « at ») ; la même si aucune
+    correction ne s'applique."""
     if not pred or not pred.get("stats"):
         return pred
     ks = {s: factor(s, sport_key) for s in pred["stats"] if s in FAMILIES}
-    if all(abs(k - 1) < 1e-9 for k in ks.values()):
+    ds = {s: dispersion(s) for s in ks}
+    if all(abs(k - 1) < 1e-9 for k in ks.values()) and all(abs(x - 1) < 1e-9 for x in ds.values()):
         return pred
+    return apply(pred, ks, ds)
+
+
+def apply(pred, ks, ds=None):
+    """Copie de la prévision `pred` aux moyennes multipliées par `ks` ({famille: facteur}) et dispersions par `ds` (celles du « match moyen » aussi)."""
+    ds = ds or {}
     out = copy.copy(pred)
-    out["stats"] = {s: (dict(v, h=v["h"] * ks[s], a=v["a"] * ks[s]) if s in ks else v) for s, v in pred["stats"].items()}
+    out["stats"] = {s: (dict(v, h=v["h"] * ks[s], a=v["a"] * ks[s], al=(v.get("al") or 0) * ds.get(s, 1.0), at=(v.get("at") or 0) * ds.get(s, 1.0))
+                        if s in ks else v) for s, v in pred["stats"].items()}
     base = pred.get("base")
     if base and base.get("stats"):
         out["base"] = dict(base, stats={s: (dict(v, h=v["h"] * ks[s], a=v["a"] * ks[s]) if s in ks else v) for s, v in base["stats"].items()})
@@ -161,6 +248,32 @@ def league_lines(fam, top=2, data=None):
         name = str
     return [f"{name(sk)} : {num(sv / n)} réels pour {num(sm / n)} attendus ({int(round(n))} matchs) → ×" + f"{k:.2f}".replace(".", ",")
             for _, sk, n, sv, sm, k in sorted(rows, reverse=True)[:top]]
+
+
+def var_ratio(a, min_n=DISP_MIN):
+    """Variance réelle autour de la moyenne corrigée / variance que le modèle prévoit (moyenne + dispersion x moyenne²) : ce que la correction de
+    dispersion rattrape, en clair (×1,10 : des écarts 10 % plus grands que prévu) ; None sous `min_n` matchs."""
+    if not a or len(a) < 7 or a[0] < min_n or a[2] <= 0 or a[5] <= 0:
+        return None
+    n, sv, sm, svv, svm, smm, sam = a
+    k = sv / sm
+    model = k * sm + (sam / smm) * k * k * smm
+    return (svv - 2 * k * svm + k * k * smm) / model if model > 0 else None
+
+
+def boot_note(fam, boot=None):
+    """« moyenne ×1,02 · variance ×1,15 » : ce que le rejeu a mesuré (affiché avec « 📚 rejeu » dans 📊 Marchés) ; '' sans rejeu suffisant."""
+    b = (_boot(boot).get("fam") or {}).get(fam)
+    if not b or b[0] < BOOT_MIN:
+        return ""
+    parts = []
+    k = boot_factor(fam, None, boot)
+    if abs(k - 1) >= 0.005:
+        parts.append("moyenne ×" + f"{k:.2f}".replace(".", ","))
+    v = var_ratio(b) if C.MEANS_CORRECT else None
+    if v is not None and abs(v - 1) >= 0.02:
+        parts.append("variance ×" + f"{v:.2f}".replace(".", ","))
+    return " · ".join(parts)
 
 
 def line(fam, data=None):

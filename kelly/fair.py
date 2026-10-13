@@ -218,7 +218,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         exp *= means.factor(kind, f.get("sk"))                  # corrigée par le réel des matchs réglés, par championnat (kelly/means.py)
         if not prematch.BOUNDS[kind][0] <= exp <= prematch.BOUNDS[kind][1]:
             continue
-        pmf = strength.nb_pmf(exp, alpha_eff(ALPHA0[kind], exp, stat_n(f, market)))
+        pmf = strength.nb_pmf(exp, alpha_eff(ALPHA0[kind] * means.dispersion(kind), exp, stat_n(f, market)))     # dispersion mesurée au rejeu
         for pt in LINES[kind]:
             for name in ("Over", "Under"):
                 out.append((market, name, pt, prematch.over_p(name, strength.p_over(pmf, pt)),
@@ -230,7 +230,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         exp *= means.factor(calib.family(market), f.get("sk"))  # corrigée par le réel des matchs réglés, par championnat (kelly/means.py)
         if not lo <= exp <= hi:
             continue
-        a = alpha_eff(alpha, exp, stat_n(f, market))
+        a = alpha_eff(alpha * means.dispersion(calib.family(market)), exp, stat_n(f, market))      # dispersion mesurée au rejeu
         pmf = strength.nb_pmf(exp, a)
         for pt in strength._lines_near(exp, a, lo=1):
             for name in ("Over", "Under"):

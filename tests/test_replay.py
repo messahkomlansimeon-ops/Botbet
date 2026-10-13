@@ -53,13 +53,13 @@ def test_no_future():
         seen.append(on)
         return real_build(matches, on, *a, **k)
     strength.build = spy
-    real_picks = replay.picks
+    real_predict = strength.predict
     used = []
-    replay.picks = lambda model, m, sk, on: used.append((model and model["last"], m["date"])) or real_picks(model, m, sk, on)
+    strength.predict = lambda model, h, a, on, *x, **k: used.append((model and model["last"], str(on))) or real_predict(model, h, a, on, *x, **k)
     try:
         res = replay.replay_div("E0", ms, "2025-10-01", "2026-04-01")
     finally:
-        strength.build, replay.picks = real_build, real_picks
+        strength.build, strength.predict = real_build, real_predict
     assert res["matches"] > 200 and res["picks"] > res["matches"] * 5, res
     assert all(last is None or last < day for last, day in used), "un modèle a vu le match qu'il prédit, ou un match d'après"
     assert len(seen) == len({d for d in seen}) and all((b - a).days >= C.REPLAY_STEP_DAYS for a, b in zip(seen, seen[1:])), seen
