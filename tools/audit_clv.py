@@ -25,10 +25,15 @@ from collections import defaultdict
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-for _k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
-    os.environ.pop(_k, None)                                          # jamais d'envoi ni de proxy depuis un outil d'audit
-os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="kelly-audit-data-"))      # kelly.store ne touche jamais au vrai data/
-os.environ.setdefault("SOURCES_CACHE_DIR", tempfile.mkdtemp(prefix="kelly-audit-cache-"))
+
+
+def isolate_env():
+    """À appeler (par main) AVANT le premier import de kelly : jamais d'envoi ni de proxy, kelly.store ne touche jamais au vrai data/ ni au vrai cache.
+    Pas à l'import du module : d'autres outils (audit_replay) l'importent et lisent, eux, le cache des sources."""
+    for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
+        os.environ.pop(k, None)
+    os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-audit-data-")
+    os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-audit-cache-")
 
 MIN_N = 30                    # lignes au minimum pour qu'une moyenne soit lue comme une mesure
 EPS = 1e-4
@@ -171,8 +176,17 @@ def section_c(rows):
         g = r.get("gap") or {}
         out.append(f"     - {r.get('event')} / {r.get('pick')} : prix marché {r.get('odds')}, 1xBet {r.get('xodds')}, edge à la prise {g.get('edge')}, "
                    f"edge contre la clôture {r.get('gap_edge_close')} ({r.get('gap_close_src')}), résultat {r.get('result')}")
-    out.append("   Lecture : si le gain vient de ces lignes, il vient du retard de 1xBet, pas du modèle. Pour savoir si 1xBet a seulement ajusté tard,")
-    out.append("   il faudrait aussi sa propre clôture : elle n'est PAS collectée aujourd'hui (Étape 0b, feu vert séparé).")
+    xc = [r for r in rows if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r.get("xodds")]
+    fresh = [r for r in xc if (r["xclose"].get("age_min") is not None and r["xclose"]["age_min"] <= 90)]
+    out.append(f"   Prix 1xBet de clôture (champ xclose, lu dans le cache, collecté seulement depuis l'Étape 0b) : {len(xc)} lignes, dont {len(fresh)} avec un relevé "
+               "de moins de 90 min avant la clôture.")
+    if xc:
+        out.append(f"   CLV 1xBet (prix 1xBet pris / prix 1xBet de clôture), relevés ≤ 90 min : {fmt_stats([math.log(r['xodds'] / r['xclose']['odds']) for r in fresh], [r.get('id') for r in fresh])}")
+    src = _count(str(r.get("prob_src")) for r in rows)
+    out.append("   Avis des books à la prise (champ prob_src) : " + ", ".join(f"{k} {v}" for k, v in sorted(src.items())) +
+               "   (« None » = ligne écrite avant que ce champ existe, ou sans avis)")
+    out.append("   Lecture : si le gain vient de ces lignes, il vient du retard de 1xBet, pas du modèle. Battre la clôture 1xBet sans battre Pinnacle = 1xBet a")
+    out.append("   ajusté tard, pas un pari où le modèle avait raison.")
     return out
 
 
@@ -236,22 +250,28 @@ def section_d(log):
     return out
 
 
+def _pace(label, rs):
+    days = sorted({r.get("date") for r in rs if r.get("date")})
+    if not rs:
+        return f"   {label} : aucune ligne réglée."
+    per = len(rs) / max(1, len(days))
+    return (f"   {label} : {len(rs)} réglées sur {len(days)} jour(s) = {per:.1f} par jour ; {TARGET_N} demanderaient ≈ {TARGET_N / per:.0f} jours "
+            f"({TARGET_N / per / 30:.1f} mois) à ce rythme.")
+
+
 def section_e(rows, log):
     settled = [r for r in rows if r.get("result") in ("win", "loss")]
-    days = sorted({r.get("date") for r in settled if r.get("date")})
-    out = ["E. RYTHME RÉEL"]
-    if days:
-        per = len(settled) / len(days)
-        out.append(f"   Suivi : {len(settled)} lignes réglées sur {len(days)} jours ({days[0]} à {days[-1]}) = {per:.1f} par jour ; "
-                   f"{TARGET_N} lignes demanderaient ≈ {TARGET_N / per:.0f} jours ({TARGET_N / per / 30:.1f} mois) à ce rythme.")
+    out = ["E. RYTHME RÉEL (ce qui compte pour la significativité, ce sont les PARIS DE VALEUR, pas les candidats suivis)",
+           _pace("Candidats suivis (envoyés + fantômes)", settled),
+           _pace("Paris de valeur envoyés (sent)", [r for r in settled if r.get("sent")]),
+           _pace("Paris réellement notés par toi (played)", [r for r in settled if r.get("played")]),
+           _pace("Paris sharpgap (1xBet en retard)", [r for r in settled if r.get("sharpgap")])]
     ldays = sorted({r.get("date") for r in log if r.get("result") in ("win", "loss") and r.get("date")})
     lset = [r for r in log if r.get("result") in ("win", "loss")]
     if ldays:
-        per = len(lset) / len(ldays)
-        out.append(f"   Journal d'ensemble : {len(lset)} lignes réglées sur {len(ldays)} jours = {per:.0f} par jour ; mais plusieurs lignes d'un même match sont "
-                   "corrélées : le nombre de MATCHS distincts compte davantage : " + str(len({r.get('id') for r in lset})) + ".")
-    if not days and not ldays:
-        out.append("   Aucune ligne réglée.")
+        out.append(f"   Journal d'ensemble (pas des paris : tous les pronostics regardés) : {len(lset)} lignes réglées sur {len(ldays)} jours, mais "
+                   f"{len({r.get('id') for r in lset})} MATCHS distincts seulement (les lignes d'un match sont corrélées).")
+    out.append(f"   Seuil de référence : {TARGET_N} paris de valeur réglés au minimum (audit du 13/10, bas de la fourchette 1 300 à 2 600).")
     return out
 
 
@@ -272,6 +292,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--data-dir", required=True, help="dossier qui contient kelly.db (copié, jamais modifié)")
     args = ap.parse_args(argv)
+    isolate_env()
     rows, log = load(args.data_dir)
     if not rows and not log:
         print("Aucune donnée (kelly.db absent ou vide).", file=sys.stderr)

@@ -86,7 +86,7 @@ def test_empty():
         make_db(d, [], [])
         rows, lg = A.load(d)
         txt = A.report(rows, lg)                            # base vide : aucun plantage
-        assert "Aucune ligne réglée" in txt
+        assert "aucune ligne réglée" in txt
         assert A.main(["--data-dir", d]) == 1           # rien à rapporter : message sur stderr, code 1
     with tempfile.TemporaryDirectory() as d:
         assert A.main(["--data-dir", d]) == 1

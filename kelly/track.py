@@ -7,6 +7,7 @@ le marché final, quel que soit le résultat.
 """
 import math
 import os
+import sys
 from datetime import date, datetime, timedelta, timezone
 
 from . import combos as CB, config as C, ensemble, learn, money, sharpgap, store
@@ -179,6 +180,23 @@ def ranks(combos):
     return out
 
 
+def _audit_close(r, c):
+    """Champs de l'audit du CLV (tools/audit_clv.py), écrits à la clôture sans AUCUNE requête en plus : `close_book` = l'avis des books de référence à la
+    clôture (proba démarginée, source, nombre de books sharp), et `xclose` = le prix 1xBet de ce pari lu dans le CACHE DISQUE (xbet.cached_cell, jamais
+    de réseau) avec l'âge du relevé en minutes : un prix plus vieux que la clôture n'est pas une clôture, l'audit lit l'âge. Ne lève jamais."""
+    try:
+        if c.get("prob_book") is not None:
+            r["close_book"] = {"p": round(c["prob_book"], 4), "src": c.get("prob_src"), "n_sharp": c.get("n_sharp")}
+        if r.get("xref"):
+            from .sources import state, xbet
+            cell = xbet.cached_cell(r["xref"])
+            if cell is not None:
+                age = round((state.clock() - cell.at) / 60) if isinstance(cell.at, (int, float)) else None
+                r["xclose"] = {"odds": cell.cf, "age_min": age, "susp": bool(cell.blocked)}
+    except Exception as e:                          # noqa: BLE001 - un champ d'audit ne bloque jamais une clôture
+        print(f"[suivi] champs d'audit de clôture ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+
+
 def close(rows, closing_picks, now):
     """Note la clôture des paris suivis à partir des sélections recalculées."""
     by_key = {c["key"]: c for c in closing_picks}
@@ -190,6 +208,7 @@ def close(rows, closing_picks, now):
         r["close_odds"], r["close_prob"] = c["odds"], round(c["prob"], 4)
         r["closed_at"] = now.isoformat(timespec="minutes")
         r["clv"] = round(math.log(r["odds"] / c["odds"]), 4)
+        _audit_close(r, c)
         s = ensemble.sharp_of(c) if r.get("sharpgap") and r.get("xodds") else None
         if s:                                               # pari « 1xBet en retard » : sa cote contre la clôture sans marge du book de référence
             r["gap_edge_close"], r["gap_close_src"] = sharpgap.close_edge(r["xodds"], s[0]), s[1]
