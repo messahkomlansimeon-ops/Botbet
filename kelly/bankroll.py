@@ -68,7 +68,7 @@ def played_gain(x):
         ratio = void_ratio(x)
     else:
         ratio = x.get("odds_final", x["odds"]) / x["odds"]
-    return p["stake"] * (p["odds"] * ratio - 1)
+    return float(round(p["stake"] * (p["odds"] * ratio - 1)))      # au franc près, comme le paie 1xBet (plus de « 1 037,5 FCFA » ni de capital à centimes)
 
 def apply_results(items, played_only=False):
     """Met à jour l'ancienne bankroll en unités (interne, jamais affichée) avec les paris réglés non encore comptés (marqués « counted »). Un

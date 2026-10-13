@@ -7,6 +7,7 @@ import atexit
 import fcntl
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -36,6 +37,26 @@ SIGNALS = []                 # signaux reçus (le journal s'écrit hors du gesti
 
 def log(msg, err=False):
     print(f"[termux {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}Z] {msg}", file=sys.stderr if err else sys.stdout, flush=True)
+
+
+LOG_MAX = 5_000_000              # journal du runner (KELLY_LOG, logs/termux.log) au-delà de 5 Mo : copié en .1 puis vidé (rotate_log)
+
+
+def rotate_log(path=None, limit=LOG_MAX):
+    """Journal trop gros : copié en « .1 » (l'ancien .1 est remplacé) puis vidé sur place. Le script kelly l'ouvre en ajout (>>) : le runner continue
+    d'écrire au début du fichier vidé. -> vrai si le journal a été tourné. Ne lève jamais."""
+    path = path or os.environ.get("KELLY_LOG")
+    if not path:
+        return False
+    try:
+        if os.path.getsize(path) <= limit:
+            return False
+        shutil.copyfile(path, path + ".1")
+        with open(path, "r+", encoding="utf-8") as f:
+            f.truncate(0)
+        return True
+    except OSError:
+        return False
 
 
 def _safe_log(msg):
@@ -349,7 +370,8 @@ class Runner:
             STOP.wait(self.tick)
 
     def _pass(self):
-        """Un tour de la boucle principale : surveille --serve, puis lance les passages dus (--daily, --track, --xbet…)."""
+        """Un tour de la boucle principale : journal tourné s'il est trop gros, surveille --serve, puis lance les passages dus (--daily, --track…)."""
+        rotate_log()
         self.serve.check()
         now, epoch = datetime.now(timezone.utc), time.time()
         if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()) and self.state["daily_try_day"] != str(now.date()):

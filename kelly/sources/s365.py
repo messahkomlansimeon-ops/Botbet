@@ -54,6 +54,7 @@ NAME = "s365"
 LABEL = "365scores"
 FILE = "s365_matches.json"
 HOST = "webws.365scores.com"
+http.require_proxy(HOST)                # jamais en direct : sans proxy, aucune requête vers 365scores (ton IP n'est jamais montrée)
 BASE = f"https://{HOST}/web"
 PARAMS = (("appTypeId", "5"), ("langId", "1"), ("timezoneName", "UTC"), ("userCountryId", "21"))
 SPORT_FOOTBALL = 1
@@ -806,7 +807,8 @@ def _via_proxy(settle=False):
     """Les requêtes 365scores de ce bloc passent par le proxy Webshare de 1xBet (même fichier XBET_PROXY, même session collante que le dernier
     relevé 1xBet qui a répondu), dans le plafond C.S365_MONTH_MB, compté dans data/s365_usage.json. Jamais de changement de session pour
     contourner un refus : un 403/429 coupe la source 24 h (http.fetch). Donne None si tout est prêt, sinon la raison de ne rien lire (proxy
-    introuvable : jamais de connexion directe, sauf S365_PROXY=0 ; plafond du mois atteint). Le mot de passe du proxy n'est jamais affiché."""
+    introuvable ou injoignable : jamais de connexion directe ; plafond du mois atteint). Le mot de passe du proxy n'est jamais affiché. S365_PROXY=0
+    (tests seulement, C.SANDBOX) : réseau simulé lu sans proxy."""
     if not C.S365_PROXY:
         yield None
         return
@@ -816,7 +818,10 @@ def _via_proxy(settle=False):
     if url and isinstance(saved, int) and base is not None and base <= saved < base + xbet.MAX_SESSION_SPAN and xbet.with_session(url, saved):
         url = xbet.with_session(url, saved)
     if not url:
-        yield "proxy introuvable (XBET_PROXY) : 365scores n'est pas lu en direct (S365_PROXY=0 pour la connexion directe)"
+        yield "proxy introuvable (XBET_PROXY) : 365scores n'est jamais lu en direct"
+        return
+    if not http.proxy_alive(url):                     # proxy injoignable il y a peu (ou adresse introuvable) : rien n'est tenté, rien n'attend
+        yield f"le proxy ne répond pas (nouvel essai dans {http.PROXY_DOWN_S // 60} min)"
         return
     limit = C.S365_MONTH_MB * 1e6 * (1.0 if settle else 1.0 - SETTLE_RESERVE)      # le règlement des paris peut aller jusqu'au bout ; le reste garde sa réserve
     used = usage()["bytes"]

@@ -583,6 +583,20 @@ def test_unexpected_error_never_stops_the_loops():
     print("ok  erreur imprévue dans la boucle ou dans le suivi des matchs : notée, et la boucle continue")
 
 
+def test_log_rotation():
+    """Journal du runner au-delà de LOG_MAX : copié en .1 puis vidé sur place ; en dessous, rien ; sans chemin ou fichier absent : rien, jamais d'erreur."""
+    d = tempfile.mkdtemp(prefix="kelly-logrot-")
+    path = os.path.join(d, "termux.log")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("x" * 120)
+    assert not R.rotate_log(path, limit=200) and os.path.getsize(path) == 120
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("y" * 100)
+    assert R.rotate_log(path, limit=200) and os.path.getsize(path) == 0 and open(path + ".1").read() == "x" * 120 + "y" * 100
+    assert not R.rotate_log(os.path.join(d, "absent.log"), limit=1) and not R.rotate_log(None)
+    print("ok  journal trop gros : copié en .1 puis vidé ; petit, absent ou sans chemin : rien")
+
+
 def main():
     test_reentrant_scope()
     test_daily_lock()
@@ -598,6 +612,7 @@ def main():
     test_run_cmd_timeout_cwd()
     test_watch_thread_runs_during_long_task()
     test_unexpected_error_never_stops_the_loops()
+    test_log_rotation()
     test_loop_supervises_during_task()
     test_gitignore()
     print("TOUS LES TESTS DU RUNNER PASSENT")

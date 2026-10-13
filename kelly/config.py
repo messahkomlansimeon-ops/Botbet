@@ -27,6 +27,11 @@ def _bool(name, default=False):
     return default if not v else v in ("1", "true", "oui", "yes")
 
 
+# Tests et --sample : dossier de données à part (DATA_DIR), réseau simulé. Jamais sur le téléphone. Seul ce bac à sable peut lire 1xBet / 365scores
+# sans proxy (S365_PROXY=0, XBET_DIRECT=1) : sur le téléphone, ils passent TOUJOURS par le proxy (13/10 : « ne jamais révéler mon IP »).
+SANDBOX = bool(os.environ.get("DATA_DIR"))
+
+
 def _shares(name, default):
     """« daily=0.6,closing=0.4 » -> dict ; entrée invalide ignorée."""
     out = dict(default)
@@ -188,7 +193,8 @@ OUTBOX_MAX_HOURS = _int("OUTBOX_MAX_HOURS", 36)   # un message resté en attente
 SCAN_SECONDS = _int("SCAN_SECONDS", 150)          # relevé gratuit /events de toutes les ligues
 FAIR_SECONDS = _int("FAIR_SECONDS", 300)          # calcul des pronostics de tous les matchs du jour (championnats 1xBet compris)
 SOURCES_SECONDS = _int("SOURCES_SECONDS", 720)    # téléchargements des stats gratuites (le reste vient du cache) : partagé entre les sources, les ligues qui jouent bientôt d'abord
-SOURCES_CACHE_KEEP_DAYS = _int("SOURCES_CACHE_KEEP_DAYS", 45)   # .cache/sources : une entrée ni téléchargée ni relue depuis ce nombre de jours est effacée
+SOURCES_CACHE_KEEP_DAYS = _int("SOURCES_CACHE_KEEP_DAYS", 10)   # .cache/sources : une entrée ni téléchargée ni relue depuis ce nombre de jours est effacée
+                                                                # (10 : les CSV et pages relus chaque matin restent ; 45 avant le 13/10, ~1 Go sur le téléphone)
 # Pronostics Kelly sans cote de bookmaker (kelly/fair.py) : proba du modèle + « cote juste » = 1 / proba.
 FAIR_MAX = _int("FAIR_MAX", 10)                   # pronostics détaillés dans le message du matin (5 si des combinés existent)
 FAIR_TRACK = _int("FAIR_TRACK", 12)               # pronostics suivis par jour pour la calibration (data/fair.json), montrés le matin
@@ -250,7 +256,7 @@ XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir 
 # seulement (robots.txt, identité KellyBot déclarée, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
 # Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
 S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
-S365_PROXY = _bool("S365_PROXY", True)            # 1 : par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct ; 0 : connexion directe
+S365_PROXY = _bool("S365_PROXY", True) if SANDBOX else True     # toujours par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct (0 : tests seulement)
 S365_MONTH_MB = _float("S365_MONTH_MB", 200)      # plafond mensuel des données 365scores passées par le proxy (1xBet : XBET_MONTH_MB à part) ; 200 : équipes du live (10/10/2026)
 S365_GAMES_PER_RUN = _int("S365_GAMES_PER_RUN", 20)   # statistiques de match lues par passage horaire (0 = désactivé)
 S365_LISTS_PER_RUN = _int("S365_LISTS_PER_RUN", 4)    # listes de résultats (ou pages plus anciennes) lues par passage
@@ -294,12 +300,12 @@ XBET_ENABLED = _bool("XBET_ENABLED", True)
 XBET_SECONDS = _int("XBET_SECONDS", 1200)           # temps maximal du relevé 1xBet du matin (3 s entre requêtes)
 XBET_MAX_MATCHES = _int("XBET_MAX_MATCHES", 150)    # matchs relevés au plus (les mieux classés d'abord) : ~2 Mo
 # Proxy de l'utilisateur pour 1xBet (celui de scrap_stat) : les relevés ne partent jamais de la connexion du compte 1xBet. XBET_PROXY
-# (variable d'environnement), sinon la ligne XBET_PROXY= de XBET_PROXY_FILE. Introuvable : pas de relevé (jamais en direct), sauf
-# XBET_DIRECT=1.
+# (variable d'environnement), sinon la ligne XBET_PROXY= de XBET_PROXY_FILE. Introuvable : pas de relevé, jamais en direct (XBET_DIRECT=1 :
+# tests seulement, C.SANDBOX).
 # Tests et --sample (DATA_DIR réglé) : jamais le vrai fichier de la machine, donc aucun relevé réel (XBET_PROXY pour un essai manuel).
 XBET_PROXY_FILE = os.environ.get("XBET_PROXY_FILE") or (os.path.join(os.environ["DATA_DIR"], "sofa.env") if os.environ.get("DATA_DIR")
                                                          else os.path.expanduser("~/.config/scrap_stat/sofa.env"))
-XBET_DIRECT = _bool("XBET_DIRECT", False)
+XBET_DIRECT = _bool("XBET_DIRECT", False) if SANDBOX else False
 # Partenaire des codes coupon : 1 = version internationale, celle de l'appli mobile 1xBet de l'utilisateur (son propre ticket y est
 # rattaché) ; le site 1xbet.ci (286) relit aussi ces codes. Un code créé pour 286 répond « code incorrect » dans l'appli.
 XBET_COUPON_PARTNER = _int("XBET_COUPON_PARTNER", 1)
@@ -416,6 +422,10 @@ WATCH_DANGER_P = _float("WATCH_DANGER_P", 0.25)    # « ⚠️ pari en danger »
 WATCH_QUIET = _bool("WATCH_QUIET", False)          # 0 (défaut) : le suivi des matchs de tes paris ignore les heures calmes (QUIET_HOURS) ; 1 : gardé pour le réveil comme les autres alertes
 WATCH_RECAP = _bool("WATCH_RECAP", True)           # 🌙 bilan de la soirée, une fois par jour
 WATCH_RECAP_HOUR = _int("WATCH_RECAP_HOUR", 22)    # heure UTC à partir de laquelle le bilan part (quand plus aucun match de tes tickets n'est en cours ; 3 h au plus tard)
+WATCH_KICKOFF = _bool("WATCH_KICKOFF", True)       # 🟢 coup d'envoi de chaque match de tes tickets (dans le message groupé du passage, avec les paris et leurs coupons)
+WATCH_FM_BACKUP = _bool("WATCH_FM_BACKUP", True)   # 365scores muet (proxy en panne, 365scores en panne ou bloqué) : scores, mi-temps et fins de match lus sur FotMob, en direct
+WATCH_FM_LEAGUES = _int("WATCH_FM_LEAGUES", 8)     # pages de championnat FotMob lues au plus par passage de secours (~200 Ko chacune) : celles de tes matchs en cours d'abord
+WATCH_FM_TTL_S = _int("WATCH_FM_TTL_S", 480)       # une page de championnat FotMob relue au plus toutes les 8 min (une fois par passage)
 LIVE_OPP_DAY = _int("LIVE_OPP_DAY", 3)              # opportunités live annoncées au plus par jour
 LIVE_OPP_GAP_H = _float("LIVE_OPP_GAP_H", 2)        # ... et au moins N heures entre deux
 LIVE_OPP_GATE = _int("LIVE_OPP_GATE", 8)            # contrôle léger (365scores) : au moins N matchs en cours dans la fenêtre avant de lire 1xBet (~500 Ko)

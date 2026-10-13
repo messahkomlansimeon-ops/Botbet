@@ -208,7 +208,7 @@ def test_real_combo_gain():
     mini["played"] = {"odds": 4.5, "stake": 1000}
     assert abs(bankroll.played_gain(mini) - 1000 * (4.5 - 1)) < 1e-6
     mini_void = dict(mini, legs=[dict(mini["legs"][0], result="void")] + [dict(l, result="win") for l in mini["legs"][1:]])        # jambe annulée : cote recalculée sur les cotes exactes des jambes
-    assert abs(bankroll.played_gain(mini_void) - 1000 * (4.5 * (1.55 * 1.55) / (1.6 * 1.55 * 1.55) - 1)) < 1e-6
+    assert abs(bankroll.played_gain(mini_void) - round(1000 * (4.5 * (1.55 * 1.55) / (1.6 * 1.55 * 1.55) - 1))) < 1e-6      # au franc près
     # bilan en unités d'un combiné de bets.json noté : à la cote notée (E12)
     assert settle._gain({"stake": 2, "result": "win", "odds": 6.0, "played": {"odds": 5.0, "stake": 4}}) == 16.0
     assert settle._gain({"stake": 2, "result": "win", "odds": 6.0}) == 10.0
@@ -384,7 +384,7 @@ def test_morning_results():
     assert "Pari du jour — cote 1xBet 1,50" in text(base | {"xodds": 1.5})
     played_ = base | {"xodds": 1.5, "played": {"odds": 1.55, "stake": 10}}
     t = text(played_)
-    assert "Pari du jour — cote 1,55 chez 1xBet" in t and "+5,5 FCFA" in t and " u" not in t, t       # 10 x (1,55 - 1), tout en FCFA
+    assert "Pari du jour — cote 1,55 chez 1xBet" in t and "+6 FCFA" in t and " u" not in t, t       # 10 x (1,55 - 1) = 5,5 : au franc près, tout en FCFA
     budget = base | {"xodds": 1.5, "stake": 2000, "cur": "FCFA"}
     assert "cote 1xBet 1,50" in text(budget) and "FCFA" not in text(budget), text(budget)            # mise conseillée seule : pas noté, aucun montant
     assert "+1 000 FCFA" in text(budget | {"played": {"odds": 1.5, "stake": 2000}}), text(budget | {"played": {"odds": 1.5, "stake": 2000}})

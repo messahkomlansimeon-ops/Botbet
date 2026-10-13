@@ -16,7 +16,7 @@ fair_combos.json).
 import math
 import re
 import unicodedata
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import bankroll, combos as CB, config as C, fair, fmt, money as M, store, telegram, track
 from .telegram import Html
@@ -373,6 +373,71 @@ def note(t, odds, stake, now=None, ref_at=None):
     elif gap < -0.15:
         lines.append("⚠️ Cote bien plus basse que prévu : vérifie la cote saisie, ou les cotes de 1xBet ont bougé.")
     return "\n".join(lines)
+
+
+RESULT_WORDS = {"gagne": "win", "gagnant": "win", "passe": "win", "perdu": "loss", "perdant": "loss", "rate": "loss", "rembourse": "void",
+                "annule": "void", "nul": "void"}
+SETTLE_HELP = ("Exemple : réglé vm3 gagné 12/10 (combi sur mesure m3 du 12/10, gagné). Résultats : gagné, perdu, remboursé. Sans date : le pari du "
+               "jour, sinon le plus récent pas encore réglé.")
+
+
+def _day_arg(a, today):
+    """« 12/10 », « 12/10/2026 », « 2026-10-12 », « hier », « aujourd'hui » -> « AAAA-MM-JJ » ; None si `a` n'est pas une date."""
+    w = norm(a)
+    t = date.fromisoformat(str(today)[:10])
+    if w == "hier":
+        return str(t - timedelta(days=1))
+    if w in ("aujourd'hui", "aujourdhui", "auj"):
+        return str(t)
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", w)
+    try:
+        if m:
+            y = int(m.group(3)) if m.group(3) else t.year
+            d = date(y + 2000 if y < 100 else y, int(m.group(2)), int(m.group(1)))
+            return str(d if m.group(3) or d <= t else date(d.year - 1, d.month, d.day))
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", w):
+            return str(date.fromisoformat(w))
+    except ValueError:
+        return None
+    return None
+
+
+def settle_command(args, day, now=None):
+    """« réglé vm3 gagné 12/10 » : résultat d'un pari NOTÉ que le règlement gratuit du matin ne trouve pas (match d'une petite ligue sans stats, score
+    introuvable). Seulement un pari noté, pas encore réglé (ou « non vérifiable ») : gagné (toutes ses jambes encore ouvertes passent gagnées : le gain
+    est payé à la cote notée), perdu, ou remboursé (mise rendue). Marqué « manual ». Le capital et le bilan le comptent aussitôt."""
+    if not args:
+        return SETTLE_HELP
+    res = next((RESULT_WORDS[norm(a)] for a in args if norm(a) in RESULT_WORDS), None)
+    when = next((_day_arg(a, day) for a in args if _day_arg(a, day)), None)
+    what = next((a for a in args if norm(a) not in RESULT_WORDS and not _day_arg(a, day)), None)
+    if not what or not res:
+        return SETTLE_HELP
+    t = find(what, when or day)
+    if t is None:
+        return f"« {what} » inconnu. " + SETTLE_HELP
+    if isinstance(t, str):
+        return t
+    if when and str(t.item.get("date"))[:10] != when:
+        return f"Pas de « {what} » noté le {fmt.fr_day(when)}. " + SETTLE_HELP
+    if not t.item.get("played") or t.item.get("skipped"):
+        return f"Le {t.label} n'est pas noté comme joué : rien à régler (seuls tes paris notés comptent)."
+    if t.item.get("result") not in (None, "unknown"):
+        return f"Le {t.label} est déjà réglé ({t.item['result']}) : rien à changer."
+    t.item["result"] = res
+    t.item["manual"] = (now or datetime.now(timezone.utc)).isoformat(timespec="minutes")
+    if res == "win":
+        for leg in t.item.get("legs") or []:
+            if leg.get("result") in (None, "unknown"):
+                leg["result"] = "win"
+    t.save()
+    M._cap_memo.clear()
+    g = M.gain(t.item)
+    word = {"win": "gagné", "loss": "perdu", "void": "remboursé"}[res]
+    out = f"✅ Réglé à la main · {t.label} : {word}" + (f" → {M.signed(round(g), t.item.get('cur'))}" if g else "")
+    if M.capital_mode():
+        out += f"\n💼 Capital : {M.money(M._r(M.capital_state()['capital']))}"
+    return out
 
 
 PAGE = 12            # paris par page de « Mes paris » : une longue liste part en plusieurs messages, chacun avec son en-tête, son pied et ses boutons

@@ -19,7 +19,8 @@ case "$1" in
             else
                 echo "⚠️ termux-wake-lock introuvable : pkg install termux-tools, ou touche « Acquire wakelock » dans la notification Termux."
             fi
-            nohup python -u termux_runner.py > "$LOG" 2>&1 &
+            [ -f "$LOG" ] && mv -f "$LOG" "$LOG.1"     # le journal d'avant est gardé (kelly logs-avant) : une panne reste lisible après un redémarrage
+            KELLY_LOG="$LOG" nohup python -u termux_runner.py >> "$LOG" 2>&1 &
             sleep 3
             if running; then echo "🚀 Kelly démarrée en arrière-plan."; else echo "❌ Kelly n'a pas démarré : kelly logs"; fi
         fi
@@ -48,6 +49,10 @@ case "$1" in
         ;;
     logs)
         tail -n 50 -f "$LOG"
+        ;;
+    logs-avant)
+        # journal du lancement précédent (avant le dernier kelly start / restart / update)
+        if [ -f "$LOG.1" ]; then tail -n 80 "$LOG.1"; else echo "Pas de journal précédent."; fi
         ;;
     rejeu|replay)
         # rejoue la saison passée (CSV football-data déjà en cache, aucune requête) ; Kelly prévient sur Telegram à la fin
@@ -103,7 +108,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|status|doctor|suivi|rejeu|rejeu-log}"
+        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|rejeu|rejeu-log}"
         exit 1
         ;;
 esac

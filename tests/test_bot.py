@@ -2410,14 +2410,14 @@ def test_played_bets():
         bankroll.apply_results([r for r in rows if r.get("played")], played_only=True)
         bankroll.apply_results(fc, played_only=True)
         n, total, staked = money.result(bets, rows, fc)
-        assert n == 3 and abs(total - (3 * (5.4 - 1) - 10 + 1.0 * (5.0 - 1))) < 1e-6 and staked == 14.0, (n, total, staked)
+        assert n == 3 and abs(total - (round(3 * (5.4 - 1)) - 10 + round(1.0 * (5.0 - 1)))) < 1e-6 and staked == 14.0, (n, total, staked)   # gains au franc près
         assert bankroll.load()["bankroll"] == 1000.0 and not bankroll.load().get("real"), bankroll.load()
         bankroll.apply_results(bets["combos"])
         assert bankroll.load()["bankroll"] == 1000.0, "un pari n'est compté qu'une fois"
         store.save("bets.json", bets)
         assert "déjà réglé" in app.handle_command("/joue sur 6")
         res = app.combo_result(bets["combos"][0], {})
-        assert "cote 5,40 chez 1xBet" in res and "+13,2 FCFA" in res and " u" not in res, res
+        assert "cote 5,40 chez 1xBet" in res and "+13 FCFA" in res and " u" not in res, res        # 3 x 4,4 = 13,2 : au franc près
         simple = settle.bilan(bets, rows=rows)
         assert "2 gagnés sur 3" in simple and "Cotes de 1xBet : +6,6 % en moyenne" in simple, simple
         assert "Joués chez 1xBet" not in simple and "+7 FCFA · 2 gagnés sur 3" in simple, simple             # le résultat en argent est donné une seule fois

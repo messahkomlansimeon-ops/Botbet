@@ -404,10 +404,10 @@ def test_played_gain_no_rounding_error_when_all_legs_win():
     for real in (True, False):
         x = fair_combo(("win", "win", "void", "win"), real=real)
         assert close(bankroll.void_ratio(x), 1 / 1.55), real
-        assert close(bankroll.played_gain(x), 1000 * (5.77 / 1.55 - 1))
+        assert close(bankroll.played_gain(x), round(1000 * (5.77 / 1.55 - 1)))          # au franc près
     # cotes de jambes différentes (1xBet) : le total de la ligne est arrondi, le ratio ne dépend pas de son arrondi
     x = fair_combo(("win", "void", "win", "win"), odds_=(1.61, 1.37, 2.03, 1.19))
-    assert close(bankroll.void_ratio(x), 1 / 1.37) and close(bankroll.played_gain(x), 1000 * (x["played"]["odds"] / 1.37 - 1))
+    assert close(bankroll.void_ratio(x), 1 / 1.37) and close(bankroll.played_gain(x), round(1000 * (x["played"]["odds"] / 1.37 - 1)))
     # perdu, aucune jambe gagnée, push : inchangé
     assert bankroll.played_gain(dict(fair_combo(("win",) * 4), result="loss")) == -1000
     assert bankroll.played_gain(fair_combo(("void",) * 4)) == 0.0

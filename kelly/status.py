@@ -305,7 +305,10 @@ def watch_lines(now=None):
     out = []
     if not h.get("ok"):
         since = h.get("since") or h["at"]
-        out.append(f"❌ En panne depuis {since[11:16].replace(':', 'h')} UTC : {h.get('why') or 'raison inconnue'} · {games}")
+        if h.get("backup"):                          # 365scores muet, le secours FotMob suit tes matchs (scores seulement)
+            out.append(f"🛟 Secours FotMob depuis {since[11:16].replace(':', 'h')} UTC (365scores : {h.get('why') or 'raison inconnue'}) · {games}")
+        else:
+            out.append(f"❌ En panne depuis {since[11:16].replace(':', 'h')} UTC : {h.get('why') or 'raison inconnue'} · {games}")
     elif n and now - at > timedelta(minutes=25):
         out.append(f"❌ Dernier passage il y a {int((now - at).total_seconds() // 60)} min · {games}")
     else:

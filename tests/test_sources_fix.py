@@ -920,7 +920,7 @@ def test_stats_cache_atomic_and_sources_cache_pruned():
         finally:
             sources.SOURCES = saved
         assert not os.path.exists(os.path.join(cache, http._key(young_url) + ".json")) and "effacée" in err, err
-        assert C.SOURCES_CACHE_KEEP_DAYS == 45
+        assert C.SOURCES_CACHE_KEEP_DAYS == 10
 
 
 # --- 14. cote de clôture gratuite : même dé-margeage que la proba à la prise --------------------------------------------------------

@@ -1484,6 +1484,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
 • <i>backup</i> (ou <i>sauvegarde</i>) : recevoir la base de données kelly.db directement ici pour la sauvegarder sur ton PC
+• <i>réglé vm3 gagné 12/10</i> : donner toi-même le résultat d'un ticket noté que Kelly ne trouve pas (petite ligue sans stats) : gagné, perdu ou remboursé
 
 <i>Les anciennes commandes marchent toujours : /top, /combi, /bilan, /joue, /match, /analyse, /stats, /monde, /ligues, /etat, /status, /live, /bank, /backup.</i>""")
 
@@ -1941,6 +1942,10 @@ def _handle_command(text):
         return money.max_loss_command(args)
     if cmd == "/objectif":
         return money.goal_command(args)
+    if cmd in ("/regle", "/reglé", "/régler", "/regler"):     # « réglé vm3 gagné 12/10 » : un ticket noté que le règlement gratuit ne trouve pas
+        now_ = now_utc()
+        kday = now_.date() if now_.hour >= C.DAY_END_HOUR else now_.date() - timedelta(days=1)
+        return played.settle_command(args, str(today.get("day") or kday)[:10])
     if cmd in ("/joue", "/joué", "/jouer"):
         now_ = now_utc()
         kday = now_.date() if now_.hour >= C.DAY_END_HOUR else now_.date() - timedelta(days=1)

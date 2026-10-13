@@ -59,6 +59,7 @@ kelly <commande>
 - `kelly stop` : Arrête proprement le runner et tous les processus python du bot.
 - `kelly restart` : Arrête puis redémarre le runner.
 - `kelly logs` : Suit les logs en temps réel (`tail -f logs/termux.log`).
+- `kelly logs-avant` : Le journal du lancement précédent (gardé à chaque `kelly start` / `restart` / `update` ; au-delà de 5 Mo, le journal est aussi tourné en `termux.log.1`).
 - `kelly status` : Vérifie si le runner et le bot sont actifs (affiche les PIDs).
 
 ### Le wrapper (`$PREFIX/bin/kelly`)

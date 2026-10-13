@@ -39,7 +39,7 @@ LIST_TEXTS = ("mes paris", "mes paris du jour")                                 
 # Kristiansand » sont des équipes) ; clés sans accents ni casse (played.norm)
 WORDS_ARGS = {"live": "/live", "bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "joue": "/joue", "jouer": "/joue", "noter": "/joue",
               "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi", "budget": "/budget",
-              "monde": "/monde", "capital": "/capital", "objectif": "/objectif", "perte": "/perte", "limite": "/perte"}
+              "monde": "/monde", "capital": "/capital", "objectif": "/objectif", "perte": "/perte", "limite": "/perte", "regle": "/regle"}
 WORDS_ALONE = {"top": "/top", "meilleurs": "/top", "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide",
                "bonjour": "/aide", "salut": "/aide", "bank": "/bank", "bankroll": "/bank", "ligues": "/ligues", "actualiser": "/cotes",
                "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes", "etat": "/etat",

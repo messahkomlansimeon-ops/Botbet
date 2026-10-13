@@ -2,6 +2,8 @@ import hashlib
 import json
 import os
 import re
+import socket
+import threading
 import time
 import zlib
 from dataclasses import dataclass
@@ -10,7 +12,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from .. import cache as kcache
+from .. import cache as kcache, config as C
 from . import state
 
 UA = "KellyBot/1.0 (usage personnel)"
@@ -33,6 +35,17 @@ MAX_CRAWL_DELAY = 60.0
 # (une seule poignée de main TLS) ; WIRE compte ce qui passe réellement par le réseau (octets compressés + en-têtes), par domaine.
 PROXIES = {}
 WIRE = {}
+# Domaines qui ne partent JAMAIS en direct (1xBet, 365scores : require_proxy) : sans proxy, aucune requête n'est envoyée, ton IP n'est jamais
+# montrée. Seuls les tests (C.SANDBOX) peuvent les lire sans proxy (réseau simulé).
+STRICT = set()
+NO_PROXY = "proxy absent : rien n'est envoyé (jamais en direct)"
+# Proxy injoignable (DNS, connexion refusée ou trop lente, pas une session Webshare en panne) : tenu pour en panne PROXY_DOWN_S secondes, les
+# requêtes suivantes échouent tout de suite au lieu d'attendre chacune leur délai (nuit du 12 au 13/10 : un passage bloqué des minutes).
+PROXY_DOWN_S = 120
+DNS_WAIT = 8.0                    # secondes au plus pour trouver l'adresse du proxy (la résolution DNS n'a pas de délai dans requests)
+DNS_OK_S = 600                    # adresse trouvée : pas re-vérifiée avant 10 min
+_proxy_down = {}                  # « hôte:port » du proxy -> instant (monotonic) jusqu'auquel il est tenu pour injoignable
+_dns_ok = {}                      # hôte du proxy -> instant de la dernière résolution réussie
 _sessions = {}
 _sleep = time.sleep
 _last = {}
@@ -69,7 +82,84 @@ def cache_dir():
 
 
 def reset():
-    _last.clear(), _crawl.clear(), _robots.clear()
+    _last.clear(), _crawl.clear(), _robots.clear(), _proxy_down.clear(), _dns_ok.clear()
+
+
+def require_proxy(domain):
+    """`domain` ne part jamais en direct : sans proxy (PROXIES), rien n'est envoyé (STRICT)."""
+    STRICT.add(domain.lower())
+
+
+def _phost(proxy):
+    u = urlparse(proxy)
+    return f"{u.hostname}:{u.port or 80}"
+
+
+def _dns(host):
+    """L'adresse de `host` se trouve-t-elle en DNS_WAIT secondes ? (dans un fil : getaddrinfo n'a pas de délai)"""
+    box = {}
+
+    def run():
+        try:
+            socket.getaddrinfo(host, None)
+            box["ok"] = True
+        except OSError:
+            box["ok"] = False
+    th = threading.Thread(target=run, daemon=True)
+    th.start()
+    th.join(DNS_WAIT)
+    return bool(box.get("ok"))
+
+
+def proxy_alive(proxy):
+    """Le proxy `proxy` peut-il être essayé ? Faux s'il a été trouvé injoignable il y a moins de PROXY_DOWN_S s, ou si son adresse ne se trouve pas
+    en DNS_WAIT s (alors tenu pour injoignable). Jamais de vérification DNS dans les tests (C.SANDBOX : proxys factices)."""
+    t = _proxy_down.get(_phost(proxy))
+    if t is not None and time.monotonic() < t:
+        return False
+    host = urlparse(proxy).hostname
+    if not host or C.SANDBOX or time.monotonic() - _dns_ok.get(host, -1e18) < DNS_OK_S:
+        return True
+    if _dns(host):
+        _dns_ok[host] = time.monotonic()
+        return True
+    _proxy_down[_phost(proxy)] = time.monotonic() + PROXY_DOWN_S
+    return False
+
+
+def _proxy_failed(proxy, e):
+    """Échec par le proxy : le proxy LUI-MÊME est injoignable (connexion impossible ou trop lente, adresse introuvable) -> tenu pour en panne
+    PROXY_DOWN_S s. Une session Webshare en panne (« Tunnel connection failed: 502 ») ne compte pas : une autre session peut marcher (xbet)."""
+    if isinstance(e, requests.ConnectTimeout) or (isinstance(e, requests.exceptions.ProxyError) and "Tunnel connection failed" not in str(e)):
+        _proxy_down[_phost(proxy)] = time.monotonic() + PROXY_DOWN_S
+
+
+def _no_direct(domain, proxy):
+    """Raison de NE PAS envoyer une requête vers `domain` (proxy absent pour un domaine STRICT, proxy injoignable) ; None sinon."""
+    if not proxy:
+        return NO_PROXY if domain in STRICT and not C.SANDBOX else None
+    if not proxy_alive(proxy):
+        return f"proxy injoignable (ProxyError), nouvel essai dans {PROXY_DOWN_S // 60} min"
+    return None
+
+
+def cause(error, who="365scores"):
+    """Cause d'un échec de lecture en mots simples, pour un avertissement : « le proxy ne répond pas », « 365scores en panne (erreur 504) »…"""
+    e = str(error or "")
+    if NO_PROXY in e or "proxy introuvable" in e:
+        return "proxy absent : rien n'est lu (jamais en direct)"
+    if any(k in e for k in ("proxy injoignable", "ProxyError", "ConnectTimeout")):
+        return "le proxy ne répond pas"
+    m = re.search(r"HTTP (\d{3})", e)
+    if m and int(m.group(1)) >= 500:
+        return f"{who} en panne (erreur {m.group(1)})"
+    if m and m.group(1) in ("403", "429"):
+        return f"{who} refuse l'accès (erreur {m.group(1)})"
+    if "ReadTimeout" in e or "Timeout" in e or "délai" in e:
+        return f"{who} trop lent (délai dépassé)"
+    if any(k in e for k in ("ConnectionError", "SSLError", "réseau indisponible")):
+        return "pas de connexion internet (ou proxy injoignable)"
+    return f"{who} ne répond pas"
 
 
 def env(name, default):
@@ -290,8 +380,11 @@ def _request(url, headers=None):
     h = {"User-Agent": UA, "Accept": "*/*"} | (headers or {})
     r, err = None, None
     for attempt in (0, 1):
-        _wait(domain)
         proxy = PROXIES.get(domain)
+        stop = _no_direct(domain, proxy)
+        if stop:                                    # jamais en direct pour 1xBet / 365scores ; proxy injoignable : on n'attend pas
+            return None, stop
+        _wait(domain)
         try:
             if proxy:
                 s = _sessions.get(domain) or _sessions.setdefault(domain, requests.Session())
@@ -301,6 +394,8 @@ def _request(url, headers=None):
             _count(domain, r)
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
             r, err = None, f"réseau indisponible ({type(e).__name__})"
+            if proxy:
+                _proxy_failed(proxy, e)
             stale = _sessions.pop(domain, None)     # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
             if stale:
                 stale.close()
@@ -343,8 +438,11 @@ def post(url, body, headers=None, timeout=TIMEOUT):
     h = {"User-Agent": UA, "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
     r, err = None, None
     for attempt in (0, 1):
-        _wait(domain)
         proxy = PROXIES.get(domain)
+        stop = _no_direct(domain, proxy)
+        if stop:                                    # jamais en direct pour 1xBet / 365scores ; proxy injoignable : on n'attend pas
+            return Result(url, None, error=stop)
+        _wait(domain)
         retry = False
         try:
             if proxy:
@@ -355,6 +453,8 @@ def post(url, body, headers=None, timeout=TIMEOUT):
             _count(domain, r)
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
             r, err, retry = None, f"réseau indisponible ({type(e).__name__})", _not_sent(e)
+            if proxy:
+                _proxy_failed(proxy, e)
             stale = _sessions.pop(domain, None)    # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
             if stale:
                 stale.close()

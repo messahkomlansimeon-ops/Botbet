@@ -72,7 +72,8 @@ def main():
         return
     h = d.get("health") or {}
     if h.get("at"):
-        state_txt = "en panne : " + str(h.get("why") or "?") if not h.get("ok") else "en bonne santé"
+        state_txt = ("secours FotMob (365scores : " + str(h.get("why") or "?") + ")" if h.get("backup") else "en panne : " + str(h.get("why") or "?")) \
+            if not h.get("ok") else "en bonne santé"
         print(ok(h.get("ok")), f"santé du suivi au dernier passage ({h['at'][11:16]} UTC) :", state_txt)
     print(ok(not d.get("out")), "lignes du suivi en attente d'envoi :", len(d.get("out") or []))
     b = d.get("budget") or {}

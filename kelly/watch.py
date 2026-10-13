@@ -8,6 +8,11 @@ sont relus (/games/?games=…, ~1 Ko par match : score, minute, statut), puis :
     /game/stats/ (~2 Ko) seulement pour les paris de stats ;
   - match fini (sorti de la liste « en cours » 1 h 55 après le coup d'envoi) : score final par les derniers résultats de l'équipe (~4 Ko) ;
   - 🏆 ticket gagné (avec le gain) ou ❌ ticket perdu, une seule fois ; sinon « 📊 3/8 gagnés, 5 en cours ».
+  - 🟢 coup d'envoi de chaque match de tes tickets, avec ses paris et leurs coupons (C.WATCH_KICKOFF) ; un match reste suivi jusqu'à la fin, même
+    quand ses paris sont décidés (décision provisoire, revue jusqu'au coup de sifflet final) ;
+  - 365scores muet (proxy en panne, 365scores en panne ou bloqué) : SECOURS FotMob (C.WATCH_FM_BACKUP) : une page de championnat par passage pour tes
+    matchs en cours, lue en direct (FotMob n'a pas besoin du proxy) : scores, mi-temps, fins de match et paris de buts ; ni buteur, ni corners, ni
+    tirs (au règlement du matin). L'avertissement dit la vraie cause (« le proxy ne répond pas », « 365scores en panne (erreur 504) ») et le secours.
 Un seul message par passage, seulement s'il y a du nouveau ; aucune requête s'il n'y a ni match de tes tickets en cours ou à venir, ni opportunité à
 chercher. Le règlement officiel (le lendemain matin) ne change pas : ce suivi n'est qu'une information.
 
@@ -16,6 +21,7 @@ assez de matchs en cours dans la fenêtre C.LIVE_MIN_MINUTE-C.LIVE_MAX_MINUTE, 3
 live » avec des boutons de cote. Heures calmes (kelly/quiet.py) : les messages de la nuit sont gardés pour le réveil. Ne lève jamais."""
 import math
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -181,15 +187,19 @@ def _day_games(s365, now, net=True):
     return out
 
 
+_WHY = {"live": ""}             # cause du dernier échec de _live, en mots simples (http.cause), pour l'avertissement
+
+
 def _live(s365, ids, now):
     """Score, minute et statut des matchs `ids` (requête ciblée /games/?games=…, ~1 Ko par match) -> {id: {"live", "ended", "score", "minute"}} ;
-    None si 365scores n'a pas répondu (ou seulement par une vieille copie)."""
+    None si 365scores n'a pas répondu (ou seulement par une vieille copie) : la cause va dans _WHY["live"]."""
     if not ids:
         return {}
     fmt_d = lambda d: d.strftime("%d/%m/%Y")              # noqa: E731
     res = http.fetch(s365._url("/games/", games=",".join(map(str, sorted(ids))), startDate=fmt_d(now - timedelta(days=1)), endDate=fmt_d(now)),
                      s365.NAME, 120)
     if not _fresh(res):                                   # erreur, source bloquée, ou vieille copie : AUCUNE donnée (jamais un score périmé pris pour le direct)
+        _WHY["live"] = http.cause(getattr(res, "error", None)) if res is not None else "365scores ne répond pas"
         return None
     return {g.get("id"): _status(g) for g in ((s365.read_json(res) or {}).get("games") or [])}
 
@@ -272,6 +282,64 @@ def _budget_ok(d, now, settle=False):
     if left is not None and left <= 0:
         return False
     return settle or int(b.get("detail") or 0) < C.WATCH_DETAIL_DAY
+
+
+# ---------- secours FotMob : 365scores muet ----------
+
+def _fm_league(leg):
+    """Identifiant FotMob du championnat du pari (fotmob.SPORT_TO_LEAGUE / EXTRA_LEAGUES), ou None."""
+    from .sources import fotmob
+    sk = leg.get("sport_key") or ""
+    return fotmob.EXTRA_LEAGUES.get(sk) or fotmob.SPORT_TO_LEAGUE.get(sk)
+
+
+FM_PAUSED = ("PP", "AB", "ABD", "SUSP", "INT", "CANC", "POSTP")
+
+
+def _fm_status(st):
+    """Statut d'un match lu sur une page de championnat FotMob -> même forme que _status (365scores) ; cartons rouges inconnus (None)."""
+    started, finished = bool(st.get("started")), bool(st.get("finished"))
+    reason = str((st.get("reason") or {}).get("short") or "").strip().upper()
+    live_t = str((st.get("liveTime") or {}).get("short") or "").strip()
+    m = re.match(r"\s*(\d+)\s*-\s*(\d+)", str(st.get("scoreStr") or ""))
+    score = (int(m.group(1)), int(m.group(2))) if m else None
+    mm = re.match(r"(\d+)", live_t)
+    minute = int(mm.group(1)) if mm else 0
+    ht = reason == "HT" or live_t.upper() == "HT"
+    paused = bool(st.get("cancelled")) or reason in FM_PAUSED
+    live = started and not finished and not paused
+    ended = finished and score is not None and not paused and not st.get("awarded")
+    return {"live": live, "paused": paused and started, "ended": ended, "score": score if (live or ended or (paused and started)) else None,
+            "minute": minute or (45 if ht else 0), "period": 1 if (ht or 0 < minute <= 45) else 2, "ht": ht,
+            "et": reason in ("AET", "PEN", "AP", "ET") or minute >= 106, "red": None, "text": reason or live_t}
+
+
+def _fm_games(todo, now):
+    """Matchs de tes paris lus sur les pages de championnat FotMob (en direct, sans proxy), au plus C.WATCH_FM_LEAGUES pages (les championnats qui ont
+    le plus de tes matchs commencés d'abord), chacune relue au plus toutes les C.WATCH_FM_TTL_S s -> ({id « fm… » : match au format de _day_games,
+    statut dans « fm »}, cause d'échec en mots simples ou '')."""
+    from .sources import fmmatch, fotmob
+    by_lg = {}
+    for _, leg, _ in todo:
+        lg = _fm_league(leg)
+        if lg and _ko(leg) and _ko(leg) <= now:
+            by_lg[lg] = by_lg.get(lg, 0) + 1
+    if not by_lg:
+        return {}, "championnats absents de FotMob"
+    games, errs = {}, []
+    for lg in sorted(by_lg, key=lambda x: -by_lg[x])[:C.WATCH_FM_LEAGUES]:
+        res = http.fetch(f"{fotmob.BASE}/leagues/{lg}", fotmob.NAME, C.WATCH_FM_TTL_S)
+        if not _fresh(res):
+            errs.append(http.cause(getattr(res, "error", None), "FotMob"))
+            continue
+        for m in (((fmmatch._next_data(res.text) or {}).get("fixtures") or {}).get("allMatches") or []):
+            st, h, a = m.get("status") or {}, m.get("home") or {}, m.get("away") or {}
+            if not m.get("id") or not st.get("utcTime"):
+                continue
+            gid = f"fm{m['id']}"
+            games[gid] = {"id": gid, "start": str(st["utcTime"]).replace("Z", "+00:00"), "home": {"id": h.get("id"), "name": h.get("name") or ""},
+                          "away": {"id": a.get("id"), "name": a.get("name") or ""}, "fm": _fm_status(st)}
+    return games, ("" if games else (errs[0] if errs else "FotMob ne répond pas"))
 
 
 def find(leg, games):
@@ -403,10 +471,11 @@ def _dur(td):
     return f"{m // 60} h {m % 60:02d}" if m >= 60 else f"{m} min"
 
 
-def _health(d, now, ok, why="", open_n=0, hard=False):
+def _health(d, now, ok, why="", open_n=0, hard=False, backup=False):
     """Santé du suivi (d["health"]) : jamais de panne silencieuse. Panne DURE (365scores bloqué, proxy absent, plafond du mois) : avertie tout de suite ;
     panne douce (pas de réponse, délai dépassé, erreur) : après C.WATCH_FAIL_PASSES passages de suite. Seulement s'il y a des matchs de tes tickets à
-    suivre, et une seule fois par panne ; au premier passage réussi ensuite : « ✅ rétabli »."""
+    suivre, et une seule fois par panne ; au premier passage réussi ensuite : « ✅ rétabli ». `backup` : 365scores muet mais le secours FotMob suit tes
+    matchs (scores seulement) : l'avertissement le dit."""
     h = d["health"]
     at = now.isoformat(timespec="minutes")
     if ok:
@@ -415,14 +484,25 @@ def _health(d, now, ok, why="", open_n=0, hard=False):
                 since = _dur(now - datetime.fromisoformat(h["since"])) if h.get("since") else ""
             except ValueError:
                 since = ""
-            _out(d, now, "warn", "✅ " + fmt.b("Suivi des matchs rétabli") + fmt.esc(f" (coupé {since})" if since else "") + fmt.esc(" : rattrapage ci-dessous."))
+            if h.get("backup"):
+                _out(d, now, "warn", "✅ " + fmt.b("365scores rétabli") + fmt.esc(f" (coupé {since})" if since else "") + fmt.esc(" : suivi complet de nouveau."))
+            else:
+                _out(d, now, "warn", "✅ " + fmt.b("Suivi des matchs rétabli") + fmt.esc(f" (coupé {since})" if since else "") + fmt.esc(" : rattrapage ci-dessous."))
         d["health"] = {"at": at, "ok": True, "why": "", "since": None, "fails": 0, "warned": False, "open": open_n}
         return
     h.update(at=at, ok=False, why=why, open=open_n, fails=int(h.get("fails") or 0) + 1, since=h.get("since") or at)
+    if backup and h.get("warned") and not h.get("backup"):         # panne déjà dite (sans secours), le secours FotMob reprend : dit une fois
+        _out(d, now, "warn", "🛟 " + fmt.b("Secours FotMob") + fmt.esc(" : je suis de nouveau tes matchs (scores, mi-temps, fins de match)."))
     if open_n > 0 and not h.get("warned") and (hard or h["fails"] >= C.WATCH_FAIL_PASSES):
-        n = f"{open_n} match{'s' if open_n > 1 else ''} de tes tickets ne {'sont' if open_n > 1 else 'est'} plus suivi{'s' if open_n > 1 else ''}"
-        _out(d, now, "warn", "⚠️ " + fmt.b("Suivi des matchs en panne") + fmt.esc(f" : {why}. {n} : regarde-les toi-même. Je te préviens dès que ça repart."))
+        if backup:
+            _out(d, now, "warn", "⚠️ " + fmt.b("365scores en panne") + fmt.esc(f" : {why}. Je suis tes matchs par FotMob : scores, mi-temps et fins de "
+                                                                                   "match. Corners, cartons, tirs et fautes : au règlement du matin."))
+        else:
+            n = f"{open_n} match{'s' if open_n > 1 else ''} de tes tickets ne {'sont' if open_n > 1 else 'est'} plus suivi{'s' if open_n > 1 else ''}"
+            _out(d, now, "warn", "⚠️ " + fmt.b("Suivi des matchs en panne") + fmt.esc(f" : {why}. {n} : regarde-les toi-même. Je te préviens dès que ça repart."))
         h["warned"] = True
+    if backup:
+        h["backup"] = True
     print(f"[suivi] en panne : {why}", file=sys.stderr)
 
 
@@ -475,7 +555,7 @@ def _lower(prev, cur):
     return cur[0] < ph or cur[1] < pa
 
 
-def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, detail_for=None):
+def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, detail_for=None, fm_for=None):
     """Le travail d'un passage, sur le document `d` (lignes à envoyer ajoutées à d["out"], document sauvé après chaque match)."""
     from .sources import s365
     ts = [t for day in (now.date(), now.date() - timedelta(days=1)) for t in exposure.tickets(str(day))]
@@ -497,12 +577,12 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
     if games is None:
         why = _blocked_why()
         if why:
-            _health(d, now, False, why, open_n, hard=True)
+            _backup(d, now, ts, todo, open_n, why, alive, alive_legs, tix, fm_for, hard=True)
             return
-    events, touched = {}, {}
+    touched, late = {}, False
     with (_NoProxy() if games is not None else s365._via_proxy(settle=True)) as why:     # tes tickets (~1 Ko par match) passent avant la lecture de fond
         if why:
-            _health(d, now, False, why, open_n, hard=True)
+            _backup(d, now, ts, todo, open_n, why, alive, alive_legs, tix, fm_for, hard=True)
             return
         games = games if games is not None else _day_games(s365, now)
         for m, why_nf in _unfollowed(ts, d, now, games):
@@ -514,27 +594,59 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
             return
         status = (live_for or (lambda ids: _live(s365, ids, now)))({g["id"] for _, _, _, g in found})
         if status is None:
-            _health(d, now, False, "365scores ne répond pas", open_n)
+            _backup(d, now, ts, todo, open_n, _WHY["live"] or "365scores ne répond pas", alive, alive_legs, tix, fm_for)
             return
-        by_game = {}
-        for x in found:
-            by_game.setdefault(x[3]["id"], []).append(x)
-        order = sorted(by_game, key=lambda gid: (not (status.get(gid) or {}).get("live"), min(_ko(x[1]) for x in by_game[gid])))
-        cache_stats, cache_final, late = {}, {}, False
-        for gid in order:
-            dl = http.get_deadline()
-            if dl is not None and http.monotonic() > dl:
-                late = True
-                break
-            try:
-                _one_game(d, now, by_game[gid], status.get(gid) or {}, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive,
-                          alive_legs, detail_for, tix)
-            except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
-                print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-            for text, extra in events.items():
-                _out(d, now, "ev", fmt.esc(text), **{k: fmt.esc(v) for k, v in (extra or {}).items()})
-            events.clear()
-            store.save(FILE, d)                         # après CHAQUE match : un passage coupé ne perd ni ne répète rien
+        late = _run(d, now, found, status, stats_for, final_for, detail_for, s365, alive, alive_legs, tix, touched)
+    _after(d, now, ts, alive, touched, open_n, late=late)
+
+
+def _backup(d, now, ts, todo, open_n, why, alive, alive_legs, tix, fm_for=None, hard=False):
+    """365scores muet (`why`) : tes matchs commencés lus sur FotMob (_fm_games : scores, mi-temps, fins de match ; ni buteur, ni stats, ni carton rouge).
+    L'avertissement dit la cause et le secours (une fois) ; secours impossible (C.WATCH_FM_BACKUP=0, championnat absent de FotMob, FotMob muet) : la
+    panne classique, avec la raison."""
+    if not C.WATCH_FM_BACKUP:
+        _health(d, now, False, why, open_n, hard=hard)
+        return
+    games, fm_why = (fm_for or (lambda: _fm_games(todo, now)))()
+    found = [(t, leg, k, find(leg, games)) for t, leg, k in todo]
+    found = [x for x in found if x[3] and _ko(x[1]) <= now]
+    if not found:
+        _health(d, now, False, why + (f" ; secours FotMob impossible : {fm_why}" if fm_why else ""), open_n, hard=hard)
+        return
+    touched = {}
+    late = _run(d, now, found, {x[3]["id"]: x[3]["fm"] for x in found}, lambda g: {}, lambda g: None, lambda g: None, None, alive, alive_legs, tix,
+                touched)
+    _after(d, now, ts, alive, touched, open_n, late=late, backup=why, hard=hard)
+
+
+def _run(d, now, found, status, stats_for, final_for, detail_for, s365, alive, alive_legs, tix, touched):
+    """Les matchs commencés `found` ([(ticket, pari, clé, match)]) au statut `status` ({id du match: statut}) : coups d'envoi, puis un bloc par match
+    (_one_game), document sauvé après CHAQUE match. -> vrai si le délai du passage a coupé la liste (le reste au passage suivant)."""
+    by_game = {}
+    for x in found:
+        by_game.setdefault(x[3]["id"], []).append(x)
+    for text in _kickoffs(d, now, by_game, status, tix):
+        _out(d, now, "ev", fmt.esc(text))
+    order = sorted(by_game, key=lambda gid: (not (status.get(gid) or {}).get("live"), min(_ko(x[1]) for x in by_game[gid])))
+    cache_stats, cache_final, events = {}, {}, {}
+    for gid in order:
+        dl = http.get_deadline()
+        if dl is not None and http.monotonic() > dl:
+            return True
+        try:
+            _one_game(d, now, by_game[gid], status.get(gid) or {}, cache_stats, cache_final, stats_for, final_for, s365, events, touched, alive,
+                      alive_legs, detail_for, tix)
+        except Exception as e:                      # noqa: BLE001 - un match en erreur n'empêche pas les autres
+            print(f"[suivi] match {gid} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        for text, extra in events.items():
+            _out(d, now, "ev", fmt.esc(text), **{k: fmt.esc(v) for k, v in (extra or {}).items()})
+        events.clear()
+        store.save(FILE, d)                         # après CHAQUE match : un passage coupé ne perd ni ne répète rien
+    return False
+
+
+def _after(d, now, ts, alive, touched, open_n, late=False, backup=None, hard=False):
+    """Fin d'un passage : derniers paris, pieds des tickets touchés, santé (secours FotMob en cours : `backup` = cause de la panne de 365scores)."""
     _last_legs(d, now, ts, alive)
     for tid, t in touched.items():
         verdict, foot = _ticket_line(t, d)
@@ -546,10 +658,53 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
         else:
             d["tickets"].pop(tid, None)
         _out(d, now, "foot", f"🎫 {fmt.b(fmt.esc(t['name']))}" + (fmt.esc(f" · 🎟️ {t['coupon']}") if t.get("coupon") else "") + f" · {fmt.esc(foot)}")
-    if late:
+    if backup:
+        _health(d, now, False, backup, open_n, hard=hard, backup=True)
+    elif late:
         _health(d, now, False, f"passage trop long (plus de {C.WATCH_DEADLINE_S} s), le reste au prochain passage", open_n)
     else:
         _health(d, now, True, open_n=open_n)
+
+
+def _gs(d, gid, legs):
+    """État du match `gid` dans d["games"]. Le même match suivi avant sous un autre identifiant (365scores <-> secours FotMob, d'après le « gid » de ses
+    paris) : son état le suit (score déjà vu, mi-temps et fin déjà dites), rien n'est annoncé deux fois."""
+    gid = str(gid)
+    if gid not in d["games"]:
+        for x in legs:
+            g0 = d["legs"].get(x[2], {}).get("gid")
+            old = "" if g0 is None else str(g0)
+            if old and old != gid and old in d["games"]:
+                d["games"][gid] = d["games"].pop(old)
+                break
+    return d["games"].setdefault(gid, {})
+
+
+KICKOFF_LATE = 15               # vu pour la première fois après la 15e (passages toutes les 10 min ; panne, redémarrage) : pas de « coup d'envoi »
+
+
+def _kickoffs(d, now, by_game, status, tix):
+    """🟢 Coup d'envoi des matchs de tes tickets vus en cours pour la première fois : un bloc par match (le match, puis ses paris et leurs coupons) ;
+    plus de HT_COMPACT à la fois : une seule ligne. Un match découvert après la KICKOFF_LATE e minute, à la mi-temps ou fini n'est pas annoncé (marqué
+    vu). -> [textes]."""
+    out = []
+    for gid, xs in by_game.items():
+        st_g = status.get(gid) or {}
+        gs = _gs(d, gid, xs)
+        if gs.get("ko") or not (st_g.get("live") or st_g.get("ended")):
+            continue
+        gs["ko"] = 1
+        if not C.WATCH_KICKOFF or st_g.get("ended") or st_g.get("ht") or int(st_g.get("minute") or 0) > KICKOFF_LATE or gs.get("score"):
+            continue
+        block, seen = [f"🟢 Coup d'envoi · {xs[0][1]['home']} – {xs[0][1]['away']}"], set()
+        for _, leg, _, _ in xs:
+            if leg["key"] not in seen:
+                seen.add(leg["key"])
+                block.append(f"   {fmt.market_icon(leg)} {leg.get('pick')}" + _from(leg["key"], tix))
+        out.append("\n".join(block))
+    if len(out) > HT_COMPACT:
+        return ["🟢 Coup d'envoi : " + " · ".join(b.split("\n")[0].removeprefix("🟢 Coup d'envoi · ") for b in out)]
+    return out
 
 
 def _score_t(txt):
@@ -637,7 +792,7 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
     """Les paris d'UN match : score, stats si besoin, fiche détaillée aux moments clés (but d'un match d'un ticket en jeu, prolongation), état de chaque
     pari ; UN bloc de lignes pour ce match dans `events` (titre + lignes des paris), tickets touchés dans `touched`."""
     g = legs[0][3]
-    gs = d["games"].setdefault(str(g["id"]), {})
+    gs = _gs(d, g["id"], legs)
     gs["at"] = now.isoformat(timespec="minutes")
     paused = st_g.get("paused")
     ko = min(_ko(x[1]) for x in legs)
@@ -888,15 +1043,15 @@ def _recap(d, now):
     d["recap"] = {"day": str(day)}
 
 
-def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, keep=False, detail_for=None):
+def follow(now=None, games=None, live_for=None, stats_for=None, final_for=None, keep=False, detail_for=None, fm_for=None):
     """Suivi des tickets : -> le message (Html) ou None s'il n'y a rien de neuf. `games` ({id: match}), `live_for(ids)`, `stats_for(g)`, `final_for(g)`,
-    `detail_for(g)` (fiche détaillée, parse_detail) :
+    `detail_for(g)` (fiche détaillée, parse_detail), `fm_for()` (secours FotMob : ({id: match avec « fm »}, cause)) :
     injectables (tests) ; sinon 365scores via le proxy. `keep` : les lignes restent dans le document jusqu'à leur envoi (tick les retire ensuite) ;
     sinon elles sont rendues et retirées tout de suite. Lève WatchStateError si le document ne peut pas être lu."""
     now = now or _now()
     d = _load()
     _purge(d, now)
-    _follow(d, now, games, live_for, stats_for, final_for, detail_for)
+    _follow(d, now, games, live_for, stats_for, final_for, detail_for, fm_for)
     try:
         _recap(d, now)
     except Exception as e:                          # noqa: BLE001 - le bilan ne bloque jamais le suivi

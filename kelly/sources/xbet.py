@@ -35,6 +35,7 @@ COUPON_BACKOFF = (2.0, 5.0, 10.0)   # attentes (s) avant chaque nouvel essai qua
 DOMAIN = "1xbet.ci"
 BASE = "https://" + DOMAIN
 http.register_source(DOMAIN, SOURCE)    # un POST (SaveCoupon) obéit aux mêmes blocages que les lectures : 403 / 429 / Cloudflare / vérification = source coupée 24 h
+http.require_proxy(DOMAIN)              # jamais en direct : sans proxy, aucune requête vers 1xBet (ton IP n'est jamais montrée)
 FEED = BASE + "/service-api/main-line-feed/v3/"
 COMMON = {"fcountry": 96, "gr": 673, "lng": "fr", "ref": 286}
 JSON_H = {"Accept": "application/json"}
@@ -531,6 +532,8 @@ class _Session:
             self.why = state.health(SOURCE)["last_error"] or "source bloquée"
         elif not self.url and not C.XBET_DIRECT:
             self.why = f"proxy introuvable (XBET_PROXY ou {C.XBET_PROXY_FILE}) : aucun relevé, jamais en direct"
+        elif self.url and not http.proxy_alive(self.url):
+            self.why = f"le proxy ne répond pas : aucun relevé (nouvel essai dans {http.PROXY_DOWN_S // 60} min), jamais en direct"
         elif self.u["bytes"] >= self.cap:
             self.why = f"plafond mensuel atteint ({usage_line(self.u)}) : relevé sauté"
         saved = self.u.get("session")

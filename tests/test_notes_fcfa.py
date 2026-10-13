@@ -889,7 +889,7 @@ def test_unnoted_morning_bets_stay_tracked():
     bets["combos"][0]["played"], bets["combos"][0]["cur"] = {"odds": 5.0, "stake": 1000}, FCFA
     store.save("bets.json", bets)
     n, total, staked = money_result()
-    assert n == 1 and staked == 1000 and abs(total - 1000 * (5.0 * (1.5 ** 4) / real["odds"] - 1)) < 1e-6, (n, total, staked)
+    assert n == 1 and staked == 1000 and abs(total - round(1000 * (5.0 * (1.5 ** 4) / real["odds"] - 1))) < 1e-6, (n, total, staked)   # au franc près
     simple = str(settle.bilan(bets))
     assert "Ton argent" in simple and "· 1 gagné sur 1" in simple and "🎯 <b>Combinés du matin</b> : 1 gagné sur 1" in simple
     # un combi sur mesure suivi mais pas encore noté (la mise n'a pas été donnée) : surveillé par les alertes ⚠️ comme tout ce qui est suivi, mais pas « joué »

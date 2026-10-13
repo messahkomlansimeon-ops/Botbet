@@ -40,6 +40,13 @@ def save(name, text, limit=None):
 
 
 def fetch(name, url, **kw):
+    if re.search(r"(^|\.)(1xbet\.[a-z]+|365scores\.com)$", requests.utils.urlparse(url).hostname or ""):     # 1xBet / 365scores : jamais en direct
+        from kelly.sources import xbet
+        proxy = xbet.proxy()
+        if not proxy:
+            print(f"⏭️ {name} : pas de proxy (XBET_PROXY), rien n'est envoyé (1xBet et 365scores ne sont jamais lus en direct)")
+            return None
+        kw["proxies"] = {"http": proxy, "https": proxy}
     try:
         r = requests.get(url, timeout=30, **kw)
         meta = {"url": scrub(r.url), "status": r.status_code,
