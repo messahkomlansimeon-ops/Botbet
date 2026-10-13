@@ -898,7 +898,8 @@ def ticket_card(h, now=None):
     except WatchStateError:
         d = {"legs": {}, "games": {}}
     pay = money.money(round((t.get("odds") or 0) * (t.get("stake") or 0)))
-    lines = [f"🎫 {fmt.b(fmt.esc(t['name']))}" + (f" · 🎟️ {fmt.code(t['coupon'])}" if t.get("coupon") else ""),
+    name = re.sub(r"\s*\(cote [\d.,]+\)$", "", str(t["name"]))     # la cote demandée du nom contredirait la vraie cote, juste dessous
+    lines = [f"🎫 {fmt.b(fmt.esc(name))}" + (f" · 🎟️ {fmt.code(t['coupon'])}" if t.get("coupon") else ""),
              fmt.esc(f"cote {fmt.odds_txt(t.get('odds') or 0)} · mise {money.money(round(t.get('stake') or 0))} · si tout passe : {pay}"), ""]
     n = {"win": 0, "loss": 0, "live": 0, "soon": 0}
     for leg in sorted(t["legs"], key=lambda l: (_ko(l) or now).isoformat()):
@@ -910,20 +911,31 @@ def ticket_card(h, now=None):
 
 
 def _leg_line(t, leg, d, now):
-    """(état, ligne) d'un pari de coupon : win « ✅ A – B 2-1 · pari », loss « ❌ … », live « ⏳ A – B 1-0 (63e) · pari », soon « 🕘 A – B 21h00 · pari »."""
+    """(état, deux lignes) d'un pari de coupon. 1re ligne : le match : win « ✅ A – B 2-1 », loss « ❌ … », live « ⏳ A – B 1-0 (63e) », soon « 🕘 A – B 21h00 ».
+    2e ligne (décalée) : le pari et où il en est (`now`, écrit à chaque passage) : « Moins de 9,5 corners → 4 corners pour l'instant » (live), « … → 7 corners
+    au final » (fini), « … → pas encore relevé » (stat jamais lue) ; un pari de buts : sa marge (« encore 1 but de marge »)."""
     cur = d["legs"].get(f"{t['what']}|{leg['key']}", {})
     ko = _ko(leg)
     gs = (d.get("games") or {}).get(str(cur.get("gid")), {}) if cur.get("gid") is not None else {}
     match = f"{leg.get('home')} – {leg.get('away')}"
+    pick = str(leg.get("pick"))
     if cur.get("state") in ("win", "loss"):
-        state, line = cur["state"], f"{'✅' if cur['state'] == 'win' else '❌'} {match} {cur.get('score') or ''} · {leg.get('pick')}"
+        state, head = cur["state"], f"{'✅' if cur['state'] == 'win' else '❌'} {match} {cur.get('score') or ''}"
+        sub = pick + (f" → {cur['now']}" if cur.get("now") else "")
     elif ko and ko > now:
-        state, line = "soon", f"🕘 {match} {ko:%Hh%M} · {leg.get('pick')}"
+        state, head, sub = "soon", f"🕘 {match} {ko:%Hh%M}", pick
     else:
         sc = gs.get("score") or cur.get("score")
         state = "live"
-        line = f"⏳ {match}" + (f" {sc}" + (f" ({gs['min']}e)" if gs.get("min") and not gs.get("ft") else "") if sc else "") + f" · {leg.get('pick')}"
-    return state, " ".join(line.split())
+        head = f"⏳ {match}" + (f" {sc}" + (f" ({gs['min']}e)" if gs.get("min") and not gs.get("ft") else "") if sc else "")
+        stat_leg = need(leg)[0] not in (None, "goals")
+        if cur.get("nf") and cur.get("gid") is None:     # Kelly ne peut pas le suivre (marché joueur, match introuvable...) : le dire plutôt qu'un blanc
+            sub = pick + f" → {cur['nf']}"
+        elif gs.get("ft") or gs.get("done"):               # match fini mais pari pas encore tranché (stat finale illisible) : un « pour l'instant » serait périmé
+            sub = pick + (" → chiffre final pas relevé" if stat_leg else "")
+        else:
+            sub = pick + (f" → {cur['now']}" if cur.get("now") else " → pas encore relevé" if stat_leg else "")
+    return state, " ".join(head.split()) + "\n    " + " ".join(sub.split())
 
 
 BOARD_MAX = 3900                # caractères au plus du tableau (un message Telegram : 4 096) ; au-delà, il se resserre
@@ -951,7 +963,7 @@ def _board_text(ts, d, now, detail=2):
             won += pay - stake
             body.append(head + fmt.esc(f" · 🏆 gagné {money.signed(round(pay - stake))}"))
         elif verdict == "lost":
-            lost = [line for _, st, line in rows if st == "loss"]
+            lost = [line.replace("\n    ", " · ") for _, st, line in rows if st == "loss"]
             body.append(head + fmt.esc(" · ❌ perdu" + (f" ({lost[0].removeprefix('❌ ')})" if lost and detail else "")))
         else:
             stake_in, pay_in = stake_in + stake, pay_in + pay
@@ -959,7 +971,7 @@ def _board_text(ts, d, now, detail=2):
             for _, st, _ in rows:
                 n[st] += 1
             body.append(head + fmt.esc(f" · {_counts(n)} · si tout passe {money.money(pay)}"))
-            body += [fmt.esc("   " + line) for _, st, line in rows if detail >= 2 or (detail == 1 and st == "live")]
+            body += [fmt.esc("   " + line.replace("\n", "\n   ")) for _, st, line in rows if detail >= 2 or (detail == 1 and st == "live")]
     foot = []
     if stake_in:
         foot.append(fmt.esc(f"💰 En jeu : mise {money.money(round(stake_in))} · gains possibles {money.money(round(pay_in))}"))
@@ -974,7 +986,7 @@ def _board_text(ts, d, now, detail=2):
 
 
 def board(now=None):
-    """📌 Tableau du jour : UN message, épinglé sans notification, qui montre tous tes coupons du jour (chaque pari : ✅ ❌ ⏳ score et minute, 🕘 heure),
+    """📌 Tableau du jour : UN message, épinglé sans notification, qui montre tous tes coupons du jour (chaque pari sur deux lignes, comme la fiche 🎫 : ✅ ❌ ⏳ score et minute, 🕘 heure, puis le pari et où il en est),
     ce qui est en jeu et ce qui est gagné ; il naît quand un match d'un coupon commence dans l'heure, puis il est MODIFIÉ (jamais renvoyé) à chaque
     passage où quelque chose change. Le tableau de la veille est désépinglé. Message effacé : un nouveau est envoyé. d["board"] = {day, msg, hash,
     pinned}. Ne lève jamais."""
@@ -1237,6 +1249,15 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
                         d["legs"].setdefault(k2, {})["danger"] = 1
                 prevl = d["legs"].get(k, {})
         rec = {"state": st, "score": sc, "gid": g["id"], "at": now.isoformat(timespec="minutes")}
+        stat_leg = need(leg)[0] not in (None, "goals")
+        if st == "live":                                 # où en est le pari : fiche 🎫 et tableau du jour le montrent à chaque passage
+            nowv = _leg_now(leg, *score, stats)
+            if nowv and stat_leg:
+                nowv += " pour l'instant"
+        else:
+            nowv = f"{detail} " + ("au final" if finished else "déjà") if stat_leg and detail else ""
+        if nowv:
+            rec["now"] = nowv
         if st in ("win", "loss") and not finished and not decided_now:
             rec["prov"] = 1                              # décidé en cours de match : revu jusqu'à la fin (but annulé)
         cur = d["legs"].get(k, {})

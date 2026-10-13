@@ -106,7 +106,7 @@ def test_won_festive_and_card():
         finally:
             watch._now = old_now
         assert card.startswith("🎫 <b>Combi vm1</b> · 🎟️ <code>AB12</code>\ncote 4,00 · mise 1 000 FCFA · si tout passe : 4 000 FCFA\n"), card
-        assert "✅ H0 – A0 1-0 · Plus de 0,5 buts" in card and "⏳ H1 – A1 0-0 (40e) · Plus de 0,5 buts" in card and "📊 1 gagné, 1 en cours" in card, card
+        assert "✅ H0 – A0 1-0\n    Plus de 0,5 buts" in card and "⏳ H1 – A1 0-0 (40e)\n    Plus de 0,5 buts" in card and "📊 1 gagné, 1 en cours" in card, card
         out = run(52, {0: live((1, 0), 52), 1: live((0, 1), 52)})
         main, won = str(out), out.more[0]
         assert "🔥 dernier match du coupon" in main, main                        # la ligne du dernier match le dit

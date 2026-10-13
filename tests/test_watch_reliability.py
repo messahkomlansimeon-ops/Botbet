@@ -10,6 +10,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-watchrel-")
+os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-watchrel-cache-")      # jamais le vrai cache
 for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
     os.environ.pop(k, None)
 os.environ["QUIET_HOURS"] = "off"
