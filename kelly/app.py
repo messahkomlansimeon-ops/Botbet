@@ -1567,6 +1567,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
 • <i>backup</i> (ou <i>sauvegarde</i>) : recevoir la base de données kelly.db tout de suite (elle arrive aussi toute seule, sans sonnerie, tous les 2 jours vers 12h00) ; téléphone perdu : sur le nouveau, <i>kelly restaurer</i> dans Termux
 • <i>marchés détail</i> (ou <i>marchés détail tirs</i>, <i>marchés détail ldc</i>) : chaque championnat et coupe, marché par marché, en plus et en moins
+• <i>erreurs</i> (ou <i>erreurs 48</i>) : résumé du journal du téléphone (erreurs, avertissements, plantages) des dernières 24 h, à copier-coller pour un contrôle
 • <i>tendances</i> (ou le bouton 📈 Tendances ; <i>tendances cartons</i>, <i>tendances tirs premier</i>) : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
 • <i>réglé vm3 gagné 12/10</i> : donner toi-même le résultat d'un ticket noté que Kelly ne trouve pas (petite ligue sans stats) : gagné, perdu ou remboursé
 
@@ -1990,6 +1991,9 @@ def _handle_command(text):
         return money.command(args)
     if cmd == "/capital":
         return money.capital_command(args)
+    if cmd == "/erreurs":                           # « erreurs » / « erreurs 48 » : résumé du journal du téléphone, à coller pour un contrôle
+        from . import logdigest
+        return logdigest.command(args)
     if cmd == "/tendances":                         # « tendances corners premier » : ce que le modèle sait des équipes et des championnats
         from . import trends
         return trends.report(args)

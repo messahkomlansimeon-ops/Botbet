@@ -34,7 +34,7 @@ def test_manual_settle():
     app.handle_command("capital 50000")
     money._save_capital(since="2026-10-01")
     assert chat.route("réglé vm3 gagné 12/10")[0] == "/regle vm3 gagné 12/10"
-    out = played.settle_command(["vm3", "gagné", "12/10"], TODAY)
+    out = played.settle_command(["m3", "gagné", "12/10"], TODAY)                 # « m3 » (nom du combi sur mesure) : compris comme « vm3 »
     assert out.startswith("✅ Réglé à la main · combi sur mesure (cote 26,9) du lundi 12 octobre : gagné → +12 945 FCFA"), out     # 500 x 25,89
     assert "💼 Capital : 62 945 FCFA" in out, out
     rows = fair.load_combos()

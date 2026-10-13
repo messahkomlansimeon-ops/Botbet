@@ -173,6 +173,11 @@ case "$1" in
         cd "$DIR" || exit 1
         python tools/suivi.py
         ;;
+    erreurs|journal)
+        # résumé du journal (erreurs, avertissements, plantages) des dernières 24 h, ou « kelly erreurs 48 » : à coller tel quel pour un contrôle
+        cd "$DIR" || exit 1
+        python tools/erreurs.py "${2:-24}"
+        ;;
     test-alerte)
         # vérifie la surveillance extérieure : healthchecks.io doit t'écrire sur Telegram « en panne » (test), puis « ok » 5 min après
         cd "$DIR" || exit 1
@@ -221,7 +226,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log|restaurer}"
+        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log|restaurer|test-alerte|erreurs}"
         exit 1
         ;;
 esac

@@ -419,6 +419,8 @@ def settle_command(args, day, now=None):
     if not what or not res:
         return SETTLE_HELP
     t = find(what, when or day)
+    if t is None and re.fullmatch(r"m\d+", norm(what)):          # « m3 » (le nom du combi sur mesure) : c'est « vm3 » dans Mes paris
+        t = find("v" + norm(what), when or day)
     if t is None:
         return f"« {what} » inconnu. " + SETTLE_HELP
     if isinstance(t, str):
