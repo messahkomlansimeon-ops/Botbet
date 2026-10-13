@@ -422,6 +422,7 @@ WATCH_DANGER_P = _float("WATCH_DANGER_P", 0.25)    # « ⚠️ pari en danger »
 WATCH_QUIET = _bool("WATCH_QUIET", False)          # 0 (défaut) : le suivi des matchs de tes paris ignore les heures calmes (QUIET_HOURS) ; 1 : gardé pour le réveil comme les autres alertes
 WATCH_RECAP = _bool("WATCH_RECAP", True)           # 🌙 bilan de la soirée, une fois par jour
 WATCH_RECAP_HOUR = _int("WATCH_RECAP_HOUR", 22)    # heure UTC à partir de laquelle le bilan part (quand plus aucun match de tes tickets n'est en cours ; 3 h au plus tard)
+MEANS_CORRECT = _bool("MEANS_CORRECT", True)       # moyennes de stats corrigées par le réel des matchs réglés (kelly/means.py : tirs, corners, fautes...)
 WATCH_PREKICK = _bool("WATCH_PREKICK", True)       # ⏰ « Dans 5 min » : un message par coupon avant son 1er match (matchs à la même heure groupés)
 WATCH_KICKOFF = _bool("WATCH_KICKOFF", True)       # 🟢 coup d'envoi de chaque match de tes tickets (dans le message groupé du passage, avec les paris et leurs coupons)
 WATCH_FM_BACKUP = _bool("WATCH_FM_BACKUP", True)   # 365scores muet (proxy en panne, 365scores en panne ou bloqué) : scores, mi-temps et fins de match lus sur FotMob, en direct

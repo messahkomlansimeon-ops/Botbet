@@ -34,7 +34,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from . import apistats, calib, catalogue, config as C, odds, prematch, stats, store, strength
+from . import apistats, calib, catalogue, config as C, means, odds, prematch, stats, store, strength
 
 FILE = "fair.json"
 LINES = {"goals": (1.5, 2.5, 3.5), "corners": (7.5, 8.5, 9.5, 10.5, 11.5, 12.5), "cards": (2.5, 3.5, 4.5, 5.5, 6.5)}
@@ -123,6 +123,7 @@ def deep_options(f, home, away):
         return []
     why = d.get("why") or {}
     d, lh, la, xg_tag = with_xg(f, d)
+    d = means.scaled(d)                                         # moyennes de stats corrigées par le réel des matchs réglés (kelly/means.py)
     short = lambda t: strength.shorten(t, 150)                  # noqa: E731 - le message Telegram a une taille limite
     tag = {"goals": short(f"modèle Kelly{xg_tag} : {lh:.1f}-{la:.1f} buts attendus" + (f" ; {why['goals']}" if why.get("goals") else ""))}
     for kind, market, unit in (("corners", prematch.CORNERS, "corners"), ("cards", prematch.CARDS, "cartons")):
@@ -175,6 +176,21 @@ def options(f, home, away):
     return _options(f, home, away)[0]
 
 
+def raw_mean(f, market):
+    """Moyenne BRUTE (avant means.factor) du chiffre d'un marché de stats pour ce match : le modèle approfondi s'il connaît cette stat, sinon le
+    profil (f[EXP_KEY]) ; None pour les buts ou sans chiffre. Posée sur le pronostic (« mu ») : le règlement la compare au réel (kelly/means.py)."""
+    fam = calib.family(market)
+    if fam not in means.FAMILIES:
+        return None
+    d = f.get("deep")
+    s = ((d.get("stats") or {}).get(fam)) if d and d.get("q", 0) >= DEEP_MIN_Q else None
+    if s:
+        whole = market in (prematch.CORNERS, prematch.CARDS) or market.endswith("_total")
+        return round(s["h"] + s["a"] if whole else s["h"] if market.endswith("_home") else s["a"], 3)
+    v = f.get(EXP_KEY.get(market, ""))
+    return round(float(v), 3) if isinstance(v, (int, float)) else None
+
+
 def stat_n(f, market):
     """Matchs de données derrière le chiffre d'un marché : buts du classement FotMob (f["std_n"]), autres chiffres d'un profil court
     (FotMob matchs, API-Football : f["aps_n"]), sinon l'effectif de la source principale (n_home / n_away). Les buts d'un classement
@@ -199,6 +215,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         exp = f.get("exp_" + kind)
         if market in skip or exp is None or (only is not None and "exp_" + kind not in only):
             continue
+        exp *= means.factor(kind)                               # corrigée par le réel des matchs réglés (kelly/means.py)
         if not prematch.BOUNDS[kind][0] <= exp <= prematch.BOUNDS[kind][1]:
             continue
         pmf = strength.nb_pmf(exp, alpha_eff(ALPHA0[kind], exp, stat_n(f, market)))
@@ -208,7 +225,10 @@ def _stat_options(f, home, away, skip=(), only=None):
                             f"stats réelles : {exp:.1f} {unit} attendus{note(market)}"))
     for market, (key, unit, (lo, hi), alpha) in STAT_SPECS.items():
         exp = f.get(key)
-        if market in skip or exp is None or not lo <= exp <= hi or (only is not None and key not in only):
+        if market in skip or exp is None or (only is not None and key not in only):
+            continue
+        exp *= means.factor(calib.family(market))               # corrigée par le réel des matchs réglés (kelly/means.py)
+        if not lo <= exp <= hi:
             continue
         a = alpha_eff(alpha, exp, stat_n(f, market))
         pmf = strength.nb_pmf(exp, a)
@@ -383,6 +403,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
         for b in best_per_family(opts, families, bases):
             c = make_pick(ev, *b, src)
             c["alts"] = alternatives(opts, bases, b[0])        # autres lignes du marché : la meilleure à la cote 1xBet (xprice.py)
+            c["mu"] = raw_mean(f, b[0])                        # nombre attendu (brut) : comparé au réel au règlement (kelly/means.py)
             c["n_min"] = stat_n(f, b[0])        # matchs de données de l'équipe la moins connue, pour la source de CE chiffre
             base = bases.get((b[0], b[1], b[2]))
             if base is not None:
@@ -444,7 +465,7 @@ def fmt_pronos(pronos, limit=None):
 
 # ---------- suivi (calibration) ----------
 
-ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0", "xodds")   # fair.json : petites
+ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0", "xodds", "mu")   # fair.json : petites
 
 
 def pick_label(r):

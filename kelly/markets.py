@@ -5,9 +5,11 @@ Pour chaque famille (buts, double chance, corners, tirs...) :
   - dans les combinés ou écartés (calib.family_k real_only : même règle que combos.data_ok), et le compteur « nouvelle règle » (calib.new_rule_note) ;
   - qui a raison quand Kelly et 1xBet (le marché pour les buts) ne sont pas d'accord, d'après tes résultats seuls (ensemble.json : log-vraisemblance
     par poids, avance du meilleur poids sur moitié-moitié) ;
-  - ce qu'a mesuré le rejeu de la saison passée (calib.boot_acc), et sa correction quand les vrais résultats manquent.
+  - ce qu'a mesuré le rejeu de la saison passée (calib.boot_acc), et sa correction quand les vrais résultats manquent ;
+  - le détail par sens (« ↕️ plus 73 % / 64 % · moins ⚠️ 39 % / 64 % ») : une moyenne biaisée trompe les deux sens en sens contraires ;
+  - la correction des moyennes (« moyenne : 23,1 attendus, 25,0 réels → corrigée ×1,08 », kelly/means.py).
 """
-from . import calib, config as C, ensemble, fmt, status
+from . import calib, config as C, ensemble, fmt, means, status
 
 ORDER = ("goals", "team_goals", "dc", "h2h", "btts", "corners", "cards", "yellow", "shots", "sot", "fouls", "throws", "offsides")
 MIN_ENS = 30              # résultats minimum pour dire qui de Kelly ou du marché a raison
@@ -73,8 +75,28 @@ def _rows(real=None, boot=None, ens=None):
             sub.append(f"⚖️ {verdict}")
         if b:
             sub.append(f"📚 rejeu {fmt.pct(b[1] / b[0])} / {fmt.pct(b[2] / b[0])}")
-        out.append((group, f, [head] + (["     " + fmt.i(fmt.esc(" · ".join(sub)))] if sub else [])))
+        extra = [x for x in (sides_line(f, real), means.line(f)) if x]
+        out.append((group, f, [head] + (["     " + fmt.i(fmt.esc(" · ".join(sub)))] if sub else []) + ["     " + fmt.i(fmt.esc(x)) for x in extra]))
     return out
+
+
+SIDE_MIN = 10                   # résultats d'un sens (plus, moins…) pour l'afficher
+SIDE_WARN = 0.10                # sens à 10 points ou plus sous l'annoncé (20 résultats au moins) : ⚠️
+
+
+def sides_line(fam, real=None):
+    """« ↕️ plus 73 % / 64 % (22) · moins ⚠️ 39 % / 64 % (23) » : réalisé / annoncé de chaque sens du pari (plus / moins, oui / non, 1X / X2…), car
+    une moyenne biaisée trompe les deux sens en sens contraires et le chiffre de la famille les mélange ; '' sans sens assez suivi."""
+    cells = ((real if real is not None else calib.load()).get("_cell") or {})
+    parts = []
+    for key, acc in sorted(cells.items(), key=lambda kv: -(kv[1][0] if isinstance(kv[1], list) else 0)):
+        f, _, sd = key.partition("|")
+        if f != fam or "|" in sd or not isinstance(acc, list) or len(acc) != 3 or acc[0] < SIDE_MIN:
+            continue
+        n, w, sp = acc
+        warn = "⚠️ " if n >= 20 and w / n <= sp / n - SIDE_WARN else ""
+        parts.append(f"{sd} {warn}{fmt.pct(w / n)} / {fmt.pct(sp / n)} ({calib.count(n)})")
+    return ("↕️ " + " · ".join(parts)) if parts else ""
 
 
 def card():

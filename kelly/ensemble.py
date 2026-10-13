@@ -67,7 +67,7 @@ from .sources import xbet
 
 FILE = "ensemble.json"
 LOG_FILE = "ensemble_log.json"
-ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0", "xodds")     # = fair.ROW (testé)
+ROW = ("key", "id", "sport_key", "home", "away", "commence", "market", "name", "point", "prob", "p0", "xodds", "mu")     # = fair.ROW (testé)
 EPS = 1e-4                                  # bornes des probas dans les logits
 GRID = tuple((k + 0.5) / 40 for k in range(40))      # poids candidats : 1,25 % ... 98,75 % (jamais exactement 0 ni 1)
 OVERROUND = (0.98, 1.30)                    # somme des 1/cote d'un marché : en dehors, cotes douteuses (cellule manquante, marché suspendu...)

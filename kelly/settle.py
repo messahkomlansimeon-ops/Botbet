@@ -2,7 +2,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import calib, config as C, ensemble, fair, fmt, learn, odds, played, players, sharpgap, stats, store, track
+from . import calib, config as C, ensemble, fair, fmt, learn, means, odds, played, players, sharpgap, stats, store, track
 from .sources import fmmatch, footballdata as fd, fotmob, names, s365
 
 GOAL_MARKETS = ("h2h", "double_chance", "btts", "spreads", "totals", "team_totals_home", "team_totals_away")
@@ -89,6 +89,22 @@ def settle_pick(b, ev, fstats=None):
     if v == point:
         return "push"
     return "win" if (name == "Over") == (v > point) else "loss"
+
+
+def stat_actual(b, fstats):
+    """Nombre réel du chiffre d'un pari de stats (corners ou cartons du match, tirs / tirs cadrés / fautes / touches / hors-jeu du match ou d'une
+    équipe, corners d'une équipe, jaunes) ; None pour les buts ou si la source ne le donne pas. Comparé au nombre attendu (« mu ») : kelly/means.py."""
+    m, fstats = b["market"], fstats or {}
+    if m in FD_MARKETS:
+        v = fstats.get("corners" if "corners" in m else "cards")
+    elif m in SHOT_MARKETS:
+        v = shot_value(m, fstats)
+    else:
+        return None
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def final_text(b, ev, fstats=None):
@@ -360,6 +376,10 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
         b["result"] = settle_pick(full, ev, fst)
         if b["result"] in ("win", "loss", "push"):
             b["final"] = final_text(full, ev, fst)
+            if b.get("mu") is not None:                 # nombre réel, comparé au nombre attendu (correction des moyennes : kelly/means.py)
+                v = stat_actual(full, fst)
+                if v is not None:
+                    b["val"] = v
     if b.get("result") is None and old:
         b["result"] = UNKNOWN if ev else "void"       # score connu mais stats introuvables : non vérifiable ; pas de score : annulé
     return bool(b.get("result"))
@@ -373,6 +393,7 @@ def settle_fair(now=None, stats_for=None):
     fdata = FootballData()
     settled = [b for b in rows if _settle_fair_row(b, now, fdata, stats_for)]
     calib.add(rows, now.date())                     # cumul par famille, sens et tranche, vieilli avec le temps (fair.json : 10 jours)
+    means.learn(settled, now.date())                # attendu contre réel, par famille de stats (kelly/means.py)
     store.save(fair.FILE, rows)
     return rows, settled
 
@@ -399,7 +420,9 @@ def settle_ensemble(now=None, stats_for=None):
         return [], 0
     now = now or datetime.now(timezone.utc)
     fdata = FootballData()
-    return ensemble.settle_log(lambda r: _settle_fair_row(r, now, fdata, stats_for or _cached_fstats))
+    got = ensemble.settle_log(lambda r: _settle_fair_row(r, now, fdata, stats_for or _cached_fstats))
+    means.learn(got[0] if got else [], now.date())  # le journal suit bien plus de matchs que tes pronostics : la correction des moyennes apprend vite
+    return got
 
 
 def _combo_legs(rows):
