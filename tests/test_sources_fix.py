@@ -891,7 +891,8 @@ def test_stats_cache_atomic_and_sources_cache_pruned():
         # .cache/sources : les entrées inutilisées depuis plus de N jours disparaissent, pas celles qu'on relit chaque matin
         cache = http.cache_dir()
         os.makedirs(cache, exist_ok=True)
-        now = time.time()
+        now = http.time.time()                                                     # l'horloge simulée de prune, pas l'heure réelle
+
         old_url, used_url, young_url = "https://x.test/old", "https://x.test/used", "https://x.test/young"
         for u in (old_url, used_url, young_url):
             http._write(http._key(u), {"url": u, "fetched_at": 0, "status": 200}, b"corps " + u.encode())

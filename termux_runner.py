@@ -38,6 +38,13 @@ def log(msg, err=False):
     print(f"[termux {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}Z] {msg}", file=sys.stderr if err else sys.stdout, flush=True)
 
 
+def _safe_log(msg):
+    try:
+        log(msg, err=True)
+    except Exception:                                   # journal impossible à écrire (disque plein) : on continue quand même
+        pass
+
+
 # ---------- décisions (pures) ----------
 
 def new_state():
@@ -317,11 +324,14 @@ class Runner:
         """Toutes les WATCH_EVERY s, le suivi des matchs (--watch), en parallèle des autres passages : il ne prend pas le verrou des données (sa
         file de messages et ses compteurs s'écrivent de façon atomique), un --track de 25 min ou le matin ne le retardent plus."""
         while not STOP.is_set():
-            with self.state_lock:
-                due = time.time() - self.state["watch_at"] >= WATCH_EVERY
-            if due:
-                rc = self.run(["--watch"])
-                self._done(["--watch"], datetime.now(timezone.utc), rc)
+            try:
+                with self.state_lock:
+                    due = time.time() - self.state["watch_at"] >= WATCH_EVERY
+                if due:
+                    rc = self.run(["--watch"])
+                    self._done(["--watch"], datetime.now(timezone.utc), rc)
+            except Exception as e:                      # une erreur imprévue ne doit jamais arrêter le suivi des matchs en silence
+                _safe_log(f"suivi des matchs : erreur inattendue ({type(e).__name__}: {e}), on continue")
             STOP.wait(min(self.tick, 15))
 
     def shutdown(self):
@@ -332,23 +342,30 @@ class Runner:
         if self.watch_thread:
             threading.Thread(target=self.watch_loop, daemon=True).start()
         while not STOP.is_set():
-            self.serve.check()
-            now, epoch = datetime.now(timezone.utc), time.time()
-            if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()) and self.state["daily_try_day"] != str(now.date()):
-                log(f"⚠️ le matin du {now.date()} n'a pas tourné (téléphone éteint ?) ; prochain passage demain à {DAILY_HOUR:02d}:00 UTC", err=True)
-                self.state["daily_try_day"], self.state["daily_tries"] = str(now.date()), DAILY_MAX_TRIES
-            with self.state_lock:
-                todo = [a for a in self.plan(now, self.state, epoch) if not (self.watch_thread and a[0] == "--watch")]
-            for args in todo:
-                if STOP.is_set():
-                    break
-                if args[0] == "--daily" and now.hour > DAILY_HOUR:
-                    log(f"rattrapage du matin à {now:%H:%M} UTC (pas fait à {DAILY_HOUR:02d}:00)")
-                rc = self.run(args)
-                self._done(args, now, rc)
-                self.serve.check()
-                now = datetime.now(timezone.utc)
+            try:
+                self._pass()
+            except Exception as e:                      # une erreur imprévue (disque plein…) ne doit jamais arrêter Kelly en silence
+                _safe_log(f"passage : erreur inattendue ({type(e).__name__}: {e}), on continue")
             STOP.wait(self.tick)
+
+    def _pass(self):
+        """Un tour de la boucle principale : surveille --serve, puis lance les passages dus (--daily, --track, --xbet…)."""
+        self.serve.check()
+        now, epoch = datetime.now(timezone.utc), time.time()
+        if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()) and self.state["daily_try_day"] != str(now.date()):
+            log(f"⚠️ le matin du {now.date()} n'a pas tourné (téléphone éteint ?) ; prochain passage demain à {DAILY_HOUR:02d}:00 UTC", err=True)
+            self.state["daily_try_day"], self.state["daily_tries"] = str(now.date()), DAILY_MAX_TRIES
+        with self.state_lock:
+            todo = [a for a in self.plan(now, self.state, epoch) if not (self.watch_thread and a[0] == "--watch")]
+        for args in todo:
+            if STOP.is_set():
+                break
+            if args[0] == "--daily" and now.hour > DAILY_HOUR:
+                log(f"rattrapage du matin à {now:%H:%M} UTC (pas fait à {DAILY_HOUR:02d}:00)")
+            rc = self.run(args)
+            self._done(args, now, rc)
+            self.serve.check()
+            now = datetime.now(timezone.utc)
 
 
 LOCK_WAIT = 30                                 # secondes d'attente du verrou au démarrage

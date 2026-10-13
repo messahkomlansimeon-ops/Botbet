@@ -540,6 +540,49 @@ def test_gitignore():
     print("ok  .gitignore : base, verrous, temporaires, logs ignorés ; sauvegarde et code suivis")
 
 
+def test_unexpected_error_never_stops_the_loops():
+    """Une erreur imprévue (planning illisible, disque plein…) dans la boucle principale ou dans le fil du suivi des matchs : notée dans le
+    journal, et la boucle continue au tour suivant (ni Kelly ni le suivi ne s'arrêtent en silence)."""
+    logs = tempfile.mkdtemp(prefix="kelly-loopguard-")
+    real_logs, real_stop = R.LOGS, R.STOP
+    R.LOGS, R.STOP = logs, threading.Event()
+    calls = {"plan": 0, "watch": 0}
+
+    def plan(now, s, e):
+        calls["plan"] += 1
+        if calls["plan"] == 1:
+            raise ValueError("planning illisible")
+        return []
+
+    def fake(args):
+        calls["watch"] += 1
+        if calls["watch"] == 1:
+            raise OSError("disque plein")
+        return 0
+    st = R.new_state()
+    r = R.Runner(serve_cmd=[sys.executable, "-c", "import time; time.sleep(60)"], tick=0.05, state=st, run=fake, plan=plan)
+    old_every = R.WATCH_EVERY
+    R.WATCH_EVERY = 0
+    t = threading.Thread(target=r.loop)
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            t.start()
+            end = time.time() + 5
+            while time.time() < end and (calls["plan"] < 3 or calls["watch"] < 3):
+                time.sleep(0.05)
+            R.STOP.set()
+            t.join(5)
+    finally:
+        r.shutdown()
+        R.LOGS, R.STOP, R.WATCH_EVERY = real_logs, real_stop, old_every
+    assert calls["plan"] >= 3 and calls["watch"] >= 3, calls
+    out = err.getvalue()
+    assert "passage : erreur inattendue (ValueError: planning illisible), on continue" in out, out
+    assert "suivi des matchs : erreur inattendue (OSError: disque plein), on continue" in out, out
+    print("ok  erreur imprévue dans la boucle ou dans le suivi des matchs : notée, et la boucle continue")
+
+
 def main():
     test_reentrant_scope()
     test_daily_lock()
@@ -554,6 +597,7 @@ def main():
     test_atexit_and_stale()
     test_run_cmd_timeout_cwd()
     test_watch_thread_runs_during_long_task()
+    test_unexpected_error_never_stops_the_loops()
     test_loop_supervises_during_task()
     test_gitignore()
     print("TOUS LES TESTS DU RUNNER PASSENT")
