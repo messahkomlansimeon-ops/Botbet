@@ -79,6 +79,25 @@ def test_applied_to_means():
     print("ok  moyennes corrigées avant le calcul des chances (profils, modèle approfondi et son match moyen) : plus monte, moins baisse ; l'attendu posé reste brut")
 
 
+def test_league_factor():
+    reset()
+    rows = [row(i, 23.0, 25.0) | {"sport_key": "soccer_epl"} for i in range(60)]
+    rows += [row(100 + i, 23.0, 28.0) | {"sport_key": "soccer_xb_argentina_2"} for i in range(30)]
+    rows += [row(200 + i, 23.0, 30.0) | {"sport_key": "soccer_xb_bolivia"} for i in range(2)]
+    assert means.learn(rows, DAY) == 92
+    kf = means.factor("shots")
+    ka, kb = means.factor("shots", "soccer_xb_argentina_2"), means.factor("shots", "soccer_xb_bolivia")
+    assert abs(ka - (kf + (28 / 23 - kf) * 30 / 60)) < 1e-9, (kf, ka)              # 30 matchs : à moitié son propre écart, à moitié celui de la famille
+    assert kf < kb < kf + 0.03 and means.factor("shots", "soccer_nowhere") == kf, (kf, kb)     # 2 matchs : presque la famille ; inconnu : la famille
+    f = {"exp_shots": 23.0, "n_home": 10, "n_away": 10, "sk": "soccer_xb_argentina_2"}
+    assert f"{23.0 * ka:.1f} tirs attendus" in next(o for o in fair._stat_options(f, "H", "A") if o[0] == "team_shots_total")[4]
+    pred = {"q": 1, "stats": {"shots": {"h": 12.0, "a": 11.0, "al": 0.1, "at": 0.05}}}
+    assert abs(means.scaled(pred, "soccer_xb_argentina_2")["stats"]["shots"]["h"] - 12.0 * ka) < 1e-9
+    lines = means.league_lines("shots")
+    assert len(lines) == 1 and lines[0].endswith("28,0 réels pour 23,0 attendus (30 matchs) → ×" + f"{ka:.2f}".replace(".", ",")), lines     # Bolivie : trop peu
+    print("ok  correction par championnat : rapprochée de celle de la famille tant qu'il a peu de matchs ; appliquée aux moyennes ; affichée dès 15 matchs")
+
+
 def test_settlement_sets_actual():
     b = {"market": "team_shots_total", "home": "H", "away": "A", "group": "soccer", "who": None}
     fst = {"side": {"home": {"shots": 14}, "away": {"shots": 12}}}
@@ -105,6 +124,7 @@ def test_market_card_lines():
 def main():
     test_learn_and_factor()
     test_applied_to_means()
+    test_league_factor()
     test_settlement_sets_actual()
     test_market_card_lines()
     print("tests correction des moyennes : OK")

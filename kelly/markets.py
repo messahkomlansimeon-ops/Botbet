@@ -75,7 +75,7 @@ def _rows(real=None, boot=None, ens=None):
             sub.append(f"⚖️ {verdict}")
         if b:
             sub.append(f"📚 rejeu {fmt.pct(b[1] / b[0])} / {fmt.pct(b[2] / b[0])}")
-        extra = [x for x in (sides_line(f, real), means.line(f)) if x]
+        extra = [x for x in (sides_line(f, real), means.line(f)) if x] + [f"   🏟 {x}" for x in means.league_lines(f)]
         out.append((group, f, [head] + (["     " + fmt.i(fmt.esc(" · ".join(sub)))] if sub else []) + ["     " + fmt.i(fmt.esc(x)) for x in extra]))
     return out
 

@@ -123,7 +123,7 @@ def deep_options(f, home, away):
         return []
     why = d.get("why") or {}
     d, lh, la, xg_tag = with_xg(f, d)
-    d = means.scaled(d)                                         # moyennes de stats corrigées par le réel des matchs réglés (kelly/means.py)
+    d = means.scaled(d, f.get("sk"))                            # moyennes de stats corrigées par le réel des matchs réglés, par championnat (kelly/means.py)
     short = lambda t: strength.shorten(t, 150)                  # noqa: E731 - le message Telegram a une taille limite
     tag = {"goals": short(f"modèle Kelly{xg_tag} : {lh:.1f}-{la:.1f} buts attendus" + (f" ; {why['goals']}" if why.get("goals") else ""))}
     for kind, market, unit in (("corners", prematch.CORNERS, "corners"), ("cards", prematch.CARDS, "cartons")):
@@ -215,7 +215,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         exp = f.get("exp_" + kind)
         if market in skip or exp is None or (only is not None and "exp_" + kind not in only):
             continue
-        exp *= means.factor(kind)                               # corrigée par le réel des matchs réglés (kelly/means.py)
+        exp *= means.factor(kind, f.get("sk"))                  # corrigée par le réel des matchs réglés, par championnat (kelly/means.py)
         if not prematch.BOUNDS[kind][0] <= exp <= prematch.BOUNDS[kind][1]:
             continue
         pmf = strength.nb_pmf(exp, alpha_eff(ALPHA0[kind], exp, stat_n(f, market)))
@@ -227,7 +227,7 @@ def _stat_options(f, home, away, skip=(), only=None):
         exp = f.get(key)
         if market in skip or exp is None or (only is not None and key not in only):
             continue
-        exp *= means.factor(calib.family(market))               # corrigée par le réel des matchs réglés (kelly/means.py)
+        exp *= means.factor(calib.family(market), f.get("sk"))  # corrigée par le réel des matchs réglés, par championnat (kelly/means.py)
         if not lo <= exp <= hi:
             continue
         a = alpha_eff(alpha, exp, stat_n(f, market))
@@ -385,6 +385,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
             families |= set(STAT_MARKETS) - have.get(ev["id"], set())      # (rejeu du 09/10 : 3 matchs payés sur 14 listés n'avaient aucun pronostic stats)
         ref = ev.get("referee") or stats.referee_for(ev)          # arbitre désigné (liste du jour d'API-Football, en cache) : cartons, jaunes et fautes
         f = odds.match_numbers(ev["home_team"], ev["away_team"], key, **({"referee": ref} if ref else {}))
+        f["sk"] = ev.get("sport_key") or key                      # championnat : correction de ses moyennes de stats (kelly/means.py)
         (opts, bases), src = _options(f, ev["home_team"], ev["away_team"]), "football-data" if key != "africa" else "API-Football"
         if not opts and not paid and api_left > 0 and day is not None and stats.left_today() > C.FAIR_API_RESERVE:
             api_left -= 1
