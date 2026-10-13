@@ -6,6 +6,7 @@ from .. import store
 
 FILE = "sources_state.json"
 BLOCK_HOURS = 24
+RATE_HOURS = 1              # HTTP 429 (trop de requêtes) : une pause d'une heure suffit (un 403, un refus, coupe 24 h)
 CLOUDFLARE_HOURS = 24 * 7
 LABELS = {"footballdata": "football-data", "understat": "Understat", "fbref": "FBref",
           "fotmob": "FotMob", "betexplorer": "BetExplorer", "xbet": "1xBet", "s365": "365scores"}
@@ -97,8 +98,8 @@ def is_blocked(name):
     return bool(health(name)["blocked_until"])
 
 
-def block(name, reason, cloudflare=False):
-    until = _iso(now() + timedelta(hours=CLOUDFLARE_HOURS if cloudflare else BLOCK_HOURS))
+def block(name, reason, cloudflare=False, hours=None):
+    until = _iso(now() + timedelta(hours=hours or (CLOUDFLARE_HOURS if cloudflare else BLOCK_HOURS)))
     when = until[:16].replace("T", " ")
     if cloudflare:
         msg = f"{LABELS.get(name, name)} bloque les robots (Cloudflare) : source désactivée jusqu'au {when} UTC"

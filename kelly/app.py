@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, catalogue, chat, combos as CB, config as C, custom, ensemble, fair, fmt, freeclose, gapbets,
+from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                xprice, xworld)
 from .sources import fmmatch, http, state, xbet
@@ -741,6 +741,9 @@ def run_daily(sample=False, retry=False):
                 raise MorningRetry(scan["error"], n)
         progress.step("bilan")
         report, model = morning_report(now)
+        moved = _step("marchés entrés / sortis des combinés", calib.combo_changes, [])
+        if moved:
+            report = report + [Html("\n".join(fmt.esc(x) for x in moved))]
         progress.step("monde")
         progress.step("profils")
         fill_profiles(day, scan)                    # stats mondiales API-Football : avant l'achat des cotes (elles guident les marchés payés)
@@ -788,6 +791,10 @@ def run_daily(sample=False, retry=False):
     fair_stakes, fair_coupons, gap_rows = {}, {}, []
     messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos, fair_stakes, odds_time=odds_at,
                                                   fair_coupons=fair_coupons, gaps=gaps, gap_out=gap_rows)
+    if not sample:                                  # ⚠️ Ce matin : journée inhabituelle, relevé 1xBet coupé, proxy refusé (rien si tout va bien)
+        alert = _step("contrôle du jour", lambda: dayhealth.message(day, dayhealth.counts(world, picks, pronos), now_utc()))
+        if alert:
+            messages = [alert] + messages
     track.record(picks, {c["key"] for c in sent_picks}, day, now, single_key=single_key(sent_picks))
     if gap_rows:                                    # 💰 suivis comme les autres paris, APRÈS track.record (le pari du jour garde sa marque)
         try:

@@ -19,3 +19,6 @@ logs/
 nohup.out
 *.log
 data/watch_next.json
+
+# miroir lisible de la base (réécrit chaque soir) : jamais dans git, la sauvegarde part sur Telegram tous les 2 jours
+data/sauvegarde/

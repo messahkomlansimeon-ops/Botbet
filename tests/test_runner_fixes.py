@@ -530,14 +530,14 @@ def test_loop_supervises_during_task():
 
 def test_gitignore():
     paths = ["data/kelly.db", "data/kelly.db-wal", "data/kelly.db-shm", "data/kelly.db-journal", "data/.kelly.lock", "data/bets.json.123.tmp",
-             "data/sauvegarde/bets.json.123.tmp", "logs/termux.log", "logs/runner.lock", ".env", "sofa.env", "probe/x.json"]
+             "data/sauvegarde/bets.json.123.tmp", "data/sauvegarde/bets.json", "logs/termux.log", "logs/runner.lock", ".env", "sofa.env", "probe/x.json"]
     r = subprocess.run(["git", "check-ignore"] + paths, cwd=ROOT, capture_output=True, text=True)
     ignored = set(r.stdout.split())
     assert ignored == set(paths), set(paths) - ignored
-    keep = subprocess.run(["git", "check-ignore", "data/sauvegarde/bets.json", "bot.py", "termux_runner.py", "tests/test_runner_fixes.py"],
+    keep = subprocess.run(["git", "check-ignore", "bot.py", "termux_runner.py", "tests/test_runner_fixes.py"],
                           cwd=ROOT, capture_output=True, text=True)
-    assert keep.stdout.strip() == "", keep.stdout                        # la sauvegarde JSON et le code restent suivis
-    print("ok  .gitignore : base, verrous, temporaires, logs ignorés ; sauvegarde et code suivis")
+    assert keep.stdout.strip() == "", keep.stdout                        # le code reste suivi
+    print("ok  .gitignore : base, verrous, temporaires, logs et miroir data/sauvegarde ignorés ; code suivi")
 
 
 def test_unexpected_error_never_stops_the_loops():

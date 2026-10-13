@@ -257,6 +257,7 @@ XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir 
 # Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
 S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
 S365_PROXY = _bool("S365_PROXY", True) if SANDBOX else True     # toujours par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct (0 : tests seulement)
+PROXY_PLAN_MB = _float("PROXY_PLAN_MB", 3000)      # forfait Webshare du mois (3 Go), partagé par 1xBet et 365scores (et scrap_stat) : jauge du status
 S365_MONTH_MB = _float("S365_MONTH_MB", 200)      # plafond mensuel des données 365scores passées par le proxy (1xBet : XBET_MONTH_MB à part) ; 200 : équipes du live (10/10/2026)
 S365_GAMES_PER_RUN = _int("S365_GAMES_PER_RUN", 20)   # statistiques de match lues par passage horaire (0 = désactivé)
 S365_LISTS_PER_RUN = _int("S365_LISTS_PER_RUN", 4)    # listes de résultats (ou pages plus anciennes) lues par passage

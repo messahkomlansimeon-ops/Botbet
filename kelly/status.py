@@ -135,8 +135,11 @@ def api_lines():
             u = xbet.usage()
             out.append(f"{'✅' if u['bytes'] < 0.9 * C.XBET_MONTH_MB * 1e6 else '⚠️'} "
                        + _gauge("1xBet (proxy)", round(u["bytes"] / 1e6), C.XBET_MONTH_MB, " Mo"))
-        u = s365.usage()
-        out.append(f"{'✅' if u['bytes'] < 0.9 * C.S365_MONTH_MB * 1e6 else '⚠️'} " + _gauge("365scores (proxy)", round(u["bytes"] / 1e6), C.S365_MONTH_MB, " Mo"))
+        u2 = s365.usage()
+        out.append(f"{'✅' if u2['bytes'] < 0.9 * C.S365_MONTH_MB * 1e6 else '⚠️'} " + _gauge("365scores (proxy)", round(u2["bytes"] / 1e6), C.S365_MONTH_MB, " Mo"))
+        tot = (xbet.usage()["bytes"] + u2["bytes"]) / 1e6
+        share = tot / C.PROXY_PLAN_MB if C.PROXY_PLAN_MB else 0
+        out.append(f"{'✅' if share < 0.8 else '⚠️' if share < 0.95 else '❌'} " + _gauge("Forfait Webshare (Kelly)", round(tot), C.PROXY_PLAN_MB, " Mo"))
     except Exception as e:                              # noqa: BLE001
         out.append(f"⚠️ Proxy : compteurs illisibles ({type(e).__name__})")
     try:
@@ -158,6 +161,9 @@ def _at(iso, now):
     return f"{dt:%Hh%M}" if dt.date() == now.date() else f"{dt:%d/%m %Hh%M}"
 
 
+NEEDED = ("FotMob", "365scores")       # sources dont un blocage n'est jamais « normal » (suivi des matchs, règlement, secours)
+
+
 def source_lines(now=None):
     """Sources de stats en lignes courtes (texte brut) : « ✅ football-data · 11 440 · 04h03 » ; les sources bloquées par leur site (robots.txt,
     blocage) regroupées sur une ligne « 💤 … (normal) » ; les avertissements comptés (« ⚠️ 3 téléchargements reportés au prochain passage ») au lieu
@@ -169,6 +175,9 @@ def source_lines(now=None):
     for m, label, unit in mods:
         h = m.health()
         err = h["last_error"] or ""
+        if h["blocked_until"] and label in NEEDED:          # FotMob, 365scores : leur blocage coupe le suivi des matchs (et son secours) : pas « normal »
+            out.append(f"❌ {label} : {err[:110] or 'bloqué par le site'}")
+            continue
         if h["blocked_until"] or ("robots.txt" in err and not h["ok"]):
             sleeping.append(label)
             continue
@@ -249,6 +258,130 @@ def learning_lines(top=6):
     return out if fams or ld else []
 
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _runner_alive(lock):
+    """Le runner du téléphone tient-il son verrou (logs/runner.lock) ? None si le fichier n'existe pas (pas de runner ici : PC)."""
+    import fcntl
+    if not os.path.exists(lock):
+        return None
+    try:
+        with open(lock, "a") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return True
+            fcntl.flock(f, fcntl.LOCK_UN)
+            return False
+    except OSError:
+        return None
+
+
+def _guard_alive():
+    """La garde (« kelly guard ») tourne-t-elle ? (processus du même utilisateur, /proc)"""
+    try:
+        for pid in os.listdir("/proc"):
+            if pid.isdigit():
+                try:
+                    with open(f"/proc/{pid}/cmdline", "rb") as f:
+                        if b"kelly\x00guard" in f.read():
+                            return True
+                except OSError:
+                    continue
+    except OSError:
+        pass
+    return False
+
+
+def _ago(epoch, now):
+    m = int(max(0, now.timestamp() - epoch) // 60)
+    return f"il y a {m} min" if m < 90 else f"il y a {m // 60} h"
+
+
+def phone_lines(now=None, root=ROOT):
+    """« 📱 Kelly sur le téléphone » (runner Termux : logs/runner_state.json, logs/runner.lock) : le programme tourne-t-il, matin, sauvegarde Telegram,
+    surveillance extérieure, garde et relance au démarrage, alertes en attente. [] hors téléphone (pas de runner)."""
+    import json
+    from . import store
+    now = now or datetime.now(timezone.utc)
+    logs = os.path.join(root, "logs")
+    alive = _runner_alive(os.path.join(logs, "runner.lock"))
+    try:
+        with open(os.path.join(logs, "runner_state.json"), encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = None
+    if alive is None and st is None:
+        return []
+    st = st if isinstance(st, dict) else {}
+    out = []
+    if alive is False:
+        out.append("❌ Le programme principal de Kelly est arrêté : plus de matin ni de suivi des matchs (kelly start dans Termux)")
+    else:
+        w = st.get("watch_at") or 0
+        out.append("✅ Kelly tourne" + (f" · suivi des matchs {_ago(w, now)}" if w else ""))
+    day = str(now.date())
+    done = store.load("daily_done.json", {})
+    if isinstance(done, dict) and done.get("day") == day:
+        out.append(f"🌅 Matin fait à {str(done.get('at', ''))[11:16].replace(':', 'h')} UTC")
+    elif st.get("daily_try_day") == day and st.get("daily_tries", 0) >= 3:
+        out.append("❌ Matin raté aujourd'hui (3 essais) : kelly logs")
+    elif now.hour >= 5:
+        out.append("⚠️ Matin pas encore fait aujourd'hui")
+    if st.get("backup_fails", 0) >= 3:
+        out.append(f"⚠️ Sauvegarde Telegram : {st['backup_fails']} essais ratés de suite" + (f" (dernière le {st['backup_day'][8:10]}/{st['backup_day'][5:7]})"
+                                                                                         if st.get("backup_day") else ""))
+    elif st.get("backup_day"):
+        out.append(f"💾 Sauvegarde Telegram du {st['backup_day'][8:10]}/{st['backup_day'][5:7]}")
+    hc = st.get("hc_at") or 0
+    if hc:
+        late = now.timestamp() - hc > 20 * 60
+        out.append(f"{'❌' if late else '✅'} Surveillance extérieure : dernier signal {_ago(hc, now)}" + (" (proxy en panne ?)" if late else ""))
+    else:
+        out.append("⚪ Surveillance extérieure non réglée (HC_PING_URL dans .env, voir DEPLOY_TERMUX.md)")
+    boot = os.path.exists(os.path.expanduser("~/.termux/boot/kelly"))
+    guard = _guard_alive()
+    if not (boot and guard):
+        out.append(("✅" if guard else "⚠️") + f" Garde {'active' if guard else 'absente (kelly restart)'} · "
+                   + ("✅ relance au démarrage" if boot else "⚠️ relance au démarrage absente (Termux:Boot)"))
+    pend = st.get("pending") or {}
+    if pend:
+        out.append(f"⏳ {len(pend)} alerte(s) en attente d'envoi (réseau ?)")
+    return out
+
+
+def xbet_lines(now=None):
+    """1xBet en une ou deux lignes : dernier relevé (matchs lus, heure), coupé (délai, plafond, panne), format suspect, refus d'accès, proxy refusé."""
+    from .sources import http, state
+    now = now or datetime.now(timezone.utc)
+    allst = state._all()
+    h, run = state.health("xbet"), (allst.get("xbet") or {}).get("run") or {}
+    out = []
+    if h["blocked_until"]:
+        out.append(f"❌ 1xBet : {(h['last_error'] or 'accès refusé')[:110]}")
+    elif h["ok"] is None:
+        return []
+    elif not h["ok"]:
+        out.append(f"❌ 1xBet : {http.cause(h['last_error'], '1xBet')}")
+    else:
+        at = _at(h["last_success"], now)
+        out.append(f"✅ 1xBet · {_num(h['rows'])} matchs lus" + (f" · {at}" if at else ""))
+    if run.get("cut"):
+        out.append(f"⚠️ 1xBet : dernier relevé coupé ({run['cut']}), {run.get('read', 0)} lus, {run.get('left', 0)} pas lus")
+    if run.get("format"):
+        out.append("❌ 1xBet répond sans cotes : format du site changé ?")
+    p = allst.get("proxy") or {}
+    if p.get("refused"):
+        try:
+            recent = now - datetime.fromisoformat(p["refused_at"]) < timedelta(hours=6)
+        except (KeyError, TypeError, ValueError):
+            recent = False
+        if recent:
+            out.append(f"❌ Proxy Webshare : {http.cause(p['refused'])}")
+    return out
+
+
 def report(now=None):
     """Le message « status » (HTML) : verdict en tête, puis services (PC), sources, apprentissage, quotas."""
     from . import fmt
@@ -265,13 +398,19 @@ def report(now=None):
     if svc:
         blocks.append([fmt.b("⚙️ Services")] + [fmt.esc(x) for x in svc])
     try:
+        ph = phone_lines(now)
+        if ph:
+            blocks.append([fmt.b("📱 Kelly sur le téléphone")] + [fmt.esc(x) for x in ph])
+    except Exception as e:                              # noqa: BLE001
+        blocks.append([f"⚠️ Téléphone : état illisible ({type(e).__name__})"])
+    try:
         wl = watch_lines(now)
         if wl:
             blocks.append([fmt.b("🎫 Suivi des matchs")] + [fmt.esc(x) for x in wl])
     except Exception as e:                              # noqa: BLE001
         blocks.append([f"⚠️ Suivi des matchs : état illisible ({type(e).__name__})"])
     try:
-        blocks.append([fmt.b("📡 Sources")] + [fmt.esc(x) for x in source_lines(now)])
+        blocks.append([fmt.b("📡 Sources")] + [fmt.esc(x) for x in xbet_lines(now) + source_lines(now)])
     except Exception as e:                              # noqa: BLE001
         blocks.append([f"⚠️ Sources de stats : rapport illisible ({type(e).__name__})"])
     try:

@@ -412,6 +412,30 @@ def new_rule_ok(fam, data=None):
     return r is None or r["roi"] + r["hw"] >= C.NEW_RULE_ROI_FLOOR
 
 
+COMBO_FILE = "combo_fams.json"      # {famille: dans les combinés ?} au dernier matin (combo_changes)
+
+
+def combo_changes(data=None):
+    """Familles sorties des combinés ou revenues depuis le dernier matin -> lignes (« 📏 Tirs : retirés des combinés, réussite 45 % pour 65 % annoncés… ») ;
+    mémorise l'état du jour. Seulement les familles assez suivies pour le bilan (SHOW_MIN) ; le tout premier matin : rien (référence)."""
+    data = data if data is not None else load()
+    now = {f: in_combos(f, data) for f, a in data.items() if not f.startswith("_") and _acc_list(a) and a[0] >= SHOW_MIN}
+    old = store.load(COMBO_FILE, None)
+    store.save(COMBO_FILE, now)
+    if not isinstance(old, dict):
+        return []
+    out = []
+    for f in sorted(now):
+        if now[f] == old.get(f, True):
+            continue
+        n, w, s = data[f]
+        rate = f"réussite {w / n:.0%} pour {s / n:.0%} annoncés".replace("%", " %")
+        label = LABELS.get(f, f)
+        out.append(f"📏 {label[0].upper() + label[1:]} : " + (f"de retour dans les combinés ({rate})" if now[f] else
+                                                              f"retirés des combinés ({rate}) ; ils reviendront quand ils redeviendront fiables"))
+    return out
+
+
 def in_combos(fam, data=None):
     """La famille a-t-elle sa place dans les combinés (combos.data_ok, affichages « écartés des combinés ») : fiabilité suffisante (family_k real_only) et
     verdict du gain réel de la nouvelle règle (new_rule_ok)."""

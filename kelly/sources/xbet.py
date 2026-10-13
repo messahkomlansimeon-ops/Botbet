@@ -124,6 +124,9 @@ def menu():
                 for x in liga.get("subLigas") or [liga]:
                     if x.get("nameEng") and x.get("id") and x["nameEng"] not in out:
                         out[x["nameEng"]] = {"id": x["id"]}
+    if not out:                                     # le football a toujours des championnats : la réponse n'a plus la forme connue
+        http.invalidate(url("leftMenuSports", selectedMs="2.1"), JSON_H)
+        raise XbetError(f"{FORMAT} (menu sans championnat)")
     return out
 
 
@@ -462,6 +465,8 @@ def proxy():
     return None
 
 
+FORMAT = "format du site 1xBet changé ?"          # réponse lisible mais vide là où il y a toujours des données
+EMPTY_SHARE, EMPTY_MIN = 0.8, 5                   # cotes vides pour 80 % des matchs lus (5 au moins) : le format a sans doute changé
 HARD_FAIL = ("ProxyError", "ConnectTimeout")                    # le proxy lui-même ne répond pas : une autre session Webshare peut aider
 SOFT_FAIL = ("ReadTimeout", "SSLError", "ConnectionError")     # peut aussi venir de 1xBet (coupure de son côté) : au plus UNE autre session par relevé
 PROXY_FAIL = HARD_FAIL + SOFT_FAIL
@@ -639,10 +644,13 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
     if ses.why:
         state.record_run(SOURCE, 0, [ses.why])
         return out
-    fails = 0
+    fails, cut, events = 0, None, list(events)
     try:                                            # la session est TOUJOURS fermée : les données du proxy sont comptées même si un match fait lever
-        for key, ev in events:
-            if len(out) >= max_matches or (deadline and time.monotonic() > deadline) or ses.full():
+        for i, (key, ev) in enumerate(events):
+            if len(out) >= max_matches:
+                break
+            if (deadline and time.monotonic() > deadline) or ses.full():
+                cut = (i, "délai dépassé" if not ses.full() else "plafond du mois atteint" if not state.is_blocked(SOURCE) else "1xBet refuse l'accès")
                 break
             if ev.get("xgid"):
                 g = {"gid": ev["xgid"], "home": ev["home_team"], "away": ev["away_team"]}
@@ -673,11 +681,26 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
                 fails += 1
                 if fails >= BREAKER:                # proxy ou réseau en panne : inutile d'attendre le délai de chaque match restant
                     errors.append(f"relevé interrompu : {BREAKER} matchs de suite en échec (proxy ou réseau)")
+                    cut = (i + 1, "proxy ou réseau en panne")
                     break
     finally:
         ses.close(f"cotes de {len(out)} match(s)")
+        empty = sum(1 for v in out.values() if not v["px"])
+        if len(out) >= EMPTY_MIN and empty >= EMPTY_SHARE * len(out):
+            errors.insert(0, f"{FORMAT} (cotes vides pour {empty}/{len(out)} matchs)")
         state.record_run(SOURCE, len(out), errors)
+        _note_run(len(out), len(events), cut, errors)
     return out
+
+
+def _note_run(read, want, cut, errors):
+    """Bilan du dernier relevé pour le status et le message du matin (sources_state.json, source « xbet », clé « run ») : matchs lus, prévus, coupure
+    (« délai dépassé »…) et format suspect. Ne lève jamais."""
+    try:
+        state._put(SOURCE, run={"at": state._iso(state.now()), "read": read, "want": want, "cut": cut[1] if cut else None,
+                                "left": max(0, want - cut[0]) if cut else 0, "format": any(FORMAT in e for e in errors)})
+    except Exception as e:                          # noqa: BLE001
+        print(f"[1xbet] bilan du relevé non noté : {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def save_coupon(legs):

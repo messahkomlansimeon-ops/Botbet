@@ -36,6 +36,10 @@ TIMEOUTS = {"--watch": 540, "--track": 1500, "--daily": 5400, "--xbet": 1500, "-
 HC_EVERY = 300               # signal de vie à healthchecks.io (HC_PING_URL dans .env) toutes les 5 min, PAR LE PROXY (ton IP n'est jamais révélée) ...
 SERVE_DOWN_FAIL = 900        # ... « en panne » (/fail) si l'écoute Telegram est arrêtée depuis 15 min : healthchecks te prévient sur Telegram par son propre bot
 PROXY_FILE = os.path.expanduser("~/.config/scrap_stat/sofa.env")
+HEALTH_EVERY = 60            # surveillance du runner (alertes Telegram, une fois chacune) : écoute plantée, disque, base, alertes en attente
+DISK_LOW_MB, DISK_OK_MB = 200, 400       # place libre du téléphone : alerte sous 200 Mo, « libérée » au-dessus de 400 Mo
+DBCHECK_HOUR = 3             # contrôle quotidien de la base (PRAGMA quick_check) dès 03:00 UTC, avant le matin
+BACKUP_FAILS_ALERT = 6       # sauvegardes Telegram ratées de suite (une par heure) avant de prévenir
 
 BACKOFF_BASE, BACKOFF_CAP, STABLE_SECS = 15, 900, 120      # relance de --serve : 15 s, 30 s, 1 min ... 15 min ; stable après 2 min de vie
 STOP = threading.Event()
@@ -77,7 +81,8 @@ def _safe_log(msg):
 
 def new_state():
     return {"watch_at": 0.0, "track_key": "", "daily_ok_day": "", "daily_try_day": "", "daily_tries": 0, "daily_try_at": 0.0,
-            "xbet_day": "", "evening_day": "", "export_day": "", "tune_day": "", "backup_day": "", "backup_try": 0.0}
+            "xbet_day": "", "evening_day": "", "export_day": "", "tune_day": "", "backup_day": "", "backup_try": 0.0,
+            "backup_fails": 0, "dbcheck_day": "", "said": {}, "pending": {}, "hc_at": 0.0}
 
 
 def backoff_delay(fails):
@@ -138,7 +143,9 @@ def mark_done(state, args, now, epoch, rc):
     elif name == "--backup-auto":                   # réussie : la prochaine dans BACKUP_EVERY_DAYS jours ; ratée : retentée dans l'heure
         state["backup_try"] = epoch
         if rc == 0:
-            state["backup_day"] = day
+            state["backup_day"], state["backup_fails"] = day, 0
+        else:
+            state["backup_fails"] += 1
     else:
         key = {"--xbet": "xbet_day", "--evening": "evening_day", "--export": "export_day", "--tune": "tune_day"}.get(name)
         if key:
@@ -320,6 +327,67 @@ class ServeSupervisor:
         return 0 if d is None else max(0.0, self.clock() - d)
 
 
+# ---------- alertes Telegram du runner ----------
+
+def telegram_say(text, env=os.environ, post=None):
+    """Message Telegram envoyé DIRECTEMENT par le runner (sans le code de Kelly : marche même si bot.py est cassé ou si l'écoute plante) -> True s'il est
+    parti. Jamais l'adresse dans le journal (elle contient le token)."""
+    token, chat = env.get("TELEGRAM_TOKEN"), env.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return False
+    try:
+        if post is None:
+            import requests
+            post = requests.post
+        data = {"chat_id": chat, "text": text, "disable_web_page_preview": "true"} | ({"disable_notification": "true"} if quiet_now(env=env) else {})
+        r = post(f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=(10, 30))
+        return getattr(r, "status_code", 200) < 400
+    except Exception:                                   # noqa: BLE001 - réseau : l'alerte reste en attente (Runner.alert)
+        return False
+
+
+def quiet_now(now=None, env=os.environ):
+    """Heures calmes (QUIET_HOURS, « 23-7 » par défaut, heure d'Abidjan = UTC ; « off » : jamais) : les alertes du runner arrivent alors sans sonnerie."""
+    spec = (env.get("QUIET_HOURS") or "23-7").strip().lower()
+    try:
+        a, b = (int(x) for x in spec.split("-"))
+    except ValueError:
+        return False
+    h = (now or datetime.now(timezone.utc)).hour
+    return a <= h or h < b if a > b else a <= h < b
+
+
+def daily_why(rc):
+    """Raison d'un passage du matin raté, en mots simples."""
+    return {124: "trop long, interrompu au bout de 90 min", 75: "liste des matchs injoignable", 143: "arrêté en route"}.get(rc, f"erreur, code {rc}")
+
+
+def disk_free_mb(path=ROOT):
+    try:
+        return shutil.disk_usage(path).free / 1e6
+    except OSError:
+        return None
+
+
+def db_check(path=None):
+    """Contrôle rapide de la base (PRAGMA quick_check, lecture seule) -> None si elle va bien (ou n'existe pas), sinon ce qui ne va pas."""
+    import sqlite3
+    path = path or os.path.join(os.environ.get("DATA_DIR") or os.path.join(ROOT, "data"), "kelly.db")
+    if not os.path.exists(path):
+        return None
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=60)
+        try:
+            res = con.execute("PRAGMA quick_check").fetchone()
+        finally:
+            con.close()
+    except sqlite3.OperationalError as e:
+        return None if "locked" in str(e) else str(e)[:120]       # occupée : on réessaiera
+    except sqlite3.Error as e:
+        return str(e)[:120]
+    return None if res and res[0] == "ok" else str(res[0] if res else "contrôle impossible")[:120]
+
+
 # ---------- signal de vie (healthchecks.io) ----------
 
 def proxy_url(env=os.environ, path=PROXY_FILE):
@@ -343,8 +411,8 @@ class Heartbeat:
     Kelly arrêtée. L'écoute Telegram arrêtée depuis SERVE_DOWN_FAIL s : signal « en panne » (/fail) avec la raison, tout de suite. TOUJOURS par le proxy
     (jamais en direct : ton IP n'est pas révélée) ; sans proxy ou sans HC_PING_URL : rien n'est envoyé. L'adresse n'est jamais écrite dans le journal."""
 
-    def __init__(self, url, serve, proxy=proxy_url, post=None):
-        self.url, self.serve, self.proxy, self._post = (url or "").strip().rstrip("/"), serve, proxy, post
+    def __init__(self, url, serve, proxy=proxy_url, post=None, on_ok=None):
+        self.url, self.serve, self.proxy, self._post, self.on_ok = (url or "").strip().rstrip("/"), serve, proxy, post, on_ok
         self.failing, self.said = False, set()
 
     def _say_once(self, key, msg):
@@ -354,6 +422,8 @@ class Heartbeat:
 
     def status(self):
         """(en panne ?, texte envoyé avec le signal)."""
+        if not (os.environ.get("TELEGRAM_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID")):
+            return True, "TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID absent du .env : Kelly ne peut rien t'envoyer"
         down = self.serve.down_for()
         if down >= SERVE_DOWN_FAIL:
             return True, f"écoute Telegram arrêtée depuis {down / 60:.0f} min (plantages répétés : kelly logs)"
@@ -380,6 +450,8 @@ class Heartbeat:
             self._say_once("err", f"signal de vie non envoyé ({type(e).__name__}) ; nouvel essai toutes les {HC_EVERY // 60} min")
         if ok:
             self.said.discard("err")
+            if self.on_ok:
+                self.on_ok()
             if fail != self.failing:
                 log(("⚠️ signal « en panne » envoyé à healthchecks : " + text) if fail else "signal de vie : de nouveau « ok »", err=fail)
             self.failing = fail
@@ -440,12 +512,96 @@ class Runner:
         self.state = state if state is not None else load_state()
         self.watch_thread = watch_thread                # suivi des matchs (--watch) dans son propre fil : jamais bloqué par --track, --daily, --xbet...
         self.state_lock = threading.Lock()
-        self.heartbeat = Heartbeat(os.environ.get("HC_PING_URL"), self.serve)
+        self.heartbeat = Heartbeat(os.environ.get("HC_PING_URL"), self.serve, on_ok=self._hc_ok)
+        self.say = telegram_say                         # alertes du runner (remplaçable : tests)
+        self.disk, self.dbcheck = disk_free_mb, db_check
+        self._disk_at = 0.0
+
+    def _hc_ok(self):
+        """Dernier signal de vie parti (montré par 🩺 status)."""
+        with self.state_lock:
+            self.state["hc_at"] = time.time()
+            save_state(self.state)
+
+    def alert(self, key, text):
+        """Alerte Telegram UNE fois par `key` (runner_state.json « said ») ; réseau coupé : gardée (« pending ») et renvoyée au prochain contrôle."""
+        with self.state_lock:
+            if key in self.state["said"] or key in self.state["pending"]:
+                return
+            self.state["pending"][key] = text
+            save_state(self.state)
+        log(f"alerte : {text[:120]}", err=True)
+        self.flush_alerts()
+
+    def flush_alerts(self):
+        with self.state_lock:
+            todo = list(self.state["pending"].items())
+        for key, text in todo:
+            if not self.say(text):
+                return                                  # réseau ou Telegram en panne : on réessaie au prochain contrôle
+            with self.state_lock:
+                self.state["pending"].pop(key, None)
+                self.state["said"][key] = time.time()
+                cut = time.time() - 30 * 86400
+                self.state["said"] = {k: v for k, v in self.state["said"].items() if v >= cut}
+                save_state(self.state)
+
+    def forget(self, key):
+        """`key` n'est plus en cours (l'écoute est revenue, la place est libérée) : True s'il avait été annoncé."""
+        with self.state_lock:
+            was = self.state["said"].pop(key, None) is not None or self.state["pending"].pop(key, None) is not None
+            if was:
+                save_state(self.state)
+        return was
+
+    def check_health(self, now=None):
+        """Un contrôle (toutes les HEALTH_EVERY s, fil à part) : alertes en attente, écoute Telegram plantée depuis 15 min (puis « rétablie »), place
+        libre du téléphone (toutes les 10 min), contrôle de la base une fois par jour dès DBCHECK_HOUR h UTC."""
+        now = now or datetime.now(timezone.utc)
+        self.flush_alerts()
+        down = self.serve.down_for()
+        if down >= SERVE_DOWN_FAIL:
+            self.alert("serve", f"⚠️ Kelly : l'écoute Telegram plante en boucle depuis {down / 60:.0f} min, tes commandes et boutons ne sont pas lus. "
+                                "Les passages (matin, suivi des matchs) continuent. Détail : kelly logs (dans Termux).")
+        elif down == 0 and self.forget("serve"):
+            self.alert(f"serve-ok|{now:%Y-%m-%d %H:%M}", "✅ Kelly : l'écoute Telegram est rétablie, tes commandes sont de nouveau lues.")
+        if time.time() - self._disk_at >= 600:
+            self._disk_at = time.time()
+            free = self.disk()
+            if free is not None and free < DISK_LOW_MB:
+                self.alert("disk", f"⚠️ Kelly : plus que {free:.0f} Mo de libre sur le téléphone, elle risque de ne plus pouvoir écrire ses données. "
+                                   "Libère de la place (photos, vidéos, applis).")
+            elif free is not None and free > DISK_OK_MB and self.forget("disk"):
+                self.alert(f"disk-ok|{now:%Y-%m-%d}", f"✅ Kelly : place libérée sur le téléphone ({free:.0f} Mo libres).")
+        day = str(now.date())
+        if now.hour >= DBCHECK_HOUR and self.state["dbcheck_day"] != day:
+            bad = self.dbcheck()
+            with self.state_lock:
+                self.state["dbcheck_day"] = day
+                save_state(self.state)
+            if bad:
+                self.alert(f"db|{day}", f"⚠️ Kelly : sa base de données est abîmée (contrôle du jour : {bad}). Restaure la dernière sauvegarde reçue ici : "
+                                        "kelly restaurer (dans Termux).")
+
+    def health_loop(self, every=HEALTH_EVERY):
+        while not STOP.wait(every):
+            try:
+                self.check_health()
+            except Exception as e:                      # noqa: BLE001 - le fil ne meurt jamais
+                _safe_log(f"surveillance : {type(e).__name__}: {e}")
 
     def _done(self, args, now, rc):
         with self.state_lock:
             mark_done(self.state, args, now, time.time(), rc)
             save_state(self.state)
+            st = dict(self.state)
+        day = str(now.date())
+        if args[0] == "--daily" and rc != 0 and st["daily_ok_day"] != day and st["daily_tries"] >= DAILY_MAX_TRIES:
+            self.alert(f"daily|{day}", f"⚠️ Kelly : le passage du matin du {now:%d/%m} a échoué {DAILY_MAX_TRIES} fois ({daily_why(rc)}) : pas de paris ce "
+                                       "matin. Le suivi des matchs et tes commandes continuent. Pour le relancer : cd ~/kelly && python bot.py --daily --force")
+        if args[0] == "--backup-auto" and st["backup_fails"] >= BACKUP_FAILS_ALERT:
+            self.alert(f"backup|{st['backup_day'] or 'jamais'}", f"⚠️ Kelly : la sauvegarde sur Telegram ne part plus ({st['backup_fails']} essais ratés"
+                                                                 f"{', dernière réussie le ' + st['backup_day'] if st['backup_day'] else ''}). Détail : kelly logs.")
 
     def _watch_wanted(self):
         """Un passage du suivi est-il demandé avant les 10 min (⏰ 5 min avant le 1er match d'un coupon) ? data/watch_next.json (watch.plan_next) donne
@@ -480,6 +636,7 @@ class Runner:
             threading.Thread(target=self.watch_loop, daemon=True).start()
         if self.heartbeat.url:
             threading.Thread(target=self.heartbeat.loop, daemon=True).start()
+        threading.Thread(target=self.health_loop, daemon=True).start()
         while not STOP.is_set():
             try:
                 self._pass()
@@ -495,6 +652,8 @@ class Runner:
         if now.hour >= DAILY_LAST_HOUR and self.state["daily_ok_day"] != str(now.date()) and self.state["daily_try_day"] != str(now.date()):
             log(f"⚠️ le matin du {now.date()} n'a pas tourné (téléphone éteint ?) ; prochain passage demain à {DAILY_HOUR:02d}:00 UTC", err=True)
             self.state["daily_try_day"], self.state["daily_tries"] = str(now.date()), DAILY_MAX_TRIES
+            self.alert(f"nodaily|{now.date()}", f"⚠️ Kelly : le passage du matin du {now:%d/%m} n'a pas tourné (téléphone éteint ou Kelly arrêtée jusqu'à "
+                                                f"{DAILY_LAST_HOUR}h UTC). Prochain passage demain à {DAILY_HOUR:02d}h00.")
         with self.state_lock:
             todo = [a for a in self.plan(now, self.state, epoch) if not (self.watch_thread and a[0] == "--watch")]
         for args in todo:

@@ -37,6 +37,14 @@ class Proc:
 
 
 def test_heartbeat():
+    os.environ.update(TELEGRAM_TOKEN="t", TELEGRAM_CHAT_ID="c")          # clés présentes : sinon « en panne » d'office (test_infra_alerts)
+    try:
+        _heartbeat()
+    finally:
+        os.environ.pop("TELEGRAM_TOKEN"), os.environ.pop("TELEGRAM_CHAT_ID")
+
+
+def _heartbeat():
     clk = Clock()
     sv = R.ServeSupervisor(["x"], clock=clk)
     sent = []

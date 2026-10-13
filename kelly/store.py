@@ -2,7 +2,8 @@
 (« bets.json », « archive/tracked-2026.json »...) et son contenu JSON : load / save ne changent pas pour le reste du code.
 Les anciens fichiers data/*.json sont importés une seule fois, à la création de la base, puis rangés dans data/sauvegarde/ ; une base
 recréée (kelly.db perdu) sans ancien fichier se remplit depuis data/sauvegarde/ (_restore_backup) au lieu de repartir à vide.
-Sauvegarde lisible (et commitée par git) : export() écrit chaque document en JSON dans data/sauvegarde/ ; import_dir() restaure."""
+Sauvegarde lisible (hors git : la base part sur Telegram tous les 2 jours, kelly/backup.py) : export() écrit chaque document en JSON dans
+data/sauvegarde/ ; import_dir() restaure."""
 import contextlib
 import fcntl
 import json

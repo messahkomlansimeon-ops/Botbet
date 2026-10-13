@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import os
@@ -127,10 +128,22 @@ def proxy_alive(proxy):
     return False
 
 
+PROXY_REFUSED = {"407": "proxy : mot de passe refusé (407)", "402": "proxy : forfait épuisé (402)"}
+
+
+def proxy_refusal(e):
+    """Le proxy refuse-t-il de servir (mot de passe refusé 407, forfait Webshare épuisé 402) ? -> texte court (sans l'adresse), sinon None."""
+    if not isinstance(e, requests.exceptions.ProxyError):
+        return None
+    m = re.search(r"Tunnel connection failed: (\d{3})", str(e))
+    return PROXY_REFUSED.get(m.group(1)) if m else None
+
+
 def _proxy_failed(proxy, e):
     """Échec par le proxy : le proxy LUI-MÊME est injoignable (connexion impossible ou trop lente, adresse introuvable) -> tenu pour en panne
     PROXY_DOWN_S s. Une session Webshare en panne (« Tunnel connection failed: 502 ») ne compte pas : une autre session peut marcher (xbet)."""
-    if isinstance(e, requests.ConnectTimeout) or (isinstance(e, requests.exceptions.ProxyError) and "Tunnel connection failed" not in str(e)):
+    if (isinstance(e, requests.ConnectTimeout) or proxy_refusal(e)       # refus du proxy : aucune session ne marchera
+            or (isinstance(e, requests.exceptions.ProxyError) and "Tunnel connection failed" not in str(e))):
         _proxy_down[_phost(proxy)] = time.monotonic() + PROXY_DOWN_S
 
 
@@ -148,6 +161,10 @@ def cause(error, who="365scores"):
     e = str(error or "")
     if NO_PROXY in e or "proxy introuvable" in e:
         return "proxy absent : rien n'est lu (jamais en direct)"
+    if "mot de passe refusé" in e:
+        return "le proxy refuse le mot de passe (vérifie XBET_PROXY)"
+    if "forfait épuisé" in e:
+        return "forfait du proxy Webshare épuisé"
     if any(k in e for k in ("proxy injoignable", "ProxyError", "ConnectTimeout")):
         return "le proxy ne répond pas"
     m = re.search(r"HTTP (\d{3})", e)
@@ -393,7 +410,11 @@ def _request(url, headers=None):
                 r = requests.get(url, headers=h, timeout=TIMEOUT)
             _count(domain, r)
         except requests.RequestException as e:     # le message ne cite jamais le proxy (il contient le mot de passe)
-            r, err = None, f"réseau indisponible ({type(e).__name__})"
+            refused = proxy_refusal(e)
+            r, err = None, refused or f"réseau indisponible ({type(e).__name__})"
+            if refused:                             # gardé pour le status et le message du matin (state « proxy »)
+                with contextlib.suppress(Exception):
+                    state._put("proxy", refused=refused, refused_at=state._iso(state.now()))
             if proxy:
                 _proxy_failed(proxy, e)
             stale = _sessions.pop(domain, None)     # connexion par le proxy cassée : le nouvel essai en ouvre une neuve
@@ -602,7 +623,7 @@ def fetch(url, source, ttl, headers=None, check_robots=True):
         state.block(source, f"HTTP {code}, Cloudflare", cloudflare=True)
         return _fail(url, cached, "Cloudflare bloque les robots", blocked=True, status=code)
     if code in (403, 429):
-        state.block(source, f"HTTP {code}")
+        state.block(source, f"HTTP {code}", hours=state.RATE_HOURS if code == 429 else None)     # 429 : trop de requêtes, pause d'une heure
         return _fail(url, cached, f"HTTP {code} : accès refusé", blocked=True, status=code)
     if code >= 400:
         return _fail(url, cached, f"HTTP {code}", status=code)
