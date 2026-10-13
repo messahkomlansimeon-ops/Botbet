@@ -72,6 +72,21 @@ case "$1" in
         shift
         python tools/marches.py "$@"
         ;;
+    restaurer|restore)
+        # kelly restaurer [fichier.zip] : installe une sauvegarde reçue sur Telegram (sans fichier : la plus récente des téléchargements),
+        # Kelly arrêtée pendant ce temps puis relancée ; l'ancienne base est gardée à côté (data/kelly.db.avant-restauration-…)
+        cd "$DIR" || exit 1
+        [ -d "$HOME/storage" ] || { has termux-setup-storage && termux-setup-storage && sleep 3; }
+        was=0; running && was=1
+        [ "$was" = 1 ] && "$0" stop
+        if python bot.py --restore ${2:+"$2"}; then
+            echo "🚀 Relance de Kelly..."
+            "$0" start
+        else
+            [ "$was" = 1 ] && "$0" start
+            exit 1
+        fi
+        ;;
     suivi)
         # contrôle du suivi des matchs et des notifications (lecture seule)
         cd "$DIR" || exit 1
@@ -114,7 +129,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log}"
+        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log|restaurer}"
         exit 1
         ;;
 esac

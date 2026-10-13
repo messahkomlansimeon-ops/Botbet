@@ -33,6 +33,7 @@ L'orchestrateur centralisé en Python ([`termux_runner.py`](termux_runner.py)) r
 5. **Relevé de l'après-midi (`--xbet`)** : chaque jour à 15:00 UTC (cotes 1xBet des matchs à venir).
 6. **Relevé du soir (`--evening`)** : chaque jour à 18:00 UTC.
 7. **Sauvegarde (`--export --own-lock`)** : chaque jour à 23:00 UTC, copie lisible de la base dans `data/sauvegarde/`.
+   **Sauvegarde sur Telegram (`--backup-auto`)** : tous les 2 jours dès 12:00 UTC, la base (vérifiée, zippée, `kelly_backup_<date>.zip`) arrive dans la conversation **sans sonnerie** ; envoi raté (réseau) : nouvel essai toutes les heures. Elle ne contient jamais `.env`.
 8. **Réglage hebdomadaire (`--tune`)** : chaque dimanche entre 02:00 et 04:00 UTC (avant le matin).
 
 **Robustesse du runner** :
@@ -61,6 +62,7 @@ kelly <commande>
 - `kelly logs` : Suit les logs en temps réel (`tail -f logs/termux.log`).
 - `kelly logs-avant` : Le journal du lancement précédent (gardé à chaque `kelly start` / `restart` / `update` ; au-delà de 5 Mo, le journal est aussi tourné en `termux.log.1`).
 - `kelly status` : Vérifie si le runner et le bot sont actifs (affiche les PIDs).
+- `kelly restaurer [fichier.zip]` : installe une sauvegarde reçue sur Telegram (sans fichier : la plus récente de tes téléchargements). Kelly est arrêtée pendant ce temps puis relancée ; la sauvegarde est vérifiée avant d'être installée, et l'ancienne base gardée à côté (`data/kelly.db.avant-restauration-…`).
 
 ### Le wrapper (`$PREFIX/bin/kelly`)
 
@@ -113,9 +115,14 @@ XBET_PROXY=http://username:password@p.webshare.io:80
 - **Commande `/backup` sur Telegram** :
   - Compresse à la volée `data/kelly.db` en format ZIP (`data/kelly_backup.zip`, ≈ 1,8 Mo, soit une réduction de taille par 9).
   - Télécharge le fichier compressé directement dans la conversation Telegram avec un timeout réseau de 300 s (résilient aux coupures des réseaux mobiles 4G/3G).
-- **Restauration** :
-  - Sur PC ou nouveau téléphone, dézipper `kelly_backup.zip` dans `data/kelly.db`.
-  - Ou exécuter `python bot.py --import data/sauvegarde/`.
+- **Sauvegarde automatique** : tous les 2 jours vers 12:00 UTC, sans sonnerie (voir §2) ; la légende donne la date, la taille, le nombre de paris notés et le capital.
+- **Ce qui n'est PAS dedans : `.env`** (token Telegram, clés, proxy). Garde son contenu ailleurs (gestionnaire de mots de passe) : sans lui, un nouveau téléphone ne peut pas faire tourner Kelly.
+- **Téléphone perdu ou en panne** :
+  1. installer Termux et Kelly sur le nouveau téléphone (ce guide) ;
+  2. remettre le fichier `.env` dans `~/kelly/` ;
+  3. dans Telegram, ouvrir la dernière sauvegarde `kelly_backup_<date>.zip` pour la télécharger ;
+  4. `kelly restaurer` (la plus récente des téléchargements est trouvée toute seule ; sinon `kelly restaurer <chemin du fichier>`).
+- Ou, sur PC : dézipper `kelly.db` dans `data/`, ou `python bot.py --import data/sauvegarde/`.
 
 ---
 

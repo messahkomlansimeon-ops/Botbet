@@ -1483,7 +1483,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 • <i>état</i> : où en est le passage du matin (pourcentage et heure de fin estimée), réponse immédiate même pendant qu'il tourne
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
-• <i>backup</i> (ou <i>sauvegarde</i>) : recevoir la base de données kelly.db directement ici pour la sauvegarder sur ton PC
+• <i>backup</i> (ou <i>sauvegarde</i>) : recevoir la base de données kelly.db tout de suite (elle arrive aussi toute seule, sans sonnerie, tous les 2 jours vers 12h00) ; téléphone perdu : sur le nouveau, <i>kelly restaurer</i> dans Termux
 • <i>marchés détail</i> (ou <i>marchés détail tirs</i>, <i>marchés détail ldc</i>) : chaque championnat et coupe, marché par marché, en plus et en moins
 • <i>tendances</i> (ou le bouton 📈 Tendances ; <i>tendances cartons</i>, <i>tendances tirs premier</i>) : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
 • <i>réglé vm3 gagné 12/10</i> : donner toi-même le résultat d'un ticket noté que Kelly ne trouve pas (petite ligue sans stats) : gagné, perdu ou remboursé
@@ -1854,39 +1854,10 @@ def _todays_usage(day, picks):
 
 
 def send_backup():
-    """/backup : envoie kelly.db (zippé) sur Telegram -> None si c'est parti, sinon le message d'erreur. Copie COHÉRENTE de la base avec l'API de sauvegarde de
-    SQLite (d'autres processus peuvent écrire pendant ce temps : copier le fichier brut donnerait une base abîmée), dans un dossier temporaire PROPRE À CET
-    APPEL (tempfile : deux sauvegardes en même temps ne se marchent pas dessus), zippée, puis le zip est envoyé (jusqu'à 300 s) ; tout est effacé quoi qu'il arrive.
-    N'a besoin d'AUCUN verrou des données (la copie est cohérente à elle seule) : le serveur la lance sans le verrou (chat.quick), l'envoi ne bloque donc ni le
-    passage du matin ni les messages."""
-    import shutil
-    import sqlite3
-    import tempfile
-    import zipfile
-    from contextlib import closing
-    db_file = store.db_path()
-    if not os.path.exists(db_file):
-        return "⚠️ Base de données introuvable."
-    tmp = tempfile.mkdtemp(prefix="kelly-backup-")
-    try:
-        fd, snap = tempfile.mkstemp(prefix="kelly-", suffix=".db", dir=tmp)
-        os.close(fd)
-        with closing(sqlite3.connect(db_file, timeout=60)) as src, closing(sqlite3.connect(snap)) as dst:
-            src.backup(dst)
-        orig_mb = os.path.getsize(snap) / (1024 * 1024)
-        zip_path = os.path.join(tmp, "kelly_backup.zip")
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.write(snap, arcname="kelly.db")
-        zip_mb = os.path.getsize(zip_path) / (1024 * 1024)
-        caption = f"💾 Sauvegarde Kelly ({zip_mb:.1f} Mo, compressée depuis {orig_mb:.1f} Mo) — {now_utc().strftime('%d/%m/%Y %H:%M UTC')}"
-        telegram.send_document(zip_path, caption=caption)
-    except telegram.TelegramError as e:
-        return f"⚠️ Échec de la sauvegarde : {e}"
-    except (OSError, sqlite3.Error, zipfile.BadZipFile) as e:
-        return f"⚠️ Échec de la sauvegarde : {type(e).__name__}: {e}"
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-    return None
+    """/backup : envoie kelly.db (copie cohérente, vérifiée, zippée) sur Telegram -> None si c'est parti, sinon le message d'erreur (kelly/backup.py).
+    N'a besoin d'AUCUN verrou des données (la copie est cohérente à elle seule) : le serveur la lance sans le verrou (chat.quick)."""
+    from . import backup
+    return backup.send()
 
 
 def handle_command(text):

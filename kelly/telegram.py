@@ -569,8 +569,8 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
     return len(updates)
 
 
-def send_document(filepath, caption=None, chat_id=None):
-    """Envoie un fichier (document) sur Telegram. Lève TelegramError en cas d'échec."""
+def send_document(filepath, caption=None, chat_id=None, silent=False):
+    """Envoie un fichier (document) sur Telegram ; `silent` : sans sonnerie (sauvegarde automatique). Lève TelegramError en cas d'échec."""
     token, chat = creds()
     chat_id = chat_id or chat
     if not (token and chat_id):
@@ -578,7 +578,7 @@ def send_document(filepath, caption=None, chat_id=None):
     with open(filepath, "rb") as f:
         try:
             r = requests.post(f"https://api.telegram.org/bot{token}/sendDocument",
-                              data={"chat_id": chat_id, "caption": caption or ""},
+                              data={"chat_id": chat_id, "caption": caption or ""} | ({"disable_notification": "true"} if silent else {}),
                               files={"document": (os.path.basename(filepath), f)},
                               timeout=(30, 300))
         except requests.RequestException as e:

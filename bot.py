@@ -118,6 +118,27 @@ def main(argv):
         app.run_commands(serve=True)
     elif "--commands" in argv:
         app.run_commands()
+    elif "--backup-auto" in argv:           # sauvegarde automatique de la base sur Telegram (termux_runner : tous les 2 jours), sans sonnerie
+        from kelly import backup
+        err = backup.send(auto=True)
+        if err:
+            print(f"[sauvegarde] {err}", file=sys.stderr)
+            sys.exit(1)
+        print("[sauvegarde] envoyée sur Telegram")
+    elif "--restore" in argv:               # kelly restaurer [fichier] : installe une sauvegarde reçue sur Telegram (Kelly arrêtée par le script)
+        from kelly import backup
+        i = argv.index("--restore")
+        src = (argv[i + 1] if i + 1 < len(argv) and not argv[i + 1].startswith("--") else "") or backup.latest()
+        if not src:
+            print("❌ Aucune sauvegarde trouvée dans tes téléchargements. Télécharge le dernier fichier « kelly_backup… .zip » reçu sur Telegram,"
+                  " puis : kelly restaurer <chemin du fichier>  (termux-setup-storage d'abord si ~/storage n'existe pas)", file=sys.stderr)
+            sys.exit(1)
+        print(f"📦 Sauvegarde : {src}")
+        try:
+            print(backup.restore(src))
+        except backup.BackupError as e:
+            print(f"❌ Restauration impossible : {e}. Ta base actuelle n'a pas été touchée.", file=sys.stderr)
+            sys.exit(1)
     elif "--export" in argv:                # lancé sous flock par kelly-backup : pas de data_lock par défaut (inter-blocage) ; --own-lock (Termux, sans flock) le prend
         from kelly import store
         if "--own-lock" in argv:

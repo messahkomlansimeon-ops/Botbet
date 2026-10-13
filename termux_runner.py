@@ -13,7 +13,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BOT = os.path.join(ROOT, "bot.py")
@@ -25,10 +25,13 @@ DAILY_MAX_TRIES = 3          # essais du matin par jour (échec, délai dépass�
 DAILY_RETRY_GAP = 1800       # ... espacés d'au moins 30 min
 WATCH_EVERY = 600
 EXPORT_HOUR = 23             # sauvegarde lisible de la base (data/sauvegarde/)
+BACKUP_HOUR = 12             # sauvegarde de la base envoyée sur Telegram (téléphone perdu ou en panne), sans sonnerie, dès 12:00 UTC ...
+BACKUP_EVERY_DAYS = 2        # ... tous les 2 jours ...
+BACKUP_RETRY = 3600          # ... retentée toutes les heures si l'envoi échoue
 TUNE_WEEKDAY, TUNE_HOURS = 6, (2, 3)    # dimanche 02:00-03:59 UTC (avant le matin ; --tune reprend où il s'est arrêté)
 
 # délai maximal par passage (s) : un appel réseau figé ne bloque plus tout le runner (--daily dure ~30 min, attente du verrou comprise)
-TIMEOUTS = {"--watch": 540, "--track": 1500, "--daily": 5400, "--xbet": 1500, "--evening": 1500, "--export": 900, "--tune": 2400}
+TIMEOUTS = {"--watch": 540, "--track": 1500, "--daily": 5400, "--xbet": 1500, "--evening": 1500, "--export": 900, "--tune": 2400, "--backup-auto": 600}
 
 BACKOFF_BASE, BACKOFF_CAP, STABLE_SECS = 15, 900, 120      # relance de --serve : 15 s, 30 s, 1 min ... 15 min ; stable après 2 min de vie
 STOP = threading.Event()
@@ -70,7 +73,7 @@ def _safe_log(msg):
 
 def new_state():
     return {"watch_at": 0.0, "track_key": "", "daily_ok_day": "", "daily_try_day": "", "daily_tries": 0, "daily_try_at": 0.0,
-            "xbet_day": "", "evening_day": "", "export_day": "", "tune_day": ""}
+            "xbet_day": "", "evening_day": "", "export_day": "", "tune_day": "", "backup_day": "", "backup_try": 0.0}
 
 
 def backoff_delay(fails):
@@ -98,9 +101,19 @@ def due_tasks(now, state, epoch):
         out.append(["--export", "--own-lock"])
     if now.weekday() == TUNE_WEEKDAY and hour in TUNE_HOURS and state["tune_day"] != day:
         out.append(["--tune"])
+    if hour >= BACKUP_HOUR and backup_due(state, now) and epoch - state["backup_try"] >= BACKUP_RETRY:
+        out.append(["--backup-auto"])
     if epoch - state["watch_at"] >= WATCH_EVERY:
         out.append(["--watch"])
     return out
+
+
+def backup_due(state, now):
+    """La sauvegarde sur Telegram est-elle due (jamais faite, ou la dernière réussie date d'au moins BACKUP_EVERY_DAYS jours) ?"""
+    try:
+        return (now.date() - date.fromisoformat(state["backup_day"])).days >= BACKUP_EVERY_DAYS
+    except (TypeError, ValueError):
+        return True
 
 
 def mark_done(state, args, now, epoch, rc):
@@ -118,6 +131,10 @@ def mark_done(state, args, now, epoch, rc):
         state["track_key"] = f"{day} {now.hour}"
     elif name == "--watch":
         state["watch_at"] = epoch
+    elif name == "--backup-auto":                   # réussie : la prochaine dans BACKUP_EVERY_DAYS jours ; ratée : retentée dans l'heure
+        state["backup_try"] = epoch
+        if rc == 0:
+            state["backup_day"] = day
     else:
         key = {"--xbet": "xbet_day", "--evening": "evening_day", "--export": "export_day", "--tune": "tune_day"}.get(name)
         if key:
