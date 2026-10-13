@@ -56,7 +56,7 @@ def _rows(real=None, boot=None, ens=None):
         if r and r[0] >= need:
             n, w, s = r
             mood = status._mood(w / n, s / n)
-            out_k = calib.family_k(f, real, real_only=True) < C.VIABLE_MIN_K
+            out_k = not calib.in_combos(f, real)
             group = "bad" if (out_k or mood == "trop confiante") else "good"
             head = f"{icon} <b>{fmt.esc(label)}</b> · {fmt.pct(w / n)} / {fmt.pct(s / n)} ({calib.count(n)}) · {mood}"
             if out_k:

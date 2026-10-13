@@ -94,6 +94,16 @@ def leg_reason(c):
     return None
 
 
+STAT_FAMILIES = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls", "throws", "offsides", "player"))
+
+
+def cross_league_stat(c):
+    """Pari de stats (corners, cartons, tirs, fautes, touches, hors-jeu, joueurs) d'un match de coupe d'Europe, d'Amérique, de coupe nationale ou entre sélections
+    (C.CROSS_LEAGUE_PREFIXES) : les moyennes de Kelly y viennent de championnats différents, sans correction de niveau (audit du 13/10). Jamais proposé."""
+    from .calib import family
+    return family(c.get("market") or "") in STAT_FAMILIES and str(c.get("sport_key") or "").startswith(C.CROSS_LEAGUE_PREFIXES)
+
+
 def x_playable(c, real):
     """Pari réel jouable au prix que 1xBet paie (xprice.price_picks) : dès que 1xBet a chiffré au moins un pari du jour (`real`), seuls
     ceux qui ont leur cote 1xBet (c["xodds"]) servent : jamais la cote typique des autres books. Sans aucune cote 1xBet (relevé en
@@ -105,7 +115,7 @@ def quality_legs(picks, special=False):
     """Les jambes qui ont une raison d'être (pour le palier spécial : seulement corners, cartons et stats joueurs), aux cotes 1xBet
     quand 1xBet a chiffré les paris du jour (x_playable) : leur valeur est alors calculée à la cote 1xBet."""
     real = any(c.get("xodds") for c in picks)
-    return [c for c in picks if (not special or mispriced(c)) and x_playable(c, real) and leg_reason(c)]
+    return [c for c in picks if (not special or mispriced(c)) and x_playable(c, real) and not cross_league_stat(c) and leg_reason(c)]
 
 
 def make_pool(picks):
@@ -203,22 +213,53 @@ def _rebuild(choices, kdim, k, b, weights):
 
 def leg_discount(data=None):
     """Prudence par jambe d'un combiné : réussite / proba annoncée des jambes de combinés réglées (calib.json « _combo », vieilli), rapprochée de
-    C.COMBO_LEG_K[1] (0,99) tant qu'elles sont peu nombreuses (n / (n + C.COMBO_LEG_PRIOR)), bornée à C.COMBO_LEG_K. L'optimiseur choisit les jambes
-    que Kelly juge les meilleures, donc celles qu'elle surestime le plus souvent : la correction par marché (calib) ne voit pas cet écart-là."""
+    C.COMBO_LEG_START (0,95) tant qu'elles sont peu nombreuses (n / (n + C.COMBO_LEG_PRIOR)), bornée à C.COMBO_LEG_K. L'optimiseur choisit les jambes
+    que Kelly juge les meilleures, donc celles qu'elle surestime le plus souvent : la correction par marché (calib) ne voit pas cet écart-là. Audit du
+    13/10 : sur 189 jambes réglées (pronostics de Kelly), 4,6 % de réussite en moins qu'annoncé, d'où 5 % au départ (1 % avant). Ne vaut que pour les
+    jambes aux probas de Kelly (leg_factor)."""
     from . import calib
     lo, hi = C.COMBO_LEG_K
     acc = (data if data is not None else calib.load()).get("_combo")
-    d = hi
+    d = C.COMBO_LEG_START
     if acc and acc[0] > 0 and acc[2] > 0:
         n = acc[0]
-        d = hi + (acc[1] / acc[2] - hi) * n / (n + C.COMBO_LEG_PRIOR)
+        d = d + (acc[1] / acc[2] - d) * n / (n + C.COMBO_LEG_PRIOR)
     return max(lo, min(hi, d))
 
 
+def leg_factor(c, d):
+    """Prudence d'une jambe : `d` (leg_discount, 5 % au départ) pour une proba de Kelly (modèle, ou mélange avec 1xBet : pronostics, combinés sur
+    mesure), C.COMBO_LEG_K[1] (1 %) pour un pari réel dont la proba est celle des books de référence (c["prob_book"] : Pinnacle sans marge, rien à
+    corriger de l'excès de confiance de Kelly)."""
+    return C.COMBO_LEG_K[1] if "prob_book" in c else d
+
+
 def combo_prob(legs, d=None):
-    """Proba d'un combiné : produit des probas des jambes x leg_discount() par jambe (au moins 1 % de prudence par jambe : les erreurs se multiplient)."""
+    """Proba d'un combiné : produit des probas des jambes x leg_factor par jambe (5 % de prudence par jambe de Kelly au départ, 1 % pour un pari
+    réel aux probas des books de référence : les erreurs se multiplient)."""
     d = leg_discount() if d is None else d
-    return math.prod(c["prob"] for c in legs) * d ** len(legs)
+    return math.prod(c["prob"] * leg_factor(c, d) for c in legs)
+
+
+def leg_market_p(c):
+    """Chance d'une jambe selon 1xBet, sans sa marge : c["p_x"] (xprice, cotes de toutes les issues), sinon c["xp"], sinon 1 / (cote 1xBet x (1 +
+    C.X_MARGIN_GUESS)) ; None sans cote 1xBet (jambe à cote mini, cote d'un autre bookmaker)."""
+    p = c.get("p_x") if c.get("p_x") is not None else c.get("xp")
+    try:
+        if p is not None and 0 < float(p) <= 1:
+            return float(p)
+        x = float(c.get("xodds") or 0)
+    except (TypeError, ValueError):
+        return None
+    return 1 / (x * (1 + C.X_MARGIN_GUESS)) if x > 1 else None
+
+
+def market_prob(legs):
+    """Chance d'un combiné selon 1xBet : produit des chances de ses jambes sans la marge (leg_market_p) ; None si une jambe n'en a pas. C'est l'avis du
+    marché : audit du 13/10, les jambes jouées passaient 65 % du temps pour 71 % annoncés par Kelly et 61 % par 1xBet, et l'écart se multiplie avec le
+    nombre de jambes (ticket de 8 jambes du 10/10 : 4,2 % selon Kelly, 0,6 % selon 1xBet)."""
+    ps = [leg_market_p(c) for c in legs]
+    return math.prod(ps) if ps and all(p is not None for p in ps) else None
 
 
 def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs=None):
@@ -242,7 +283,7 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs
     bmax = int(hi_l / step) + slack
     weights = [max(1, round(math.log(c["odds"]) / step)) for c in legs]
     d = leg_discount()
-    lps = [math.log(c["prob"]) + math.log(d) - EPS for c in legs]      # prudence par jambe : à cote égale, moins de jambes (le nombre imposé reste respecté)
+    lps = [math.log(c["prob"]) + math.log(leg_factor(c, d)) - EPS for c in legs]      # prudence par jambe : à cote égale, moins de jambes (le nombre imposé reste respecté)
     by_event = {}
     for j, c in enumerate(legs):
         by_event.setdefault(c["id"], []).append(j)
@@ -414,15 +455,19 @@ def viable(c):
 
 
 def data_ok(c):
-    """Kelly connaît assez les équipes du pronostic `c` : données de qualité suffisante (C.VIABLE_MIN_Q), assez de matchs récents pour les deux
-    équipes (C.VIABLE_MIN_N), et marché ou championnat où elle ne s'est pas montrée trop sûre d'elle (calib, C.VIABLE_MIN_K). Partie « données »
+    """Kelly connaît assez les équipes du pronostic `c` : pas un pari de stats d'une coupe (cross_league_stat), données de qualité suffisante
+    (C.VIABLE_MIN_Q), assez de matchs récents pour les deux équipes (C.VIABLE_MIN_N), et marché ou championnat où elle ne s'est pas montrée trop sûre
+    d'elle (calib, C.VIABLE_MIN_K). Partie « données »
     de viable, reprise telle quelle par le combiné audacieux (app._bold_pools), qui assouplit la probabilité mais jamais ces contrôles."""
     from . import calib
+    if cross_league_stat(c):                                              # stats d'une coupe : moyennes de championnats différents
+        return False
     if c.get("conf", 1.0) < C.VIABLE_MIN_Q or (c.get("n_min") is not None and c["n_min"] < C.VIABLE_MIN_N):
         return False
     # sur les seuls vrais résultats (le rejeu corrige les probas, il n'écarte jamais un marché à lui seul) ; corners, cartons, tirs... : sur ceux de la
-    # nouvelle règle de choix des lignes dès qu'il y en a assez (calib.viable_factor)
-    return calib.viable_factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0"), shown=c.get("prob")) >= C.VIABLE_MIN_K
+    # nouvelle règle de choix des lignes dès qu'il y en a assez (calib.viable_factor), et sur leur gain réel à la cote 1xBet (calib.new_rule_ok)
+    return calib.viable_factor(c["market"], sport_key=c.get("sport_key"), side=calib.side(c), p=c.get("p0"), shown=c.get("prob")) >= C.VIABLE_MIN_K \
+        and calib.new_rule_ok(calib.family(c["market"]))
 
 
 def best_per_match(pronos):

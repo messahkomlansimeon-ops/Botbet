@@ -43,20 +43,20 @@ def test_families():
 
 def test_blend_and_line_choice():
     reset()
-    # Kelly voit plus de 24,5 à 70 % (15 points au-dessus de 1xBet) et plus de 22,5 à 80 % (10 points au-dessus)
-    alts = [["Over", 22.5, 0.80, None], ["Over", 24.5, 0.70, None], ["Over", 26.5, 0.52, None]]
+    # Kelly voit plus de 24,5 à 80 % (25 points au-dessus de 1xBet) et plus de 22,5 à 88 % (18 points au-dessus) : le modèle ne pèse que 25 %
+    alts = [["Over", 22.5, 0.88, None], ["Over", 24.5, 0.80, None], ["Over", 26.5, 0.60, None]]
     old = C.ENSEMBLE_ACTIVE_FAMILIES
     C.ENSEMBLE_ACTIVE_FAMILIES = old - {"shots"}
     try:
-        legacy = prono("team_shots_total", "Over", 24.5, 0.70, alts)
-        assert xprice.price(legacy, SHOTS) == "value" and legacy["point"] == 24.5 and legacy["prob"] == 0.7       # avant : le plus gros écart, 70 % annoncés
+        legacy = prono("team_shots_total", "Over", 24.5, 0.80, alts)
+        assert xprice.price(legacy, SHOTS) == "value" and legacy["point"] == 24.5 and legacy["prob"] == 0.8       # avant : le plus gros écart, 80 % annoncés
     finally:
         C.ENSEMBLE_ACTIVE_FAMILIES = old
-    c = prono("team_shots_total", "Over", 24.5, 0.70, alts)
+    c = prono("team_shots_total", "Over", 24.5, 0.80, alts)
     assert xprice.price(c, SHOTS) == "value", c
     px = ensemble.x_fair(SHOTS, "team_shots_total", c["name"], c["point"])
     assert px < c["prob"] < c["p_model"], c                        # proba retenue entre 1xBet et Kelly : plus jamais 70 % sur la seule foi de Kelly
-    assert c["p0"] in (0.70, 0.80) and abs(c["prob"] * c["xodds"] - 1 - c["xev"]) < 1e-3 and c["xodds"] * c["prob"] >= 1 + C.ENSEMBLE_MARGIN, c
+    assert c["p0"] in (0.80, 0.88) and abs(c["prob"] * c["xodds"] - 1 - c["xev"]) < 1e-3 and c["xodds"] * c["prob"] >= 1 + C.ENSEMBLE_MARGIN, c
     # Kelly à peine au-dessus de 1xBet : plus aucune valeur une fois mélangé (avant : joué si la cote >= 1 / proba x 1,05)
     thin = prono("team_shots_total", "Over", 24.5, 0.64, [["Over", 24.5, 0.64, None]])
     assert xprice.price(thin, SHOTS) in ("low", "weak") and not CB.viable(thin), thin
@@ -65,16 +65,16 @@ def test_blend_and_line_choice():
 
 def test_learned_weights():
     reset()
-    alts = [["Over", 24.5, 0.70, None]]
-    before = prono("team_shots_total", "Over", 24.5, 0.70, alts)
+    alts = [["Over", 24.5, 0.80, None]]
+    before = prono("team_shots_total", "Over", 24.5, 0.80, alts)
     assert xprice.price(before, SHOTS) == "value"
     # résultats : 1xBet bien meilleur que Kelly sur les tirs (poids du modèle appris très bas)
     ll = [-((i - 0) ** 2) / 4.0 for i in range(40)]
-    store.save(ensemble.FILE, {"fam": {"shots": {"m": {"ll": ll, "n": 600}}}, "done": {}})
+    store.save(ensemble.FILE, {"v": 2, "fam": {"shots": {"m": {"ll": ll, "n": 600}}}, "done": {}})
     ensemble._memo.clear()
     w = ensemble.weights("shots")["wm"]
     assert w < 0.3, w
-    after = prono("team_shots_total", "Over", 24.5, 0.70, alts)
+    after = prono("team_shots_total", "Over", 24.5, 0.80, alts)
     assert xprice.price(after, SHOTS) in ("low", "weak") and not CB.viable(after), after      # Kelly écoutée moins : plus de valeur
     print(f"ok  poids appris (Kelly {round(w * 100)} % sur les tirs) : le désaccord seul ne fait plus un pari")
 
@@ -83,7 +83,7 @@ def test_no_probable_path_for_stats():
     """Poids appris très bas (le marché pèse plus de 70 %) : le chemin « probable » (sans sharp, -10 % toléré) est celui des buts ; une ligne de stats
     doit toujours valoir C.ENSEMBLE_MARGIN au prix 1xBet."""
     reset()
-    store.save(ensemble.FILE, {"fam": {"shots": {"m": {"ll": [-((i - 0) ** 2) / 4.0 for i in range(40)], "n": 600}}}, "done": {}})
+    store.save(ensemble.FILE, {"v": 2, "fam": {"shots": {"m": {"ll": [-((i - 0) ** 2) / 4.0 for i in range(40)], "n": 600}}}, "done": {}})
     ensemble._memo.clear()
     assert 1 - ensemble.weights("shots")["wm"] >= C.ENSEMBLE_VETO_WEIGHT
     c = prono("team_shots_total", "Over", 22.5, 0.72, [["Over", 22.5, 0.72, None]])       # 1xBet 1,36 : espérance au mélange -4 %

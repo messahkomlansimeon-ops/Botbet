@@ -1,7 +1,7 @@
 """Mode capital (hors ligne) : « capital 50000 », « perte max 5000 », « objectif 18000 ». Le capital suit les paris notés ; la limite du jour est la plus
-petite de la perte max et de 10 % du capital, moins ce qui est déjà misé aujourd'hui ; plus de mise une fois la limite atteinte ; l'objectif est
-affiché (ce que rapporte la mise, ce qu'il faudrait pour l'atteindre d'un coup), jamais utilisé pour grossir une mise ; sans capital, « Kelly ne
-conseille pas de miser dessus » reste dit. Lancer : python -m tests.test_capital"""
+petite de la perte max et de 3 % du capital, moins ce qui est déjà misé aujourd'hui ; plus de mise une fois la limite atteinte ; l'objectif est celui du
+mois (affiché avec ce qui est déjà fait), jamais utilisé pour grossir une mise ; une grosse mise notée (plus de 5 % du capital) est signalée ; sans
+capital, « Kelly ne conseille pas de miser dessus » reste dit. Lancer : python -m tests.test_capital"""
 import os
 import re
 import tempfile
@@ -36,24 +36,26 @@ def test_commands_and_limit():
     assert not money.capital_mode() and not money.active()
     out = app.handle_command("capital 50000")
     txt = telegram.plain(out)
-    assert txt.startswith("✅ 💼 Mon capital\n\n💰 Capital : 50 000 FCFA\n📅 Depuis le ") and "Limite : 5 000 FCFA" in txt and "perte max 5000" in txt, txt
-    assert "<b>50 000 FCFA</b>" in out and "🏁 Ajoute un objectif : <i>objectif 18000</i>" in out and "📈 Hier" not in out, out    # pas de pari hier
+    assert txt.startswith("✅ 💼 Mon capital\n\n💰 Capital : 50 000 FCFA\n📅 Depuis le ") and "Limite : 1 500 FCFA" in txt and "perte max 5000" in txt, txt
+    assert "<b>50 000 FCFA</b>" in out and "🏁 Ajoute un objectif du mois : <i>objectif 5000</i>" in out and "📈 Hier" not in out, out    # pas de pari hier
+    assert "Limite = 3 % du capital (jamais plus que ta perte max), 1 % au plus par ticket, 100 FCFA au plus sur un ticket loterie" in txt, txt
     st = money.capital_state()
-    assert st["capital"] == 50000 and st["limit"] == 5000 and st["left"] == 5000 and money.daily() == 5000 and money.active()
+    assert st["capital"] == 50000 and st["limit"] == 1500 and st["left"] == 1500 and money.daily() == 1500 and money.active()
     out = telegram.plain(app.handle_command("perte max 5000"))
-    assert "Reste : 5 000 FCFA\n▱▱▱▱▱▱▱▱▱▱ 0 %" in out and "Fixe ta perte max" not in out, out
-    assert "Limite : 3 000 FCFA" in telegram.plain(app.handle_command("limite 3000")) and money.daily() == 3000      # la perte max plafonne
+    assert "Reste : 1 500 FCFA\n▱▱▱▱▱▱▱▱▱▱ 0 %" in out and "Fixe ta perte max" not in out, out
+    assert "Limite : 1 000 FCFA" in telegram.plain(app.handle_command("limite 1000")) and money.daily() == 1000      # la perte max plafonne
     app.handle_command("perte max 5 000")
-    assert money.daily() == 5000
+    assert money.daily() == 1500                                                   # 3 % du capital, sous la perte max
     out = telegram.plain(app.handle_command("objectif 18000"))
-    assert "🏁 Objectif : +18 000 FCFA par jour" in out and "n'augmentera jamais une mise" in out, out
+    assert "🏁 Objectif du mois : +18 000 FCFA · fait : +0 FCFA" in out and "n'augmentera jamais une mise" in out, out
+    assert "Repère réaliste : +5 à +10 % du capital par mois (2 500 FCFA à 5 000 FCFA)" in out, out
     assert chat.route("💼 Mon capital")[0] == "/capital" and chat.route("💰 Mon budget")[0] == "/budget"       # ancien bouton : toujours compris
     assert "mode capital" in app.handle_command("budget 5000")                     # pas de mélange des deux modes
-    assert "💰 Capital : 2 000 FCFA" in telegram.plain(app.handle_command("capital 2k")) and money.capital_state()["limit"] == 200
+    assert "💰 Capital : 2 000 FCFA" in telegram.plain(app.handle_command("capital 2k")) and money.capital_state()["limit"] == 60
     assert "Montant invalide" in app.handle_command("objectif abc") and "FCFA" in app.handle_command("capital 50 €")
     assert app.handle_command("capital 0").startswith("💼 Mode capital arrêté") and not money.active()
     assert "Fixe d'abord ton capital" in app.handle_command("objectif 18000")
-    print("ok  commandes capital / perte max / objectif ; limite du jour = min(perte max, 10 % du capital)")
+    print("ok  commandes capital / perte max / objectif du mois ; limite du jour = min(perte max, 3 % du capital)")
 
 
 def test_follows_results_and_stops():
@@ -71,19 +73,19 @@ def test_follows_results_and_stops():
     store.save("bets.json", {"picks": [], "combos": [combo(yday, 5368.03, 2.0, "loss"), combo(TODAY, 4800, 3.0)]})
     card = telegram.plain(money.capital_card())
     assert "💰 Capital : 44 632 FCFA" in card and "📈 Hier : −5 368 FCFA" in card and not re.search(r"\d,\d", card), card
-    assert "Déjà misé : 4 800 FCFA\nReste : 0 FCFA · limite atteinte" in card and "▰▰▰▰▰▰▰▰▰▰ 100 %" in card, card      # limite 4 450 (10 %)
-    assert money.capital_line(html=False) == "💼 Capital 44 632 FCFA · reste aujourd'hui 0 / 4 450 FCFA"      # 10 % de 44 632, arrondi à 50
-    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 4800, 3.0)]})
+    assert "Déjà misé : 4 800 FCFA\nReste : 0 FCFA · limite atteinte" in card and "▰▰▰▰▰▰▰▰▰▰ 100 %" in card, card      # limite 1 300 (3 %)
+    assert money.capital_line(html=False) == "💼 Capital 44 632 FCFA · reste aujourd'hui 0 / 1 300 FCFA"      # 3 % de 44 632, arrondi à 50
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 1300, 3.0)]})
     card = telegram.plain(money.capital_card())
-    assert "Reste : 200 FCFA\n▰▰▰▰▰▰▰▰▰▱ 96 %" in card, card
-    # grosses pertes : le capital baisse, la limite aussi (10 % du capital passe sous la perte max), jamais l'inverse
+    assert "Reste : 200 FCFA\n▰▰▰▰▰▰▰▰▱▱ 87 %" in card, card
+    # grosses pertes : le capital baisse, la limite aussi (3 % du capital), jamais l'inverse
     store.save("bets.json", {"picks": [], "combos": [combo(yday, 20000, 2.0, "loss")]})
     st = money.capital_state()
-    assert st["capital"] == 30000 and st["limit"] == 3000, st
+    assert st["capital"] == 30000 and st["limit"] == 900, st
     # mises notées aujourd'hui : la limite se consomme, puis plus aucune mise ce jour-là
-    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 2000, 3.0), combo(TODAY, 1000, 5.0, tier="⚖️ C")]})
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 500, 3.0), combo(TODAY, 300, 5.0, tier="⚖️ C")]})
     st = money.capital_state()
-    assert st["staked"] == 3000 and st["left"] == 2000 and money.daily() == 2000, st
+    assert st["staked"] == 800 and st["left"] == 700 and money.daily() == 700, st
     store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 5000, 3.0)]})
     assert money.daily() == 0 and money.active()
     assert money.allocate([{"kind": "pari", "tier": "pari", "prob": 0.7, "odds": 2.0}])[0] == [0]
@@ -101,23 +103,20 @@ def test_display_and_goal():
     app.handle_command("perte max 5000")
     app.handle_command("objectif 18000")
     assert money.stake_words(1500, 0.3, 5.0) == "1 500 FCFA → si ça passe : +6 000 FCFA"
-    # 18 000 à cote 5 : 4 500 à miser, 90 % de la limite : trop risqué ; à cote 40 : 500, raisonnable ; à cote 2 : au-dessus de la limite
-    assert money.goal_line(5.0) == "🎯 Pour +18 000 FCFA d'un coup : il faudrait miser 4 500 FCFA (90 % de ta limite du jour) ⚠️ trop risqué"
-    assert money.goal_line(40.0) == "🎯 Pour +18 000 FCFA d'un coup : il faudrait miser 500 FCFA (10 % de ta limite du jour)"
-    assert money.goal_line(2.0).endswith("⚠️ au-dessus de ce qu'il te reste aujourd'hui (5 000 FCFA)")
     leg = {"key": "k1", "id": "e1", "home": "A", "away": "B", "start": "19:00", "league": "L", "sport_key": "soccer_epl", "market": "h2h",
            "pick": "A gagne", "odds": 2.5, "prob": 0.5, "p_x": 0.45}
     legs = [leg, leg | {"key": "k2", "id": "e2", "home": "C", "away": "D"}]
     msg = str(fmt.combo("🛡️ SÛR (cote 5 à 7)", legs, 6.25, 0.25, stake_txt=money.stake_words(1500, 0.25, 6.25)))
-    assert "💰 Mise : <b>1 500 FCFA → si ça passe : +7 875 FCFA</b>\n<i>🎯 Pour +18 000 FCFA d'un coup : il faudrait miser 3 450 FCFA (69 % de ta " \
-           "limite du jour) ⚠️ trop risqué</i>" in msg, msg
-    assert "🎯 Pour" not in str(fmt.combo("🛡️ SÛR", legs, 6.25, 0.25, stake_txt=money.NO_EDGE))      # pas de mise conseillée : pas d'objectif affiché
-    assert app.money_line([]).startswith("💼 Capital 50 000 FCFA · reste aujourd'hui 5 000 / 5 000 FCFA · objectif +18 000 FCFA (écris « capital »")
+    assert ("🎯 2 paris · 25 % selon Kelly · 20 % selon 1xBet\n📊 Espérance : +56,2 % selon Kelly · +26,6 % selon 1xBet\n"
+            "💰 Mise : <b>1 500 FCFA → si ça passe : +7 875 FCFA</b>") in msg, msg
+    assert "🎯 Pour" not in msg and "d'un coup" not in msg                         # plus de « ce qu'il faudrait miser pour l'objectif » : jamais de course à l'objectif
+    assert app.money_line([]).startswith("💼 Capital 50 000 FCFA · reste aujourd'hui 1 500 / 1 500 FCFA · objectif du mois +18 000 FCFA (fait +0 FCFA) "
+                                         "(écris « capital »"), app.money_line([])
     # sans capital ni budget : pas de montant, mais l'espérance négative reste dite
     reset()
     assert money.stake_words(None, 0.4, 2.0) == money.NO_EDGE and money.stake_words(None, 0.6, 2.0) is None
     assert "fixe ton capital avec « 💼 Mon capital »" in str(fmt.combo("🛡️ SÛR", legs, 6.25, 0.25))
-    print("ok  « si ça passe : +X », objectif affiché et jamais forcé, ligne du bilan ; sans capital : espérance négative dite")
+    print("ok  « si ça passe : +X », chances selon Kelly et selon 1xBet, objectif du mois et jamais forcé ; sans capital : espérance négative dite")
 
 
 class Ticket:
@@ -138,9 +137,14 @@ def test_note_confirmation():
     assert "📈" not in played.note(Ticket(50.2), 50.52, 10) and "💼" not in out                    # moins de 1 % ; pas de capital : pas de ligne 💼
     app.handle_command("capital 50000")
     app.handle_command("perte max 5000")
-    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 4800, 3.0)]})
-    assert "💼 Reste aujourd'hui : 200 / 5 000 FCFA" in played.note(Ticket(50.52), 50.52, 10)
-    print("ok  confirmation « ✅ Noté » : gain si ça passe, écart dit à partir de 1 %, reste du jour en mode capital")
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 1300, 3.0)]})
+    out = played.note(Ticket(50.52), 50.52, 10)
+    assert "💼 Reste aujourd'hui : 200 / 1 500 FCFA" in out and "Erreur de frappe" not in out, out
+    store.save("bets.json", {"picks": [], "combos": []})
+    out = played.note(Ticket(12.21), 12.21, 15000)                                 # 15 000 au lieu de 1 500 ? dit, jamais refusé
+    assert out.startswith("✅ Noté") and "⚠️ 15 000 FCFA sur un seul ticket, c'est 30 % de ton capital. Erreur de frappe ? Corrige avec « ✏️ Autre cote »." in out, out
+    assert "Erreur de frappe" not in played.note(Ticket(12.21), 12.21, 2000)     # 4 % du capital : rien
+    print("ok  confirmation « ✅ Noté » : gain si ça passe, écart dit à partir de 1 %, reste du jour en mode capital, grosse mise signalée")
 
 
 def test_over_limit():
@@ -149,10 +153,10 @@ def test_over_limit():
     assert money.over_limit(10 ** 6) is None                                       # hors mode capital : jamais
     app.handle_command("capital 50000")
     app.handle_command("perte max 5000")
-    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 4800, 3.0)]})
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 1300, 3.0)]})
     money._cap_memo.clear()
     assert money.over_limit(600) == 200 and money.over_limit(200) is None          # 600 conseillés à l'envoi, 200 restants : la mise sera demandée
-    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 5600, 3.0)]})
+    store.save("bets.json", {"picks": [], "combos": [combo(TODAY, 2100, 3.0)]})
     money._cap_memo.clear()
     out = played.note(Ticket(50.52), 50.52, 10)
     assert "⚠️ Limite du jour dépassée de 600 FCFA" in out and out.startswith("✅ Noté"), out        # noté (c'est ce qui a été joué), mais dit

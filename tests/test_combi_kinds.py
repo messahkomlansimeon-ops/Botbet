@@ -309,7 +309,8 @@ def test_bold():
         out = chat.on_callback("cplus|30|f", 9)
     assert out.startswith("<b>🎲 COMBINÉ AUDACIEUX — cote ") and "🎯 Paris choisis : fautes" in out, out
     # les paris moins solides : comptés sous le titre, marqués 🟠 dans la liste (plus nommés en tête), légende en pied
-    assert "\n🎲 Ticket de loterie, mise très petite.\n🟠 3 paris moins sûrs pour atteindre la cote\n" in out, out
+    assert ("\n<i>🎰 Ticket loterie : 1 chance sur 56 selon 1xBet. En moyenne il rend 38 % de moins que la mise : 100 FCFA au plus.</i>\n"
+            "🟠 3 paris moins sûrs pour atteindre la cote\n") in out, out                 # 3 % selon Kelly : ticket loterie, dit une seule fois
     assert sorted(weak_legs(out)) == ["FH10 – FA10", "FH11 – FA11", "FH12 – FA12"] and "<i>🟢 solide · 🟠 moins sûr</i>" in out, out
     assert T.buttons(out)[0].startswith("cjoue|"), out
     item = store.load(custom.FILE, {})["items"]["m1"]

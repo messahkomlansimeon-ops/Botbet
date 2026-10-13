@@ -1,5 +1,5 @@
-"""Garde-fou « loterie » et bilan lisible (hors ligne). Mode capital : un pari à moins de 5 % de chances a sa mise plafonnée à 5 % de la limite du jour
-(250 FCFA pour 5 000), le message le dit ; à partir du 4e ticket noté dans la journée, la confirmation le signale sans rien bloquer. Bilan : l'argent
+"""Garde-fou « loterie » et bilan lisible (hors ligne). Ticket « loterie » (moins de 5 % de chances selon Kelly, cote de 50 et plus, ou moins de 2 % selon
+1xBet) : 100 FCFA au plus, avec ou sans capital, le message le dit ; mode capital : 1 % du capital au plus par ticket ; à partir du 4e ticket noté dans la journée, la confirmation le signale sans rien bloquer. Bilan : l'argent
 d'abord (arrondi, jauge de la mise récupérée), combinés par palier, fiabilité à pastilles, « Par championnat ». Lancer : python -m tests.test_lottery_guard"""
 import os
 import re
@@ -18,21 +18,21 @@ from kelly import app, calib, money, played, settle, store  # noqa: E402
 def test_lottery_cap():
     T.reset()
     item = [{"kind": "combo", "tier": "🎯", "prob": 0.02, "odds": 60.0}]        # combiné audacieux : 2 % de chances, espérance +20 %
-    big = money.allocate(item, budget=5000)[0][0]
-    assert big > 250, big                                                       # sans capital : rien n'est plafonné
-    assert money.lottery_cap() is None and "loterie" not in money.stake_words(big, 0.02, 60.0)
+    assert money.allocate(item, budget=5000)[0][0] == 100                      # 750 sans le plafond : ticket loterie, même sans capital
+    assert money.is_lottery(0.3, 55.0) and money.is_lottery(0.25, 6.0, 0.015) and not money.is_lottery(0.25, 6.0, 0.05)    # cote ; 1xBet
+    assert money.allocate([{"kind": "combo", "tier": "🎯", "prob": 0.25, "odds": 6.0, "p_mkt": 0.015}], budget=5000)[0][0] == 100
     app.handle_command("capital 50000")
     app.handle_command("perte max 5000")
-    assert money.lottery_cap() == 250
     st = money.allocate(item)[0][0]
-    assert st == 250, st                                                        # 750 sans le plafond
-    assert money.stake_words(st, 0.02, 60.0) == "250 FCFA · ticket loterie, mise plafonnée → si ça passe : +14 750 FCFA"
+    assert st == 100, st                                                        # 200 sans le plafond (limite du jour 1 500)
+    assert money.stake_words(st, 0.02, 60.0) == "100 FCFA · ticket loterie → si ça passe : +5 900 FCFA"
     solid = [{"kind": "combo", "tier": "🛡️", "prob": 0.25, "odds": 6.0}]
-    assert money.allocate(solid)[0][0] > 250                                    # 25 % de chances : pas un ticket loterie
+    assert money.allocate(solid)[0][0] == 450                                   # 25 % de chances, cote 6 : pas un ticket loterie (30 % de 1 500)
     both = money.allocate(item + solid)[0]
-    assert both[0] <= 250 and both[1] > 250, both                               # le plafond ne touche que le ticket loterie
+    assert both[0] <= 100 and both[1] > 100, both                               # le plafond ne touche que le ticket loterie
     assert "loterie" not in money.stake_words(both[1], 0.25, 6.0)
-    print("ok  ticket loterie (< 5 %) : mise plafonnée à 5 % de la limite du jour, dit dans le message ; rien hors mode capital")
+    assert money.ticket_cap() == 500 and money.allocate(solid, budget=5000)[0][0] == 500     # 1 % du capital au plus par ticket
+    print("ok  ticket loterie (< 5 %, cote 50+, < 2 % selon 1xBet) : 100 FCFA au plus, dit dans le message ; 1 % du capital au plus par ticket")
 
 
 def test_too_many_tickets():

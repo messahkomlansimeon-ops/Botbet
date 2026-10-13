@@ -68,6 +68,7 @@ def replay_div(div, matches, frm, to, deadline=None):
     sk = fd.DIV_TO_SPORT.get(div)
     acc, n_m, n_p = {}, 0, 0
     hl = strength.hl_for(div)
+    upper = strength.upper_matches(div)                               # division du dessus : les relégués n'ont pas l'a priori des promus
     model, start = None, None
     todo = sorted((m for m in matches if frm <= m["date"] < to and m.get("hg") is not None and m.get("ag") is not None),
                   key=lambda m: (m["date"], m["home"]))
@@ -77,7 +78,7 @@ def replay_div(div, matches, frm, to, deadline=None):
         d = date.fromisoformat(m["date"])
         if start is None or d >= start + timedelta(days=C.REPLAY_STEP_DAYS):
             start = d
-            model = strength.build(matches, d, hl, div=div)          # matchs joués AVANT d seulement
+            model = strength.build(matches, d, hl, div=div, upper=upper)          # matchs joués AVANT d seulement
         got = picks(model, m, sk, d)
         if got:
             n_m += 1

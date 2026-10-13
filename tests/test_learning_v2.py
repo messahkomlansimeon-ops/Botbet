@@ -120,14 +120,16 @@ def leg(i, odds, prob, ev=None):
 
 def test_combo_prudence():
     reset()
-    assert CB.leg_discount() == 0.99
+    assert CB.leg_discount() == C.COMBO_LEG_START == 0.95                       # 5 % par jambe au départ (audit du 13/10)
     legs = [leg(i, 1.3, 0.7) for i in range(10)]
-    assert abs(CB.combo_prob(legs) - 0.7 ** 10 * 0.99 ** 10) < 1e-15 and CB.combo_prob(legs) < math.prod(c["prob"] for c in legs)
+    assert abs(CB.combo_prob(legs) - 0.7 ** 10 * 0.95 ** 10) < 1e-15 and CB.combo_prob(legs) < math.prod(c["prob"] for c in legs)
+    real = [c | {"prob_book": 0.7} for c in legs]                               # pari réel aux probas de Pinnacle : 1 % seulement
+    assert abs(CB.combo_prob(real) - 0.7 ** 10 * 0.99 ** 10) < 1e-15
     # les jambes choisies perdent plus que prévu : la prudence grandit, sans sortir des bornes ; jamais comptées deux fois
     played = [{"prob": 0.7, "result": "win" if i < 180 else "loss"} for i in range(300)] + [{"prob": 0.7, "result": "push"}]
     assert calib.add_combo_legs(played, D0) == 300 and calib.add_combo_legs(played, D0) == 0
     d = CB.leg_discount()
-    assert 0.90 <= d < 0.95, d
+    assert C.COMBO_LEG_K[0] <= d < 0.92, d                                      # 86 % réalisés / annoncés, rapproché de 0,95 : 0,89
     calib.add_combo_legs([{"prob": 0.8, "result": "loss"} for _ in range(3000)], D0)
     assert CB.leg_discount() == C.COMBO_LEG_K[0]
     calib.add_combo_legs([{"prob": 0.5, "result": "win"} for _ in range(20000)], D0)

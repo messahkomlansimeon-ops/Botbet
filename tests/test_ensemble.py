@@ -84,12 +84,12 @@ def test_devig():
 
 def test_pool_and_renormalisation():
     fresh()
-    # a priori : buts / 1N2 / 2 marquent / double chance = 0,12 ; corners, cartons, tirs... = 0,5 ; sharp 0,75
+    # a priori : buts / 1N2 / 2 marquent / double chance = 0,12 ; corners, cartons, tirs... = 0,25 (0,5 avant l'audit du 13/10) ; sharp 0,75
     for m in ("totals", "btts", "double_chance", "h2h"):
         assert E.weights(E.family(m))["wm"] == 0.12, m
     for m in ("alternate_totals_corners", "alternate_totals_cards", "team_shots_total", "team_sot_home", "team_fouls_away",
               "team_throws_total", "team_offsides_total"):
-        assert E.weights(E.family(m))["wm"] == 0.5, m
+        assert E.weights(E.family(m))["wm"] == 0.25, m
     assert {E.family(m) for m in ("team_shots_total", "team_shots_home", "team_shots_away")} == {"shots"}
     # trois avis : log-cotes, poids effectifs de somme 1
     p, parts = E.combine("goals", 0.70, 0.55, 0.60)
@@ -108,9 +108,9 @@ def test_pool_and_renormalisation():
     assert E.combine("goals", 0.70, None, None)[0] == 0.70 and E.combine("goals", 0.70)[1]["w"] == {"model": 1.0, "sharp": 0.0, "x": 0.0}
     assert close(E.combine("goals", None, 0.55, 0.60)[0], E.pool_market(0.60, 0.55, 0.75)[0])
     assert E.combine("goals", None, None, None)[0] is None
-    # famille non mesurée : moitié-moitié avec 1xBet
+    # famille non mesurée : le modèle pèse 25 %, 1xBet 75 %
     pc, parts = E.combine("corners", 0.70, 0.50, None)
-    assert close(pc, E.expit(0.5 * E.logit(0.70))) and close(parts["w"]["x"], 0.5)
+    assert close(pc, E.expit(0.25 * E.logit(0.70))) and close(parts["w"]["x"], 0.75)
     # avis identiques : la proba retenue est cette proba ; la combinaison reste entre les avis
     assert close(E.combine("goals", 0.6, 0.6, 0.6)[0], 0.6)
     for pm, px_, ps in ((0.9, 0.2, 0.5), (0.2, 0.9, 0.5), (0.5, 0.5, 0.9)):
@@ -127,7 +127,7 @@ def rows_for(fam_market, n, model_good, seed, noise_m=0.10, noise_x=0.08, start=
     for i in range(start + n):                        # le même flux de tirages : start=500 donne la suite des 500 premiers
         pt = rng.uniform(0.45, 0.8)
         pm, px = (pt, pt + rng.gauss(0, noise_x)) if model_good else (pt + rng.gauss(0, noise_m), pt)
-        out.append({"key": f"{fam_market}|{seed}|{i}", "date": "2026-10-01", "market": fam_market, "result": "win" if rng.random() < pt else "loss",
+        out.append({"key": f"{fam_market}|{seed}|{i}", "id": f"g{seed}x{i}", "date": "2026-10-01", "market": fam_market, "result": "win" if rng.random() < pt else "loss",
                     "pm": min(0.95, max(0.05, pm)), "px": min(0.95, max(0.05, px)), "ps": None})
     return out[start:]
 
@@ -135,11 +135,11 @@ def rows_for(fam_market, n, model_good, seed, noise_m=0.10, noise_x=0.08, start=
 def test_learning_is_slow_and_shrunk():
     fresh()
     corners = "alternate_totals_corners"
-    # sous ENSEMBLE_MIN_N résultats : le poids est EXACTEMENT l'a priori
+    # sous ENSEMBLE_MIN_N_OTHER matchs (300 : famille sans a priori mesuré) : le poids est EXACTEMENT l'a priori
     rows = rows_for(corners, 60, True, 1)
     assert E.learn(rows) == 60
     w = E.weights("corners")
-    assert w["wm"] == 0.5 and 59 < w["n_m"] <= 60, w
+    assert w["wm"] == 0.25 and 59 < w["n_m"] <= 60, w
     # idempotent : les mêmes lignes (ou leurs clés) ne comptent pas deux fois ; ligne non réglée, sans modèle ou sans marché : rien
     assert E.learn(rows) == 0 and all(r.get("ens") for r in rows)
     clones = [dict(r) for r in rows]
@@ -148,22 +148,28 @@ def test_learning_is_slow_and_shrunk():
     assert E.learn(clones) == 0, "clés déjà apprises (ensemble.json) : pas de double compte, même depuis un autre document"
     assert E.learn([{"key": "n1", "market": corners, "result": None, "pm": 0.6, "px": 0.5}, {"key": "n2", "market": corners, "result": "win", "pm": None, "px": 0.5},
                     {"key": "n3", "market": corners, "result": "win", "pm": 0.6}, {"key": "n4", "market": corners, "result": "void", "pm": 0.6, "px": 0.5}]) == 0
-    # juste au-dessus du minimum, le passage au posterior est progressif : poids = a priori + (n - MIN_N) / MIN_N x (posterior - a priori)
     E.learn(rows_for(corners, 50, True, 1, start=60))
+    assert E.weights("corners")["wm"] == 0.25, "110 matchs : sous 300, toujours l'a priori"
+    # juste au-dessus du minimum, le passage au posterior est progressif : poids = a priori + (n - MIN) / MIN x (posterior - a priori)
+    E.learn(rows_for(corners, 230, True, 1, start=110))
     acc = E.load()["fam"]["corners"]["m"]
-    post = E._post_mean(acc, 0.5, C.ENSEMBLE_PRIOR_SD_OTHER)
-    ramp = (acc["n"] - C.ENSEMBLE_MIN_N) / C.ENSEMBLE_MIN_N
-    assert 0 < ramp < 0.5 and abs(post - 0.5) > 0.005 and close(E.weights("corners")["wm"], 0.5 + ramp * (post - 0.5)), (ramp, post, E.weights("corners"))
+    post = E._post_mean(acc, 0.25, C.ENSEMBLE_PRIOR_SD_OTHER)
+    ramp = (acc["n"] - C.ENSEMBLE_MIN_N_OTHER) / C.ENSEMBLE_MIN_N_OTHER
+    assert 0 < ramp < 0.5 and abs(post - 0.25) > 0.005 and close(E.weights("corners")["wm"], 0.25 + ramp * (post - 0.25)), (ramp, post, E.weights("corners"))
     # modèle réellement meilleur : le poids monte, lentement, et reste loin de 1 ; l'inverse : il baisse
-    E.learn(rows_for(corners, 390, True, 1, start=110))
+    E.learn(rows_for(corners, 160, True, 1, start=340))
     w500 = E.weights("corners")["wm"]
-    assert 0.5 < w500 < 0.75, w500
+    assert 0.25 < w500 < 0.6, w500
     E.learn(rows_for(corners, 1500, True, 1, start=500))
     w2000 = E.weights("corners")["wm"]
     assert w500 < w2000 < 0.9, (w500, w2000)
     fresh()
-    E.learn(rows_for(corners, 500, False, 2))
-    assert 0.2 < E.weights("corners")["wm"] < 0.5
+    E.learn(rows_for(corners, 700, False, 2))
+    assert 0.05 < E.weights("corners")["wm"] < 0.25
+    # lignes d'un même match : corrélées, elles comptent pour UN match (effectif et vraisemblance)
+    fresh()
+    same = [r | {"id": f"g7x{i // 4}"} for i, r in enumerate(rows_for(corners, 400, True, 7))]
+    assert E.learn(same) == 400 and 95 < E.weights("corners")["n_m"] <= 100, E.weights("corners")       # 100 matchs (oubli léger compris)
     # famille où l'audit a mesuré (buts) : l'a priori serré (0,12) bouge à peine, même avec un modèle exact
     fresh()
     E.learn(rows_for("totals", 500, True, 3))
@@ -214,10 +220,15 @@ def test_learning_is_slow_and_shrunk():
         assert close(a, lam * b + C.ENSEMBLE_TEMP * math.log(E.expit(g * E.logit(0.7) + (1 - g) * E.logit(p_mkt))), 1e-9), g
     # un autre processus réécrit le document (règlement du soir, remise à zéro) : le poids est relu sans reset()
     fresh()
-    E.learn(rows_for(corners, 400, True, 4))
-    assert E.weights("corners")["wm"] > 0.5
-    store.save(E.FILE, {"fam": {}, "done": {}})
-    assert E.weights("corners")["wm"] == 0.5 and E.weights("corners")["n_m"] == 0
+    E.learn(rows_for(corners, 600, True, 4))
+    assert E.weights("corners")["wm"] > 0.25
+    store.save(E.FILE, {"v": 2, "fam": {}, "done": {}})
+    assert E.weights("corners")["wm"] == 0.25 and E.weights("corners")["n_m"] == 0
+    # état de la version 1 (effectif en lignes, a priori 0,5) : le poids appris du modèle des familles non mesurées est oublié, les buts restent
+    store.save(E.FILE, {"fam": {"corners": {"m": {"ll": [0.0] * 40, "n": 900}, "s": {"ll": [0.0] * 40, "n": 5}}, "goals": {"m": {"ll": [0.0] * 40, "n": 700}}},
+                        "done": {}})
+    st = E.load()
+    assert st["v"] == 2 and "m" not in st["fam"]["corners"] and st["fam"]["corners"]["s"]["n"] == 5 and st["fam"]["goals"]["m"]["n"] == 700, st
     # oubli : l'effectif ne dépasse jamais ~ 1 / (1 - lambda)
     fresh()
     old = C.ENSEMBLE_HALF_LIFE
@@ -269,7 +280,7 @@ def test_value_rule_and_veto():
     # le veto se mesure au marché total (sharp + 1xBet)
     v = E.value_of("btts", 0.30, 0.52, 0.52, 3.0)
     assert v["why"] == "veto"
-    # corners (poids du marché 0,5 < 0,7) : pas de veto, un grand écart reste permis
+    # corners (marché à 0,75, mais jamais mesuré meilleur que le modèle : VETO_FAMILIES) : pas de veto, un grand écart reste permis
     v = E.value_of("alternate_totals_corners", 0.75, 0.55, None, 2.0)
     assert v["ok"] and v["why"] == "" and 0.55 < v["p"] < 0.75
     # famille de marché lourd sans aucun avis de marché : rien n'est validé
@@ -542,17 +553,19 @@ def test_xprice_opt_in_path():
         # ligne actuelle absente de c["alts"] (ligne déplacée) : son modèle vient de c["p0"], jamais de c["prob"] (= p_ens d'un passage précédent)
         off = copy.deepcopy(base) | {"prob": 0.70, "p0": 0.76, "alts": [["Under", 1.5, 0.24, None]]}
         assert xprice.price(off, px, refs) == "low" and off["p_model"] == 0.76 and off["xodds"] == 1.45 and off["xwhy"] == "line"       # sans sharp la ligne serait « probable » : hors c["alts"], elle n'est pas proposée
-        # --- corners (non mesuré : modèle 50 %) : sans avis sharp, la valeur est possible ---
+        # --- corners (non mesuré : modèle 25 %) : sans avis sharp, la valeur est possible, sur un désaccord net (Kelly 85 %, 1xBet 60 %) ---
         pxc = {("alternate_totals_corners", "Under", 10.5): 1.55, ("alternate_totals_corners", "Over", 10.5): 2.45}
         cor = {"key": "m|alternate_totals_corners||10.5|Under", "id": "m", "sport_key": "soccer_epl", "home": "A", "away": "B",
-               "commence": "2026-10-09T19:00:00Z", "market": "alternate_totals_corners", "name": "Under", "point": 10.5, "who": None, "prob": 0.75,
-               "p0": 0.75, "min_odds": 1.4, "conf": 0.6, "n_min": 8, "score": 0.2, "pick": "Moins de 10,5 corners",
-               "alts": [["Under", 10.5, 0.75, None]]}
+               "commence": "2026-10-09T19:00:00Z", "market": "alternate_totals_corners", "name": "Under", "point": 10.5, "who": None, "prob": 0.85,
+               "p0": 0.85, "min_odds": 1.4, "conf": 0.6, "n_min": 8, "score": 0.2, "pick": "Moins de 10,5 corners",
+               "alts": [["Under", 10.5, 0.85, None]]}
         px_c = E.x_fair(pxc, "alternate_totals_corners", "Under", 10.5)
         assert xprice.price(cor, pxc) == "value"
-        assert cor["ew"] == 0.5 and cor["esrc"] == "x+model" and cor["p_model"] == 0.75 and abs(cor["prob"] - E.expit(0.5 * E.logit(0.75) + 0.5 * E.logit(px_c))) < 1e-4
-        assert px_c < cor["prob"] < 0.75 and cor["xodds"] == 1.55 and abs(cor["xev"] - (cor["prob"] * 1.55 - 1)) < 1e-4 and CB.viable(cor)
-        assert "xveto" not in cor, "famille où le marché pèse 50 % : un écart de 0,12 n'est pas écarté"
+        assert cor["ew"] == 0.25 and cor["esrc"] == "x+model" and cor["p_model"] == 0.85 and abs(cor["prob"] - E.expit(0.25 * E.logit(0.85) + 0.75 * E.logit(px_c))) < 1e-4
+        assert px_c < cor["prob"] < 0.85 and cor["xodds"] == 1.55 and abs(cor["xev"] - (cor["prob"] * 1.55 - 1)) < 1e-4 and CB.viable(cor)
+        assert "xveto" not in cor, "famille où le marché n'a jamais été mesuré meilleur : un écart de 0,25 n'est pas écarté"
+        mild = copy.deepcopy(cor) | {"prob": 0.75, "p0": 0.75, "alts": [["Under", 10.5, 0.75, None]]}
+        assert xprice.price(mild, pxc) == "low" and not CB.viable(mild), "Kelly 75 % contre 1xBet 60 % : à 25 %, plus assez pour une valeur"
         # sous C.VIABLE_MIN_P, la proba retenue rend la ligne « faible » : ici 0,62 de modèle sur des plus/moins à 2,1 / 1,75 -> ~0,53
         pxw = {("alternate_totals_corners", "Over", 9.5): 2.1, ("alternate_totals_corners", "Under", 9.5): 1.75}
         thin = copy.deepcopy(cor) | {"name": "Over", "point": 9.5, "prob": 0.62, "p0": 0.62, "alts": [["Over", 9.5, 0.62, None]]}
@@ -561,7 +574,7 @@ def test_xprice_opt_in_path():
         weak = copy.deepcopy(cor) | {"alts": [["Under", 10.5, 0.75, 0.80]]}
         assert xprice.price(weak, pxc) == "weak" and not CB.viable(weak)
         # --- plusieurs lignes : choose retient une ligne qui passe la règle, jamais une ligne sous VIABLE_MIN_P ou en dessous de 1 + marge ---
-        multi = copy.deepcopy(cor) | {"alts": [["Under", 10.5, 0.75, None], ["Over", 10.5, 0.25, None], ["Under", 11.5, 0.84, None]]}
+        multi = copy.deepcopy(cor) | {"alts": [["Under", 10.5, 0.85, None], ["Over", 10.5, 0.15, None], ["Under", 11.5, 0.93, None]]}
         pxm = pxc | {("alternate_totals_corners", "Under", 11.5): 1.30, ("alternate_totals_corners", "Over", 11.5): 3.5}
         got = xprice.choose(copy.deepcopy(multi), pxm)
         assert got is not None and got[2] >= C.VIABLE_MIN_P and got[5] * got[2] >= 1 + C.ENSEMBLE_MARGIN - 1e-9 and (got[0], got[1]) in (("Under", 10.5), ("Under", 11.5))

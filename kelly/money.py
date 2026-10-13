@@ -12,9 +12,12 @@ réduit dans la même proportion, le budget est entièrement misé. Journée pau
 
 Capital (« capital 50000 », mode recommandé, à la place du budget du jour) : la somme confiée à Kelly. Il suit tes résultats (capital de départ +
 gains et pertes des paris notés et réglés depuis qu'il a été fixé). Chaque jour, Kelly répartit au plus la limite du jour : la plus petite de ta perte
-maximale (« perte max 5000 ») et de CAPITAL_DAY_SHARE du capital, moins ce que tu as déjà misé (noté) aujourd'hui. Les mises baissent donc après des
-pertes, jamais l'inverse, et une fois la limite atteinte Kelly ne propose plus de mise ce jour-là. Objectif (« objectif 18000 ») : affiché (ce que
-rapporte la mise conseillée, ce qu'il faudrait miser pour l'atteindre d'un coup, avec un avertissement), jamais utilisé pour grossir une mise.
+maximale (« perte max 5000 ») et de CAPITAL_DAY_SHARE (3 %) du capital, moins ce que tu as déjà misé (noté) aujourd'hui ; un ticket ne prend jamais plus de
+TICKET_SHARE (1 %) du capital, et un ticket « loterie » (is_lottery : cote de 50 et plus, ou trop peu de chances) LOTTERY_STAKE (100 FCFA) au plus. Les mises
+baissent donc après des pertes, jamais l'inverse, et une fois la limite atteinte Kelly ne propose plus de mise ce jour-là. Pourquoi si peu (audit du 13/10) :
+aucun avantage n'est encore prouvé face à 1xBet ; à 10 % du capital par jour, quelques points de trop sur les chances de chaque pari suffisent à perdre la
+moitié du capital en quelques mois. Objectif du mois (« objectif 18000 ») : affiché avec ce qui est déjà fait ce mois-ci, jamais utilisé pour grossir une
+mise.
 
 data/mybudget.json : {"daily": montant, "cur": "FCFA"} ou {"capital": montant, "since": "AAAA-MM-JJ", "max_day": montant, "goal": montant, "cur": "FCFA"}. « cur » sur la ligne d'un pari = devise de sa mise (stake) : la mise conseillée du
 matin, ou celle de la note. Un pari ne compte dans l'argent (gain, bilan) que s'il est NOTÉ (x["played"]) et pas retiré.
@@ -34,9 +37,13 @@ FCFA_WORDS = {"fcfa", "cfa", "xof", "f", "fr", "frs", "franc", "francs"}        
 SHARE = {"pari": 0.25, "🛡️": 0.30, "⚖️": 0.18, "🎯": 0.15, "🔥": 0.08, "💀": 0.04}   # part max du budget par palier
 FAIR_SHARE = ((8, 0.12), (20, 0.08), (math.inf, 0.05))                            # combinés à vérifier, selon la cote mini
 CONF_FULL, CONF_MIN = 0.10, 0.3       # espérance de +10 % ou plus : part entière ; jamais moins de 30 % de la part
-CAPITAL_DAY_SHARE = 0.10              # mode capital : au plus 10 % du capital misé par jour (et jamais plus que la perte maximale choisie)
-LOTTERY_P = 0.05                      # mode capital : un pari à moins de 5 % de chances est un ticket « loterie »...
-LOTTERY_SHARE = 0.05                  # ... sa mise est plafonnée à 5 % de la limite du jour (250 FCFA pour 5 000)
+CAPITAL_DAY_SHARE = 0.03              # mode capital : au plus 3 % du capital misé par jour (et jamais plus que la perte maximale choisie)
+TICKET_SHARE = 0.01                   # mode capital : au plus 1 % du capital sur un même ticket
+TICKET_WARN_SHARE = 0.05              # une mise NOTÉE au-delà de 5 % du capital est signalée (erreur de frappe ?), jamais refusée
+LOTTERY_P = 0.05                      # ticket « loterie » : moins de 5 % de chances selon Kelly...
+LOTTERY_ODDS = 50                     # ... ou une cote de 50 et plus...
+LOTTERY_MKT_P = 0.02                  # ... ou moins de 2 % de chances selon 1xBet (sans sa marge)
+LOTTERY_STAKE = 100                   # sa mise conseillée : 100 FCFA au plus, quel que soit le budget
 TICKETS_DAY = 3                       # au-delà de 3 tickets notés dans la journée, la confirmation le signale (rien n'est bloqué)
 
 
@@ -86,7 +93,7 @@ _cap_memo = {}
 
 def capital_state(today=None, docs=None):
     """{"capital": capital actuel, "base", "since", "limit": limite du jour, "staked": misé (noté) aujourd'hui, "left": reste à miser aujourd'hui,
-    "max_day", "goal", "yesterday": gain des paris notés d'hier (None s'il n'y en a pas)} ; {} hors mode capital. Gardé en mémoire tant que les
+    "max_day", "goal" (objectif du mois), "month": gain des paris notés de ce mois-ci, "yesterday": gain des paris notés d'hier (None s'il n'y en a pas)} ; {} hors mode capital. Gardé en mémoire tant que les
     paris et le réglage ne changent pas (relu au plus une fois par seconde)."""
     d = load()
     base = _amount(d.get("capital"))
@@ -101,6 +108,7 @@ def capital_state(today=None, docs=None):
     gains = _counted(bets, rows, fair_rows)
     capital = max(0.0, base + sum(g for x, g in gains if str(x.get("date") or "")[:10] >= since))
     yest = [g for x, g in gains if str(x.get("date") or "")[:10] == yday]
+    month = sum(g for x, g in gains if str(x.get("date") or "")[:10] >= since and str(x.get("date") or "")[:7] == day[:7])
     today_played = [x for x in items(bets, rows, fair_rows) if x.get("played") and not x.get("skipped") and str(x.get("date") or "")[:10] == day]
     staked = sum(_amount(x["played"].get("stake")) for x in today_played)
     max_day = _amount(d.get("max_day"))
@@ -108,7 +116,8 @@ def capital_state(today=None, docs=None):
     step = round_step(limit) if limit >= 1 else 1
     limit = math.floor(limit / step) * step if limit >= 1 else 0
     state = {"capital": round(capital, 2), "base": base, "since": since, "limit": limit, "staked": staked, "left": max(0, limit - staked),
-             "max_day": max_day, "goal": _amount(d.get("goal")), "yesterday": sum(yest) if yest else None, "tickets": len(today_played)}
+             "max_day": max_day, "goal": _amount(d.get("goal")), "month": month, "yesterday": sum(yest) if yest else None,
+             "tickets": len(today_played)}
     if docs is None:
         _cap_memo.update(key=key, at=time.monotonic(), state=state)
     return state
@@ -199,8 +208,8 @@ def _raw(it):
 
 
 def allocate(items, budget=None, detail=False):
-    """items = [{kind: pari|combo|fair, tier: titre du palier (cote mini visée pour fair), prob, odds}] -> (mises, misé, gardé), dans
-    l'ordre des items ; une mise de 0 = pari laissé de côté (plus petit que l'arrondi). Ne lève jamais (valeur illisible : mise 0).
+    """items = [{kind: pari|combo|fair, tier: titre du palier (cote mini visée pour fair), prob, odds, p_mkt (facultatif : chances selon 1xBet, pour
+    reconnaître un ticket « loterie »)}] -> (mises, misé, gardé), dans l'ordre des items ; une mise de 0 = pari laissé de côté (plus petit que l'arrondi). Ne lève jamais (valeur illisible : mise 0).
     `detail` : un 4e élément, « journée pauvre » = la somme des parts reste sous le budget (rien n'a été réduit), à ne pas confondre
     avec le reste d'un arrondi."""
     budget = _amount(daily() if budget is None else budget)
@@ -213,30 +222,39 @@ def allocate(items, budget=None, detail=False):
     scale = min(1.0, 1.0 / total) if total else 0
     step = round_step(budget)
     stakes = [math.floor(budget * r * scale / step) * step for r in raw]
-    cap = lottery_cap()
-    if cap is not None:                              # mode capital : ticket « loterie » plafonné, le reste n'est pas redistribué (gardé)
-        stakes = [min(st, cap) if _lottery(it) else st for st, it in zip(stakes, items)]
+    cap = ticket_cap()
+    if cap is not None:                              # mode capital : jamais plus de TICKET_SHARE du capital sur un ticket (le reste est gardé)
+        stakes = [min(st, cap) for st in stakes]
+    stakes = [min(st, LOTTERY_STAKE) if _lottery(it) else st for st, it in zip(stakes, items)]     # ticket « loterie » : 100 FCFA au plus (gardé)
     spent = round(sum(stakes), 2)
     out = (stakes, spent, round(budget - spent, 2))
     return out + (total < 1,) if detail else out
 
 
+def is_lottery(prob=None, odds=None, p_mkt=None):
+    """Ticket « loterie » : moins de LOTTERY_P de chances selon Kelly (`prob`), cote de LOTTERY_ODDS ou plus (`odds`), ou moins de LOTTERY_MKT_P de
+    chances selon 1xBet sans sa marge (`p_mkt`, combos.market_prob) ; une valeur absente ou illisible ne compte pas."""
+    def num(x):
+        try:
+            v = float(x)
+        except (TypeError, ValueError):
+            return None
+        return v if math.isfinite(v) else None
+    p, o, m = num(prob), num(odds), num(p_mkt)
+    return (p is not None and p < LOTTERY_P) or (o is not None and o >= LOTTERY_ODDS) or (m is not None and m < LOTTERY_MKT_P)
+
+
 def _lottery(it):
-    try:
-        return float(it.get("prob")) < LOTTERY_P
-    except (TypeError, ValueError, AttributeError):
-        return False
+    return isinstance(it, dict) and is_lottery(it.get("prob"), it.get("odds"), it.get("p_mkt"))
 
 
-def lottery_cap():
-    """Mise maximale d'un ticket « loterie » (chances < LOTTERY_P) en mode capital : LOTTERY_SHARE de la limite du jour, arrondie ; None hors mode
-    capital (rien n'est plafonné)."""
+def ticket_cap():
+    """Mode capital : mise maximale d'un ticket, TICKET_SHARE du capital arrondie au pas des mises du jour ; None hors mode capital."""
     st = capital_state()
     if not st:
         return None
-    limit = st["limit"]
-    step = round_step(limit) if limit >= 1 else 1
-    return math.floor(limit * LOTTERY_SHARE / step) * step
+    step = round_step(st["limit"]) if st["limit"] >= 1 else 1
+    return math.floor(max(0.0, st["capital"]) * TICKET_SHARE / step) * step
 
 
 def row_item(x):
@@ -245,7 +263,8 @@ def row_item(x):
     bets.json) : kind « combo » et son palier ; pari du jour (tracked.json) : kind « pari » à sa cote 1xBet quand il en a une."""
     try:
         if "legs" in x:
-            return {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"])}
+            from . import combos
+            return {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"]), "p_mkt": combos.market_prob(x["legs"])}
         if "keys" in x:
             return {"kind": "combo", "tier": x["tier"], "prob": float(x["prob"]), "odds": float(x["odds"])}
         return {"kind": "pari", "tier": "pari", "prob": float(x["prob"]), "odds": float(x.get("xodds") or x["odds"])}
@@ -297,32 +316,18 @@ def no_stake_txt(prob=None, odds=None):
     return "pas de mise (trop petite pour ton budget)"
 
 
-def stake_words(st, prob=None, odds=None, suffix=""):
+def stake_words(st, prob=None, odds=None, suffix="", p_mkt=None):
     """Mise `st` (allocate) en mots ; sans budget ni capital (None) : NO_EDGE si le pari perd en moyenne (`prob`, `odds`), None sinon. 0 : voir
-    no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant (pas en mode capital, où la ligne dit ce que rapporte la mise)."""
+    no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant (pas en mode capital, où la ligne dit ce que rapporte la mise). `p_mkt` :
+    chances selon 1xBet (ticket « loterie », is_lottery)."""
     if st is None:
         return NO_EDGE if prob is not None and odds is not None and not has_edge(prob, odds) else None
     if not st:
         return no_stake_txt(prob, odds)
     if capital_mode():
-        lot = " · ticket loterie, mise plafonnée" if prob is not None and prob < LOTTERY_P else ""
+        lot = " · ticket loterie" if is_lottery(prob, odds, p_mkt) else ""
         return money(st) + lot + (f" → si ça passe : {signed(round(st * (odds - 1)))}" if odds and odds > 1 else "")
     return money(st) + suffix
-
-
-def goal_line(odds):
-    """Mode capital avec un objectif : « 🎯 Pour +18 000 FCFA d'un coup : miser 4 500 FCFA (90 % de ta limite du jour) ⚠️ trop risqué » (texte
-    brut) ; '' sans objectif, sans capital ou sans cote. Jamais une mise conseillée : seulement ce qu'il faudrait, et si c'est raisonnable."""
-    st = capital_state()
-    if not st or not st["goal"] or not odds or odds <= 1:
-        return ""
-    step = round_step(st["limit"]) if st["limit"] >= 1 else 1
-    need = math.ceil(st["goal"] / (odds - 1) / step) * step
-    txt = f"🎯 Pour {signed(st['goal'])} d'un coup : il faudrait miser {money(need)}"
-    if need > st["left"]:
-        return txt + f" ⚠️ au-dessus de ce qu'il te reste aujourd'hui ({money(st['left'])})"
-    share = need / st["limit"] if st["limit"] else 1
-    return txt + f" ({round(share * 100)} % de ta limite du jour)" + (" ⚠️ trop risqué" if share > 0.5 else "")
 
 
 def _r(x):
@@ -336,14 +341,15 @@ def _n(x):
 
 
 def capital_line(html=True):
-    """Une ligne : « 💼 Capital 50 000 FCFA · reste aujourd'hui 200 / 5 000 FCFA · objectif +18 000 FCFA » (HTML si `html`) ; '' hors mode capital."""
+    """Une ligne : « 💼 Capital 50 000 FCFA · reste aujourd'hui 200 / 1 500 FCFA · objectif du mois +18 000 FCFA (fait +2 300 FCFA) » (HTML si `html`) ;
+    '' hors mode capital."""
     st = capital_state()
     if not st:
         return ""
     b = fmt.b if html else (lambda x: x)
     e = fmt.esc if html else (lambda x: x)
     return (f"💼 Capital {b(e(money(_r(st['capital']))))} · reste aujourd'hui {e(_n(st['left']))} / {e(money(_r(st['limit'])))}"
-            + (f" · objectif {e(signed(_r(st['goal'])))}" if st["goal"] else ""))
+            + (f" · objectif du mois {e(signed(_r(st['goal'])))} (fait {e(signed(_r(st.get('month') or 0)))})" if st["goal"] else ""))
 
 
 def _bar(part, cells=10):
@@ -372,10 +378,15 @@ def capital_card(st=None):
         if not st["max_day"]:
             lines.append("💡 Fixe ta perte max : " + i("perte max 5000"))
     lines.append("")
-    lines.append(f"🏁 Objectif : {e(signed(_r(st['goal'])))} par jour" if st["goal"] else "🏁 Ajoute un objectif : " + i("objectif 18000"))
+    if st["goal"]:
+        done = st.get("month") or 0
+        lines.append(f"🏁 Objectif du mois : {e(signed(_r(st['goal'])))} · fait : {e(signed(_r(done)))}" + (" ✅" if done >= st["goal"] else ""))
+    else:
+        lines.append("🏁 Ajoute un objectif du mois : " + i("objectif 5000"))
     if st["yesterday"] is not None:
         lines.append(f"📈 Hier : {e(signed(_r(st['yesterday'])))}")
-    lines += ["", i(f"ℹ️ Limite = ta perte max, ou {round(CAPITAL_DAY_SHARE * 100)} % du capital s'il baisse. Le capital suit les paris que tu notes.")]
+    lines += ["", i(f"ℹ️ Limite = {round(CAPITAL_DAY_SHARE * 100)} % du capital (jamais plus que ta perte max), {round(TICKET_SHARE * 100)} % au plus par "
+                    f"ticket, {money(LOTTERY_STAKE)} au plus sur un ticket loterie. Le capital suit les paris que tu notes.")]
     return Html("\n".join(lines))
 
 
@@ -509,7 +520,7 @@ def command(args):
 # ---------- commandes « capital », « perte max », « objectif » ----------
 
 CAPITAL_HELP = ("Écris « capital 50000 » (la somme que tu confies à Kelly, que tu acceptes de perdre), « perte max 5000 » (le plus que tu acceptes de "
-                "perdre en un jour) et « objectif 18000 » (ce que tu aimerais gagner par jour : affiché, jamais utilisé pour grossir une mise).")
+                "perdre en un jour) et « objectif 5000 » (ce que tu aimerais gagner par mois : affiché, jamais utilisé pour grossir une mise).")
 
 
 def _amount_arg(args, name):
@@ -566,7 +577,8 @@ def max_loss_command(args):
 
 
 def goal_command(args):
-    """« objectif 18000 » : affiché sous les combinés et le matin, jamais utilisé pour grossir une mise ; « objectif 0 » : retiré."""
+    """« objectif 5000 » : objectif du MOIS, affiché avec ce qui est déjà fait ce mois-ci (carte du capital, ligne du matin), jamais utilisé pour grossir
+    une mise ; « objectif 0 » : retiré."""
     if not args:
         return capital_status()
     amount, err = _amount_arg(args, "objectif")
@@ -577,8 +589,8 @@ def goal_command(args):
     _save_capital(goal=amount if amount > 0 else None)
     if amount <= 0:
         return _done(fmt.i("Objectif retiré."))
-    return _done(fmt.i("Kelly n'augmentera jamais une mise pour atteindre l'objectif : sous chaque combiné, elle te dit ce que rapporte sa mise "
-                       "conseillée et ce qu'il faudrait miser pour l'atteindre d'un coup, avec un avertissement si c'est trop risqué."))
+    return _done(fmt.i(f"Objectif du mois. Kelly n'augmentera jamais une mise pour l'atteindre. Repère réaliste : +5 à +10 % du capital par mois "
+                       f"({money(_r(capital_state()['capital'] * 0.05))} à {money(_r(capital_state()['capital'] * 0.10))})."))
 
 
 def played_norm(w):

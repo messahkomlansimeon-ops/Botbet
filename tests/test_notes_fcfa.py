@@ -424,7 +424,7 @@ def test_custom_is_a_note():
     assert "Avec quelle mise en FCFA ?" in reply and "À quelle cote" not in reply and "played" not in fair.load_combos()[0], reply
     # combiné à cote MINI (pas chez 1xBet : aucune cote 1xBet connue) : la cote est demandée, jamais notée à la cote mini à la place
     typ = [pick(i) for i in range(1, 5)]
-    flat = [unpriced(i) for i in range(7)]
+    flat = [unpriced(i, prob=0.76, p0=0.76) for i in range(7)]     # 76 % à la cote mini 1,46 : espérance positive même après 5 % de prudence par jambe
     for budget in (True, False):
         reset()
         if budget:

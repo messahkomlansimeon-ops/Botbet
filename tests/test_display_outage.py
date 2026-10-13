@@ -55,8 +55,10 @@ def test_combo_marks():
     msg = str(fmt.fair_combo(616.9, legs, 0.02, title="🎲 COMBINÉ AUDACIEUX", coupon="SKU6L", when="08:50", weak={"k2"}, shared={"e1": 3},
                              note="🎲 Ticket de loterie, mise très petite.", extra={"k2": "mal payé"}))
     head, *blocks = msg.split("\n\n")
-    assert head == ("<b>🎲 COMBINÉ AUDACIEUX — cote 616,9</b>\n🎯 3 paris · 2 % de chances\n🎲 Ticket de loterie, mise très petite.\n"
-                    "🎟️ <code>SKU6L</code>  <i>touche pour copier</i>"), head
+    lines = head.split("\n")
+    assert lines[0] == "<b>🎲 COMBINÉ AUDACIEUX — cote 616,9</b>" and lines[1] == "🎯 3 paris · 2 % selon Kelly · 18 % selon 1xBet", head    # chances des 2 côtés
+    assert lines[2].startswith("<i>🎰 Ticket loterie : 1 chance sur 6 selon 1xBet.") and lines[3:] == [
+        "🎲 Ticket de loterie, mise très petite.", "🎟️ <code>SKU6L</code>  <i>touche pour copier</i>"], head            # cote 50 et plus : ticket loterie
     assert blocks[0] == ("🇪🇸 <i>19h00 · Liga</i>\n<b>1. H1 – A1</b> · 🔗3\n🚩 Plus de 9,5 corners · <b>1,90</b>\n🟢 <i>Kelly 66 % · 1xBet 49 % (+17)</i>"), blocks[0]
     assert blocks[1] == ("🇪🇸 <i>19h00 · Liga</i>\n<b>2. Lyon &lt;B&gt; – A2</b>\n🏁 Plus de 3,5 hors-jeu au total · <b>1,90</b>\n"
                          "🟠 <i>Kelly 62 % · 1xBet 47 % (+15) · mal payé</i>"), blocks[1]       # nom d'équipe échappé
@@ -66,7 +68,8 @@ def test_combo_marks():
     assert "<B>" not in msg and not any(w in msg.lower() for w in fmt.JARGON if w != "score"), msg
     # combiné du matin, avec mise : le montant en tête ; sans pari moins sûr ni match déjà joué, pas de légende
     plain = str(fmt.combo("🛡️ SÛR (cote 5 à 7)", legs[:1], 1.9, 0.66, stake_txt="1 500 FCFA", coupon="AB12"))
-    assert plain.startswith("<b>🛡️ SÛR — cote 1,90</b>\n🎯 1 paris · 66 % de chances · espérance +25,4 %\n💰 Mise : <b>1 500 FCFA</b>\n"
+    assert plain.startswith("<b>🛡️ SÛR — cote 1,90</b>\n🎯 1 paris · 66 % selon Kelly · 49 % selon 1xBet\n📊 Espérance : +25,4 % selon Kelly · −6,9 % selon 1xBet\n"
+                            "💰 Mise : <b>1 500 FCFA</b>\n"
                             "🎟️ <code>AB12</code>  <i>touche pour copier</i>\n\n🇪🇸"), plain
     assert "solide" not in plain and "🔗" not in plain and "\n\n━━━━━━━━━━━━\n🎟️ Code : <code>AB12</code>" in plain and "Mon capital" not in plain, plain
     # la marque d'écart : négative quand Kelly est sous 1xBet

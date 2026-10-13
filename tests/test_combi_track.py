@@ -499,10 +499,13 @@ def test_settle_real_picks_and_unknown():
         app.custom_combo(picks, [], 5.0, DAY, when="09:30")
         custom.track("m1", DAY)
     row = fair.load_combos()[0]
+    if not row.get("played"):                                        # 4 jambes à +5 % : sous la prudence de 5 % par jambe, aucune mise conseillée -> notée à la main
+        assert "✅ Noté" in played.command(["vm1", fmt.odds_txt(row["min_odds"]), "500"], DAY)
+    row = fair.load_combos()[0]
     assert row["src"] == "picks" and played.is_real(row) and [l["market"] for l in row["legs"]] == ["h2h"] * 4, row
     with Scores({}, default=(2, 0)):                                 # l'équipe à domicile gagne
         rows, _ = settle.settle_fair_combos(at(8, day=2))
-    assert rows[0]["result"] == "win" and abs(money.gain(rows[0]) - rows[0]["stake"] * (rows[0]["min_odds"] - 1)) < 1e-6, rows[0]          # toutes gagnées : la cote notée (le total arrondi à 2 décimales) est payée telle quelle
+    assert rows[0]["result"] == "win" and abs(money.gain(rows[0]) - rows[0]["played"]["stake"] * (rows[0]["played"]["odds"] - 1)) < 1e-6, rows[0]   # la cote notée (le total arrondi à 2 décimales) est payée telle quelle
     # un pari que le règlement gratuit ne connaît pas : « non vérifiable », jamais gagné ni plantage
     reset()
     money.set_daily(5000)
@@ -722,6 +725,8 @@ def test_alerts_real_picks_and_good_news():
     with Fakes():
         app.custom_combo(picks, [], 5.0, DAY, when="09:30")
         custom.track("m1", DAY)
+    if not fair.load_combos()[0].get("played"):                      # sous la prudence de 5 % par jambe, pas de mise conseillée : noté à la main
+        played.command(["vm1", fmt.odds_txt(fair.load_combos()[0]["min_odds"]), "500"], DAY)
     rows = track.load()
     took, noted = xalerts.took_bets(rows, [], DAY)
     assert set(took) == {f"e{i}|h2h||Home{i}" for i in range(1, 5)} and set(took.values()) == {XB} and noted == set(took), took

@@ -472,7 +472,7 @@ def test_journal_settlement_and_learning():
         assert res == {"totals": "win", "alternate_totals_corners": "win"}, res                    # 3 buts < 3,5 ; 12 corners > 9,5
         assert all(r.get("ens") for r in store.load(E.LOG_FILE, []))
         lines = E.lines()
-        assert len(lines) == 2 and any(l.startswith("buts : Kelly compte pour 12 %") for l in lines) and any(l.startswith("corners : Kelly compte pour 50 %") for l in lines), lines
+        assert len(lines) == 2 and any(l.startswith("buts : Kelly compte pour 12 %") for l in lines) and any(l.startswith("corners : Kelly compte pour 25 %") for l in lines), lines
         # statistiques : le règlement du journal ne demande JAMAIS rien de plus à API-Football (cache seulement), quota intact
         reset()
         pronos = priced_pronos()

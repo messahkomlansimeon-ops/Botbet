@@ -1545,7 +1545,8 @@ def test_adaptive_disagreement():
 
 
 def mkleg(i, odds_, prob, ev=None, market="h2h", edge=None, **kw):
-    return {"key": f"k{i}", "id": ev or f"e{i}", "odds": odds_, "prob": prob, "edge": prob * odds_ - 1 if edge is None else edge,
+    """Pari réel (build_picks) : sa proba est celle des books de référence (« prob_book »), prudence de 1 % par jambe dans un combiné."""
+    return {"key": f"k{i}", "id": ev or f"e{i}", "odds": odds_, "prob": prob, "prob_book": prob, "edge": prob * odds_ - 1 if edge is None else edge,
             "n_books": 14, "weight": 1.0, "score": 0.0, "market": market, "name": "Over", "why": "", "pm": None,
             "commence": f"2026-10-01T{10 + i % 12:02d}:00:00Z", "home": f"H{i}", "away": f"A{i}", "event": f"H{i} - A{i}",
             "league": "L", "start": f"{10 + i % 12}:00", "pick": f"Pari {i}"} | kw
@@ -2165,8 +2166,8 @@ def test_replay_oct8():
         assert not any("joue si ≥" in t or "· mini " in t for t in text if "COMBINÉ À VÉRIFIER" not in t and "Pronostics Kelly" not in t)
         real_ids = {c["id"] for c in sent_picks}
         assert real_ids <= {p["id"] for p in picks}                                      # les combinés réels n'ont que des jambes à vraies cotes
-        for fm in fair_msgs:
-            assert "Mise indicative" not in fm and "Mise : fixe ton capital" in fm
+        for fm in fair_msgs:                                                             # sans budget : jamais d'unités ; à la cote mini, avec 5 % de prudence
+            assert "Mise indicative" not in fm and ("Mise : fixe ton capital" in fm or "Kelly ne conseille pas de miser dessus" in fm), fm   # par jambe, souvent rien
         # --- enregistrement : fichier à part, jamais dans bets.json ni dans les mises de la bankroll
         n_rec = fair.record_combos(built, day)
         rows = store.load("fair_combos.json", [])
@@ -2181,7 +2182,8 @@ def test_replay_oct8():
         assert isinstance(reply, telegram.Html) and "Kelly n'a vu aucune cote de 1xBet aujourd'hui : voici un combiné" in reply, reply   # cote mini avant les cotes de référence
         assert "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET — cote mini 2" in reply and "à vérifier chez 1xBet" in reply
         mini = float(re.search(r"CHEZ 1XBET — cote mini (\d+,\d+)", reply).group(1).replace(",", "."))
-        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and " · joue si ≥ <b>" in reply and "Mise : fixe ton capital" in reply
+        assert 25 <= mini <= 25 * (1 + C.CUSTOM_TOLERANCE) and " · joue si ≥ <b>" in reply and ("Mise : fixe ton capital" in reply
+                                                                                              or "Kelly ne conseille pas de miser dessus" in reply), reply
         assert "SUR MESURE" not in reply and "Mise indicative" not in reply and "mise conseillée :" not in reply
         # --- une cote hors de portée de TOUS les pronostics solides du jour : impossible, on dit précisément ce qui manque
         huge = int(CB.fair_shortfall(keep, 25)["best_total"] * 5)

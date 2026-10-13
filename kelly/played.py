@@ -362,6 +362,9 @@ def note(t, odds, stake, now=None, ref_at=None):
         lines.append(f"💼 Reste aujourd'hui : {M._n(st['left'])} / {M.money(M._r(st['limit']))}")
         if st["staked"] > st["limit"] + 0.5:          # noté quand même (c'est ce que tu as joué), mais dit clairement
             lines.append(f"⚠️ Limite du jour dépassée de {M.money(M._r(st['staked'] - st['limit']))} : plus aucune mise conseillée aujourd'hui.")
+        if st["capital"] > 0 and stake > M.TICKET_WARN_SHARE * st["capital"]:     # grosse mise : erreur de frappe ? (dit, jamais refusé)
+            lines.append(f"⚠️ {M.money(M._r(stake))} sur un seul ticket, c'est {round(stake / st['capital'] * 100)} % de ton capital. "
+                         "Erreur de frappe ? Corrige avec « ✏️ Autre cote ».")
         if st["tickets"] > M.TICKETS_DAY:           # trop de tickets : signalé, jamais bloqué (la note est déjà enregistrée)
             lines.append(f"⚠️ {st['tickets']}e ticket aujourd'hui : au-delà de {M.TICKETS_DAY}, tes tickets partagent souvent les mêmes matchs "
                          "et les pertes s'additionnent.")

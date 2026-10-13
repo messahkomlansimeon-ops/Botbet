@@ -378,7 +378,7 @@ def send_combo(app, plan, day, now):
     l'envoi (une relance ne le double pas). -> le palier envoyé, ou None."""
     legs, total, prob, tier, when = plan["legs"], plan["total"], plan["prob"], plan["tier"], plan["when"]
     coupon = app._coupon(legs)                      # réseau 1xBet (ticket sans mise) : hors verrou
-    stake = app._budget_stake(prob, total)
+    stake = app._budget_stake(prob, total, legs=legs)
     with locked():
         doc = load(day)
         rows = fair.load_combos()
@@ -394,7 +394,7 @@ def send_combo(app, plan, day, now):
         span = f"de {kos[0]:%Hh%M} à {kos[-1]:%Hh%M}" if kos[0] != kos[-1] else f"à {kos[0]:%Hh%M}"
         head = (f"🧮 Les paris stats (tirs, fautes, touches...) viennent de s'ouvrir chez 1xBet pour des matchs {span} : "
                 f"voici un combiné aux cotes de {when}.")
-        msg = app._fair_reply((legs, total, prob), head, title=C.STATS_WINDOW_TITLE, stake_txt=app._stake_words(stake), when=when, code=coupon,
+        msg = app._fair_reply((legs, total, prob), head, title=C.STATS_WINDOW_TITLE, stake_txt=app._stake_words(stake, legs=legs), when=when, code=coupon,
                               retry=app.RETRY_BUTTON)
         quiet.send(app.chat.with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon))
     print(f"[stats] combiné {tier} envoyé : cote {total:.2f}, {len(legs)} pari(s), code {'oui' if coupon else 'non'}", file=sys.stderr)

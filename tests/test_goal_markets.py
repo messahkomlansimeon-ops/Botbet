@@ -210,7 +210,7 @@ def test_market_anchoring_backtest():
     m1 = S.build(ms, on, div="E0", mkt=0.5)
     m0 = S.build(ms, on, div="E0", mkt=0.0)
     g1, g0 = m1["stats"]["goals"], m0["stats"]["goals"]
-    assert g1["mkt"] == 0.5 and g1["n_mkt"] > 600 and g0["mkt"] == 0.0 and g0["n_mkt"] == 0 and m1["v"] == S.VERSION == 3
+    assert g1["mkt"] == 0.5 and g1["n_mkt"] > 600 and g0["mkt"] == 0.0 and g0["n_mkt"] == 0 and m1["v"] == S.VERSION == 4
     assert abs(g1["alpha"] - g0["alpha"]) < 0.08 and g1["atot"] < 0.08
     # cache : l'ancrage fait partie de la clé (un cache fait sans ancrage est refait)
     old_w = C.STRENGTH_MKT_WEIGHT

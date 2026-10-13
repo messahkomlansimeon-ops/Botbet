@@ -202,16 +202,16 @@ def _mood(won, said):
     return "trop confiante" if won < said - 0.05 else "un peu prudente" if won > said + 0.05 else "juste"
 
 
-def _state(n, w, s, need, k=None):
+def _state(n, w, s, need, k=None, out_=None):
     """« 🟢 Buts · 131 · juste (71 % / 69 %) », « 🔴 Tirs · 67 · trop confiante (45 % / 65 %) → écartés des combinés », « ⏳ Corners · 49/60 » :
-    sans le libellé (ajouté par l'appelant) -> (pastille, suite)."""
+    sans le libellé (ajouté par l'appelant) -> (pastille, suite). `out_` : la famille est écartée des combinés (calib.in_combos) ; sans lui, k < VIABLE_MIN_K."""
     from . import fmt
     won, said, n = w / n, s / n, int(round(n))           # cumul vieilli : nombre effectif, décimal
     if n < need:
         return "⏳", f"{n}/{need}"
     mood = _mood(won, said)
     out = f"{n} · {mood} ({fmt.pct(won)} / {fmt.pct(said)})"
-    if k is not None and k < C.VIABLE_MIN_K:
+    if (out_ if out_ is not None else (k is not None and k < C.VIABLE_MIN_K)):
         out += " → écartés des combinés"
     return ("🔴" if mood == "trop confiante" else "🟢"), out
 
@@ -224,7 +224,7 @@ def learning_lines(top=6):
     d = calib.load()
     fams = sorted(((f, a) for f, a in d.items() if not f.startswith("_") and isinstance(a, list) and a[0]), key=lambda x: -x[1][0])
     for f, (n, w, s) in fams[:top]:
-        dot, txt = _state(n, w, s, calib.min_need(f), calib.family_k(f, d, real_only=True))
+        dot, txt = _state(n, w, s, calib.min_need(f), out_=not calib.in_combos(f, d))
         out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}" + calib.new_rule_note(f, d))
     try:
         from . import replay

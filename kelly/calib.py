@@ -31,6 +31,7 @@ dilué par une saison rejouée où la méthode seule s'est montrée plus juste. 
 Jambes de combinés (data["_combo"]) : réussite des jambes des combinés réglés face à leur proba (déjà corrigée) ; combos.leg_discount en tire la
 prudence par jambe.
 """
+import math
 import time
 from datetime import date, datetime, timezone
 
@@ -163,8 +164,13 @@ def add(rows, today=None):
         accumulate(data, r, r["result"] == "win")
         if r.get("rule") == C.RULE and family(r["market"]) in C.STATS_NEW_FAMILIES:     # compteur « depuis la correction » : la proba ANNONCÉE
             accumulate(data.setdefault("_new", {}), r | {"p0": r["prob"]}, r["result"] == "win")      # (mélange avec 1xBet), pas celle du modèle seul
+            if r.get("xodds"):                                                         # gain réel à la cote 1xBet, par match (new_roi)
+                data.setdefault("_new_rows", []).append([str(r.get("date") or "")[:10], str(r.get("id") or r["key"].split("|")[0]), family(r["market"]),
+                                                         round(float(r["xodds"]), 3), 1 if r["result"] == "win" else 0])
         r["calib"] = True
         n += 1
+    if len(data.get("_new_rows") or []) > C.NEW_RULE_ROWS:
+        data["_new_rows"] = data["_new_rows"][-C.NEW_RULE_ROWS:]
     _save(data)
     return n
 
@@ -327,6 +333,50 @@ def judged_on_new(fam, data=None):
     return fam in C.STATS_NEW_FAMILIES and new_count(fam, data) >= new_min(fam)
 
 
+def new_roi(fam, data=None):
+    """Gain réel à la cote 1xBet des pronostics de la nouvelle règle de la famille `fam` (data["_new_rows"]) : {"n" : résultats, "m" : matchs, "roi" : gain
+    moyen par mise, "hw" : marge d'erreur (C.NEW_RULE_Z erreurs-types)} ; None sans résultat. L'erreur-type est comptée MATCH PAR MATCH (estimateur de ratio
+    à grappes) : deux lignes d'un même match passent ou cassent souvent ensemble, elles n'apportent pas deux fois l'information."""
+    rows = [r for r in ((data if data is not None else load()).get("_new_rows") or []) if isinstance(r, list) and len(r) == 5 and r[2] == fam]
+    if not rows:
+        return None
+    by = {}
+    for day, mid, _, odds, won in rows:
+        g = by.setdefault((day, mid), [0.0, 0])
+        g[0] += won * odds - 1
+        g[1] += 1
+    tot_r, tot_n, m = sum(g[0] for g in by.values()), sum(g[1] for g in by.values()), len(by)
+    roi = tot_r / tot_n
+    var = m / (m - 1) * sum((g[0] - roi * g[1]) ** 2 for g in by.values()) / tot_n ** 2 if m > 1 else float("inf")
+    return {"n": tot_n, "m": m, "roi": roi, "hw": C.NEW_RULE_Z * math.sqrt(var) if math.isfinite(var) else float("inf")}
+
+
+def old_bad(fam, data=None):
+    """La famille était-elle écartée des combinés par les résultats de l'ancienne règle (tous les vrais résultats, sans rejeu) ?"""
+    return factor(rep_market(fam), data if data is not None else load(), base=1.0) < C.VIABLE_MIN_K
+
+
+def new_rule_ok(fam, data=None):
+    """Verdict du GAIN RÉEL de la nouvelle règle (new_roi), une fois la famille jugée sur elle (judged_on_new) : une famille écartée par l'ancienne règle
+    (old_bad) ne revient que si le gain, au pire de sa marge d'erreur, reste au-dessus de C.NEW_RULE_ROI_FLOOR ; une famille admise n'est écartée que si
+    le gain, au mieux de sa marge, reste en dessous (la preuve est demandée au changement, dans les deux sens). Pas encore jugée : True (l'ancienne règle
+    décide, viable_factor)."""
+    data = data if data is not None else load()
+    if not judged_on_new(fam, data):
+        return True
+    r = new_roi(fam, data)
+    if old_bad(fam, data):
+        return r is not None and r["roi"] - r["hw"] >= C.NEW_RULE_ROI_FLOOR
+    return r is None or r["roi"] + r["hw"] >= C.NEW_RULE_ROI_FLOOR
+
+
+def in_combos(fam, data=None):
+    """La famille a-t-elle sa place dans les combinés (combos.data_ok, affichages « écartés des combinés ») : fiabilité suffisante (family_k real_only) et
+    verdict du gain réel de la nouvelle règle (new_rule_ok)."""
+    data = data if data is not None else load()
+    return family_k(fam, data, real_only=True) >= C.VIABLE_MIN_K and new_rule_ok(fam, data)
+
+
 def viable_factor(market, sport_key=None, side=None, p=None, data=None, shown=None):
     """k qui décide si un marché reste dans les combinés (combos.data_ok) : sur les seuls vrais résultats (jamais le rejeu), et pour
     C.STATS_NEW_FAMILIES sur ceux de la nouvelle règle dès qu'il y en a new_min (les résultats de l'ancienne règle n'écartent plus). Ceux-là
@@ -338,19 +388,26 @@ def viable_factor(market, sport_key=None, side=None, p=None, data=None, shown=No
 
 
 def new_rule_note(fam, data=None):
-    """« · nouvelle règle 12/30 » ; « · nouvelle règle : 34 · 63 % / 65 % → de retour dans les combinés » ; '' hors C.STATS_NEW_FAMILIES ou
-    sans résultat."""
+    """« · nouvelle règle 12/30 » ; « · nouvelle règle : 34 · 63 % / 65 % · gain +6 % (± 14 %, 21 matchs) → de retour dans les combinés » ;
+    « … → gain pas encore prouvé » ; '' hors C.STATS_NEW_FAMILIES ou sans résultat."""
     data = data if data is not None else load()
     if fam not in C.STATS_NEW_FAMILIES:
         return ""
     acc = new_rule(data).get(fam)
     n = acc[0] if _acc_list(acc) else 0
+    bad_before = old_bad(fam, data)
     if n < new_min(fam):
-        old_bad = factor(rep_market(fam), data, base=1.0) < C.VIABLE_MIN_K
-        return f" · nouvelle règle {count(n)}/{new_min(fam)}" if (n >= 0.5 or old_bad) else ""
+        return f" · nouvelle règle {count(n)}/{new_min(fam)}" if (n >= 0.5 or bad_before) else ""
     txt = f" · nouvelle règle : {count(n)} · {round(acc[1] / n * 100)} % / {round(acc[2] / n * 100)} %"
-    if factor(rep_market(fam), data, base=1.0) < C.VIABLE_MIN_K <= viable_factor(rep_market(fam), data=data):
-        txt += " → de retour dans les combinés"
+    r = new_roi(fam, data)
+    if r is not None:
+        hw = f"± {round(r['hw'] * 100)} %" if math.isfinite(r["hw"]) else "marge inconnue"
+        txt += f" · gain {'+' if r['roi'] >= 0 else '−'}{round(abs(r['roi']) * 100)} % ({hw}, {r['m']} match{'s' if r['m'] > 1 else ''})"
+    k_ok = viable_factor(rep_market(fam), data=data) >= C.VIABLE_MIN_K
+    if bad_before and k_ok:
+        txt += " → de retour dans les combinés" if new_rule_ok(fam, data) else " → gain pas encore prouvé"
+    elif not bad_before and k_ok and not new_rule_ok(fam, data):
+        txt += " → perte prouvée"
     return txt
 
 

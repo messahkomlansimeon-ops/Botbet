@@ -204,8 +204,10 @@ REPLAY_PRIOR = _int("REPLAY_PRIOR", 1)            # 1 : la correction mesurée p
 REPLAY_DAYS = _int("REPLAY_DAYS", 365)            # jours rejoués (avant la date du premier rejeu)
 REPLAY_STEP_DAYS = _int("REPLAY_STEP_DAYS", 7)    # le modèle est réajusté tous les N jours pendant le rejeu (sur les seuls matchs d'avant)
 REPLAY_TUNE_SECONDS = _int("REPLAY_TUNE_SECONDS", 420)   # temps donné au rejeu après le réglage du dimanche (--tune), s'il n'est pas fini
-COMBO_LEG_K = (0.90, 0.99)                                 # prudence par jambe d'un combiné (mesurée sur les jambes réglées), bornée ; 0,99 = 1 % au moins
-COMBO_LEG_PRIOR = _int("COMBO_LEG_PRIOR", 200)              # la prudence mesurée remplace progressivement 0,99 : n / (n + 200)
+COMBO_LEG_K = (0.85, 0.99)                                 # prudence par jambe d'un combiné (mesurée sur les jambes réglées), bornée ; 0,99 = 1 % au moins
+COMBO_LEG_START = _float("COMBO_LEG_START", 0.95)          # prudence de départ : 5 % par jambe (audit du 13/10 : 189 jambes réglées, 4,6 % de réussite en moins qu'annoncé)
+COMBO_LEG_PRIOR = _int("COMBO_LEG_PRIOR", 200)              # la prudence mesurée remplace progressivement celle de départ : n / (n + 200)
+X_MARGIN_GUESS = _float("X_MARGIN_GUESS", 0.07)            # marge de 1xBet supposée sur une cote seule (médiane mesurée : 7,2 %) quand sa proba sans marge manque
 FAIR_MIN_N = 5                                    # matchs récents minimum pour croire une équipe
 FAIR_P_RANGE = (0.55, 0.80)                       # proba utile : en dessous c'est du hasard, au-dessus la cote juste est < 1.25
 FAIR_P_TARGET = 0.65                              # entre deux lignes, on garde celle dont la proba est la plus proche
@@ -595,18 +597,33 @@ ENSEMBLE_LOG = _bool("ENSEMBLE_LOG", True)
 # sur les résultats de l'ancienne règle (tirs : 45 % réalisés pour 65 % annoncés, lignes choisies sur le plus gros désaccord avec 1xBet).
 STATS_NEW_FAMILIES = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))
 STATS_NEW_MIN = _int("STATS_NEW_MIN", 30)
+# ... et sur le GAIN RÉEL à la cote 1xBet, avec sa marge d'erreur comptée match par match (calib.new_roi : les lignes d'un même match sont corrélées) :
+# une famille écartée par l'ancienne règle ne revient que si le gain, au pire de la marge, reste au-dessus de NEW_RULE_ROI_FLOOR (pas pire que payer la
+# marge de 1xBet) ; une famille admise n'est écartée que si le gain, au mieux de la marge, reste en dessous. Seuil « 18 sur 30 » seul (avant le 13/10) : une
+# famille qui perd 11 % repassait une fois sur trois.
+NEW_RULE_ROI_FLOOR = _float("NEW_RULE_ROI_FLOOR", -0.10)
+NEW_RULE_Z = _float("NEW_RULE_Z", 1.2816)                      # marge d'erreur : 80 % de confiance (10 % de chances de chaque côté)
+NEW_RULE_ROWS = _int("NEW_RULE_ROWS", 3000)                    # résultats gardés pour ce calcul (les plus récents)
 RULE = 2                     # numéro de la règle de choix des lignes, posé sur chaque pronostic suivi (« rule ») : 2 = mélange avec 1xBet (12/10)
 ENSEMBLE_MARGIN = _float("ENSEMBLE_MARGIN", 0.03)             # valeur : cote 1xBet x proba retenue >= 1 + marge
 ENSEMBLE_REQUIRE_MARKET = _bool("ENSEMBLE_REQUIRE_MARKET", True)  # vrai : pas de valeur sans AU MOINS un avis de marché (sharp ou 1xBet sans marge), dans toutes les familles
 ENSEMBLE_MAX_DISAGREE = _float("ENSEMBLE_MAX_DISAGREE", 0.12)  # veto : |proba du modèle - proba du marché| au-delà (familles où le marché pèse beaucoup)
 ENSEMBLE_VETO_WEIGHT = _float("ENSEMBLE_VETO_WEIGHT", 0.7)    # le veto vaut quand le poids du marché est >= à ce seuil
 # Poids a priori du MODÈLE face au marché, par famille (calib.family) : buts / 1N2 / les 2 marquent / double chance : le marché pèse 85 à 90 % ;
-# corners, cartons, tirs, fautes, touches, hors-jeu : aucune mesure fiable, moitié-moitié avec la cote 1xBet. « ENSEMBLE_PRIOR_MODEL=goals=0.1,... »
+# corners, cartons, tirs, fautes, touches, hors-jeu : aucune mesure fiable, le modèle pèse 25 % face à la cote 1xBet (50 % avant l'audit du 13/10 : le modèle de
+# corners fait moins bien qu'une simple moyenne de ligue dans 4 championnats sur 6, les tirs annonçaient 65 % pour 45 % réalisés, et les lignes choisies sur le plus
+# gros désaccord avec 1xBet sont celles où Kelly se trompe le plus). « ENSEMBLE_PRIOR_MODEL=goals=0.1,... »
 ENSEMBLE_PRIOR_MODEL = {k: min(1.0, v) for k, v in _shares("ENSEMBLE_PRIOR_MODEL", {"goals": 0.12, "btts": 0.12, "dc": 0.12, "h2h": 0.12, "team_goals": 0.12}).items()}
-ENSEMBLE_PRIOR_OTHER = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_OTHER", 0.5)))   # famille sans a priori propre
+ENSEMBLE_PRIOR_OTHER = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_OTHER", 0.25)))  # famille sans a priori propre (corners, cartons, tirs, fautes...)
 ENSEMBLE_PRIOR_SHARP = min(1.0, max(0.0, _float("ENSEMBLE_PRIOR_SHARP", 0.75)))  # part du « sharp » dans l'avis du marché quand sharp ET 1xBet existent
 ENSEMBLE_SHARP_MAX_AGE_MIN = _int("ENSEMBLE_SHARP_MAX_AGE_MIN", 180)   # une proba sharp plus vieille (min) n'entre plus dans l'ensemble ; âge inconnu : acceptée
 ENSEMBLE_X_MARGIN = _float("ENSEMBLE_X_MARGIN", 0.05)         # marge supposée de 1xBet quand sa cote sans marge n'est pas calculable (double chance sans les 3 cotes)
+# Compétitions entre clubs de championnats différents (coupes d'Europe et d'Amérique, coupes nationales) ou entre sélections : aucun pari de stats (corners,
+# cartons, tirs, fautes, touches, hors-jeu, combos.cross_league_stat). Kelly n'y a que les moyennes de championnats différents, sans correction de niveau
+# (audit du 13/10 : les corners d'un club écossais comptés comme ceux d'un club anglais).
+CROSS_LEAGUE_PREFIXES = ("soccer_uefa_", "soccer_fifa_", "soccer_conmebol_", "soccer_concacaf_", "soccer_africa_",
+                         "soccer_international_", "soccer_fa_cup", "soccer_england_efl_cup", "soccer_spain_copa_del_rey", "soccer_germany_dfb_pokal",
+                         "soccer_italy_coppa_italia", "soccer_france_coupe_de_france")
 # Sans avis sharp (Pinnacle, Betfair, Matchbook), un pari de buts n'est JAMAIS une « valeur » : 1xBet seul, devigé, rend 0,93-0,94 (marge 6-7 %), donc le seuil
 # 1 + ENSEMBLE_MARGIN n'y est jamais atteint sans modèle. Il est alors « probable » (🎯, pas 💎) : proba retenue >= ENSEMBLE_PROBABLE_MIN_P et 1xBet ne paie pas plus de
 # ENSEMBLE_PROBABLE_MIN_EV sous la proba retenue (-10 % : la marge ordinaire de 1xBet passe, une cote bradée non). Aucune mise conseillée tant que l'espérance au prix
@@ -629,11 +646,13 @@ GOAL_XG_WEIGHT = min(0.6, max(0.0, _float("GOAL_XG_WEIGHT", 0.3)))
 GOAL_XG_WEIGHT_TABLE = min(0.6, max(0.0, _float("GOAL_XG_WEIGHT_TABLE", 0.15)))
 # Apprentissage (par famille) : posterior bayésien sur une grille de poids, a priori Beta centré sur le poids a priori et d'écart-type
 # ENSEMBLE_PRIOR_SD (petit = rappel fort : buts / 1N2 / 2 marquent / double chance, où l'audit a mesuré ; grand : familles non mesurées). Rien ne
-# bouge avant ENSEMBLE_MIN_N pronostics réglés (avec les deux avis) ; le passage est progressif sur ENSEMBLE_MIN_N de plus.
+# bouge avant ENSEMBLE_MIN_N matchs réglés (avec les deux avis ; ENSEMBLE_MIN_N_OTHER pour corners, cartons, tirs, fautes) ; le passage est progressif sur
+# autant de plus.
 ENSEMBLE_PRIOR_SD = {k: max(0.01, v) for k, v in _shares("ENSEMBLE_PRIOR_SD", {"goals": 0.07, "btts": 0.07, "dc": 0.07, "h2h": 0.07, "team_goals": 0.07}).items()}
 ENSEMBLE_PRIOR_SD_OTHER = max(0.01, _float("ENSEMBLE_PRIOR_SD_OTHER", 0.20))   # écart-type a priori du poids du modèle ailleurs
 ENSEMBLE_PRIOR_SD_SHARP = max(0.01, _float("ENSEMBLE_PRIOR_SD_SHARP", 0.15))   # écart-type a priori de la part du sharp (ws)
-ENSEMBLE_MIN_N = _float("ENSEMBLE_MIN_N", 100)
+ENSEMBLE_MIN_N = _float("ENSEMBLE_MIN_N", 100)                # matchs (une ligne compte 1 / nombre de lignes de sa famille dans le même match)
+ENSEMBLE_MIN_N_OTHER = _float("ENSEMBLE_MIN_N_OTHER", 300)    # familles sans a priori mesuré (corners, cartons, tirs, fautes...) : 300 matchs avant de bouger
 ENSEMBLE_HALF_LIFE = _float("ENSEMBLE_HALF_LIFE", 2000)       # oubli exponentiel : un résultat compte moitié moins après autant de résultats
 ENSEMBLE_TEMP = _float("ENSEMBLE_TEMP", 0.5)                  # vraisemblance atténuée : lignes d'un même match corrélées, choix non aléatoire
 ENSEMBLE_LOG_DAYS = _int("ENSEMBLE_LOG_DAYS", 10)             # jours gardés dans data/ensemble_log.json (avis en attente de règlement)

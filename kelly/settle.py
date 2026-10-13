@@ -577,7 +577,7 @@ def _reliability_lines(note=True):
                   key=lambda x: -x[1][0])
     out = []
     for f, (n, w, s_) in fams:
-        dot, txt = status._state(n, w, s_, calib.min_need(f), calib.family_k(f, d, real_only=True))
+        dot, txt = status._state(n, w, s_, calib.min_need(f), out_=not calib.in_combos(f, d))
         out.append(f"{dot} {calib.LABELS.get(f, f).capitalize()} · {txt}" + (calib.new_rule_note(f, d) if note else ""))
     rows = calib.league_rows(d)
     pick = rows if len(rows) <= 3 else rows[:2] + rows[-1:]

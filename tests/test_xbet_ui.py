@@ -148,7 +148,7 @@ def test_combi_fallthrough():
     # aucune cote 1xBet : combiné à cote mini (à vérifier) AVANT les cotes de référence des autres books
     reset()
     typ = [pick(i) for i in range(1, 5)]
-    flat = [prono(i, xodds=None, xref=None, xev=None, xgid=None) for i in range(7)]
+    flat = [prono(i, xodds=None, xref=None, xev=None, xgid=None, prob=0.76, p0=0.76) for i in range(7)]     # 76 % à 1,46 : positif après 5 % de prudence par jambe
     with Fakes() as f:
         out = str(app.custom_combo(typ, flat, 4.5, DAY))
     assert out.startswith("Kelly n'a vu aucune cote de 1xBet aujourd'hui") and "À VÉRIFIER CHEZ 1XBET" in out and "SUR MESURE" not in out, out

@@ -17,15 +17,16 @@ Combinaison en log-cotes (« logit pooling », poids de somme 1), en deux étage
 Un avis manquant est donc retiré et les poids restants renormalisés PAR ÉTAGE : le poids du modèle (wm) ne grimpe pas quand le « sharp »
 manque (sinon un match sans Pinnacle redonnerait au modèle 30 % au lieu de 12 %). Priors (config.ENSEMBLE_PRIOR_*) : buts, 1N2, les 2 marquent,
 double chance wm = 0,12 (le marché pèse 88 %, sharp si présent sinon 1xBet) ; corners, cartons, tirs, tirs cadrés, fautes, touches, hors-jeu
-wm = 0,5 (non mesuré) ; ws = 0,75 quand sharp ET 1xBet existent.
+wm = 0,25 (non mesuré ; 0,5 avant l'audit du 13/10) ; ws = 0,75 quand sharp ET 1xBet existent.
 
 Règle de décision (value) : le pari est « de la valeur » ssi cote 1xBet x p_ens >= 1 + ENSEMBLE_MARGIN (3 %) ET pas de veto ET, dans les familles où le marché pèse
 lourd (buts, 1N2...), un avis SHARP existe (Pinnacle, Betfair Exchange, Matchbook : config.SHARP_BOOKS). Sans avis sharp, 1xBet seul, devigé, rend 0,93-0,94 (marge de 6-7 %) :
 le seuil n'est jamais atteint sans que le modèle l'y pousse, et le modèle n'a pas à décider seul. Le pari est alors « probable » (kind « probable », jamais « valeur ») : proba
 retenue >= ENSEMBLE_PROBABLE_MIN_P et 1xBet ne paie pas plus de ENSEMBLE_PROBABLE_MIN_EV sous elle ; ev_x (proba 1xBet sans marge x cote - 1) dit s'il reste une espérance au prix
 du marché (combos.stake_prob : aucune mise conseillée tant qu'elle n'est pas positive). Veto : dans les
-familles où le marché pèse >= ENSEMBLE_VETO_WEIGHT (0,7), un écart |p_model - p_mkt| > ENSEMBLE_MAX_DISAGREE (0,12) écarte le pari (dans ces
-familles, c'est presque toujours Kelly qui se trompe). Sans aucun avis de marché (ligne dont l'autre issue manque chez 1xBet, pas de sharp), rien
+familles où le marché a été MESURÉ meilleur que le modèle (VETO_FAMILIES : buts, 1N2, double chance, les 2 marquent) et y pèse >= ENSEMBLE_VETO_WEIGHT
+(0,7), un écart |p_model - p_mkt| > ENSEMBLE_MAX_DISAGREE (0,12) écarte le pari (dans ces familles, c'est presque toujours Kelly qui se trompe). Corners,
+cartons, tirs, fautes : pas de veto (le modèle n'y pèse que 25 %, et sans aucun écart permis il ne pourrait jamais montrer s'il sait quelque chose). Sans aucun avis de marché (ligne dont l'autre issue manque chez 1xBet, pas de sharp), rien
 n'est validé (« no_market ») : une valeur jugée sur le seul modèle est celle que l'audit a démentie (ENSEMBLE_REQUIRE_MARKET = faux pour l'autoriser
 hors des familles à marché lourd).
 
@@ -34,13 +35,15 @@ GRILLE de 40 valeurs de [0, 1] et, pour chaque valeur, la log-vraisemblance cumu
 l'opposé du log-loss). Le poids utilisé est la MOYENNE a posteriori : a priori Beta de moyenne le poids a priori et d'écart-type
 ENSEMBLE_PRIOR_SD (0,07 là où l'audit a mesuré, 0,20 ailleurs : un rappel fort vers le poids a priori), fois la vraisemblance. Un écart de
 quelques points entre le modèle et le marché apporte très peu d'information par résultat : la moyenne a posteriori ne bouge donc que
-lentement (plusieurs centaines de résultats par famille pour déplacer un poids de 0,1), ce qui est voulu. Garde-fous : (1) rien ne bouge avant
-ENSEMBLE_MIN_N résultats comportant les avis comparés (modèle et un avis de marché pour wm ; sharp et 1xBet pour ws), puis le passage est
-progressif sur ENSEMBLE_MIN_N de plus ; (2) la vraisemblance est
-atténuée (ENSEMBLE_TEMP = 0,5) car les lignes d'un même match sont corrélées et le choix des pronostics n'est pas aléatoire ; (3) oubli
-exponentiel (demi-vie ENSEMBLE_HALF_LIFE résultats) pour suivre un marché qui change. L'état tient dans data/ensemble.json
-({"fam": {famille: {"m": {"ll": [40 nombres], "n": effectif}, "s": {...}}}, "done": {clé du pronostic: jour}}) : l'apprentissage est
-idempotent par clé de pronostic, que le résultat vienne de data/ensemble_log.json ou de data/fair.json.
+lentement (plusieurs centaines de résultats par famille pour déplacer un poids de 0,1), ce qui est voulu. Garde-fous : (1) l'effectif compte des
+MATCHS : les k lignes d'une même famille dans un même match comptent chacune 1/k (effectif et vraisemblance), car elles sont corrélées ; (2) rien ne
+bouge avant ENSEMBLE_MIN_N matchs (ENSEMBLE_MIN_N_OTHER = 300 dans les familles sans a priori mesuré : corners, cartons, tirs, fautes...) comportant les
+avis comparés (modèle et un avis de marché pour wm ; sharp et 1xBet pour ws), puis le passage est progressif sur autant de plus ; (3) la vraisemblance
+est atténuée (ENSEMBLE_TEMP = 0,5) car le choix des pronostics n'est pas aléatoire ; (4) oubli exponentiel (demi-vie ENSEMBLE_HALF_LIFE résultats) pour
+suivre un marché qui change. L'état tient dans data/ensemble.json ({"v": 2, "fam": {famille: {"m": {"ll": [40 nombres], "n": effectif}, "s": {...}}},
+"done": {clé du pronostic: jour}}) : l'apprentissage est idempotent par clé de pronostic, que le résultat vienne de data/ensemble_log.json ou de
+data/fair.json. Version 1 (effectif en lignes, a priori 0,5 des familles non mesurées) : le poids appris du modèle (« m ») de ces familles est oublié à
+la lecture (_migrate), les autres restent.
 
 Mode « mixte » (phase 2, config.ENSEMBLE_ENABLED / ENSEMBLE_ACTIVE_FAMILIES / ENSEMBLE_LOG) : l'ensemble DÉCIDE seulement dans les familles
 actives (is_active : buts, 1N2, double chance, les 2 marquent par défaut), là où le marché a prouvé qu'il vaut mieux que le modèle. Ailleurs la règle
@@ -74,6 +77,8 @@ _OTHER = {"Over": "Under", "Under": "Over", "Yes": "No", "No": "Yes"}
 # Familles où un avis sharp peut exister (buts, 1N2, double chance, les 2 marquent) : seules elles ont le chemin « probable » sans sharp. Corners, cartons,
 # tirs, fautes n'ont jamais d'avis sharp : même quand le marché y pèse lourd (poids appris), une ligne doit valoir C.ENSEMBLE_MARGIN au prix 1xBet.
 PROBABLE_FAMILIES = frozenset(("goals", "btts", "dc", "h2h", "team_goals"))
+VETO_FAMILIES = PROBABLE_FAMILIES           # familles où le marché a été mesuré meilleur que le modèle : seul endroit où un gros désaccord écarte le pari
+VERSION = 2                                 # ensemble.json : effectif compté en matchs (voir le haut du module)
 _memo = {}
 
 
@@ -303,9 +308,22 @@ def load():
         d = d if isinstance(d, dict) else {}
         d.setdefault("fam", {})
         d.setdefault("done", {})
+        _migrate(d)
         _memo.clear()
         _memo.update(data=d, ver=ver)
     return _memo["data"]
+
+
+def _migrate(d):
+    """État de la version 1 (effectif en lignes, a priori 0,5 des familles non mesurées) -> version 2 : le poids appris du modèle (« m ») des familles sans
+    a priori mesuré (corners, cartons, tirs, fautes...) est oublié (appris en lignes sur quelques jours, sous l'ancien a priori) ; buts, 1N2, double chance,
+    les 2 marquent et la part du sharp (« s ») restent. En mémoire seulement : la prochaine sauvegarde (learn) l'écrit avec « v »: 2."""
+    if d.get("v", 1) >= VERSION:
+        return
+    for fam, st in d["fam"].items():
+        if fam not in C.ENSEMBLE_PRIOR_MODEL and isinstance(st, dict):
+            st.pop("m", None)
+    d["v"] = VERSION
 
 
 def reset():
@@ -339,11 +357,18 @@ def _post_mean(acc, prior, sd):
     return sum(g * x for g, x in zip(GRID, w)) / sum(w)
 
 
-def _weight(acc, prior, sd):
-    """Poids utilisé : l'a priori tant que le compte est sous ENSEMBLE_MIN_N, puis le posterior, introduit progressivement sur MIN_N de plus."""
-    if not acc or acc.get("n", 0) < C.ENSEMBLE_MIN_N:
+def min_n(fam, kind="m"):
+    """Matchs requis avant que le poids appris bouge : ENSEMBLE_MIN_N, ENSEMBLE_MIN_N_OTHER pour le poids du modèle d'une famille sans a priori mesuré."""
+    return C.ENSEMBLE_MIN_N if kind == "s" or fam in C.ENSEMBLE_PRIOR_MODEL else C.ENSEMBLE_MIN_N_OTHER
+
+
+def _weight(acc, prior, sd, need=None):
+    """Poids utilisé : l'a priori tant que l'effectif (en matchs) est sous `need` (ENSEMBLE_MIN_N par défaut), puis le posterior, introduit
+    progressivement sur `need` de plus."""
+    need = C.ENSEMBLE_MIN_N if need is None else need
+    if not acc or acc.get("n", 0) < need:
         return prior
-    r = min(1.0, (acc["n"] - C.ENSEMBLE_MIN_N) / max(C.ENSEMBLE_MIN_N, 1e-9))
+    r = min(1.0, (acc["n"] - need) / max(need, 1e-9))
     return prior + r * (_post_mean(acc, prior, sd) - prior)
 
 
@@ -354,7 +379,8 @@ def weights(fam, data=None):
     if cache and fam in _memo.get("w", {}):
         return _memo["w"][fam]
     st = (d.get("fam") or {}).get(fam) or {}
-    out = {"wm": _weight(st.get("m"), prior_model(fam), prior_sd(fam, "m")), "ws": _weight(st.get("s"), C.ENSEMBLE_PRIOR_SHARP, prior_sd(fam, "s")),
+    out = {"wm": _weight(st.get("m"), prior_model(fam), prior_sd(fam, "m"), min_n(fam)),
+           "ws": _weight(st.get("s"), C.ENSEMBLE_PRIOR_SHARP, prior_sd(fam, "s"), min_n(fam, "s")),
            "prior_wm": prior_model(fam), "prior_ws": C.ENSEMBLE_PRIOR_SHARP,
            "n_m": round((st.get("m") or {}).get("n", 0.0), 1), "n_s": round((st.get("s") or {}).get("n", 0.0), 1)}
     if cache:
@@ -367,11 +393,12 @@ def _loglik(p, y):
     return math.log(p if y else 1 - p)
 
 
-def _add(acc, lls):
-    """Un résultat de plus dans le cumul : oubli exponentiel (demi-vie ENSEMBLE_HALF_LIFE résultats), vraisemblance atténuée de ENSEMBLE_TEMP."""
-    lam = 0.5 ** (1 / max(C.ENSEMBLE_HALF_LIFE, 1.0))
-    acc["ll"] = [lam * a + C.ENSEMBLE_TEMP * x for a, x in zip(acc["ll"], lls)]
-    acc["n"] = lam * acc.get("n", 0.0) + 1.0
+def _add(acc, lls, w=1.0):
+    """Un résultat de plus dans le cumul, de poids `w` (1 / nombre de lignes de sa famille dans le même match : l'effectif compte des matchs) : oubli
+    exponentiel (demi-vie ENSEMBLE_HALF_LIFE résultats), vraisemblance atténuée de ENSEMBLE_TEMP."""
+    lam = 0.5 ** (w / max(C.ENSEMBLE_HALF_LIFE, 1.0))
+    acc["ll"] = [lam * a + C.ENSEMBLE_TEMP * w * x for a, x in zip(acc["ll"], lls)]
+    acc["n"] = lam * acc.get("n", 0.0) + w
 
 
 def learn(rows):
@@ -381,22 +408,31 @@ def learn(rows):
     marque les lignes apprises (« ens »). Enregistre si quelque chose a changé. -> nombre de lignes apprises."""
     data = load()
     n = 0
-    for r in sorted(rows, key=lambda r: (str(r.get("date") or ""), str(r.get("key") or ""))):
+
+    def learnable(r):
         key = r.get("key")
         if r.get("result") not in ("win", "loss") or not key or key in data["done"] or r.get("ens"):
-            continue
+            return False
         pm, px, ps = r.get("pm"), r.get("px"), r.get("ps")
-        if not ((pm is not None and (px is not None or ps is not None)) or (px is not None and ps is not None)):
-            continue
+        return (pm is not None and (px is not None or ps is not None)) or (px is not None and ps is not None)
+    todo = sorted((r for r in rows if learnable(r)), key=lambda r: (str(r.get("date") or ""), str(r.get("key") or "")))
+    per_match = {}                                                 # lignes d'une même famille dans un même match : corrélées, elles comptent pour un match
+    for r in todo:
+        k = (family(r["market"]), str(r.get("date") or ""), r.get("id") or r["key"].split("|")[0])
+        per_match[k] = per_match.get(k, 0) + 1
+    for r in todo:
+        key = r["key"]
+        pm, px, ps = r.get("pm"), r.get("px"), r.get("ps")
         y = 1 if r["result"] == "win" else 0
         fam = family(r["market"])
+        wt = 1.0 / per_match[(fam, str(r.get("date") or ""), r.get("id") or key.split("|")[0])]
         st = data["fam"].setdefault(fam, {})
         if pm is not None:
             w = weights(fam, data)                                 # ws courant : l'avis du marché dont on mesure le poids du modèle
             p_mkt = pool_market(ps, px, w["ws"])[0]
-            _add(st.setdefault("m", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool(pm, p_mkt, g), y) for g in GRID])
+            _add(st.setdefault("m", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool(pm, p_mkt, g), y) for g in GRID], wt)
         if ps is not None and px is not None:
-            _add(st.setdefault("s", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool_market(ps, px, g)[0], y) for g in GRID])
+            _add(st.setdefault("s", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool_market(ps, px, g)[0], y) for g in GRID], wt)
         data["done"][key] = str(r.get("date") or date.today())
         r["ens"] = True
         n += 1
@@ -456,7 +492,7 @@ def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_app
         return out
     out["ev"] = p * price - 1
     out["ev_x"] = None if p_x is None else p_x * price - 1
-    heavy = parts["market_weight"] >= C.ENSEMBLE_VETO_WEIGHT
+    heavy = parts["market_weight"] >= C.ENSEMBLE_VETO_WEIGHT and family(market) in VETO_FAMILIES     # marché mesuré meilleur et pesant lourd
     if p_model is not None and parts["p_mkt"] is not None:
         out["gap"] = abs(p_model - parts["p_mkt"])
     if parts["p_mkt"] is None and (heavy or C.ENSEMBLE_REQUIRE_MARKET):

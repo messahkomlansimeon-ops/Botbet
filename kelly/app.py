@@ -51,12 +51,13 @@ def day_stakes(top, built, built_fair, gaps=()):
     for g in gaps:
         keys.append(("gap", g["key"]))
         items.append(gapbets.stake_item(g))
-    for title, (_, odds_, prob) in built:
+    for title, (legs, odds_, prob) in built:
         keys.append(title)
-        items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_})
+        items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_, "p_mkt": CB.market_prob(legs)})
     for target, (legs, min_total, prob) in built_fair:
         keys.append(("fair", target))
-        items.append({"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total})        # jambe « probable » (sans avis sharp) : proba 1xBet sans marge
+        items.append({"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total,        # jambe « probable » (sans avis sharp) :
+                      "p_mkt": CB.market_prob(legs)})                                                                 # proba 1xBet sans marge
     stakes, spent, kept, poor = money.allocate(items, detail=True)
     return dict(zip(keys, stakes)), spent, kept, poor
 
@@ -1465,7 +1466,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
 <b>Ton capital</b>
-Écris une fois <i>capital 50000</i> (la somme que tu confies à Kelly), <i>perte max 5000</i> (le plus que tu acceptes de perdre en un jour) et, si tu veux, <i>objectif 18000</i>. Le capital suit les paris que tu notes. Chaque jour, Kelly répartit au plus ta limite : ta perte max, ou 10 % du capital s'il a baissé. Elle s'arrête quand tu as misé ta limite du jour et n'augmente jamais une mise pour atteindre l'objectif : elle te montre seulement ce que rapporte sa mise et ce qu'il faudrait pour l'atteindre.
+Écris une fois <i>capital 50000</i> (la somme que tu confies à Kelly), <i>perte max 5000</i> (le plus que tu acceptes de perdre en un jour) et, si tu veux, <i>objectif 5000</i> (ce que tu aimerais gagner par mois). Le capital suit les paris que tu notes. Chaque jour, Kelly répartit au plus ta limite : 3 % du capital (jamais plus que ta perte max), 1 % au plus par ticket, 100 FCFA au plus sur un ticket loterie (cote de 50 et plus, ou trop peu de chances). Elle s'arrête quand tu as misé ta limite du jour et n'augmente jamais une mise pour atteindre l'objectif. Sous chaque combiné : ses chances selon Kelly ET selon 1xBet.
 
 <b>Ou un budget du jour</b>
 Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>, <i>5k</i>) : c'est ce que tu es prêt à miser aujourd'hui. Chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la <b>mise conseillée</b> de chacun, en FCFA. Les jours pauvres, elle en garde une partie. Change-le n'importe quel jour : il reste tel quel jusqu'à ce que tu le changes. Sans budget, pas de mise conseillée.
@@ -1478,7 +1479,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 
 <b>Tu peux aussi écrire</b>
 • un nom d'équipe : <i>Flamengo</i>
-• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>capital 50000</i>, <i>perte max 5000</i>, <i>objectif 18000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
+• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>capital 50000</i>, <i>perte max 5000</i>, <i>objectif 5000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
 • <i>état</i> : où en est le passage du matin (pourcentage et heure de fin estimée), réponse immédiate même pendant qu'il tourne
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
@@ -2044,18 +2045,21 @@ def _coupon(legs):
     return xbet.save_coupon(legs) if legs and all(c.get("xref") and c.get("xodds") for c in legs) else None
 
 
-def _budget_stake(prob, odds, kind="fair", tier=None):
+def _budget_stake(prob, odds, kind="fair", tier=None, legs=None):
     """Mise (devise) d'un combiné demandé à la main (« combi 20 ») sur le budget du jour ; None sans budget. 0 : trop petite pour le budget.
-    `kind` / `tier` : voir money.allocate (combiné à cote juste : sa cote ; combiné de paris réels : « combo » et son palier)."""
+    `kind` / `tier` : voir money.allocate (combiné à cote juste : sa cote ; combiné de paris réels : « combo » et son palier). `legs` : ses jambes, pour
+    ses chances selon 1xBet (ticket « loterie », money.is_lottery)."""
     if not money.active():
         return None
-    return money.allocate([{"kind": kind, "tier": odds if tier is None else tier, "prob": prob, "odds": odds}])[0][0]
+    return money.allocate([{"kind": kind, "tier": odds if tier is None else tier, "prob": prob, "odds": odds,
+                            "p_mkt": CB.market_prob(legs) if legs else None}])[0][0]
 
 
-def _stake_words(st, prob=None, odds=None):
+def _stake_words(st, prob=None, odds=None, legs=None):
     """La mise `st` (_budget_stake) en mots pour le message : « 1 500 FCFA (sur ton budget du jour) » ; None sans budget. Mise 0 : « pas de mise (trop
-    petite pour ton budget) », ou, si `prob` et `odds` montrent une espérance négative, « Kelly ne conseille pas de miser dessus » (money.no_stake_txt)."""
-    return money.stake_words(st, prob, odds, " (sur ton budget du jour)")
+    petite pour ton budget) », ou, si `prob` et `odds` montrent une espérance négative, « Kelly ne conseille pas de miser dessus » (money.no_stake_txt).
+    `legs` : voir _budget_stake."""
+    return money.stake_words(st, prob, odds, " (sur ton budget du jour)", p_mkt=CB.market_prob(legs) if legs else None)
 
 
 def _budget_stake_txt(prob, odds):
@@ -2078,8 +2082,8 @@ def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, w
     stake = None
     if budget and stake_txt is None:
         p_stake = CB.stake_prob(legs, prob)          # jambe « probable » (sans avis sharp) : proba 1xBet sans marge
-        stake = _budget_stake(p_stake, min_total)
-        stake_txt = _stake_words(stake, p_stake, min_total)
+        stake = _budget_stake(p_stake, min_total, legs=legs)
+        stake_txt = _stake_words(stake, p_stake, min_total, legs)
     expected = coupon and bool(retry) and all(c.get("xref") and c.get("xodds") for c in legs) and not code
     top = "\n".join(x for x in (fmt.esc(head).strip("\n"), changes) if x)
     msg = Html((top + "\n\n" if top.strip() else "")
@@ -2396,8 +2400,8 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
         if combo:
             picks_, odds_, prob = combo
             if money.active():
-                st = _budget_stake(prob, odds_, "combo", "🎯")
-                txt = _stake_words(st, prob, odds_)
+                st = _budget_stake(prob, odds_, "combo", "🎯", legs=picks_)
+                txt = _stake_words(st, prob, odds_, picks_)
             else:
                 st, txt = None, None                # pas de budget du jour : aucune mise conseillée (le message dit de le régler)
             xcombo = all(c.get("xref") and c.get("xodds") for c in picks_)
@@ -2675,15 +2679,22 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
         sure_loss = money.active() and not money.has_edge(combo[2], combo[1])      # espérance négative : Kelly ne conseille aucune mise (money.allocate)
         small = "Kelly ne conseille pas d'y miser" if sure_loss else "mise petite"
         # sous le titre, en quelques mots : les paris moins sûrs ne sont plus nommés, ils portent 🟠 dans la liste (« mal payé » sur leur ligne)
-        rare = f" Environ 1 chance sur {int(round(1 / combo[2], -1 if combo[2] > 0.001 else -2)):,}.".replace(",", " ") if combo[2] < 0.01 else ""
+        lottery = money.is_lottery(combo[2], combo[1], CB.market_prob(combo[0]))       # la ligne 🎰 sous les chances le dit déjà (fmt.combo_chances)
+        rare = f" Environ 1 chance sur {int(round(1 / combo[2], -1 if combo[2] > 0.001 else -2)):,}.".replace(",", " ") if combo[2] < 0.01 and not lottery else ""
         if fill:                                    # au moins N : les N paris d'abord, les moins sûrs comblent le trou
             lines = [f"🧩 {len(combo[0])} paris (au moins {mn_} demandés)"
                      + (f" : en {mn_} paris, même les plus sûrs, la cote ne descend pas sous {fmt.trim(over, 1)} (pas {t}) ; voici le plus sûr à partir de là." if over else "."),
                      f"🎲 {small[0].upper() + small[1:]}.{rare}"]
+        elif lottery:
+            lines = ["🎲 Kelly ne conseille pas d'y miser."] if sure_loss else []
         else:
             lines = [f"🎲 Ticket de loterie, {small if sure_loss else 'mise très petite'}.{rare}"]
         if src == "pronos" and CB.ev(combo) < 1:     # le combiné à cote juste n'affiche pas l'espérance dans son en-tête
-            lines[-1] += f" Espérance {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}."
+            esp = f"Espérance selon Kelly {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}."
+            if lines:
+                lines[-1] += " " + esp
+            else:
+                lines.append(esp)
         lines.append(f"{fmt.WEAK} {len(weak)} pari{'s' if many else ''} moins sûr{'s' if many else ''} {'pour compléter' if fill else 'pour atteindre la cote'}"
                      if weak else "✅ Tous ses paris sont solides.")
         head = fmt.esc("\n".join(lines))
@@ -2694,10 +2705,10 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
         foot += stale
         if src == "pronos":
             return _fair_reply(combo, "", title=title, when=when, retry="redemande le combi", budget=True, keep=keep, tail=foot, note=head, **marks)
-        st = _budget_stake(combo[2], combo[1], "combo", "🎯") if money.active() else None
+        st = _budget_stake(combo[2], combo[1], "combo", "🎯", legs=combo[0]) if money.active() else None
         code = xbet.save_coupon(combo[0]) if all(c.get("xref") for c in combo[0]) else None
         msg = Html(fmt.combo(title + (f" · {only.upper()}" if only else ""), combo[0], combo[1], combo[2],
-                             reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st, combo[2], combo[1]), coupon=code,
+                             reasons={c["key"]: (CB.leg_reason(c) or "proche") for c in combo[0]}, stake_txt=_stake_words(st, combo[2], combo[1], combo[0]), coupon=code,
                              when=when, note=head, **marks) + ("\n" + fmt.esc(foot.strip("\n")) if foot.strip() else ""))
         cid = custom.remember(day, target, lo, hi, combo, st, money.cur() if st is not None else None, code, when, src="picks",
                               kinds=kinds if prefix else None, nlegs=nlegs)

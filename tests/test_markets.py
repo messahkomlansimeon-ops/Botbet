@@ -26,7 +26,7 @@ def test_button_and_words():
 def test_card():
     store.save(calib.FILE, {"goals": [131, 93, 90.4], "shots": [67, 30, 43.5], "corners": [49, 30, 31.9]})
     store.save(calib.BOOT_FILE, {"acc": {"corners": [18032, 11180, 11721], "cards": [6011, 3787, 3907]}})
-    store.save(ensemble.FILE, {"fam": {"shots": {"m": {"ll": ll(0, 0.01), "n": 100}},             # avance sur moitié-moitié : 3,6 -> nette
+    store.save(ensemble.FILE, {"v": 2, "fam": {"shots": {"m": {"ll": ll(0, 0.01), "n": 100}},     # avance sur moitié-moitié : 3,6 -> nette
                                        "corners": {"m": {"ll": ll(27, 0.01), "n": 165}},          # 0,5 -> égalité
                                        "offsides": {"m": {"ll": ll(6, 0.01), "n": 26}}}, "done": {}})
     calib._memo.clear()

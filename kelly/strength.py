@@ -33,7 +33,7 @@ from datetime import date, timedelta
 
 from . import config as C, store
 
-VERSION = 3                      # 3 : + ancrage marché (buts attendus implicites des cotes de clôture) et kappa des buts ; 2 : + cartons jaunes seuls (stat « yellow ») ; un cache d'une version plus ancienne est refait au premier appel
+VERSION = 4                      # 4 : une équipe reléguée n'a plus l'a priori des promus ; 3 : + ancrage marché (buts attendus implicites des cotes de clôture) et kappa des buts ; 2 : + cartons jaunes seuls (stat « yellow ») ; un cache d'une version plus ancienne est refait au premier appel
 HALF_LIFE = 110                  # jours : un match vieux de 110 jours pèse moitié moins
 STATS = ("goals", "shots", "sot", "corners", "fouls", "cards", "yellow")
 UNIT = {"goals": "buts", "shots": "tirs", "sot": "tirs cadrés", "corners": "corners", "fouls": "fautes", "cards": "cartons", "yellow": "cartons jaunes"}
@@ -42,6 +42,8 @@ MIN_MATCHES = 60                 # matchs minimum dans la ligue pour ajuster un 
 MIN_ROWS = 50                    # lignes minimum pour une statistique
 STALE_DAYS = 14                  # cache périmé encore utilisable si les données brutes manquent
 NEFF_FULL = 8.0                  # matchs pondérés à partir desquels une équipe est « bien connue »
+# division du dessus (football-data) : une équipe nouvelle dans la division qui y jouait avant est RELÉGUÉE, pas promue (relegated)
+UPPER = {"E1": "E0", "E2": "E1", "E3": "E2", "SP2": "SP1", "I2": "I1", "D2": "D1", "F2": "F1"}
 # a priori des équipes promues (attaque, défense) : elles marquent moins et encaissent plus
 PROMO = {"goals": (0.87, 1.13), "shots": (0.93, 1.07), "sot": (0.93, 1.07), "corners": (0.94, 1.06),
          "fouls": (1.0, 1.0), "cards": (1.0, 1.0), "yellow": (1.0, 1.0)}
@@ -488,10 +490,36 @@ def _ord(s, memo={}):
     return v
 
 
-def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None, mkt=None):
+def upper_matches(div, loader=None):
+    """Matchs de la division du dessus (UPPER, cache disque seulement) ; None pour une 1re division ou si rien n'est en cache."""
+    up = UPPER.get(div)
+    if not up:
+        return None
+    try:
+        return (loader or load_matches)(up) or None
+    except Exception:                                    # noqa: BLE001 - facultatif : sans elle, la règle d'avant (tout nouveau = promu)
+        return None
+
+
+def relegated(first, on_s, upper):
+    """Équipes nouvelles dans la division (`first` : équipe -> date de son 1er match ici) qui jouaient dans la division du dessus AVANT ce 1er match
+    (`upper`, matchs d'avant `on_s` seulement : rien du futur) : reléguées, elles ne prennent pas l'a priori des promus (elles seraient jugées trop faibles)."""
+    if not upper:
+        return set()
+    last_up = {}
+    for m in upper:
+        if m["date"] < on_s:
+            for t in (m["home"], m["away"]):
+                if m["date"] > last_up.get(t, ""):
+                    last_up[t] = m["date"]
+    return {t for t, d in first.items() if t in last_up and last_up[t] < d}
+
+
+def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None, mkt=None, upper=None):
     """Modèle complet d'une ligue à la date `on` (date), à partir des matchs normalisés (footballdata.parse_csv) joués
     AVANT `on`. None si moins de MIN_MATCHES matchs. `mkt` : poids des buts attendus implicites des cotes de clôture dans l'apprentissage des buts
-    (config.STRENGTH_MKT_WEIGHT par défaut ; 0 = buts réels seuls). Dict JSON : {v, div, on, n, last, stats:{stat:{...,t:{équipe:[att,
+    (config.STRENGTH_MKT_WEIGHT par défaut ; 0 = buts réels seuls). `upper` : matchs de la division du dessus (upper_matches) : une équipe nouvelle
+    qui y jouait avant est reléguée, elle garde l'a priori neutre au lieu de celui des promus. Dict JSON : {v, div, on, n, last, stats:{stat:{...,t:{équipe:[att,
     déf, matchs pondérés, matchs]}}}, ctx:{form, table, refs, lg, h2h}}."""
     global FITS
     on_s = on.isoformat()
@@ -507,7 +535,8 @@ def build(matches, on, hl=HALF_LIFE, stats=STATS, div=None, mkt=None):
         first.setdefault(m["home"], m["date"])
         first.setdefault(m["away"], m["date"])
     start, span = _ord(ms[0]["date"]), on_o - _ord(ms[0]["date"])
-    promo = {idx[t] for t, d in first.items() if span >= 250 and _ord(d) - start > 200 and on_o - _ord(d) <= 300}
+    down = relegated(first, on_s, upper)
+    promo = {idx[t] for t, d in first.items() if span >= 250 and _ord(d) - start > 200 and on_o - _ord(d) <= 300 and t not in down}
     ln2 = math.log(2) / hl
     wts = [math.exp(-ln2 * (on_o - _ord(m["date"]))) for m in ms]
     mkt = C.STRENGTH_MKT_WEIGHT if mkt is None else mkt
@@ -797,7 +826,7 @@ def get(div, on=None, loader=None):
             _memo[div] = (key.split("|")[0], disk)
             _memo_stamp[div] = _stamp()
             return disk
-        model = build((loader or load_matches)(div), on, hl, div=div)
+        model = build((loader or load_matches)(div), on, hl, div=div, upper=upper_matches(div, loader))
         if model:
             model["key"] = key
             _save(div, model)
@@ -1376,19 +1405,20 @@ def _br(p, k):
     return sum((p[i] - (1.0 if i == k else 0.0)) ** 2 for i in range(len(p)))
 
 
-def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None, mkt=None):
+def walk(matches, test_from, test_to=None, hl=HALF_LIFE, step_days=3, ctx=True, stats=("goals",), div=None, mkt=None, upper=...):
     """Évaluation pas à pas (walk-forward) : avant chaque lot de matchs (tous les `step_days` jours) le modèle est
     réajusté sur le passé seulement, puis prédit le lot. Produit (match, p1x2 [H, D, A], P(plus de 2,5)) pour chaque
     match de [test_from, test_to[ ; (match, None, None) quand le modèle ne peut pas le prédire. Générateur : l'appelant
     peut s'arrêter (budget de temps) entre deux matchs."""
     tf = str(test_from)
     te = str(test_to) if test_to else "9999"
+    upper = upper_matches(div) if upper is ... else upper           # division du dessus (cache) : relégués ; build ne lit que les matchs d'avant chaque date
     batch_start, model = None, None
     for m in sorted((m for m in matches if tf <= m["date"] < te), key=lambda m: m["date"]):
         d = date.fromisoformat(m["date"])
         if batch_start is None or d >= batch_start + timedelta(days=step_days):
             batch_start = d
-            model = build(matches, d, hl, stats, div, mkt)
+            model = build(matches, d, hl, stats, div, mkt, upper)
         pred = predict(model, m["home"], m["away"], d, m.get("referee"), ctx) if model else None
         if not pred:
             yield m, None, None
