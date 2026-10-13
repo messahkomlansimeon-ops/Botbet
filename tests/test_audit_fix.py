@@ -114,11 +114,20 @@ def test_noted_combo_never_replaced():
     assert row["keys"] == row0["keys"] and row["legs"] == row0["legs"] and row["min_odds"] == row0["min_odds"], row
     assert row["played"] == row0["played"] and row["result"] is None and "dead" not in row and "orig_keys" not in row, row
     warns = [str(m) for m in f.sent if "⚠️" in str(m)]
-    assert len(warns) == 1 and "ton ticket" in warns[0] and "H1 – A1" in warns[0] and "n'est plus chez 1xBet" in warns[0], f.sent
+    assert len(warns) == 1 and "ton ticket" in warns[0] and "H1 – A1" in warns[0] and "n'est plus proposé chez 1xBet" in warns[0], f.sent
+    assert "Moins bien payé" not in warns[0] and "Déjà placé chez 1xBet : rien à faire" in warns[0], warns[0]
     assert "COMBINÉ À JOUR" not in "".join(map(str, f.sent)) and "NEW01" not in "".join(map(str, f.sent))
     # le relevé suivant, même situation : pas deux fois la même alerte
     with Fakes() as f:
         assert app._update_combos(DAY, gone_pronos(), N.at(15), GOT9) == 0 and not f.sent, f.sent
+    # 13/10 : des paris toujours proposés, que Kelly ne choisirait plus aujourd'hui (sa correction a changé) ou dont la cote a bougé (même, plus
+    # haute, plus basse) : RIEN (la cote d'un ticket placé est acquise ; avant : « 📉 Moins bien payé : 1,91 ➜ 1,91 »)
+    noted_morning()
+    same = [N.prono(0), N.prono(1, prob=0.40, p0=0.45), N.prono(2, xodds=1.70), N.prono(3, xodds=1.30)]
+    store.save("today.json", {"day": DAY, "picks": [], "pronos": same})
+    with Fakes() as f:
+        app._update_combos(DAY, same, N.at(13), {"m0", "m1", "m2", "m3"})
+    assert not [m for m in f.sent if "ton ticket" in str(m)], f.sent
     # plus aucun remplaçant : AVANT le ticket noté était déclaré mort, annulé et sorti du bilan
     noted_morning()
     only4 = [N.prono(0), N.prono(1, xodds=None, xodds0=None, xev=None, xref=None, xnone=1), N.prono(2), N.prono(3)]

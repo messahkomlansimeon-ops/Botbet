@@ -1228,16 +1228,21 @@ def _others_usage(rows, row, day, sent):
 
 
 def _ticket_problems(legs, pool, fresh_ids, now):
-    """Paris du ticket noté `legs` (la version jouée) que le relevé `pool` (pronostics à jour) ne retrouve plus à un prix jouable : [(jambe, cote 1xBet
-    du moment ou None)]. Seuls les matchs relus (`fresh_ids`) sont jugés. « None » : 1xBet ne propose plus le pari ; une cote : il paie moins qu'un pari
-    viable (combos.fair_legs). Une ligne qui a seulement changé de côté ou de seuil dans le marché n'est pas un problème (la ligne jouée a pu rester)."""
-    viable = {(c["id"], c["market"]) for c in CB.fair_legs(upcoming(pool, now)) if c.get("xodds")}
+    """Paris du ticket NOTÉ `legs` (la version jouée) que 1xBet ne propose PLUS : [(jambe, None)]. Seuls les matchs relus (`fresh_ids`) sont jugés. Le pari
+    EXACT est cherché dans le relevé du match (xbet.cached_cell sur sa référence c["xref"]) ; sans référence : plus aucune ligne de son marché dans
+    `pool`. Jamais une question de cote : celle d'un ticket placé est acquise, et un pari que Kelly ne choisirait plus aujourd'hui (sa correction a
+    changé, une autre ligne est préférée) n'est pas un problème du ticket (13/10 : « moins bien payé 1,91 ➜ 1,91 » après une mise à jour de Kelly)."""
     out = []
     for l in legs:
-        if (fresh_ids is not None and l["id"] not in fresh_ids) or (l["id"], l["market"]) in viable:
+        if fresh_ids is not None and l["id"] not in fresh_ids:
             continue
-        cur = next((c for c in pool if c["id"] == l["id"] and c["market"] == l["market"] and c.get("xodds")), None)
-        out.append((l, cur["xodds"] if cur else None))
+        cell = xbet.cached_cell(l["xref"]) if l.get("xref") else None
+        if cell is not None:
+            if cell.cf is None:                     # le relevé du match ne propose plus CE pari
+                out.append((l, None))
+            continue                                # proposé (ou suspendu un moment) : rien à dire
+        if not any(c["id"] == l["id"] and c["market"] == l["market"] and c.get("xodds") for c in pool):
+            out.append((l, None))
     return out
 
 
@@ -1251,8 +1256,9 @@ def _ticket_lines(problems):
     return lines
 
 
-TICKET_ADVICE = ("Ton combiné reste suivi tel que tu l'as noté : ses paris, ta note et son règlement ne changent pas. Vérifie ton ticket dans l'appli 1xBet. "
-                 "Pour obtenir une version à jour, touche « ↩️ Annuler » puis « 🎟️ Vérifier ce combiné ».")
+TICKET_ADVICE = ("Ton combiné reste suivi tel que tu l'as noté. Déjà placé chez 1xBet : rien à faire, un pari déjà pris reste valable à ta cote (réglé "
+                 "normalement, ou remboursé si le match est annulé). Pas encore placé : touche « ↩️ Annuler » puis « 🎟️ Vérifier ce combiné » pour une "
+                 "version à jour.")
 
 
 def _watch_ticket(sent, row, legs0, pool, now, refreshed, tier):
@@ -1264,7 +1270,7 @@ def _watch_ticket(sent, row, legs0, pool, now, refreshed, tier):
     last = sent["tiers"].get(tier) or {"keys": row.get("keys") or [], "total": row.get("min_odds") or 1.0}
     if keys and keys != last.get("warned"):
         p = row["played"]
-        telegram.send(Html(fmt.esc(f"⚠️ Un pari de ton ticket n'est plus chez 1xBet ou est moins bien payé (combiné joué à {fmt.odds_txt(p['odds'])}) :")
+        telegram.send(Html(fmt.esc(f"⚠️ Un pari de ton ticket n'est plus proposé chez 1xBet (combiné joué à {fmt.odds_txt(p['odds'])}) :")
                            + "\n" + "\n".join(_ticket_lines(probs)) + "\n\n" + fmt.i(fmt.esc(TICKET_ADVICE))))
         sent["tiers"][tier] = last | {"warned": keys}
     elif not keys and last.get("warned"):
@@ -2260,11 +2266,11 @@ def _check_ticket(row, legs, day, tier, now, check=None):
     probs = _ticket_problems(legs, pool, got, now)
     p = row["played"]
     if probs:
-        text = (fmt.esc(f"⚠️ Un pari de ton ticket n'est plus chez 1xBet ou est moins bien payé (combiné joué à {fmt.odds_txt(p['odds'])}, vérifié à {hhmm}) :")
+        text = (fmt.esc(f"⚠️ Un pari de ton ticket n'est plus proposé chez 1xBet (combiné joué à {fmt.odds_txt(p['odds'])}, vérifié à {hhmm}) :")
                 + "\n" + "\n".join(_ticket_lines(probs)) + "\n\n" + fmt.i(fmt.esc(TICKET_ADVICE)))
     else:
-        text = fmt.esc(f"✅ Ton ticket (combiné joué à {fmt.odds_txt(p['odds'])}) est toujours chez 1xBet à {hhmm} : tous ses paris sont encore proposés à un prix "
-                       "jouable. Rien à changer.")
+        text = fmt.esc(f"✅ Ton ticket (combiné joué à {fmt.odds_txt(p['odds'])}) est toujours chez 1xBet à {hhmm} : tous ses paris sont encore proposés. "
+                       "Ta cote est acquise, rien à changer.")
     return chat.with_played_button(Html(text), f"v{tier}", day, refresh=tier, lookup=True, code=row.get("coupon"))
 
 
