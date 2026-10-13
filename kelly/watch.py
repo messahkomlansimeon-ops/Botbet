@@ -673,11 +673,16 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
             _backup(d, now, ts, todo, open_n, why, alive, alive_legs, tix, fm_for, hard=True)
             return
         games = games if games is not None else _day_games(s365, now)
-        for m, why_nf in _unfollowed(ts, d, now, games):
+        listed = {str(g.get("start") or "")[:10] for g in games.values()}
+        blind = any(_ko(leg) <= now and str(_ko(leg).date()) not in listed for _, leg, _ in todo)      # liste du jour vide ou absente : 365scores muet
+        for m, why_nf in ([] if blind else _unfollowed(ts, d, now, games)):    # sans liste, « introuvable » serait faux : dit plus tard s'il le faut
             _out(d, now, "nf", "👁️ " + fmt.esc(f"Pas suivi en direct (verdict au règlement du matin) : {m} : {why_nf}"))
         found = [(t, leg, k, find(leg, games)) for t, leg, k in todo]
         found = [x for x in found if x[3] and _ko(x[1]) <= now]                 # matchs commencés
         if not found:
+            if blind:
+                _backup(d, now, ts, todo, open_n, "liste des matchs du jour de 365scores vide ou injoignable", alive, alive_legs, tix, fm_for)
+                return
             _health(d, now, True, open_n=open_n)
             return
         status = (live_for or (lambda ids: _live(s365, ids, now)))({g["id"] for _, _, _, g in found})
@@ -1489,6 +1494,11 @@ def _tickets(now):
     except WatchStateError:
         return
     sent_lines = list(d["out"])
+    for m in [msg, *getattr(msg, "more", ())]:          # en attente plus de 2 h (réseau coupé) : abandonné, jamais une rafale de buts périmés
+        try:
+            m.ttl = C.WATCH_LIVE_TTL_MIN * 60
+        except AttributeError:
+            pass
     if C.WATCH_QUIET:                                    # gardé pour le réveil la nuit : chaque message (groupé, puis ⏰ 🔥 🎉 à part) l'un après l'autre
         ok = all([quiet.send(m, now, kind="suivi") for m in [msg, *getattr(msg, "more", ())]])
     else:

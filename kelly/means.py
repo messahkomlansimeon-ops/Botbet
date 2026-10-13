@@ -25,6 +25,7 @@ data/means.json : {"fam": {famille: [n, Σ réel, Σ attendu]}, "lg": {famille: 
 vieillissement, "done": {jour|match|marché: jour}}."""
 import contextlib
 import copy
+import sys
 from datetime import date, timedelta
 
 from . import calib, config as C, store
@@ -128,7 +129,8 @@ def learn(rows, today=None):
             store.save(FILE, d, compact=True)
             reset()
         return new
-    except Exception:                               # noqa: BLE001 - facultatif : sans lui, les moyennes restent brutes
+    except Exception as e:                          # noqa: BLE001 - facultatif : sans lui, les moyennes restent brutes
+        print(f"[moyennes] apprentissage ignoré : {type(e).__name__}: {e}", file=sys.stderr)
         return 0
 
 

@@ -29,6 +29,7 @@ BACKUP_HOUR = 12             # sauvegarde de la base envoyée sur Telegram (tél
 BACKUP_EVERY_DAYS = 2        # ... tous les 2 jours ...
 BACKUP_RETRY = 3600          # ... retentée toutes les heures si l'envoi échoue
 TUNE_WEEKDAY, TUNE_HOURS = 6, (2, 3)    # dimanche 02:00-03:59 UTC (avant le matin ; --tune reprend où il s'est arrêté)
+TUNE_LATE_DAYS, TUNE_CATCHUP_HOURS = 8, range(9, 14)     # réglage manqué (téléphone éteint le dimanche) : rattrapé le jour même entre 9h et 14h UTC
 
 # délai maximal par passage (s) : un appel réseau figé ne bloque plus tout le runner (--daily dure ~30 min, attente du verrou comprise)
 TIMEOUTS = {"--watch": 540, "--track": 1500, "--daily": 5400, "--xbet": 1500, "--evening": 1500, "--export": 900, "--tune": 2400, "--backup-auto": 600}
@@ -108,13 +109,22 @@ def due_tasks(now, state, epoch):
         out.append(["--evening"])
     if hour == EXPORT_HOUR and state["export_day"] != day:
         out.append(["--export", "--own-lock"])
-    if now.weekday() == TUNE_WEEKDAY and hour in TUNE_HOURS and state["tune_day"] != day:
+    if state["tune_day"] != day and ((now.weekday() == TUNE_WEEKDAY and hour in TUNE_HOURS)
+                                     or (hour in TUNE_CATCHUP_HOURS and _days_since(state["tune_day"], now) >= TUNE_LATE_DAYS)):
         out.append(["--tune"])
     if hour >= BACKUP_HOUR and backup_due(state, now) and epoch - state["backup_try"] >= BACKUP_RETRY:
         out.append(["--backup-auto"])
     if epoch - state["watch_at"] >= WATCH_EVERY:
         out.append(["--watch"])
     return out
+
+
+def _days_since(day, now):
+    """Jours depuis `day` (« AAAA-MM-JJ ») ; très grand si jamais fait ou illisible."""
+    try:
+        return (now.date() - date.fromisoformat(day)).days
+    except (TypeError, ValueError):
+        return 10 ** 6
 
 
 def backup_due(state, now):

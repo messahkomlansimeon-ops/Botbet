@@ -188,10 +188,11 @@ def _migrate(data, rows):
     data["_v"] = VERSION
 
 
-def add(rows, today=None):
+def add(rows, today=None, defer=None):
     """Ajoute au cumul les pronostics réglés (gagnés ou perdus) pas encore comptés (marqués « calib ») : famille, championnat, sens et tranche
     (data["_cell"]), après avoir vieilli les cumuls (C.CALIB_HALF_LIFE). Chaque match compte UNE fois par famille : ses k lignes réglées ensemble pèsent
-    1/k chacune (comme ensemble.learn et new_roi). -> nombre ajouté."""
+    1/k chacune (comme ensemble.learn et new_roi). `defer` (dict) : le cumul y est rangé au lieu d'être écrit (l'appelant l'écrit AVEC les lignes
+    marquées, store.save_many). -> nombre ajouté."""
     from collections import Counter
     data, n = load(), 0
     new = [r for r in rows if not r.get("calib") and r.get("result") in ("win", "loss")]
@@ -212,7 +213,10 @@ def add(rows, today=None):
         n += 1
     if len(data.get("_new_rows") or []) > C.NEW_RULE_ROWS:
         data["_new_rows"] = data["_new_rows"][-C.NEW_RULE_ROWS:]
-    _save(data)
+    if defer is not None:
+        defer[FILE] = data
+    else:
+        _save(data)
     return n
 
 
@@ -251,6 +255,11 @@ def add_combo_legs(legs, today=None):
         leg["calib_combo"] = True
     _save(data)
     return len(new)
+
+
+def reset():
+    """Oublie le cumul gardé en mémoire (relu au prochain appel) : après une écriture faite hors de _save (store.save_many du règlement)."""
+    _memo.clear()
 
 
 def _save(data):

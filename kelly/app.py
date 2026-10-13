@@ -2174,6 +2174,19 @@ def _live_fair(legs, lo, hi, prefix=None, now=None, check=None, fresh_min=None, 
     return CB.patch_combo(legs, [c for c in upcoming(pronos, now) if c["id"] not in avoid], lo, hi, fresh_ids=got, prefix=prefix, usage=usage), hhmm, True
 
 
+def xbet_why():
+    """Cause du dernier échec 1xBet en mots simples (« le proxy ne répond pas », « 1xBet refuse l'accès (erreur 429), pause jusqu'à 14h05 UTC »…) ;
+    '' si elle est inconnue. Jamais l'adresse du proxy."""
+    try:
+        h = state.health(xbet.SOURCE)
+        cause = http.cause(h.get("last_error") or "", "1xBet") if h.get("last_error") else ""
+        if h.get("blocked_until"):
+            cause = (cause or "1xBet refuse l'accès") + f", pause jusqu'à {h['blocked_until'][11:16].replace(':', 'h')} UTC"
+        return cause
+    except Exception:                               # noqa: BLE001
+        return ""
+
+
 def _live_reply(fc, lo, hi, now=None, check=None, keep=None, usage=None, avoid=None):
     """combi N aux cotes 1xBet : « ⏳ » tout de suite, puis le combiné vérifié en direct (paris retirés ou mal payés remplacés) et son
     code coupon aux cotes de l'instant. 1xBet injoignable : le combiné aux cotes du dernier relevé, sans code, en le disant. `keep` : voir
@@ -2191,7 +2204,8 @@ def _live_reply(fc, lo, hi, now=None, check=None, keep=None, usage=None, avoid=N
     if not ok:                                      # cotes du dernier relevé : l'heure réelle de leur relevé (cache), sinon celle du relevé du jour
         t0 = xbet.odds_time([(c.get("xref") or [c.get("xgid")])[0] for c in fc[0]])
         last = datetime.fromtimestamp(t0, tz=timezone.utc).strftime("%H:%M") if t0 else store.load("today.json", {}).get("xbet_at") or ""
-        return _fair_reply(fc, f"⚠️ 1xBet ne répond pas en ce moment : combiné aux cotes du dernier relevé (cote "
+        why = xbet_why()
+        return _fair_reply(fc, f"⚠️ 1xBet ne répond pas en ce moment{f' ({why})' if why else ''} : combiné aux cotes du dernier relevé (cote "
                                f"{fmt.trim(fc[1], 1)}), sans code coupon. Vérifie chaque cote avant de jouer.", coupon=False,
                            when=last, stale=True, budget=True, keep=keep)
     nl = (keep or {}).get("nlegs")

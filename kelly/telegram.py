@@ -178,14 +178,14 @@ def _deliver(part, is_html, markup, chat_id, reply_to=None):
     return api("sendMessage", chat_id=chat_id, text=part, **extra)
 
 
-def _enqueue(parts, is_html, markup, chat_id, reply_to=None):
+def _enqueue(parts, is_html, markup, chat_id, reply_to=None, ttl=None):
     """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier, la citation `reply_to` sur le premier). Ajout ATOMIQUE
     (store.update) : le bot Telegram et le suivi des matchs peuvent ajouter en même temps sans s'écraser. LAST_QUEUED passe à vrai (le message n'est
     pas perdu : il partira plus tard)."""
     global LAST_QUEUED
     now = time.time()
     new = [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
-           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) for i, p in enumerate(parts)]
+           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) | ({"ttl": ttl} if ttl else {}) for i, p in enumerate(parts)]
 
     def add(box):
         box = (box if isinstance(box, list) else []) + new
@@ -214,13 +214,13 @@ def _send_one(text, chat_id=None, queue=True):
         return True
     is_html = isinstance(text, Html)
     parts, markup, sent = _chunks(str(text)), getattr(text, "markup", None), True
-    reply_to = getattr(text, "reply_to", None)
+    reply_to, ttl = getattr(text, "reply_to", None), getattr(text, "ttl", None)
     explicit = chat_id if chat_id != chat else None
     if queue and store.load(OUTBOX, []):                        # des messages plus anciens attendent : d'abord eux
         if time.monotonic() - _last_fail[0] > 60:
             flush_outbox()
         if store.load(OUTBOX, []):
-            _enqueue(parts, is_html, markup, explicit, reply_to)
+            _enqueue(parts, is_html, markup, explicit, reply_to, ttl)
             return False
     for i, part in enumerate(parts):
         try:
@@ -232,10 +232,10 @@ def _send_one(text, chat_id=None, queue=True):
                 print("[telegram] délai sans réponse : le message a peut-être été livré, il n'est pas renvoyé", file=sys.stderr)
                 if queue and parts[i + 1:]:
                     _last_fail[0] = time.monotonic()
-                    _enqueue(parts[i + 1:], is_html, markup, explicit)
+                    _enqueue(parts[i + 1:], is_html, markup, explicit, ttl=ttl)
             elif queue and _transient(e):
                 _last_fail[0] = time.monotonic()
-                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None)
+                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None, ttl)
             return False
     return (sent or {}).get("message_id", True) if isinstance(sent, dict) else True
 
@@ -285,9 +285,10 @@ def _flush(box, chat):
     ajouté pendant le renvoi par un autre processus reste."""
     now = time.time()
     done = []                                        # entrées traitées (envoyées ou abandonnées), retirées de la file à la fin
-    keep = [e for e in box if now - e.get("ts", now) <= C.OUTBOX_MAX_HOURS * 3600]
+    keep = [e for e in box if now - e.get("ts", now) <= (e.get("ttl") or C.OUTBOX_MAX_HOURS * 3600)]      # « ttl » : message du direct, vite périmé
     if len(keep) < len(box):
-        print(f"[telegram] {len(box) - len(keep)} message(s) en attente depuis plus de {C.OUTBOX_MAX_HOURS} h abandonné(s)", file=sys.stderr)
+        print(f"[telegram] {len(box) - len(keep)} message(s) trop vieux abandonné(s) (direct : {C.WATCH_LIVE_TTL_MIN} min, autres : "
+              f"{C.OUTBOX_MAX_HOURS} h)", file=sys.stderr)
         done += [e for e in box if e not in keep]
     sent = 0
     while keep:
@@ -522,6 +523,8 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
     if defer:
         _run_later(handler, on_callback)
     state = store.load("telegram.json", {"offset": 0})
+    state = state if isinstance(state, dict) else {"offset": 0}
+    state["offset"] = max(int(state.get("offset") or 0), _OFFSET[0])     # base illisible ou disque plein : la mémoire de ce processus fait foi
     start = state["offset"]
     try:
         # attente Telegram `timeout` s ; une connexion coupée en silence est détectée POLL_MARGIN s après. Marge large : sur réseau mobile
@@ -535,7 +538,7 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
         return 0
     _outage_back()
     for u in updates:
-        state["offset"] = u["update_id"] + 1
+        state["offset"] = _OFFSET[0] = max(_OFFSET[0], u["update_id"] + 1)
         cq = u.get("callback_query")
         if cq:
             answer_callback(cq.get("id"))           # tout de suite, avant une éventuelle attente du verrou : pas de sablier
@@ -545,7 +548,7 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
                     _later(on_callback, [cq.get("data") or "", cmsg.get("message_id")], True)
                 else:
                     _handle(lock, on_callback, cq.get("data") or "", cmsg.get("message_id"))
-            store.save("telegram.json", state)
+            _save_offset(state)
             continue
         msg = u.get("message") or {}
         text = (msg.get("text") or "").strip()
@@ -563,10 +566,20 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
             _later(handler, [text], False)
         else:
             _handle(lock, handler, text)
-        store.save("telegram.json", state)          # offset sauvé à chaque commande : jamais traitée deux fois
+        _save_offset(state)                         # offset sauvé à chaque commande : jamais traitée deux fois
     if state["offset"] != start:                    # rien de nouveau (la plupart des passages du serveur) : pas d'écriture inutile
-        store.save("telegram.json", state)
+        _save_offset(state)
     return len(updates)
+
+
+_OFFSET = [0]           # dernier décalage connu de ce processus : une écriture refusée (disque plein, base abîmée) ne fait jamais retraiter une commande
+
+
+def _save_offset(state):
+    try:
+        store.save("telegram.json", state)
+    except OSError as e:                            # gardé en mémoire (_OFFSET) : la commande n'est pas retraitée au passage suivant
+        print(f"[telegram] décalage non enregistré ({e}) : gardé en mémoire", file=sys.stderr)
 
 
 def send_document(filepath, caption=None, chat_id=None, silent=False):

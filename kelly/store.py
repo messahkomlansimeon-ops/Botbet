@@ -269,6 +269,26 @@ def save(name, obj, compact=False):
                     " updated=excluded.updated, version=docs.version+1", (name, body, _now()))
 
 
+def save_many(docs):
+    """Enregistre plusieurs documents ({nom: objet}) dans UNE transaction : tous ou aucun (un cumul et les lignes qu'il vient de compter). Un document
+    illisible dans ce processus n'est pas écrasé (comme save) : les autres le sont. Lève OSError si la base refuse."""
+    rows = [(name, _dump(obj)) for name, obj in docs.items() if name not in _unreadable]
+    for name in docs:
+        if name in _unreadable:
+            print(f"[store] {name} non enregistré : la base n'a pas pu être relue dans ce processus", file=sys.stderr)
+    with _db() as con:
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            for name, body in rows:
+                con.execute("INSERT INTO docs (name, body, updated) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET body=excluded.body,"
+                            " updated=excluded.updated, version=docs.version+1", (name, body, _now()))
+            con.execute("COMMIT")
+        except BaseException:
+            with contextlib.suppress(sqlite3.Error):
+                con.execute("ROLLBACK")
+            raise
+
+
 def update(name, fn, default):
     """Lire-modifier-écrire ATOMIQUE du document `name` : dans une seule transaction SQLite (BEGIN IMMEDIATE), lit le document (ou `default`),
     appelle `new, result = fn(document)`, écrit `new` (sauf si c'est None : rien d'écrit), valide. Deux processus (le bot Telegram et le suivi des

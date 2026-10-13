@@ -225,6 +225,19 @@ def match_total(fst, k):
     return fst.get(k)
 
 
+NEVER_ZERO = ("shots", "fouls", "throws")      # un match a toujours des corners, des tirs, des fautes, des touches : 0 = stats manquantes
+
+
+def zero_stats(b, fst):
+    """Le total du match qui règle `b` vaut-il 0 alors qu'il n'est jamais nul (corners, tirs, fautes, touches) ? Une source qui n'a pas les stats les
+    rend parfois à 0 : le pari n'est alors PAS réglé (et rien n'est appris) ; un « moins de » serait gagné à tort."""
+    m = b["market"]
+    if m in FD_MARKETS and "corners" in m:
+        return match_total(fst, "corners") == 0
+    mt = fmt.TEAM_MARKET.match(m)
+    return bool(mt) and mt[1] in NEVER_ZERO and shot_value(f"team_{mt[1]}_total", fst or {}) == 0
+
+
 def _has_stat(b, fst):
     """`fst` donne-t-il la valeur dont le marché de `b` a besoin (corners / cartons du match, ou la stat d'une équipe) ?"""
     if b["market"] in FD_MARKETS:
@@ -340,6 +353,9 @@ def settle_pending(now=None, scores_by_sport=None, stats_for=None):
                 settled.append(b)                  # rendrait un combiné « gagné » à une cote recalculée sans cette jambe
             continue
         fst = match_stats(b, fdata, stats_for)
+        if zero_stats(b, fst):
+            print(f"[settle] {b.get('event')} : stats à 0 (manquantes), pari non réglé", file=sys.stderr)
+            fst = None
         b["result"] = settle_pick(b, ev, fst)
         if b["result"] in ("win", "loss", "push"):
             b["final"] = final_text(b, ev, fst)       # affiché dans le message de résultats : « 2-0 », « 11 corners »
@@ -384,6 +400,8 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
     ev = (football_score(full) if stats.enabled() else None) or fdata.score(full) or fdata.fotmob_score(full)
     if ev:
         fst = match_stats(full, fdata, stats_for)
+        if zero_stats(full, fst):                      # stats à 0 là où il y en a toujours : manquantes (rien appris de faux)
+            fst = None
         b["result"] = settle_pick(full, ev, fst)
         if b["result"] in ("win", "loss", "push"):
             b["final"] = final_text(full, ev, fst)
@@ -403,9 +421,11 @@ def settle_fair(now=None, stats_for=None):
     rows = fair.load()
     fdata = FootballData()
     settled = [b for b in rows if _settle_fair_row(b, now, fdata, stats_for)]
-    calib.add(rows, now.date())                     # cumul par famille, sens et tranche, vieilli avec le temps (fair.json : 10 jours)
-    means.learn(settled, now.date())                # attendu contre réel, par famille de stats (kelly/means.py)
-    store.save(fair.FILE, rows)
+    pending = {}
+    calib.add(rows, now.date(), defer=pending)      # cumul par famille, sens et tranche, vieilli avec le temps (fair.json : 10 jours)
+    means.learn(settled, now.date())                # attendu contre réel, par famille de stats (kelly/means.py ; ne compte jamais deux fois un match)
+    store.save_many(pending | {fair.FILE: rows})    # fiabilité ET lignes marquées « comptées » d'un coup : un arrêt entre les deux ne compte plus deux fois
+    calib.reset()
     return rows, settled
 
 
