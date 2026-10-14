@@ -54,12 +54,19 @@ def day_stakes(top, built, built_fair, gaps=()):
     for title, (legs, odds_, prob) in built:
         keys.append(title)
         items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_, "p_mkt": CB.market_prob(legs)} | lanes.item_fields(legs))
+    s_keys, s_items = [], []                         # voie `saison` : allouée À PART, sur ce qui reste du budget après les autres (ses parts ne réduisent jamais les mises des autres voies)
     for target, (legs, min_total, prob) in built_fair:
-        keys.append(("fair", target))
-        items.append({"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total,        # jambe « probable » (sans avis sharp) :
-                      "p_mkt": CB.market_prob(legs)} | lanes.item_fields(legs))                                       # proba 1xBet sans marge
+        item = {"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total,           # jambe « probable » (sans avis sharp) :
+                "p_mkt": CB.market_prob(legs)} | lanes.item_fields(legs)                                          # proba 1xBet sans marge
+        (s_keys if CB.season_no(target) is not None else keys).append(("fair", target))
+        (s_items if CB.season_no(target) is not None else items).append(item)
     stakes, spent, kept, poor = money.allocate(items, detail=True)
-    return dict(zip(keys, stakes)), spent, kept, poor
+    out = dict(zip(keys, stakes))
+    if s_items:
+        s_stakes, s_spent, _, s_poor = money.allocate(s_items, budget=max(0, kept), detail=True, step=money.round_step(money.daily()))
+        out |= dict(zip(s_keys, s_stakes))
+        spent, kept, poor = round(spent + s_spent, 2), round(kept - s_spent, 2), poor and s_poor
+    return out, spent, kept, poor
 
 
 def morning_plan(picks, gaps=()):
@@ -133,7 +140,22 @@ def _resend_fair(pronos, again, fair_combos):
 def _recorded_fair(day):
     """Combinés à cote juste du matin déjà enregistrés pour le jour `day` (fair_combos.json) : {palier: ligne}, sans les combis sur mesure ni ceux de la
     fenêtre des stats (envoyés dans la journée, jamais rebâtis le matin)."""
-    return {str(r["tier"]): r for r in fair.load_combos() if str(r.get("date")) == str(day) and not r.get("custom") and CB.window_no(r["tier"]) is None}
+    return {str(r["tier"]): r for r in fair.load_combos() if str(r.get("date")) == str(day) and not r.get("custom") and CB.window_no(r["tier"]) is None
+            and CB.season_no(r["tier"]) is None}
+
+
+def _recorded_season(day):
+    """Combinés de la voie `saison` déjà enregistrés pour le jour `day` (fair_combos.json, paliers « ss3 », « ss10 »...) : {palier: ligne}. Une relance du matin les renvoie tels quels."""
+    return {str(r["tier"]): r for r in fair.load_combos() if str(r.get("date")) == str(day) and not r.get("custom") and CB.season_no(r["tier"]) is not None}
+
+
+def season_plan_all(season_legs, day, usage):
+    """Combinés de la voie `saison` du matin [(palier « ss10 », combiné | None)] : paliers de C.SEASON_TIERS sur les jambes `saison` jouables (voie « on », remplissage selon FILL_LEGS),
+    avec le Usage de la journée ; les paliers déjà enregistrés pour ce jour (relance) sont renvoyés tels quels. [] quand la voie n'est pas « on »."""
+    if lanes.season_mode() != "on":
+        return []
+    legs = [c for c in season_legs if lanes.usable(c)]
+    return _resend_fair(season_legs, _recorded_season(day), CB.season_plan(legs, usage=usage))
 
 
 RETRY_BUTTON = "touche « 🎟️ Vérifier ce combiné »"        # sous un combiné qui devait avoir son code coupon et ne l'a pas eu (fmt.coupon_block)
@@ -159,15 +181,17 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     again_fair = _recorded_fair(day)
     built = [(t, c) for t, c in plan if c]
     missing = [t for t, c in plan if not c and t not in rejected and t not in again]
-    built_fair = [(t, c) for t, c in fair_combos if c]
+    built_fair = [(t, c) for t, c in fair_combos if c and CB.season_no(t) is None]
+    built_season = [(t, c) for t, c in fair_combos if c and CB.season_no(t) is not None]      # voie `saison` : section à part, mêmes mécanismes (mise, coupon, bouton, suivi)
     n_ghost = 0
     ghost_line = ""                                  # combinés SANS valeur (toutes jambes fill) : construits et journalisés, jamais envoyés (NOVALUE_SEND les réaffiche) ; une relance garde ceux déjà envoyés
-    for lst, kind, known in ((built, "matin réel", resent), (built_fair, "matin à vérifier", {str(k) for k in again_fair})):
+    for lst, kind, known in ((built, "matin réel", resent), (built_fair, "matin à vérifier", {str(k) for k in again_fair}),
+                             (built_season, "saison", {str(k) for k in _recorded_season(day)})):
         for t, c in list(lst):
             if str(t) not in {str(k) for k in known} and fair.unsent(c[0]):
                 lst.remove((t, c))
                 n_ghost += fair.ghost_record(t, c, day, kind)
-                if kind == "matin à vérifier" and ghost_out is not None:
+                if kind != "matin réel" and ghost_out is not None:
                     ghost_out.add(str(t))
             else:
                 fair.ghost_drop(day, [l["key"] for l in c[0]])         # envoyé finalement (relance où une jambe a gagné de la valeur, NOVALUE_SEND) : plus un fantôme
@@ -175,7 +199,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         ghost_line = fmt.i(f"👻 {n_ghost} combiné{'s' if n_ghost > 1 else ''} sans valeur suivi{'s' if n_ghost > 1 else ''} en fantôme, non envoyé{'s' if n_ghost > 1 else ''}")
     if top_gap and gap_out is not None:                  # ... mais il reste un écart sharp : marqué dans le suivi pour mesurer sa clôture contre Pinnacle
         gap_out.append((top, top_gap[0], None, None))
-    stakes, spent, kept, poor = day_stakes(top, built, built_fair, gaps)
+    stakes, spent, kept, poor = day_stakes(top, built, built_fair + built_season, gaps)
     cur = money.cur()
     if fair_stakes is not None:
         fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple) and k[0] == "fair")})   # 0 compris
@@ -187,6 +211,8 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                 else f"{n_events} matchs analysés avec des cotes réelles")
         n_c = f"{len(built)} combiné{'s' if len(built) > 1 else ''} aujourd'hui" if built else "aucun combiné aujourd'hui"
         head = [fmt.b(f"🔥 Kelly — {fmt.fr_day(day)}"), "", f"📊 {seen}", f"🎯 {n_c}"]
+        if built_season:
+            head.append(f"{C.SEASON_TITLE.split(' ', 1)[0]} {len(built_season)} combiné{'s' if len(built_season) > 1 else ''} " + fmt.i("« saison en cours » (modèle des matchs de cette saison seulement)"))
         if built_fair:
             n_f = f"{len(built_fair)} combiné{'s' if len(built_fair) > 1 else ''}"
             if all(all(c.get("xodds") for c in legs) for _, (legs, _, _) in built_fair):      # tout est aux cotes relevées chez 1xBet
@@ -261,7 +287,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                             "stake": st} | ({"cur": cur} if money.active() and st else {}) | fair._has_value(picks_) | {k: v for k, v in lanes.item_fields(picks_).items() if k == "frac"}
                            | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
                                "coupon": coupon, "at": when} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
-    for target, (legs, min_total, prob) in built_fair:
+    for target, (legs, min_total, prob) in built_fair + built_season:
         xfair = all(c.get("xref") and c.get("xodds") for c in legs)
         old = again_fair.get(str(target)) or {}
         old = old if set(old.get("keys") or []) == {c["key"] for c in legs} else {}      # relance : mêmes paris = même code coupon et même heure de cotes que l'envoi d'origine
@@ -279,7 +305,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     if pronos:
         shown = CB.best_per_match(pronos)          # un seul pronostic par match : le meilleur, s'il est viable
         if shown:
-            msg = fmt.pronos(shown, C.FAIR_MAX if not (sent_combos or built_fair) else max(3, C.FAIR_MAX // 2), when=odds_time)
+            msg = fmt.pronos(shown, C.FAIR_MAX if not (sent_combos or built_fair or built_season) else max(3, C.FAIR_MAX // 2), when=odds_time)
             if stats_note and not picks:             # pas d'en-tête (aucun pari réel) : la ligne passe sous la liste des pronostics
                 msg = Html(msg + "\n\n" + fmt.i(fmt.esc(stats_note)))
             messages.append(msg)
@@ -832,11 +858,14 @@ def run_daily(sample=False, retry=False):
         if not scan.get("paid"):
             why = budget.why_not(len(C.FEATURED["soccer"].split(",")), "daily")
             why = "budget de cotes du jour épuisé" if why else None
-    if pronos:
+    usage = _step("réutilisation des matchs", lambda: morning_plan(picks, gaps)[6] if picks else CB.Usage(), None)      # UN Usage pour toute la journée : combinés réels, à vérifier, saison
+    if pronos and usage is not None:
         try:
-            fair_combos = _resend_fair(pronos, _recorded_fair(day), fair_plan_all(pronos, picks, gaps))
+            fair_combos = _resend_fair(pronos, _recorded_fair(day), fair_plan_all(pronos, picks, gaps, usage=usage))
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+    if season_legs:
+        fair_combos = list(fair_combos) + (_step("combinés saison", lambda: season_plan_all(season_legs, day, usage if usage is not None else CB.Usage()), []) or [])
     fair_stakes, fair_coupons, gap_rows, ghost_out = {}, {}, [], set()
     messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos, fair_stakes, odds_time=odds_at,
                                                   fair_coupons=fair_coupons, gaps=gaps, gap_out=gap_rows, ghost_out=ghost_out)
@@ -882,11 +911,12 @@ def deliver_morning(messages, day, now, sample=False):
         store.save(DAILY_FILE, {"day": str(day), "at": now.isoformat()})
 
 
-def fair_plan_all(pronos, picks=None, gaps=()):
+def fair_plan_all(pronos, picks=None, gaps=(), usage=None):
     """Tous les combinés à cote juste du matin (paliers 5 / 12 / 25 puis « tirs cadrés », « tirs vers le but », « stats ») avec UN SEUL Usage, celui de toute la
     journée : avec `picks` (paris réels du matin), il part de ce que les combinés réels, le pari du jour et les écarts sharp `gaps` ont déjà pris (morning_plan) ; un
     match n'est jamais repris dans plusieurs tickets au-delà des règles de réutilisation (une jambe risquée une seule fois, sûre LEG_REUSE_MAX fois)."""
-    usage = morning_plan(picks, gaps)[6] if picks else CB.Usage()
+    if usage is None:
+        usage = morning_plan(picks, gaps)[6] if picks else CB.Usage()
     return CB.fair_plan(pronos, usage=usage) + CB.fair_shots_plan(pronos, usage=usage)
 
 
@@ -1322,7 +1352,7 @@ def _watch_ticket(sent, row, legs0, pool, now, refreshed, tier):
 
 def _of_day(tier):
     """« du matin » (combinés bâtis au passage de 04:00) ou « stats » (envoyé dans la journée par la fenêtre des stats, statswindow) : de quel combiné parlent les messages de mise à jour."""
-    return "stats" if CB.window_no(tier) is not None else "du matin"
+    return "stats" if CB.window_no(tier) is not None else "saison en cours" if CB.season_no(tier) is not None else "du matin"
 
 
 def _update_combos(day, pronos, now, refreshed):
@@ -1338,7 +1368,7 @@ def _update_combos(day, pronos, now, refreshed):
     sent, rows, n = _load_updates(day), fair.load_combos(), 0
     hhmm = now.strftime("%H:%M")
     for row in rows:
-        if played.is_custom(row):                   # combiné sur mesure : le ticket est placé, ses paris ne sont jamais remplacés tout seuls
+        if played.is_custom(row) or CB.season_no(row["tier"]) is not None:       # combiné sur mesure : ses paris ne sont jamais remplacés tout seuls ; voie `saison` : relue au passage du matin seulement
             continue
         rng = _tier_range(row["tier"])
         tier = str(row["tier"])
@@ -1604,6 +1634,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 🧾 <b>Mes paris</b> : tes paris du jour, à noter quand tu les joues
 📊 <b>Mes résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
 🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage)
+🧮 <b>Saison</b> (écris <i>saison</i> ou <i>saison 10</i>) : la voie « saison en cours », qui juge les équipes sur les seuls matchs de cette saison ; son état, ou un combiné à la cote voulue
 📊 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
 💼 <b>Mon capital</b> : ton capital, ta limite du jour, ce que tu as déjà misé et tes deux objectifs mesurés (CLV 1xBet, capital)
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
@@ -2066,6 +2097,8 @@ def _handle_command(text):
         return money.max_loss_command(args)
     if cmd == "/voies":
         return lanes.command(args)
+    if cmd == "/saison":
+        return season_command(args, today)
     if cmd == "/objectif":
         return money.goal_command(args)
     if cmd in ("/regle", "/reglé", "/régler", "/regler"):     # « réglé vm3 gagné 12/10 » : un ticket noté que le règlement gratuit ne trouve pas
@@ -2170,6 +2203,58 @@ def combi_target(args):
     return float(v) if v is not None and math.isfinite(v) else None
 
 
+def season_command(args, today, now=None, check=None):
+    """« saison » : l'état de la voie `saison` (jambes du matin, combinés du jour, fantômes) ; « saison N » : un combiné sur mesure à la cote N bâti sur les SEULES jambes `saison` du matin
+    encore jouables (jambes de valeur d'abord, puis le remplissage), avec son code coupon, sa mise et le bouton « ✅ Je le joue » (suivi comme « combi N »). Les jambes sont celles du matin
+    (data/today.json), aucune requête."""
+    now = now or now_utc()
+    day = today.get("day") or ""
+    legs = [c for c in upcoming(today.get("season") or [], now) if lanes.usable(c)]
+    mode = lanes.season_mode()
+    if not args:
+        rows = [r for r in fair.load_combos() if str(r.get("date")) == day and CB.season_no(r["tier"]) is not None]
+        ghost = [r for r in fair.load_ghost() if r.get("date") == day and r.get("kind") == "saison"]
+        value = sum(1 for c in legs if c.get("sval"))
+        out = [f"🧮 Saison en cours — voie : {mode} · cotes visées {', '.join(fmt.trim(t, 1) for t in C.SEASON_TIERS)} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %",
+               f"Jambes du matin encore jouables : {len(legs)} ({value} à valeur, {len(legs) - value} de remplissage)" if legs else "Aucune jambe « saison » jouable aujourd'hui."]
+        for r in sorted(rows, key=lambda r: CB.season_no(r["tier"])):
+            out.append(f"• cote {fmt.trim(r['min_odds'], 1)} ({len(r.get('legs') or [])} paris) — "
+                       + ("noté joué" if r.get("played") else "envoyé") + (f" · {r['result']}" if r.get("result") else ""))
+        if ghost:
+            out.append(f"👻 {len(ghost)} combiné{'s' if len(ghost) > 1 else ''} sans valeur suivi{'s' if len(ghost) > 1 else ''} en fantôme (non envoyé{'s' if len(ghost) > 1 else ''})")
+        out.append("« saison 10 » : un combiné à la cote 10 sur ces jambes.")
+        return "\n".join(out)
+    target = combi_target(args)
+    if target is None or target <= 1.0:
+        return "Exemple : saison 10 (un combiné « saison en cours » à la cote 10), ou saison seul pour l'état de la voie."
+    if mode != "on":
+        return f"La voie « saison » est {'en fantôme (calculée, jamais jouée)' if mode == 'ghost' else 'éteinte'} : aucun combiné proposé."
+    if len(legs) < 2:
+        return "Pas assez de jambes « saison » encore jouables aujourd'hui (il en faut au moins deux sur deux matchs différents)."
+    usage = day_usage(day)
+    combo = CB.season_plan(legs, [target], usage=usage)[0][1]
+    if not combo:
+        top = CB.reach([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs])
+        return f"Aucun combiné « saison » à la cote {fmt.trim(target, 1)} avec les jambes du jour" + (f" : la plus haute cote atteignable est {fmt.trim(top, 1)}." if top > 1 else ".")
+    lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)
+    keep = {"day": day, "target": target, "lo": lo, "hi": hi, "src": "saison"}
+    intro = f"{C.SEASON_TITLE.split(' ', 1)[0]} Combiné « saison en cours » à la cote {fmt.trim(target, 1)} (modèle des matchs de cette saison, mélangé au marché)."
+    res, hhmm, ok = _live_season(combo[0], lo, hi, now, check, usage=day_usage(day))      # relecture 1xBet EN DIRECT avant l'envoi, comme « combi N »
+    stale = False
+    if ok and res is None:
+        return ("Les paris de ce combiné « saison » ne sont plus jouables chez 1xBet et Kelly ne trouve pas de remplaçants dans la même fourchette de cote. "
+                f"Réessaie avec une autre cote que {fmt.trim(target, 1)}.")
+    if ok:
+        legs2, total, prob, removed, added, changed = res
+        combo, when = (legs2, total, prob), hhmm
+        intro += f" Cotes relues chez 1xBet à {hhmm}." + (" Un pari a été remplacé." if removed or added else "")
+    else:
+        when, stale = today.get("xbet_at"), True
+        intro += " 1xBet n'a rien rendu à l'instant (panne, ou matchs sur le point de commencer) : cotes du dernier relevé, vérifie-les avant de valider."
+    return _fair_reply(combo, intro, title=f"{C.SEASON_TITLE} · cote {fmt.trim(target, 1)}", when=when, stale=stale, retry="redemande le combi", budget=True, keep=keep,
+                       shared=_shared_counts(day, combo[0]))
+
+
 def _coupon(legs):
     """Code coupon 1xBet d'un combiné dont toutes les jambes ont leur référence et leur cote 1xBet (xbet.save_coupon : ticket sans mise) ;
     None sinon, ou si l'enregistrement échoue (jamais d'erreur)."""
@@ -2224,9 +2309,22 @@ def _fair_reply(fc, head, changes="", coupon=True, title=None, stake_txt=None, w
                + ("\n" + fmt.esc(tail.strip("\n")) if tail.strip() else ""))      # avertissements courts, une ligne chacun, sous le combiné
     if keep:                                        # gardé en mémoire avec la mise conseillée du message (budget du jour ; None sans budget)
         cid = custom.remember(keep["day"], keep["target"], keep["lo"], keep["hi"], fc, stake, None if stake is None else money.cur(), code, when,
-                              kinds=keep.get("kinds"), nlegs=keep.get("nlegs"))
-        return custom.with_button(msg, cid, keep["day"], code)
+                              src=keep.get("src") or "pronos", kinds=keep.get("kinds"), nlegs=keep.get("nlegs"))
+        return custom.with_button(msg, cid, keep["day"], code, another=keep.get("src") != "saison")      # « 🔀 Un autre » rebâtirait sur les paris des autres voies
     return msg
+
+
+def _live_season(legs, lo, hi, now=None, check=None, usage=None):
+    """Combiné `saison` `legs` vérifié EN DIRECT chez 1xBet : ses matchs + C.XBET_LIVE_SPARES remplaçants (les jambes `saison` les plus probables du matin) relus à l'instant
+    (seasonlane.live_check), puis CB.season_patch dans [lo, hi]. -> (résultat de season_patch ou None, heure, relu : faux si 1xBet n'a rien rendu). `check` : injectable."""
+    now = now or now_utc()
+    ids = {l["id"] for l in legs}
+    spares = sorted((c for c in upcoming(store.load("today.json", {}).get("season") or [], now) if c["id"] not in ids and lanes.usable(c)), key=lambda c: -c["prob"])
+    spare_ids = list(dict.fromkeys(c["id"] for c in spares))[:C.XBET_LIVE_SPARES]
+    pool, got, hhmm = (check or seasonlane.live_check)(ids | set(spare_ids), now, fresh_min=C.XBET_COMBI_FRESH_MIN)
+    if not got:
+        return None, hhmm, False
+    return CB.season_patch(legs, pool, lo, hi, fresh_ids=got, usage=usage), hhmm, True
 
 
 def _live_fair(legs, lo, hi, prefix=None, now=None, check=None, fresh_min=None, usage=None, avoid=None):
@@ -2310,6 +2408,9 @@ def _tier_range(tier):
             return lo, hi, prefix
     if CB.window_no(tier) is not None:             # « ts5w1 » : combiné de la fenêtre des stats (statswindow), mêmes familles et même fourchette que « ts5 »
         return C.STATS_WINDOW_COMBO[0], C.STATS_WINDOW_COMBO[1], C.STATS_WINDOW_PREFIX
+    sn = CB.season_no(tier)
+    if sn is not None:                             # « ss10 » : combiné de la voie `saison` (fourchette de son palier) ; jamais remplacé tout seul (voir _update_combos, check)
+        return sn * (1 - C.SEASON_SPREAD), sn * (1 + C.SEASON_SPREAD), None
     return None
 
 
@@ -2318,7 +2419,8 @@ def _check_ticket(row, legs, day, tier, now, check=None):
     est plus ou paie moins ; la ligne de suivi (paris, note, règlement) ne change JAMAIS. Pour une version à jour : « ↩️ Annuler » la note, puis
     « 🎟️ Vérifier ce combiné ». -> la réponse."""
     telegram.send("⏳ Je vérifie ton ticket chez 1xBet…", queue=False)
-    pool, got, hhmm = (check or xprice.live_check)({l["id"] for l in legs}, now, fresh_min=None)
+    season = CB.season_no(tier) is not None or any(l.get("strategy") == "saison" for l in legs)
+    pool, got, hhmm = (check or (seasonlane.live_check if season else xprice.live_check))({l["id"] for l in legs}, now, fresh_min=None)
     if not got:
         return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné commencent) : réessaie dans quelques minutes."
     probs = _ticket_problems(legs, pool, got, now)
@@ -2361,7 +2463,10 @@ def refresh_combo(tier, day, now=None, check=None, fetch=None):
     if fair.is_ticket(row) or fair.is_noted(row):   # noté joué (combiné du matin ou sur mesure) : le ticket est placé, on le relit et on le dit, sans jamais le remplacer
         return _check_ticket(row, base, str(day), str(tier), now, check)
     telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False)
-    res, hhmm, ok = _live_fair(base, lo, hi, prefix, now, check, usage=None if mine else _others_usage(rows, row, str(day), sent))
+    if CB.season_no(tier) is not None or (mine and row.get("src") == "saison"):      # voie `saison` : relue sur SES jambes, jamais remplacée par celles des autres voies
+        res, hhmm, ok = _live_season(base, lo, hi, now, check, usage=None if mine else _others_usage(rows, row, str(day), sent))
+    else:
+        res, hhmm, ok = _live_fair(base, lo, hi, prefix, now, check, usage=None if mine else _others_usage(rows, row, str(day), sent))
     if not ok:
         return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné commencent) : réessaie dans quelques minutes."
     if res is None:

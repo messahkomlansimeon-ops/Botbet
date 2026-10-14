@@ -566,6 +566,21 @@ SEASON_MIN_N = max(1, _int("SEASON_MIN_N", 100))                             # m
 SEASON_MARGIN = _float("SEASON_MARGIN", 0.02)                                # valeur : proba retenue x cote 1xBet >= 1 + marge
 SEASON_FILL_MIN_P = _float("SEASON_FILL_MIN_P", 0.60)                        # jambe de remplissage : proba retenue minimale ...
 SEASON_FILL_MIN_EV = _float("SEASON_FILL_MIN_EV", -0.08)                     # ... et espérance au prix du marché (proba du marché x cote - 1) d'au moins -8 %
+def _floats(name, default):
+    """« 3,10,30,100 » -> (3.0, 10.0, 30.0, 100.0) ; vide ou invalide : `default`."""
+    try:
+        vals = tuple(float(x) for x in (os.environ.get(name) or "").replace(";", ",").split(",") if x.strip())
+    except ValueError:
+        return tuple(default)
+    return vals if vals and all(v > 1.0 for v in vals) else tuple(default)
+
+
+SEASON_TIERS = _floats("SEASON_TIERS", (3, 10, 30, 100))                     # cotes visées des combinés de la voie `saison` (une fourchette de +-SEASON_SPREAD autour de chacune)
+SEASON_SPREAD = min(0.9, max(0.0, _float("SEASON_SPREAD", 0.20)))
+SEASON_TIER_PREFIX = "ss"                                                    # palier d'un combiné de la voie : « ss3 », « ss10 », « ss30 », « ss100 »
+SEASON_TITLE = "🧮 SAISON EN COURS"
+KELLY_FRACTION_SEASON = _float("KELLY_FRACTION_SEASON", 0.15)                # part de mise de la voie (relative à KELLY_FRACTION_REF, comme les autres voies)
+SEASON_TICKET_MAX = max(0.0, _float("SEASON_TICKET_MAX", 0))                 # mise maximale d'un combiné de la voie (FCFA) ; 0 = le plafond de ticket existant (mode capital) et le plafond loterie
 SEASON_SECONDS = max(30, _int("SEASON_SECONDS", 600))                      # temps maximal du relevé 1xBet de la voie (en plus de celui du relevé principal)
 SEASON_MAX_MATCHES = max(1, _int("SEASON_MAX_MATCHES", 60))                  # matchs relevés chez 1xBet au plus pour la voie (le cache du relevé principal sert d'abord)
 KELLY_FRACTION_REF = 0.25

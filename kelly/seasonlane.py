@@ -221,12 +221,17 @@ def _line(c, px, name, point, p0, base, odd, now, wdata, cdata):
     if p_mkt is None:
         return out
     p = ensemble.pool(pm, p_mkt, wm)
-    out.update(p=p, ev=p * odd - 1, ev_mkt=p_mkt * odd - 1)
-    if p * odd >= 1 + C.SEASON_MARGIN:
-        out["kind"] = "value"
-    elif p >= C.SEASON_FILL_MIN_P and out["ev_mkt"] >= C.SEASON_FILL_MIN_EV:
-        out["kind"] = "fill"
+    out.update(p=p, ev=p * odd - 1, ev_mkt=p_mkt * odd - 1, kind=verdict(p, odd, p_mkt))
     return out
+
+
+def verdict(p, odd, p_mkt):
+    """« value » (proba retenue x cote >= 1 + SEASON_MARGIN), « fill » (proba retenue >= SEASON_FILL_MIN_P et espérance au prix du marché >= SEASON_FILL_MIN_EV) ou None."""
+    if p * odd >= 1 + C.SEASON_MARGIN:
+        return "value"
+    if p >= C.SEASON_FILL_MIN_P and p_mkt * odd - 1 >= C.SEASON_FILL_MIN_EV:
+        return "fill"
+    return None
 
 
 def _rank(v):
@@ -285,6 +290,57 @@ def price(c, px, refs, now, wdata=None, cdata=None):
     chosen = _apply(c, best, refs, ref_line=best is ref_v) if best else None
     ref = None if best is ref_v else _apply(c, ref_v, refs, ref_line=True)
     return chosen, ref
+
+
+def reprice(c, px, refs):
+    """La jambe `c` (déjà choisie le matin) remise aux cotes `px` du moment (copie), ou None si 1xBet ne propose plus CETTE ligne. La proba du modèle (p_model), son poids (ew) et l'avis sharp
+    du matin (p_sharp) restent ceux du matin ; seul l'avis de 1xBet (p_x) et le prix changent. `sval` est recalculé : 1 (valeur), 0 (remplissage) ou None (la jambe ne vaut plus ni l'un ni l'autre)."""
+    odd = xbet.lookup(px, c["market"], c["name"], c["point"])
+    if not odd:
+        return None
+    p_x = ensemble.x_fair(px, c["market"], c["name"], c["point"], c.get("home"), c.get("away"))
+    p_mkt = ensemble.pool_market(c.get("p_sharp"), p_x, C.ENSEMBLE_PRIOR_SHARP)[0]
+    out = dict(c, xodds=odd, odds=odd)
+    if p_mkt is not None and c.get("p_model") is not None:
+        p = ensemble.pool(c["p_model"], p_mkt, c.get("ew", C.SEASON_MODEL_WEIGHT))
+        kind = verdict(p, odd, p_mkt)
+        out.update(prob=round(p, 4), p_ens=round(p, 4), xev=round(p * odd - 1, 4), sval=None if kind is None else 1 if kind == "value" else 0)
+        if p_x is not None:
+            out.update(p_x=round(p_x, 4), xp=round(p_x, 4))
+    else:
+        out["sval"] = None
+    ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+    if ref:
+        out["xref"] = ref
+    return out
+
+
+def live_check(ids, now=None, fresh_min=None, fetch=None):
+    """Relit EN DIRECT chez 1xBet les matchs `ids` des jambes `saison` du matin (data/today.json['season'], id 1xBet connu : lus directement) et les remet au prix du moment, SANS rien écrire :
+    -> (jambes encore proposées, remises au prix [reprice], ids relus, heure « HH:MM »). Les matchs qui commencent dans moins de C.XBET_SOON_MIN min sont laissés de côté. Même contrat
+    que xprice.live_check pour _ticket_problems / _check_ticket. `fetch` : injectable. Ne lève jamais (1xBet en panne : aucun id relu)."""
+    from datetime import timedelta
+    from . import xprice
+    now = now or datetime.now(timezone.utc)
+    legs = store.load("today.json", {}).get("season") or []
+    soon = now + timedelta(minutes=C.XBET_SOON_MIN)
+    sel = [c for c in legs if c["id"] in ids and datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
+    found = {}
+    if sel:
+        try:
+            events, wanted = xprice._events(sel), xprice._wanted(sel)
+            kw = dict(deadline=time.monotonic() + C.XBET_SECONDS, wanted=wanted, live=True, fresh_min=fresh_min)
+            found = (fetch(events, **kw) if fetch is not None else xbet.fetch_day(events, record=False, **kw)) or {}
+        except Exception as e:                      # noqa: BLE001
+            print(f"[saison] vérification en direct impossible : {type(e).__name__}: {e}", file=sys.stderr)
+            found = {}
+    pool = []
+    for c in sel:
+        f = found.get(c["id"])
+        r = reprice(c, f["px"], f.get("refs")) if f and f.get("px") else None
+        if r is not None:
+            pool.append(r)
+    return pool, set(found), now.strftime("%H:%M")
 
 
 def run(scan, picks, day, now, fetch=None, history=None):

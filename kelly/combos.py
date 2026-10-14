@@ -628,7 +628,88 @@ def fair_shots_plan(pronos, tiers=None, usage=None):
 def shots_title(target):
     """Titre d'un combiné « spécial tirs » (« 🎯 COMBINÉ TIRS CADRÉS »), None pour les autres combinés à cote juste. Un combiné de la fenêtre des stats
     (window_tier : « ts5w1 ») porte celui du palier « stats » du matin."""
-    return next((t for k, _, t, _, _ in C.FAIR_SHOTS_TIERS if k == target), None) or (C.STATS_WINDOW_TITLE if window_no(target) is not None else None)
+    return (next((t for k, _, t, _, _ in C.FAIR_SHOTS_TIERS if k == target), None) or (C.STATS_WINDOW_TITLE if window_no(target) is not None else None)
+            or (f"{C.SEASON_TITLE} · cote {season_no(target):g}" if season_no(target) is not None else None))
+
+
+def season_tier(target):
+    """Palier d'un combiné de la voie `saison` pour la cote visée `target` : « ss3 », « ss10 », « ss2,5 » -> « ss2.5 »."""
+    t = float(target)
+    return f"{C.SEASON_TIER_PREFIX}{int(t) if t.is_integer() else t:g}"
+
+
+def season_no(tier):
+    """Cote visée d'un palier de la voie `saison` (« ss10 » -> 10.0) ; None pour tout autre palier."""
+    t = str(tier)
+    if not t.startswith(C.SEASON_TIER_PREFIX):
+        return None
+    try:
+        v = float(t[len(C.SEASON_TIER_PREFIX):])
+    except ValueError:
+        return None
+    return v if v > 1.0 else None
+
+
+def season_plan(legs, tiers=None, usage=None):
+    """Combinés de la voie `saison`, un par palier de C.SEASON_TIERS, cote totale dans [cote x (1 - C.SEASON_SPREAD), cote x (1 + C.SEASON_SPREAD)] : [(palier « ss10 », (jambes,
+    cote, proba) | None)]. Les jambes de VALEUR d'abord (sval), puis, si la fourchette n'est pas atteinte et si C.FILL_LEGS, avec le remplissage. Un seul pari par match, la proba du
+    combiné maximale (_best_combo : l'essai des tirs de best_combo ne concerne pas cette voie). `usage` : celui de toute la journée (mêmes règles de réutilisation que les autres tickets) ;
+    un combiné SANS valeur (que du remplissage) est construit mais ne consomme aucune réutilisation (il reste en fantôme, voir ensemble.unsent)."""
+    usage = usage if usage is not None else Usage()
+    pool = [c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds")]
+    out = []
+    for target in (tiers if tiers is not None else C.SEASON_TIERS):
+        lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)
+        free = usage.filter(pool)
+        combo = _best_combo([c for c in free if c.get("sval")], lo, hi)
+        if combo is None and C.FILL_LEGS:
+            combo = _best_combo(free, lo, hi)
+        if combo and not ensemble.unsent(combo[0]):
+            usage.add(combo[0])
+        out.append((season_tier(target), combo))
+    return out
+
+
+def season_patch(legs, pool, lo, hi, fresh_ids=None, usage=None):
+    """Combiné `saison` `legs` remis aux cotes du moment : `pool` = jambes `saison` relues (seasonlane.live_check : remises au prix, `sval` recalculé). Une jambe dont le match a été relu reste si CETTE
+    ligne est encore proposée et vaut encore la valeur ou le remplissage (sval) ; sinon elle sort. Une jambe dont le match n'a PAS été relu est reprise telle quelle. Cote totale >= `lo` : on
+    garde les survivants ; sinon ils sont complétés par le meilleur combiné de remplaçants (jambes de la voie encore valables, `usage` : règles de réutilisation) pour revenir dans
+    [lo, hi]. Toujours au moins 2 jambes. -> (jambes, cote, proba, retirées, ajoutées, []) ou None si impossible. Jamais une jambe d'une autre voie."""
+    from . import lanes
+    by_key = {c.get("key"): c for c in pool}
+    keep, removed = [], []
+    for l in legs:
+        if fresh_ids is not None and l["id"] not in fresh_ids:
+            keep.append(l)
+            continue
+        c = by_key.get(l["key"])
+        if c and c.get("xodds") and c.get("sval") is not None and lanes.usable(c):
+            keep.append(c)
+        else:
+            removed.append(l)
+    total = math.prod(c.get("odds") or c["xodds"] for c in keep) if keep else 1.0
+    if fresh_ids is not None and not fresh_ids:
+        return keep, total, combo_prob(keep), [], [], []
+    added = []
+    if not keep or total < lo or len(keep) < 2:
+        used = {c["id"] for c in keep}
+        spares = [c for c in pool if c["id"] not in used and c.get("xodds") and c.get("sval") is not None and lanes.usable(c) and (usage is None or usage.allowed(c))]
+        best = {}
+        for c in spares:                                    # une jambe par match : la plus probable
+            if c["id"] not in best or c["prob"] > best[c["id"]]["prob"]:
+                best[c["id"]] = c
+        spares = [c | {"odds": c["xodds"]} for c in best.values()]
+        rlo, rhi = max(lo / total, 1.01), hi / total
+        if rhi < rlo:
+            return None
+        one = max((c for c in spares if rlo <= c["odds"] <= rhi), key=lambda c: c["prob"], default=None)
+        extra = ([one], one["odds"], one["prob"]) if (one and keep) else _best_combo(spares, rlo, rhi)
+        if not extra:
+            return None
+        added = extra[0]
+        keep = keep + added
+        total = math.prod(c.get("odds") or c["xodds"] for c in keep)
+    return keep, total, combo_prob(keep), removed, added, []
 
 
 def window_tier(n):

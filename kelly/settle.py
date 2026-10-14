@@ -515,8 +515,9 @@ def _combo_legs(rows):
     """Jambes qui apprennent la prudence par jambe : celles des combinés de Kelly (pas les combinés sur mesure : « custom »), chaque jambe une seule
     fois par jour même reprise dans plusieurs tickets (la première rencontrée, toujours la même d'un passage à l'autre)."""
     seen, out = set(), []
+    from . import combos as CB
     for c in rows:
-        if c.get("custom"):
+        if c.get("custom") or CB.season_no(c.get("tier")) is not None:       # la voie `saison` a sa propre mesure : ses jambes n'apprennent pas la prudence des autres combinés
             continue
         for leg in c.get("legs") or []:
             k = (str(c.get("date")), leg.get("key"))
@@ -632,7 +633,8 @@ def fair_combo_line(rows, days=None, today=None, short=False):
     """Combinés à cote juste réglés : « Combinés à vérifier : 2 gagnés sur 5 (sans mise : à comparer aux cotes de 1xBet) » ; '' si
     rien de réglé. Les combinés sur mesure que l'utilisateur joue (« ✅ Je le joue », marque « custom ») n'y sont pas : il les choisit lui-même,
     ils ne mesurent pas les combinés du matin de Kelly (ils sont dans le bilan en argent et celui des paris joués)."""
-    done = [r for r in rows if r.get("result") in ("win", "loss") and not r.get("custom")]
+    from . import combos as CB
+    done = [r for r in rows if r.get("result") in ("win", "loss") and not r.get("custom") and CB.season_no(r.get("tier")) is None]       # la voie `saison` a sa propre ligne (lanestats)
     if days:
         cut = str((datetime.fromisoformat(str(today)) if today else datetime.now(timezone.utc)).date() - timedelta(days=days))
         done = [r for r in done if r["date"] >= cut]

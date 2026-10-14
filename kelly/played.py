@@ -268,6 +268,9 @@ def price_info(what, x):
 def _fair_name(tier, real=False, row=None):
     """« Tirs cadrés », « Tirs vers le but » pour les combinés « spécial tirs », sinon « À vérifier (cote mini 25) » ou, `real`, « Aux cotes 1xBet
     (cote 25,1) » : le niveau de cote dit lequel c'est (`row` : la ligne de suivi, pour la cote d'un combiné aux cotes 1xBet)."""
+    sn = CB.season_no(tier)
+    if sn is not None:                                             # voie `saison` : « Saison en cours (cote 10) »
+        return f"Saison en cours (cote {fmt.trim(sn, 1)})"
     t = CB.shots_title(str(tier))
     if t:
         name = re.sub(r"^\S+ COMBINÉ ", "", t).capitalize()           # « 🎯 COMBINÉ TIRS CADRÉS », « 🧮 COMBINÉ STATS »

@@ -10,7 +10,7 @@ from collections import defaultdict
 from . import config as C, ensemble, store
 
 LEAD_OK_MIN = 90
-LANES = ("sharpgap", "stats", "fill", "live")
+LANES = ("sharpgap", "stats", "fill", "live", "saison")
 OBJ_MIN_N = 300                                # objectif 1 : lignes réglées minimales avant de conclure
 CUT_MIN_N = 300                                # coupure de la voie stats entière
 CUT_MIN_N_LEAGUE = 200                         # coupure et retour d'une ligue

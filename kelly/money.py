@@ -212,11 +212,11 @@ def _raw(it, with_frac=True):
     return r if math.isfinite(r) and r > 0 else 0.0
 
 
-def allocate(items, budget=None, detail=False):
+def allocate(items, budget=None, detail=False, step=None):
     """items = [{kind: pari|combo|fair, tier: titre du palier (cote mini visée pour fair), prob, odds, p_mkt (facultatif : chances selon 1xBet, pour
     reconnaître un ticket « loterie »)}] -> (mises, misé, gardé), dans l'ordre des items ; une mise de 0 = pari laissé de côté (plus petit que l'arrondi). Ne lève jamais (valeur illisible : mise 0).
     `detail` : un 4e élément, « journée pauvre » = la somme des parts reste sous le budget (rien n'a été réduit), à ne pas confondre
-    avec le reste d'un arrondi."""
+    avec le reste d'un arrondi. `step` : pas d'arrondi imposé (par défaut celui du budget)."""
     budget = _amount(daily() if budget is None else budget)
     items = list(items)
     if not budget or not items:
@@ -225,12 +225,13 @@ def allocate(items, budget=None, detail=False):
     raw = [_raw(it) for it in items]
     total = sum(_raw(it, False) for it in items)     # somme des parts AVANT la fraction de la voie : réduire une mise stats n'augmente pas celles des autres
     scale = min(1.0, 1.0 / total) if total else 0
-    step = round_step(budget)
+    step = round_step(budget) if step is None else step      # `step` : le pas d'un budget plus grand (la voie `saison` est allouée sur le reste du jour, avec le pas du jour entier)
     stakes = [math.floor(budget * r * scale / step) * step for r in raw]
     cap = ticket_cap()
     if cap is not None:                              # mode capital : jamais plus de TICKET_SHARE du capital sur un ticket (le reste est gardé)
         stakes = [min(st, cap) for st in stakes]
     stakes = [min(st, LOTTERY_STAKE) if _lottery(it) else st for st, it in zip(stakes, items)]     # ticket « loterie » : 100 FCFA au plus (gardé)
+    stakes = [math.floor(min(st, float(it["cap"])) / step) * step if isinstance(it, dict) and it.get("cap") else st for st, it in zip(stakes, items)]      # plafond propre d'une voie (SEASON_TICKET_MAX), arrondi au pas
     room = budget - sum(stakes)                      # combinés SANS valeur : par défaut AUCUNE mise (suivi en fantôme) ; NOVALUE_STAKE > 0 : mise fixe optionnelle, APRÈS les autres, même plafond de ticket, prise sur le reste du jour
     for i, it in enumerate(items):
         if isinstance(it, dict) and it.get("novalue") and C.NOVALUE_STAKE > 0:

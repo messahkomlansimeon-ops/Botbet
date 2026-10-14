@@ -109,12 +109,16 @@ def frac(lane):
 
 def item_fields(legs, single=False):
     """Champs de money.allocate pour un pari (`single`) ou un combiné de jambes `legs` : {"frac": fraction de Kelly de la voie la plus prudente parmi les jambes à valeur}, ou
-    {"novalue": True} pour un combiné dont TOUTES les jambes sont « fill » (par défaut aucune mise : suivi en fantôme ; mise fixe optionnelle NOVALUE_STAKE, hors Kelly). {} quand une jambe n'a pas d'étiquette (ligne d'avant les étiquettes, combiné live) :
+    {"novalue": True} pour un combiné dont TOUTES les jambes sont « fill » (ou des jambes `saison` de remplissage) (par défaut aucune mise : suivi en fantôme ; mise fixe optionnelle NOVALUE_STAKE, hors Kelly). {} quand une jambe n'a pas d'étiquette (ligne d'avant les étiquettes, combiné live) :
     le comportement d'avant. Un pari seul sans valeur garde Kelly comme avant."""
     legs = list(legs or [])
     labels = [(l or {}).get("strategy") for l in legs]
     if not legs or any(x is None for x in labels) or "live" in labels or not C.ENSEMBLE_ENABLED:
         return {}                                   # jambe live : hors voies, le dimensionnement live reste celui d'avant
+    if "saison" in labels:                         # combiné de la voie `saison` : à valeur s'il a une jambe à valeur (sval), part de mise propre à la voie, plafond propre éventuel
+        if any((l or {}).get("sval") for l, x in zip(legs, labels) if x == "saison"):
+            return {"frac": C.KELLY_FRACTION_SEASON} | ({"cap": C.SEASON_TICKET_MAX} if C.SEASON_TICKET_MAX > 0 else {})
+        return {} if single else {"novalue": True}
     value = [x for x in labels if x in ("sharpgap", "stats")]
     if value:
         return {"frac": min(frac(x) for x in value)}
