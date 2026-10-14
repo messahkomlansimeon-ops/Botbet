@@ -798,6 +798,13 @@ def _bilan_detail(bets, days, rows, picks, combos):
             blocks.append(["📏 <b>CLV par jambe des combinés</b> " + fmt.i("(les jambes sans valeur à part)")] + [e("• " + x) for x in lc])
     except Exception as ex:                         # noqa: BLE001
         print(f"[bilan] CLV par jambe illisible : {type(ex).__name__}: {ex}", file=sys.stderr)
+    try:
+        from . import combovariants
+        cv = combovariants.lines(days)
+        if cv:
+            blocks.append(["🧪 <b>Variantes du constructeur</b> " + fmt.i("(fantômes, hors P&L)")] + [e(("• " if not x.startswith(" ") else "") + x) for x in cv])
+    except Exception as ex:                         # noqa: BLE001
+        print(f"[bilan] variantes illisibles : {type(ex).__name__}: {ex}", file=sys.stderr)
     q = [e("✅ " + _block("Envoyés", sent)), e("👻 " + _block("Suivis en silence", ghost))]
     if picks:
         brier = sum((r["prob"] - (1.0 if r["result"] == "win" else 0.0)) ** 2 for r in picks) / len(picks)

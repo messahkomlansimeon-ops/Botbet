@@ -94,6 +94,13 @@ def message(now=None):
             blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées)")] + [f"• {fmt.esc(x)}" for x in ll])
     except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
         print(f"[weekly] voies illisibles : {type(e).__name__}: {e}", file=sys.stderr)
+    try:
+        from . import combovariants
+        cv = combovariants.lines()                  # lecture du lundi : sur toute la période suivie (la règle pré-déclarée compte des paliers et des jours cumulés)
+        if cv:
+            blocks.append(["🧪 <b>Variantes du constructeur</b> " + fmt.i("(fantômes, hors P&L)")] + [fmt.esc(("• " if not x.startswith(" ") else "") + x) for x in cv])
+    except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
+        print(f"[weekly] variantes illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     data = calib.load()
     fam = _family_lines(data)
     if fam:

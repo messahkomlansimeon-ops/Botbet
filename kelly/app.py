@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
+from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                cupstats, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
@@ -897,6 +897,8 @@ def run_daily(sample=False, retry=False):
                | ({"picks_at": odds_at} if odds_at and any(c.get("xodds") for c in picks) else {}))
     progress.step("envoi")
     deliver_morning(report + messages, day, now, sample)          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
+    if not sample:                                  # APRÈS l'envoi : jamais un retard du matin ; pool du jour gardé, quatre variantes en fantôme (jamais envoyées, hors Usage)
+        _step("variantes du constructeur", lambda: combovariants.run(day, picks, pronos, season_legs))
     print(cache.line(), file=sys.stderr)
     if not sample:
         _step("instantané de la mémoire", lambda: store.snapshot(str(day)))     # copie du jour des documents précieux (3 jours gardés)
