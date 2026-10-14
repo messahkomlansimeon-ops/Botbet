@@ -288,7 +288,7 @@ def _answer(p, text):
     Cote déjà CONNUE (p["odds"] : cote 1xBet lue par Kelly, ou cote tapée) : on n'attend que la mise, un montant seul (« 1000 », « 1 000 »,
     « 2000 », « 2k ») est la mise (aucune ambiguïté à garder : ce n'est pas une cote), et « cote mise » (« 11000 1000 ») corrige aussi la cote. Un
     décimal seul (« 5,40 ») est une cote : la mise est alors demandée, avec cette cote. Cote du pari connue mais pas encore donnée : un nombre ENTIER seul (« 400 », « 2k ») qui vaut
-    STAKE_MIN_AS_STAKE ou plus, ou qui est à plus de ±STAKE_ODDS_BAND de la cote connue, est la MISE : « Noté à 25,06 pour 400 FCFA, c'est bien ça ? » (un « oui » la note). Sans mise conseillée, la mise est demandée et l'attente
+    STAKE_MIN_AS_STAKE ou plus (cote du pari sous ce seuil), ou qui est à plus de ±STAKE_ODDS_BAND de la cote connue d'un gros pari, est la MISE ; sous le seuil sur un pari sous le seuil et hors bande : ambigu, « cote ou mise ? » : « Noté à 25,06 pour 400 FCFA, c'est bien ça ? » (un « oui » la note). Sans mise conseillée, la mise est demandée et l'attente
     reste ouverte."""
     t = played.find(p["what"], p["day"])
     ref = t.ref if t is not None and not isinstance(t, str) and t.ref else None
@@ -310,7 +310,12 @@ def _answer(p, text):
         amount, n = money.take_amount(tokens)
         if amount is not None and n == len(tokens) and not foreign and amount > 0 and (float(amount).is_integer() or mult != 1):
             value = amount * mult
-            if (value >= STAKE_MIN_AS_STAKE and ref < STAKE_MIN_AS_STAKE) or abs(value / ref - 1) > STAKE_ODDS_BAND:      # gros combiné (cote >= 50) : « 11062 » est une cote
+            outside = abs(value / ref - 1) > STAKE_ODDS_BAND
+            if value < STAKE_MIN_AS_STAKE and ref < STAKE_MIN_AS_STAKE and outside:      # « 4 » sur un pari à 2,10 : cote ou mise ? Jamais deviné, les deux lectures sont proposées
+                n = fmt.trim(value, 0)
+                return (f"« {n} » : cote ou mise ? Si c'est la cote, écris {n},00 (la mise sera demandée ensuite). Si c'est la mise ({money.money(value)}), "
+                        f"écris la cote puis la mise, par exemple {fmt.num(ref)} {n}.")
+            if (value >= STAKE_MIN_AS_STAKE and ref < STAKE_MIN_AS_STAKE) or outside:      # gros combiné (cote >= 50) : « 11062 » est une cote
                 stake = int(value)
                 msg = played.Confirm(f"Noté à {fmt.odds_txt(ref)} pour {money.money(stake)}, c'est bien ça ? Réponds « oui », ou renvoie la cote (et la mise) si 1xBet t'a payé autre chose.")
                 msg.confirm = {"odds": ref, "stake": stake}

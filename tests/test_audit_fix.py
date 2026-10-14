@@ -549,7 +549,7 @@ def test_absurd_odds_ask_confirmation():
     x = played.find("sur", DAY).item["played"]
     assert x["odds"] == 5.0 and x["stake"] == 500, x
     # cote du combiné connue (25,06) : un nombre entier seul est la mise dès qu'il vaut 50 ou plus, ou qu'il est à plus de ±50 % de la cote ; sinon c'est une cote
-    for reply, kind in (("400", "stake"), ("2k", "stake"), ("1 000", "stake"), ("60", "stake"), ("10", "stake"), ("5,40", "odds"), ("25,06", "odds"), ("30", "odds"), ("35", "odds"), ("40", "stake"), ("abc", "bad")):
+    for reply, kind in (("400", "stake"), ("2k", "stake"), ("1 000", "stake"), ("60", "stake"), ("10", "ambig"), ("5,40", "odds"), ("25,06", "odds"), ("30", "odds"), ("35", "odds"), ("40", "ambig"), ("abc", "bad")):
         played.command(["sur", "0"], DAY)
         chat.clear_pending()
         with Fakes():
@@ -560,6 +560,9 @@ def test_absurd_odds_ask_confirmation():
         if kind == "stake":
             assert out.startswith(f"Noté à 25,06 pour {money.money(float(amount))}, c'est bien ça ?") and chat.get_pending()["confirm"] == {"odds": 25.06, "stake": int(amount)}, (reply, out)
             assert played.find("sur", DAY).item.get("played") is None, "rien n'est noté avant le « oui »"
+        elif kind == "ambig":
+            assert out.startswith(f"« {reply} » : cote ou mise ?") and f"écris {reply},00" in out and f"25,06 {reply}" in out and chat.get_pending() and not chat.get_pending().get("confirm"), (reply, out)
+            assert played.find("sur", DAY).item.get("played") is None
         elif kind == "odds":
             assert "c'est bien ça" not in out, (reply, out)
         else:
