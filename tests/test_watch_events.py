@@ -146,7 +146,8 @@ def test_extra_time():
     store.save(watch.FILE, {})
     ts = [ticket("vm1", [leg(0, point=2.5), leg(0, market="alternate_totals_corners", point=9.5)])]       # + un pari de corners du même match, en jeu jusqu'au bout
     calls = []
-    old = C.WATCH_DETAIL_DAY
+    old, old_after = C.WATCH_DETAIL_DAY, C.WATCH_AFTER_LOSS
+    C.WATCH_AFTER_LOSS = True                          # ce test couvre le texte de fin d'un match dont le coupon est déjà perdu (suivi demandé) ; le défaut ne le suit plus
     C.WATCH_DETAIL_DAY = 0                             # plafond du jour à zéro : la fiche de la prolongation passe quand même (elle règle tes paris)
     try:
         with tickets(ts):
@@ -160,7 +161,7 @@ def test_extra_time():
             assert "🏁 Terminé · H0 1-1 à 90 min, 3-1 au final A0" in msg and "Prolongation" not in msg and "✅" not in msg, msg
             assert calls == [0], "score à 90 min déjà connu : pas de 2e fiche"
     finally:
-        C.WATCH_DETAIL_DAY = old
+        C.WATCH_DETAIL_DAY, C.WATCH_AFTER_LOSS = old, old_after
     print("ok  prolongation : dite une fois, paris de buts réglés sur le score à 90 min, fiche lue malgré le plafond du jour")
 
 

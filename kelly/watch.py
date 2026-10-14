@@ -604,7 +604,7 @@ def _unfollowed(ts, d, now, games):
     introuvable sur 365scores 30 min après le coup d'envoi. -> [(texte du match, raison)]."""
     out, seen = [], set()
     for t in ts:
-        if _verdict(d, t) == "won":
+        if _verdict(d, t) == "won" or (_verdict(d, t) == "lost" and not C.WATCH_AFTER_LOSS):      # coupon tranché : plus d'avis « pas suivi » sur ses matchs
             continue
         for leg in t["legs"]:
             k = f"{t['what']}|{leg['key']}"

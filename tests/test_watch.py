@@ -119,17 +119,17 @@ def test_follow():
     msg = str(watch.follow(KO + timedelta(minutes=85), **kw))
     assert "❌ H0 – A0 : Moins de 3,5 buts (3-1)" in msg and "❌ Ticket perdu." in msg, msg
     live[1] = {"live": True, "score": (5, 0), "minute": 88}
-    msg = str(watch.follow(KO + timedelta(minutes=90), **kw))        # ticket perdu : ses autres matchs restent suivis, sans répéter « Ticket perdu »
-    assert msg == "⚽ H1 5-0 A1 (88e)\n❌ H1 – A1 : Moins de 3,5 buts (5-0) · 🎟️ C1 (perdu)", msg        # le coupon, marqué perdu
-    assert watch.follow(KO + timedelta(minutes=92), **kw) is None, "rien de neuf"
-    old, C.WATCH_AFTER_LOSS = C.WATCH_AFTER_LOSS, False
+    assert watch.follow(KO + timedelta(minutes=90), **kw) is None, "défaut : plus aucune alerte sur un match qui n'appartient qu'à un coupon perdu"
+    old, C.WATCH_AFTER_LOSS = C.WATCH_AFTER_LOSS, True
     try:
         what, games = setup_tickets()
         live2 = {0: {"live": True, "score": (4, 0), "minute": 60}, 1: {"live": True, "score": (0, 0), "minute": 60}, 2: {"live": True, "score": (0, 0), "minute": 60}}
         kw3 = kw | {"games": games, "live_for": lambda ids: live2}
         assert "❌ Ticket perdu." in str(watch.follow(KO + timedelta(minutes=60), **kw3))
         live2[1] = {"live": True, "score": (5, 0), "minute": 88}
-        assert watch.follow(KO + timedelta(minutes=90), **kw3) is None, "WATCH_AFTER_LOSS=0 : comme avant, plus rien sur un ticket perdu"
+        msg = str(watch.follow(KO + timedelta(minutes=90), **kw3))        # WATCH_AFTER_LOSS=1 : les autres matchs du ticket perdu restent suivis, sans répéter « Ticket perdu »
+        assert msg == "⚽ H1 5-0 A1 (88e)\n❌ H1 – A1 : Moins de 3,5 buts (5-0) · 🎟️ C1 (perdu)", msg
+        assert watch.follow(KO + timedelta(minutes=92), **kw3) is None, "rien de neuf"
     finally:
         C.WATCH_AFTER_LOSS = old
     # match suspendu (groupe 4 chez 365scores, comme un match fini) : rien n'est tranché, même longtemps après le coup d'envoi
