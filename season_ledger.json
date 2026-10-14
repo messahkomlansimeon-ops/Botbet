@@ -48,5 +48,20 @@
  "prereg_sha": "b7a3536c14832db538246215dcf99b20437012fb5240e11adac718c499c42c4b",
  "written_at": "2026-10-14T11:07:25+00:00",
  "final": null,
- "extensions": []
+ "extensions": [
+  {
+   "at": "2026-10-14T12:23:56+00:00",
+   "why": "ajouté AVANT la lecture réelle, après la relecture de l'outil (la pré-déclaration `prereg` et son sha ne changent pas)",
+   "limit_no_warmup": "le cache ne contient que les saisons 2024-25, 2025-26 et 2026-27 des CSV football-data (2022-23 et 2023-24 absentes) : dans la fenêtre < 2025-07-01 il n'y a donc QU'UNE saison. strength_hl110 et strength_hl45 sont ajustés sur la seule saison en cours (aucun réchauffement, aucun promu détecté), comme la voie `saison`. Le résultat se lit « saison seule, avec rétrécissement, contre strength SANS historique antérieur » ; il ne dit pas ce que vaut le modèle de production avec son historique de trois saisons. L'avantage de hl110 sur hl45 (plus d'historique) est lui aussi réduit.",
+   "cadence": "chaque lot de 3 jours (comme strength.walk) réajuste les cinq modèles sur les mêmes matchs antérieurs au jour du lot : même information pour tous ; le rejeu des modèles `strength` se fait avec ctx éteint, mkt=0 (aucun ancrage marché), sans means.factor ni calib.",
+   "errors": "un match qui lève une exception est écarté pour TOUS les modèles (compté dans final.counts.errors, première erreur gardée) : jamais un modèle noté sur moins de matchs qu'un autre.",
+   "guards": "--final refuse --divs et --smoke ; écriture atomique ; l'essai --smoke (une division, 90 s) n'affiche que des comptes, jamais la table.",
+   "seasons_read": [
+    "2223",
+    "2324",
+    "2425"
+   ],
+   "decision": "aucune décision automatique ; le superviseur tranche SEASON_MODEL_WEIGHT et SEASON_PRIOR_K"
+  }
+ ]
 }
