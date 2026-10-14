@@ -186,7 +186,11 @@ def test_selection_points():
         assert statswindow.announce_list({"pronos": [near | {"xodds": 1.9, "xat": "07:55"}], "announced": []}, {"announced": [], "combos": []}, NOW) == [], "mais rien d'annoncé"
     # status
     assert any("sharpgap : on · stats : on" in l for l in lanes.lines()) and any("Stats en fantôme" in l for l in lanes.lines())
-    assert "🎛️ Voies" in str(status.report(NOW))
+    rep = str(status.report(NOW))
+    assert "🎛️ Voies" in rep
+    assert "Part de mise : sharpgap 0.25" in rep or "Part de mise : sharpgap 0,25" in rep
+    assert "Kelly : sharpgap" not in rep and "fraction de Kelly" not in rep, "la mise n'est pas du Kelly"
+    assert "jambes sans étiquette : " in rep and "(lignes du jour)" in rep
     print("ok  points de sélection : écarts sharp (matin et alertes), relevé 1xBet, fenêtre des stats ; ghost = calculé et journalisé jamais sélectionné ; off = rien de lu ; status affiche les voies")
 
 

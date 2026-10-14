@@ -725,8 +725,8 @@ def _bilan_simple(days, rows, picks, combos):
     try:
         from . import lanestats
         ll = lanestats.lane_lines(rows, days, plain=True)
-        if ll:
-            blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées ; l'argent d'un combiné n'est jamais réparti entre voies)")] + [fmt.esc("• " + x) for x in ll])
+        blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées ; l'argent d'un combiné n'est jamais réparti entre voies)")] + [fmt.esc("• " + x) for x in ll]
+                      + ([fmt.i(fmt.esc(lanestats.unlabeled_line()))] if lanestats.unlabeled_line() else []))
     except Exception as e:                          # noqa: BLE001 - le bilan ne dépend jamais de ce bloc
         print(f"[bilan] voies illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     pl = played.summary_lines(bets_, rows, fair.load_combos(), days)
@@ -761,8 +761,8 @@ def _bilan_detail(bets, days, rows, picks, combos):
         from . import lanestats
         ll = lanestats.lane_lines(rows, days)
         blocks.append(["🏁 <b>Objectifs</b>"] + [e(x) for x in lanestats.objective_lines()])
-        if ll:
-            blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées ; l'argent d'un combiné n'est jamais réparti entre voies)")] + [e("• " + x) for x in ll])
+        blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées ; l'argent d'un combiné n'est jamais réparti entre voies)")] + [e("• " + x) for x in ll]
+                      + ([fmt.i(e(lanestats.unlabeled_line()))] if lanestats.unlabeled_line() else []))
     except Exception as ex:                         # noqa: BLE001
         print(f"[bilan] voies illisibles : {type(ex).__name__}: {ex}", file=sys.stderr)
     q = [e("✅ " + _block("Envoyés", sent)), e("👻 " + _block("Suivis en silence", ghost))]

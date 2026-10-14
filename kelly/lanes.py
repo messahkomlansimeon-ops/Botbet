@@ -119,7 +119,7 @@ def lines():
     st = state().get("stats") or {}
     out = [f"sharpgap : {C.STRATEGY_SHARPGAP} · stats : {C.STRATEGY_STATS}" + (" (coupée automatiquement : fantôme)" if st.get("mode") == "ghost" else "")
            + f" · jambes sans valeur : {'oui' if C.FILL_LEGS else 'non'}",
-           f"Kelly : sharpgap {C.KELLY_FRACTION_SHARPGAP:g} · stats {C.KELLY_FRACTION_STATS:g} · combiné sans valeur : mise "
+           f"Part de mise : sharpgap {C.KELLY_FRACTION_SHARPGAP:g} · stats {C.KELLY_FRACTION_STATS:g} (part de ta limite du jour, pas du Kelly) · combiné sans valeur : mise "
            + (f"fixe {C.NOVALUE_STAKE:g} (« sans valeur »)" if C.NOVALUE_STAKE > 0 else "aucune (suivi en fantôme)")]
     ghost = sorted(set(C.STATS_GHOST_LEAGUES) | set(st.get("leagues") or {}))
     out.append("Stats en fantôme : " + ("toutes les ligues hors football-data" if C.STATS_GHOST_OUTSIDE_FD else "aucune par défaut")

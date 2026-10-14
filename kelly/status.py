@@ -438,6 +438,9 @@ def report(now=None):
         from . import lanes
         from . import lanestats
         blocks.append([fmt.b("🎛️ Voies")] + [fmt.esc(x) for x in lanes.lines()])
+        ul = lanestats.unlabeled_line()
+        if ul:
+            blocks[-1].append(fmt.esc(ul))
         blocks.append([fmt.b("🏁 Objectifs")] + [fmt.esc(x) for x in lanestats.objective_lines()])
     except Exception as e:                              # noqa: BLE001
         blocks.append([f"⚠️ Voies : état illisible ({type(e).__name__})"])

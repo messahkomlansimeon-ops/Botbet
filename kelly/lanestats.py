@@ -322,3 +322,33 @@ def cut_lines():
     except Exception as e:                      # noqa: BLE001
         print(f"[lanes] lignes de coupure illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     return out
+
+
+def unlabeled(today=None):
+    """(sans étiquette, total) des lignes du jour qui portent un prix 1xBet : jambes des combinés du jour (hors jambes LIVE : leur voie n'est pas définie, à étiqueter plus tard) +
+    lignes du journal d'ensemble du jour. Une ligne créée après le lot des étiquettes complètes en a toujours une (fill à défaut) ; seules les lignes d'avant (legacy) peuvent
+    en manquer. Documents abîmés : les éléments illisibles sont ignorés."""
+    from datetime import date
+    from . import fair
+    day = str(today or date.today())[:10]
+    legs = []
+    for combos in (fair.load_combos(), (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])):
+        for c in combos if isinstance(combos, list) else []:
+            if isinstance(c, dict) and str(c.get("date") or "")[:10] == day:
+                legs += [l for l in c.get("legs") or [] if isinstance(l, dict) and l.get("xodds") and not l.get("live")]
+    rows = [r for r in journal_rows() if isinstance(r, dict) and r.get("date") == day and r.get("xodds")]
+    allx = legs + rows
+    return sum(1 for x in allx if not x.get("strategy")), len(allx)
+
+
+def unlabeled_line(today=None):
+    """« jambes sans étiquette : n / total (lignes du jour) » ; '' ensemble éteint (aucune étiquette n'existe alors) ou document illisible."""
+    from . import config as C
+    if not C.ENSEMBLE_ENABLED:
+        return ""
+    try:
+        n, total = unlabeled(today)
+    except Exception as e:                      # noqa: BLE001
+        print(f"[lanes] compteur d'étiquettes illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return ""
+    return f"jambes sans étiquette : {n} / {total} (lignes du jour)"

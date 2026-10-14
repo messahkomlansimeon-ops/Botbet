@@ -132,12 +132,13 @@ def _weak(c):
 
 
 def price(c, px, refs=None):
-    """Met le pronostic `c` à la cote 1xBet (voir _price) puis lui pose sa voie (c["strategy"] : sharpgap / stats / fill, ensemble.strategy_of) s'il est jouable
-    ("value") ; un pronostic écarté, trop mal payé ou absent n'a pas de voie."""
+    """Met le pronostic `c` à la cote 1xBet (voir _price) puis lui pose sa voie (c["strategy"] : sharpgap / stats / fill, ensemble.strategy_of) dès qu'il porte un prix 1xBet,
+    donc dès qu'il est jouable chez 1xBet : « value » (voie de sa famille), mais aussi « low » / « weak » (jambes de complément COMBI_FILL_* / COMBI_BOLD_*, favoris sans valeur) =
+    « fill ». Seul un pronostic absent de 1xBet (aucune cote) n'a pas de voie : il n'est pas jouable."""
     r = _price(c, px, refs)
     c.pop("strategy", None)
-    if r == "value" and C.ENSEMBLE_ENABLED:             # ensemble éteint : le comportement d'avant, strictement (aucune étiquette)
-        s = ensemble.strategy_of(c)
+    if c.get("xodds") and C.ENSEMBLE_ENABLED:           # ensemble éteint : le comportement d'avant, strictement (aucune étiquette)
+        s = ensemble.strategy_of(c) if r == "value" else "fill"        # « low » / « weak » / ligne écartée par l'ensemble : jamais une voie à valeur (strategy_of rejouerait value() sans xwhy)
         if s:
             c["strategy"] = s
     return r

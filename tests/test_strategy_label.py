@@ -58,8 +58,8 @@ def test_xprice_sets_once():
     c = copy.deepcopy(base)
     xprice.apply([c], fetch=lambda *a, **k: {"m": {"gid": 900, "px": px, "refs": refs}}, picks=[copy.deepcopy(sharp)])
     assert c["xkind"] == "value" and c["strategy"] == "sharpgap", c
-    low = copy.deepcopy(base)                                  # sans sharp : jamais jouable (no_sharp), donc pas de voie
-    assert xprice.price(low, px, refs) == "low" and "strategy" not in low
+    low = copy.deepcopy(base)                                  # sans sharp : jamais « value » (no_sharp), mais il porte un prix 1xBet = jouable comme complément : « fill »
+    assert xprice.price(low, px, refs) == "low" and low["xodds"] and low["strategy"] == "fill", low
     c["strategy"] = "stats"                                     # une relecture remplace la voie par celle du nouveau prix, elle ne s'accumule pas
     xprice.apply([c], fetch=lambda *a, **k: {"m": {"gid": 900, "px": {}, "refs": refs}})
     assert "strategy" not in c, "match relu mais pari absent de 1xBet : plus de voie"
