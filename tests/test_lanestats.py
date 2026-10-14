@@ -83,7 +83,7 @@ def test_learning_and_archive():
     r = row(5, sport_key="soccer_brazil_campeonato")
     back = ensemble.unpack_archive_row(r["key"], TODAY, ensemble._pack(r))
     assert back["sport_key"] == "soccer_brazil_campeonato" and back["strategy"] == "stats"
-    old = ensemble.unpack_archive_row("k", TODAY, ensemble._pack(r)[:-6])        # sans sport_key, sval, ref, pe, swhy ni refused (colonnes ajoutées à la fin)
+    old = ensemble.unpack_archive_row("k", TODAY, ensemble._pack(r)[:-7])        # sans sport_key, sval, ref, pe, swhy, refused ni cup (colonnes ajoutées à la fin)
     assert "sport_key" not in old, "une ligne archivée avant l'ajout de la colonne reste lisible"
     print("ok  sharpgap n'apprend rien (stats + fill + anciennes oui) ; la ligue est dans l'archive")
 

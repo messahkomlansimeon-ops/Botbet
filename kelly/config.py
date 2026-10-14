@@ -239,8 +239,8 @@ APISTATS_KEEP_MATCHES = 15                        # matchs gardés par équipe (
 APISTATS_MIN_N = 3                                # matchs minimum pour qu'un profil serve : « utilisable », confiance réduite (features.aps_quality)
 APISTATS_GOOD_N = 6                               # à partir de là le profil est « bon » : confiance pleine, admis dans les combinés à cote juste
 APISTATS_SAT_N = 10                               # équipe « saturée » : au moins autant de matchs que la fenêtre des moyennes (APISTATS_LAST)
-APISTATS_MAX_TEAMS = 300                          # équipes gardées dans data/apistats_profiles.json (< 300 Ko avec 15 matchs chacune)
-APISTATS_MAX_BYTES = 285_000                      # taille maximale de data/apistats_profiles.json (marge sous 300 Ko, xG compris) : les équipes les moins récentes sortent d'abord
+APISTATS_MAX_TEAMS = 300                          # équipes gardées dans data/apistats_profiles.json (~300-330 Ko avec 15 matchs chacune et l'identifiant de l'adversaire)
+APISTATS_MAX_BYTES = 330_000                      # taille maximale de data/apistats_profiles.json (marge sous 350 Ko, xG et identifiant de l'adversaire compris : 285 000 avant l'adversaire) : les équipes les moins récentes sortent d'abord
 APISTATS_KEEP_DAYS = 120                          # équipe oubliée si elle n'a pas joué (ni été mise à jour) depuis
 APISTATS_SECONDS = _int("APISTATS_SECONDS", 360)  # durée maximale du remplissage du matin (55 requêtes x STATS_MIN_GAP = ~340 s)
 STATS_MIN_GAP = _float("STATS_MIN_GAP", 6.2)      # secondes entre deux appels API-Football : le forfait gratuit limite à 10 requêtes par minute (HTTP 429 au-delà)
@@ -555,6 +555,10 @@ STATS_GHOST_OUTSIDE_FD = _bool("STATS_GHOST_OUTSIDE_FD", True)
 # `saison`, son propre journal, sa propre calibration. STRATEGY_SEASON : on (jambes et combinés), ghost (calculé et journalisé, jamais joué), off (rien de calculé). SEASON_LEAGUES : les
 # seules ligues (clés sport_key) de la voie ; vide = toutes celles où au moins SEASON_MIN_TEAMS équipes ont SEASON_MIN_MATCHES matchs cette saison.
 STRATEGY_SEASON = _mode("STRATEGY_SEASON", "on")
+SEASON_CUPS = _set("SEASON_CUPS", ("soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league", "soccer_conmebol_copa_libertadores",
+                                   "soccer_conmebol_copa_sudamericana", "soccer_fa_cup", "soccer_england_efl_cup", "soccer_spain_copa_del_rey", "soccer_germany_dfb_pokal",
+                                   "soccer_italy_coppa_italia", "soccer_france_coupe_de_france"))     # coupes de clubs : l'attente vient du profil de CHAMPIONNAT de chaque équipe (season.cup_predict)
+SEASON_CUP_HOME = _float("SEASON_CUP_HOME", 1.10)                          # facteur domicile neutre d'un match de coupe (domicile / extérieur)
 SEASON_LEAGUES = _set("SEASON_LEAGUES", ())
 SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 12.0))                    # rétrécissement vers la moyenne de la ligue : poids n / (n + k) ; 12 = le meilleur réglage mesuré au rejeu du 14/10 (season_ledger.json), 6 était la spécification de départ
 SEASON_MIN_MATCHES = max(1, _int("SEASON_MIN_MATCHES", 4))                   # matchs minimum par équipe cette saison, sinon pas de prévision

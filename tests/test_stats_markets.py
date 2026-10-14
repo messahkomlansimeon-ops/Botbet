@@ -475,12 +475,14 @@ def test_apistats_records_yellow():
     assert n == 2
     row = d["teams"]["1"]["m"][0]
     iy = apistats.R_STATS + 2 * apistats.KEYS.index("yellow")
-    assert row[iy:iy + 2] == [2, 3] and len(row) == iy + 2
+    assert row[iy:iy + 2] == [2, 3] and len(row) == iy + 3 and row[-1] == 2      # jaunes puis l'adversaire (id API-Football) en dernier
     # jaunes inconnus (null) : colonnes omises, jamais 0
     unknown = {"corners": 6.0, "cards": 2.0, "shots": 0.0, "sot": 0.0, "fouls": 0.0, "yel": 0.0, "nul": ["yel", "shots", "sot", "fouls"]}
     d2 = {"v": 2, "teams": {}, "seen": {}, "lg": []}
     apistats.record(d2, dict(e, id=8), {"teams": {"1": unknown, "2": tv(3.0, 4.0)}})
-    assert len(d2["teams"]["1"]["m"][0]) == apistats.R_STATS + 2 * apistats.KEYS.index("xg")      # ni xG ni jaunes : ligne courte
+    r2 = d2["teams"]["1"]["m"][0]
+    ix = apistats.R_STATS + 2 * apistats.KEYS.index("xg")
+    assert r2[ix:ix + 4] == [None] * 4 and r2[-1] == 2 and len(r2) == apistats.R_STATS + 2 * len(apistats.KEYS) + 1      # ni xG ni jaunes : None (jamais 0), puis l'adversaire (toutes les paires sont écrites)
     print("ok  API-Football : jaunes enregistrés à la fin de la ligne, null = colonnes omises")
 
 

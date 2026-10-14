@@ -133,9 +133,9 @@ def test_record_row_format_and_unknown_xg():
     d = apistats.load()
     assert apistats.KEYS[-2:] == ("xg", "yellow") and apistats.KEYS[:6] == ("goals", "shots", "sot", "corners", "fouls", "cards")
     base = apistats.R_STATS + 2 * 6                                                         # longueur d'une ligne sans xG ni jaunes
-    full = base + 4                                                                         # + xG + jaunes (« yel » : 2 chacune dans ces essais)
+    full = base + 4 + 1                                                                     # + xG + jaunes (« yel » : 2 chacune dans ces essais) + l'adversaire en dernier
     row = play(d, 3, SAN, FLA, (2, 1), ("1.624", 0.8))
-    assert len(row) == full and row[base:base + 2] == [1.62, 0.8] and row[-2:] == [2, 2], row
+    assert len(row) == full and row[base:base + 2] == [1.62, 0.8] and row[-3:-1] == [2, 2], row
     row = play(d, 4, SAN, FLA, (2, 1))                                                      # xG non envoyé : colonnes xG vides (jamais 0), jaunes gardés
     assert len(row) == full and row[base:base + 2] == [None, None], row
     row = play(d, 5, SAN, FLA, (2, 1), (1.1, None))                                         # un seul côté : inconnu pour les deux (jamais 0)
@@ -158,7 +158,8 @@ def test_record_row_format_and_unknown_xg():
     older["teams"]["128"]["nul"], older["teams"]["127"]["nul"] = ["yel", "shots", "sot", "fouls"], ["yel", "shots", "sot", "fouls"]
     assert apistats.record(d, dict(e, id=779, ts=1790100000), older) == 2
     dd = apistats._d2i(datetime.fromtimestamp(1790100000, tz=timezone.utc).date().isoformat())
-    assert [len(r) for r in d["teams"]["128"]["m"] if r[apistats.R_DAY] == dd] == [base]
+    short = [r for r in d["teams"]["128"]["m"] if r[apistats.R_DAY] == dd]
+    assert [len(r) for r in short] == [base + 5] and short[0][base:base + 4] == [None] * 4, short        # xG et jaunes inconnus : None (jamais 0), puis l'adversaire en dernier
     # un match dont seul l'xG serait connu n'est pas ajouté (rien d'autre d'utilisable)
     only = {"teams": {"128": {"xg": 1.0, "nul": ["corners", "cards", "yel", "shots", "sot", "fouls"]},
                       "127": {"xg": 0.5, "nul": ["corners", "cards", "yel", "shots", "sot", "fouls"]}}}
@@ -399,7 +400,7 @@ def test_morning_pass_end_to_end():
     xi = apistats.R_STATS + 2 * 6
     rows_home = d["teams"]["3000"]["m"]
     assert len(rows_home) == 3
-    assert [len(r) for r in rows_home] == [xi + 4] * 3, rows_home                               # xG puis jaunes (ajoutés à la fin de KEYS)
+    assert [len(r) for r in rows_home] == [xi + 5] * 3, rows_home                               # xG puis jaunes (ajoutés à la fin de KEYS), puis l'adversaire en dernier
     assert [r[xi:xi + 2] for r in rows_home] == [[1.62, 0.85], [1.62, 0.85], [None, None]]       # 3e match : l'adversaire a un null -> xG inconnu (jamais 0)
     assert d["teams"]["3001"]["m"][0][xi:xi + 2] == [0.85, 1.62]
     # les statistiques brutes du cache portent l'xG, null = clé absente

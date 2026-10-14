@@ -200,6 +200,74 @@ def predict(model, home, away):
             "promo": [False, False], "unavailable_referee": False, "newcomer": None}
 
 
+# ---------- coupes : deux équipes de championnats différents ----------
+
+def locate(models, name):
+    """(clé de ligue, nom de l'équipe dans le modèle) de l'équipe `name` parmi les modèles de championnat `models` ({clé: modèle `saison`}), ou None : le meilleur rapprochement de nom
+    (>= 0,8) toutes ligues confondues ; deux ligues différentes à 0,05 près (ou plus) l'une de l'autre = ambigu, sauf nom exact."""
+    from .sources import names
+    hits = []
+    for sk, model in models.items():
+        ts = teams(model)
+        t = names.best_team(name, ts) if ts else None
+        if t:
+            hits.append((names.team_sim(name, t), sk, t))
+    if not hits:
+        return None
+    hits.sort(key=lambda h: -h[0])
+    best = hits[0]
+    if len(hits) > 1 and hits[1][0] >= best[0] - 0.05 and not (names.norm(best[2]) == names.norm(name) and names.norm(hits[1][2]) != names.norm(name)):
+        return None
+    return best[1], best[2]
+
+
+def _rel(entry, s):
+    """(attaque, défense) d'une équipe RAPPORTÉES à la moyenne de sa ligue : 1 = une équipe moyenne de son championnat. Moyenne des lignes domicile et extérieur (déjà rétrécies)."""
+    return (0.5 * (entry["ah"] / s["lg_h"] + entry["aa"] / s["lg_a"]), 0.5 * (entry["dh"] / s["lg_a"] + entry["da"] / s["lg_h"]))
+
+
+def cup_predict(models, home, away, home_factor=None):
+    """Prévision `saison` d'un match de COUPE (ou entre championnats) : l'attente d'une équipe = profil de championnat de A (attaque) x profil de championnat de B (défense), chacun rapporté
+    à la moyenne de sa propre ligue, x le niveau moyen des deux ligues (moyenne des deux moyennes de côté), avec un facteur domicile NEUTRE (C.SEASON_CUP_HOME = 1,10, réparti
+    à parts égales entre les deux équipes : domicile / extérieur = 1,10). Au moins C.SEASON_MIN_MATCHES matchs de championnat par équipe. Dispersion : moyenne de celles des deux ligues.
+    Même forme que predict (strength.grid / strength.lines), `cup` vrai. None si une équipe est introuvable, ambiguë ou trop peu jouée ; aucun niveau de ligue n'est corrigé au-delà
+    de ce rapport à la moyenne de la ligue (limite connue)."""
+    f = C.SEASON_CUP_HOME if home_factor is None else home_factor
+    la, lb = locate(models, home), locate(models, away)
+    if not la or not lb or la == lb:
+        return None
+    (ska, ta), (skb, tb) = la, lb
+    ma, mb = models[ska], models[skb]
+    ga, gb = ma["stats"]["goals"], mb["stats"]["goals"]
+    if min(ga["t"][ta]["n"], gb["t"][tb]["n"]) < C.SEASON_MIN_MATCHES:
+        return None
+    k = ma["k"]
+    h = math.sqrt(f)
+    stats, base, qs = {}, {}, {}
+    for stat in ma["stats"]:
+        sa, sb = ma["stats"].get(stat), mb["stats"].get(stat)
+        if not sa or not sb or ta not in sa["t"] or tb not in sb["t"] or min(sa["t"][ta]["n"], sb["t"][tb]["n"]) < C.SEASON_MIN_MATCHES:
+            continue
+        att_a, def_a = _rel(sa["t"][ta], sa)
+        att_b, def_b = _rel(sb["t"][tb], sb)
+        level = 0.5 * (0.5 * (sa["lg_h"] + sa["lg_a"]) + 0.5 * (sb["lg_h"] + sb["lg_a"]))
+        lam_a, lam_b = level * att_a * def_b * h, level * att_b * def_a / h
+        al, at = 0.5 * (sa["alpha"] + sb["alpha"]), 0.5 * (sa["atot"] + sb["atot"])
+        stats[stat] = {"h": lam_a, "a": lam_b, "al": 0.0 if stat == "goals" else al, "at": 0.0 if stat == "goals" else at}
+        base[stat] = (level * h, level / h)
+        n = min(sa["t"][ta]["n"], sb["t"][tb]["n"])
+        qs[stat] = n / (n + k)
+    if "goals" not in stats:
+        return None
+    kappa = 0.5 * (ma["kappa"] + mb["kappa"])
+    g = stats["goals"]
+    return {"lane": "saison", "cup": True, "div": f"{ska}+{skb}", "home": home, "away": away, "lh": g["h"], "la": g["a"], "lh0": g["h"], "la0": g["a"], "rho": 0.0, "kappa": kappa,
+            "fh": 1.0, "fa": 1.0, "q": qs["goals"], "qs": qs, "stats": stats, "notes": [], "info": {"cup_leagues": [ska, skb]}, "tm": {},
+            "base": {"lh": base["goals"][0], "la": base["goals"][1], "stats": {st: {"h": v[0], "a": v[1]} for st, v in base.items() if st != "goals"}},
+            "n": [ga["t"][ta]["n"], gb["t"][tb]["n"]], "neff": [float(ga["t"][ta]["n"]), float(gb["t"][tb]["n"])], "model_n": ma["rows"] + mb["rows"], "last": ma["on"], "stale": 0,
+            "promo": [False, False], "unavailable_referee": False, "newcomer": None}
+
+
 # ---------- lecture des données déjà stockées (aucune requête) ----------
 
 def _day(i):
@@ -213,14 +281,16 @@ def _from_matches(matches):
     for m in matches:
         for side, team in (("home", m["home"]), ("away", m["away"])):
             pairs = fd._side(m, side)
-            out.append({"team": team, "d": m["date"], "home": 1 if side == "home" else 0, "s": {st: v for st, v in pairs.items() if st in STATS}})
+            out.append({"team": team, "d": m["date"], "home": 1 if side == "home" else 0, "s": {st: v for st, v in pairs.items() if st in STATS},
+                        "opp": m["away"] if side == "home" else m["home"]})        # football-data nomme toujours l'adversaire
     return out
 
 
 def _from_team_rows(teams_doc, sport_key, keys, r_stats, r_home=1, r_day=0):
     """Observations des équipes d'une ligue rangées par FotMob / 365scores / API-Football : {id: {nm, sk:[...], m:[[jour, domicile, (pour, contre)...]]}}."""
+    from .sources import rows as srows
     out = []
-    for t in teams_doc.values():
+    for tid, t in teams_doc.items():
         if not isinstance(t, dict) or sport_key not in (t.get("sk") or []) or not t.get("nm"):
             continue
         for r in t.get("m") or []:
@@ -229,13 +299,15 @@ def _from_team_rows(teams_doc, sport_key, keys, r_stats, r_home=1, r_day=0):
                 if key in STATS and len(r) > r_stats + 2 * i + 1 and r[r_stats + 2 * i] is not None and r[r_stats + 2 * i + 1] is not None:
                     s[key] = (r[r_stats + 2 * i], r[r_stats + 2 * i + 1])
             if "goals" in s:
-                out.append({"team": t["nm"], "d": _day(r[r_day]), "home": 1 if r[r_home] else 0, "s": s})
+                opp = srows.opponent(r, r_stats)                    # identifiant de l'adversaire (de la MÊME source) quand la ligne le porte, sinon None
+                out.append({"team": t["nm"], "d": _day(r[r_day]), "home": 1 if r[r_home] else 0, "s": s, "tid": tid, "opp": opp})
     return out
 
 
-def collect(sport_key, on, loaders=None):
+def collect(sport_key, on, loaders=None, docs=None):
     """(observations, source) de la ligue : UNE source par ligue, dans l'ordre football-data > FotMob > 365scores > API-Football, la première qui donne au moins
-    C.SEASON_MIN_TEAMS équipes ayant C.SEASON_MIN_MATCHES matchs cette saison. ([], None) sinon. `loaders` : {source: fonction() -> observations} (tests)."""
+    C.SEASON_MIN_TEAMS équipes ayant C.SEASON_MIN_MATCHES matchs cette saison. ([], None) sinon. `loaders` : {source: fonction() -> observations} (tests). `docs` : documents des sources
+    déjà chargés ({"fotmob": équipes, "365scores": équipes, "api-football": document}) pour compter beaucoup de ligues sans relire trois gros documents à chaque ligue."""
     from . import apistats
     from .sources import fmmatch, s365, footballdata as fd
 
@@ -247,15 +319,15 @@ def collect(sport_key, on, loaders=None):
         return _from_matches(strength.load_matches(div))
 
     def fotmob():
-        return _from_team_rows(fmmatch.load()["teams"], sport_key, fmmatch.KEYS, fmmatch.R_STATS)
+        return _from_team_rows(docs["fotmob"] if docs else fmmatch.load()["teams"], sport_key, fmmatch.KEYS, fmmatch.R_STATS)
 
     def three():
-        return _from_team_rows(s365.load()["teams"], sport_key, s365.KEYS, s365.R_STATS)
+        return _from_team_rows(docs["365scores"] if docs else s365.load()["teams"], sport_key, s365.KEYS, s365.R_STATS)
 
     start = season_start(sport_key, on).isoformat()
 
     def api():
-        d = apistats.load()
+        d = docs["api-football"] if docs else apistats.load()
         teams_doc = {}
         for tid, t in d["teams"].items():
             if not isinstance(t, dict) or sport_key not in (t.get("sk") or []):
@@ -278,6 +350,38 @@ def collect(sport_key, on, loaders=None):
         if sum(1 for n in per.values() if n >= C.SEASON_MIN_MATCHES) >= C.SEASON_MIN_TEAMS:
             return obs, name
     return [], None
+
+
+def coverage(obs, on, sport_key=None):
+    """(équipes suivies, équipes AVEC adversaire) d'une liste d'observations : une équipe est suivie si elle a au moins C.SEASON_MIN_MATCHES matchs de buts cette saison, « avec adversaire »
+    si au moins C.SEASON_MIN_MATCHES de ces matchs portent l'identifiant de l'adversaire (l'ajustement à l'adversaire n'est possible que pour elles)."""
+    start, end = season_start(sport_key, on).isoformat(), on.isoformat()
+    n, k = {}, {}
+    for o in obs:
+        if start <= str(o.get("d") or "") < end and (o.get("s") or {}).get("goals"):
+            n[o["team"]] = n.get(o["team"], 0) + 1
+            if o.get("opp") is not None:
+                k[o["team"]] = k.get(o["team"], 0) + 1
+    tracked = [t for t, c in n.items() if c >= C.SEASON_MIN_MATCHES]
+    return len(tracked), sum(1 for t in tracked if k.get(t, 0) >= C.SEASON_MIN_MATCHES)
+
+
+def snapshot(on, leagues, loaders=None):
+    """{clé de ligue: {"source", "teams", "opp"}} des ligues COUVERTES (au moins C.SEASON_MIN_TEAMS équipes suivies) parmi `leagues` : ce que la voie `saison` suit exactement, et
+    pour combien d'équipes l'identifiant de l'adversaire est déjà enregistré. Lecture seule des données stockées (jamais une requête)."""
+    from . import apistats
+    from .sources import fmmatch, s365
+    docs = None if loaders else {"fotmob": fmmatch.load()["teams"], "365scores": s365.load()["teams"], "api-football": apistats.load()}      # chargés UNE fois pour toutes les ligues
+    out = {}
+    for sk in leagues:
+        try:
+            obs, src = collect(sk, on, loaders, docs)
+            if src:
+                teams, opp = coverage(obs, on, sk)
+                out[sk] = {"source": src, "teams": teams, "opp": opp}
+        except Exception:                      # noqa: BLE001 - une ligue illisible n'arrête pas le compte
+            continue
+    return out
 
 
 _memo = {}

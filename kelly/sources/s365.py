@@ -49,6 +49,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 from .. import cache as kcache, config as C, store
 from . import fmmatch, footballdata, http, names, state
+from . import rows as srows
 
 NAME = "s365"
 LABEL = "365scores"
@@ -401,11 +402,12 @@ def record(d, m, key):
     d["recent"][m["id"]] = {"d": m["d"], "sk": key, "h": m["hn"], "a": m["an"], "s": m["s"]}
     if key in CUPS:                                         # coupe / sélection : règlement seulement, jamais les profils d'équipes
         return True
-    for tid, name, long_, home in ((m["hid"], m["hn"], m.get("hl"), 1), (m["aid"], m["an"], m.get("al"), 0)):
+    for tid, name, long_, home, opp in ((m["hid"], m["hn"], m.get("hl"), 1, m["aid"]), (m["aid"], m["an"], m.get("al"), 0, m["hid"])):
         row = [day, home]
         for k in KEYS:
             pair = m["s"].get(k)
             row += (pair if home else pair[::-1]) if pair else [None, None]
+        row = srows.with_opponent(row, opp, R_STATS)         # l'identifiant 365scores de l'adversaire, dernier élément (kelly/sources/rows.py)
         t = d["teams"].setdefault(tid, {"m": []})
         t.update(nm=name, d=str(_today()), sk=list(dict.fromkeys([x for x in t.get("sk", []) if x != key] + [key]))[-4:])
         if long_ and long_ != name:
@@ -473,7 +475,7 @@ def _apply(d, op, today):
 
 def _views(rows):
     from . import footballdata as fd
-    cell = lambda r, j: r[j] if j < len(r) else None          # noqa: E731 - ligne plus courte : colonne manquante = None
+    cell = lambda r, j: srows.cell(r, j, R_STATS)              # noqa: E731 - ligne plus courte : colonne manquante = None ; jamais l'adversaire (dernier élément)
     recs = [{k: (cell(r, R_STATS + 2 * i), cell(r, R_STATS + 2 * i + 1)) for i, k in enumerate(KEYS)} for r in rows]
     n = C.APISTATS_LAST
 

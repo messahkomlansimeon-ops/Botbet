@@ -10,7 +10,7 @@ from collections import defaultdict
 from . import config as C, ensemble, store
 
 LEAD_OK_MIN = 90
-LANES = ("sharpgap", "stats", "fill", "live", "saison")
+LANES = ("sharpgap", "stats", "fill", "live", "saison", "saison_cup")        # saison_cup : les jambes `saison` de COUPE (cup = true), séparées au bilan
 OBJ_MIN_N = 300                                # objectif 1 : lignes réglées minimales avant de conclure
 CUT_MIN_N = 300                                # coupure de la voie stats entière
 CUT_MIN_N_LEAGUE = 200                         # coupure et retour d'une ligue
@@ -134,8 +134,9 @@ def leg_results(rows, days=None, today=None):
     cut = _since(days, today)
     out = {}
 
-    def put(key, lane, res, day):
+    def put(key, lane, res, day, cup=False):
         if key and res in ("win", "loss") and (day or "") >= cut and key not in out:
+            lane = "saison_cup" if lane == "saison" and cup else lane
             out[key] = (lane if lane in LANES else "legacy", res)
 
     for r in rows:
@@ -145,7 +146,7 @@ def leg_results(rows, days=None, today=None):
     for combos in docs:
         for c in combos if isinstance(combos, list) else []:
             for leg in c.get("legs") or []:
-                put(leg.get("key"), leg.get("strategy"), leg.get("result"), c.get("date"))
+                put(leg.get("key"), leg.get("strategy"), leg.get("result"), c.get("date"), bool(leg.get("cup")))
     return out
 
 
@@ -179,12 +180,12 @@ def season_rows_all(days=None, today=None):
     return [r for r in seasonlane.journal_rows() if isinstance(r, dict) and (r.get("date") or "") >= cut]
 
 
-def season_detail(days=None, today=None, plain=False):
+def season_detail(days=None, today=None, plain=False, cup=False):
     """Suite de la ligne « saison » du bilan par voie : réalisé contre annoncé (proba retenue) et CLV 1xBet avec son intervalle à 95 % (marges PAR MATCH) des jambes du journal de la voie,
     séparés valeur / remplissage, puis l'argent des combinés notés par palier de cote (« cote 10 : +1 200 FCFA sur 3 »). '' sans rien de réglé ni de noté. Ne lève jamais."""
     try:
         from . import combos as CB, fair, money
-        rows = [r for r in season_rows(days, today) if settled(r)]
+        rows = [r for r in season_rows(days, today) if settled(r) and bool(r.get("cup")) == cup]        # championnats et coupes (cup = true) ne se mélangent jamais
         parts = []
         for label, sel in (("valeur", [r for r in rows if r.get("sval") == 1]), ("remplissage", [r for r in rows if r.get("sval") == 0])):
             if not sel:
@@ -198,10 +199,12 @@ def season_detail(days=None, today=None, plain=False):
             parts.append(txt)
         why = {}
         for r in season_rows_all(days, today):
-            if r.get("swhy"):
+            if r.get("swhy") and bool(r.get("cup")) == cup:
                 why[r["swhy"]] = why.get(r["swhy"], 0) + 1
         if why:
             parts.append("lignes écartées : " + ", ".join(f"{k} {v}" for k, v in sorted(why.items())))
+        if cup:
+            return (" · " + " · ".join(parts)) if parts else ""             # l'argent des combinés n'est pas séparable par jambe : il reste sur la ligne « saison »
         bets = store.load_doc("bets.json", {"combos": []})
         trk = store.load_doc("tracked.json", [])
         tiers, custom = {}, (0.0, 0)
@@ -236,23 +239,23 @@ def lane_lines(rows, days=None, today=None, plain=False):
     log = [r for r in journal_rows() if (r.get("date") or "") >= cut]
     for lane in LANES + ("legacy",):
         mine = [res for ln, res in legs.values() if ln == lane]
-        if not mine and lane == "saison":
-            det = season_detail(days, today, plain)
+        if not mine and lane in ("saison", "saison_cup"):
+            det = season_detail(days, today, plain, cup=lane == "saison_cup")
             if det:
-                out.append("saison : aucun combiné réglé" + det)
+                out.append(("saison (coupes)" if lane == "saison_cup" else "saison") + " : aucun combiné réglé" + det)
             continue
         if not mine:
             continue
         w = sum(1 for res in mine if res == "win")
-        txt = f"{'avant les étiquettes' if lane == 'legacy' else lane} : {w} gagnée{'s' if w > 1 else ''} sur {len(mine)} ({round(w / len(mine) * 100)} %)"
+        txt = f"{ {'legacy': 'avant les étiquettes', 'saison_cup': 'saison (coupes)'}.get(lane, lane) } : {w} gagnée{'s' if w > 1 else ''} sur {len(mine)} ({round(w / len(mine) * 100)} %)"
         if lane in ("sharpgap", "stats"):
             n, m, h, gone = clv([r for r in log if r.get("strategy") == lane and settled(r)])
             if n:
                 txt += f" · {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" (sur {n} lignes du journal)"
         if lane == "live":
             txt += " · hors voies (dimensionnement d'avant) ; " + live_calib_text(days, today)
-        if lane == "saison":
-            txt += season_detail(days, today, plain)
+        if lane in ("saison", "saison_cup"):
+            txt += season_detail(days, today, plain, cup=lane == "saison_cup")
         out.append(txt)
     try:
         cm = combo_money(days, today)
@@ -491,15 +494,17 @@ def leg_clv_lines(days=None, today=None):
         name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
         out.append(f"{name} : {n} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" · {round(pos / n * 100)} % battent le dernier prix"
                    + ("" if n >= 30 else " (trop peu pour conclure)"))
-    if sea:                                     # la voie `saison` à part : sa couverture et son CLV ne se mélangent à ceux d'aucune autre voie
-        meas = [(l, v) for l, _, v in sea if v is not None]
+    for label, grp in (("saison (à part : voie propre)", [x for x in sea if not x[0].get("cup")]), ("saison, coupes (à part)", [x for x in sea if x[0].get("cup")])):
+        if not grp:                             # la voie `saison` à part (championnats puis coupes) : couverture et CLV ne se mélangent à ceux d'aucune autre voie
+            continue
+        meas = [(l, v) for l, _, v in grp if v is not None]
         if meas:
             n, m, h = stats([v for _, v in meas], [l.get("id") for l, _ in meas])
             pos = sum(1 for _, v in meas if v > 0)
-            out.append(f"saison (à part : voie propre) : {len(meas)} mesurées sur {len(sea)} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "")
+            out.append(f"{label} : {len(meas)} mesurées sur {len(grp)} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "")
                        + f" · {round(pos / n * 100)} % battent le dernier prix" + ("" if n >= 30 else " (trop peu pour conclure)"))
         else:
-            out.append(f"saison (à part : voie propre) : {len(sea)} jambes, aucune mesurée")
+            out.append(f"{label} : {len(grp)} jambes, aucune mesurée")
     if live:                                    # toujours dite, mesurée ou non : le live est visible à part, hors voies
         meas = [v for _, _, v in live if v is not None]
         out.append(f"live (à part : hors voies) : {len(live)} jambes, " + (f"{len(meas)} mesurées" if meas else live_calib_text(days, today)))

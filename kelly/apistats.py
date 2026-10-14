@@ -39,6 +39,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from . import apileagues, catalogue, config as C, stats, store
+from .sources import rows as srows
 
 FILE = "apistats_profiles.json"
 KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "xg", "yellow")  # ordre des paires dans une ligne de match ; nouvelles clés : toujours à la fin
@@ -78,7 +79,7 @@ def _num(x, nd=1):
 
 def _cell(r, j):
     """Colonne `j` d'une ligne ; None si la ligne est plus courte (ligne écrite avant l'ajout de la clé : donnée inconnue, jamais 0)."""
-    return r[j] if j < len(r) else None
+    return srows.cell(r, j, R_STATS)       # jamais l'adversaire (dernier élément, kelly/sources/rows.py)
 
 
 def load():
@@ -165,9 +166,12 @@ def record(d, e, st):
         if all(p == (None, None) for k, p in zip(KEYS[1:], pairs[1:]) if k not in FLOAT_KEYS and k != "yellow"):
             continue                                  # match sans aucune statistique utilisable (le xG ou les jaunes seuls ne suffisent pas)
         row = [day, lgi, home] + [_num(x, 2 if k in FLOAT_KEYS else 1) for k, p in zip(KEYS, pairs) for x in p]
-        first_opt = R_STATS + 2 * min(KEYS.index(k) for k in OPTIONAL)
-        while len(row) > first_opt and row[-2:] == [None, None]:      # xG / jaunes inconnus en fin de ligne : colonnes omises, même lecture qu'une ligne ancienne
-            del row[-2:]
+        if opp is not None:                           # l'identifiant API-Football de l'adversaire, dernier élément : TOUTES les paires restent écrites (kelly/sources/rows.py : la parité dit s'il est là)
+            row = srows.with_opponent(row, int(opp), R_STATS)
+        else:
+            first_opt = R_STATS + 2 * min(KEYS.index(k) for k in OPTIONAL)
+            while len(row) > first_opt and row[-2:] == [None, None]:      # xG / jaunes inconnus en fin de ligne : colonnes omises, même lecture qu'une ligne ancienne
+                del row[-2:]
         t = d["teams"].setdefault(str(tid), {"m": []})
         lk = e.get("lk")
         t.update(nm=name, lg=label, d=_today(), sk=list(dict.fromkeys([k for k in t.get("sk", []) if k != lk] + ([lk] if lk else [])))[-4:])

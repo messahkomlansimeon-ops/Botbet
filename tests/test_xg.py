@@ -95,7 +95,7 @@ def test_record_and_settle_unchanged():
     assert fmmatch.record(d, m, SK)
     row = d["teams"][m["hid"]]["m"][0]
     ix = fmmatch.R_STATS + 2 * fmmatch.KEYS.index("xg")                              # xG, npxG puis les jaunes (ajoutés à la fin de KEYS)
-    assert len(row) == 2 + 2 * len(fmmatch.KEYS) and row[ix:ix + 4] == [1.62, 1.6, 1.62, 1.6]
+    assert len(row) == 2 + 2 * len(fmmatch.KEYS) + 1 and row[-1] == m["aid"] and row[ix:ix + 4] == [1.62, 1.6, 1.62, 1.6]      # l'adversaire en dernier
     assert d["teams"][m["aid"]]["m"][0][ix:ix + 4] == [1.6, 1.62, 1.6, 1.62]       # vue de l'équipe extérieure : inversée
     assert "xg" in d["recent"]["7"]["s"]
 

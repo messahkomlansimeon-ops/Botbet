@@ -9,7 +9,7 @@ Isolement : cette voie ne touche ni aux voies sharpgap / stats, ni au gel de l'e
   - son propre journal (data/season_log.json, archive arch/sea/), mêmes champs que le journal d'ensemble (pm, px, ps, xref, xclose, strategy) ;
   - ses propres champs : `sval` = 1 (jambe à valeur : proba retenue x cote >= 1 + SEASON_MARGIN) ou 0 (jambe de remplissage : proba retenue >= SEASON_FILL_MIN_P et espérance au prix du
     marché >= SEASON_FILL_MIN_EV) ; `ref` = 1 sur la ligne de RÉFÉRENCE du marché (la plus proche de FAIR_P_TARGET, choisie sans regarder le prix).
-Apprentissage (poids, calibration) : les seules lignes de référence. Les lignes choisies parce qu'elles valent quelque chose au prix 1xBet sont triées sur leur écart au marché : les
+Apprentissage (poids, calibration) : les seules lignes de référence, hors coupes (cup = true : mesurées au bilan, pas encore apprises). Les lignes choisies parce qu'elles valent quelque chose au prix 1xBet sont triées sur leur écart au marché : les
 apprendre fabriquerait le biais du gagnant (les tirs « moins de », 13/10). Elles servent à la mesure (bilan, CLV), jamais à l'apprentissage.
 Une jambe par match dans un combiné (combos), comme les autres voies ; ici une ligne par marché."""
 import sys
@@ -23,6 +23,7 @@ LOG = "season_log.json"
 ARCH = "arch/sea/"
 WEIGHTS_FILE = "season_weights.json"
 CALIB_FILE = "season_calib.json"
+STATE_FILE = "season_state.json"
 SUFFIX = "|saison"
 MARKETS = frozenset(("totals", "btts", "double_chance", "h2h", "team_totals_home", "team_totals_away", prematch.CORNERS, prematch.CARDS)
                     + tuple(m for m in fair.STAT_SPECS if not m.startswith(("team_throws", "team_offsides"))))
@@ -88,7 +89,7 @@ def learn(log):
     data, cal = load_weights(), load_calib()
 
     def learnable(r):
-        return (r.get("ref") and r.get("result") in ("win", "loss") and r.get("key") and r["key"] not in data["done"] and not r.get("ens")
+        return (r.get("ref") and not r.get("cup") and r.get("result") in ("win", "loss") and r.get("key") and r["key"] not in data["done"] and not r.get("ens")
                 and r.get("pm") is not None and (r.get("px") is not None or r.get("ps") is not None))
     todo = sorted((r for r in log if learnable(r)), key=lambda r: (str(r.get("date") or ""), str(r.get("key") or "")))
     if not todo:
@@ -141,21 +142,37 @@ def _key(ev_id, market, name, point):
     return f'{ev_id}|{market}||{point if point is not None else ""}|{name}{SUFFIX}'
 
 
+def cup_models(today):
+    """{clé de ligue: modèle `saison`} de TOUS les championnats suivis (même hors SEASON_LEAGUES : une coupe a besoin du championnat de chaque équipe)."""
+    out = {}
+    for sk in known_leagues(False):
+        m = season.get(sk, today, fallback=fallback_for(sk))
+        if m:
+            out[sk] = m
+    return out
+
+
 def make(scan, now, today=None):
     """Pronostics `saison` du jour (sans prix) : un par match et par marché, avec toutes ses lignes plausibles en c["alts"] ([nom, ligne, proba brute, référence]), la ligne par défaut étant
     celle dont la proba est la plus proche de FAIR_P_TARGET (c'est la ligne de RÉFÉRENCE, choisie sans regarder le prix). Seulement les ligues couvertes par le modèle de saison."""
     out = []
     today = today or now.date()
+    models = None
     for key, evs in (scan.get("leagues") or {}).items():
         if not league_ok(key):
             continue
-        model = season.get(key, today, fallback=fallback_for(key))
+        cup = key in C.SEASON_CUPS
+        if cup:                                      # coupe : l'attente vient du profil de championnat de chaque équipe (season.cup_predict), jambes marquées cup = true
+            models = cup_models(today) if models is None else models
+            model = {"source": "coupe : profils de championnat"} if models else None
+        else:
+            model = season.get(key, today, fallback=fallback_for(key))
         if not model:
             continue
         for ev in sorted(evs, key=lambda e: e["commence_time"]):
             if _ko(ev) <= now:
                 continue
-            pred = season.predict(model, ev["home_team"], ev["away_team"])
+            pred = season.cup_predict(models, ev["home_team"], ev["away_team"]) if cup else season.predict(model, ev["home_team"], ev["away_team"])
             if not pred:
                 continue
             by = {}
@@ -172,7 +189,7 @@ def make(scan, now, today=None):
                             "event": f'{ev["home_team"]} - {ev["away_team"]}', "home": ev["home_team"], "away": ev["away_team"], "commence": ev["commence_time"],
                             "start": ev["commence_time"][11:16], "market": mk, "name": n0, "point": pt0, "who": who, "group": "soccer",
                             "pick": odds.label(mk, n0, pt0, who, "soccer"), "p0": p0, "base": b0, "alts": alts, "conf": round(pred["qs"].get(_stat_of(mk), pred["q"]), 2), "score": p0 - 0.5, "src": "saison", "why": f"saison en cours ({model.get('source')})",
-                            "mu": None, "n_min": min(pred["n"]), "lane": "saison"} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {}))
+                            "mu": None, "n_min": min(pred["n"]), "lane": "saison"} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {}) | ({"cup": True} if cup else {}))
     return out
 
 
@@ -306,6 +323,40 @@ def price(c, px, refs, now, wdata=None, cdata=None):
     return chosen, ref, extra
 
 
+def known_leagues(_filtered=True):
+    """Clés de toutes les ligues dont une source stockée (football-data, FotMob, 365scores, API-Football) a des équipes."""
+    from . import apistats
+    from .sources import footballdata as fd, fmmatch, s365
+    out = {fd.DIV_TO_SPORT[d] for d in fd.SPORT_TO_DIV.values() if d not in fd.NEW_DIVS and d in fd.DIV_TO_SPORT}
+    for doc in (fmmatch.load()["teams"], s365.load()["teams"], apistats.load()["teams"]):
+        for t in doc.values():
+            if isinstance(t, dict):
+                out.update(k for k in t.get("sk") or [] if isinstance(k, str))
+    return sorted(k for k in out if k not in C.SEASON_CUPS and (not _filtered or league_ok(k)))
+
+
+def refresh_state(now, loaders=None):
+    """Écrit data/season_state.json : ce que la voie suit exactement aujourd'hui ({"day", "leagues": {clé: {source, teams, opp}}}), lu par `status` (ligues suivies, équipes, équipes avec
+    adversaire). Lecture seule des données stockées ; ne lève jamais. -> le document."""
+    try:
+        doc = {"day": str(now.date()), "leagues": season.snapshot(now.date(), known_leagues(), loaders)}
+        store.save(STATE_FILE, doc, compact=True)
+        return doc
+    except Exception as e:                          # noqa: BLE001
+        print(f"[saison] état des ligues suivies ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return {}
+
+
+def state_text():
+    """« ligues suivies : 12 · équipes : 230 · avec adversaire : 40 » (data/season_state.json) ; « … pas encore mesuré » sans document."""
+    d = store.load(STATE_FILE, {})
+    lg = (d.get("leagues") if isinstance(d, dict) else None) or {}
+    if not isinstance(lg, dict) or not d:
+        return "ligues suivies : pas encore mesuré"
+    return (f"ligues suivies : {len(lg)} · équipes : {sum(v.get('teams', 0) for v in lg.values())} · avec adversaire : {sum(v.get('opp', 0) for v in lg.values())}"
+            f" (au {d.get('day')})")
+
+
 def reprice(c, px, refs):
     """La jambe `c` (déjà choisie le matin) remise aux cotes `px` du moment (copie), ou None si 1xBet ne propose plus CETTE ligne. La proba du modèle (p_model), son poids (ew) et l'avis sharp
     du matin (p_sharp) restent ceux du matin ; seul l'avis de 1xBet (p_x) et le prix changent. `sval` est recalculé : 1 (valeur), 0 (remplissage) ou None (la jambe ne vaut plus ni l'un ni l'autre)."""
@@ -362,6 +413,8 @@ def run(scan, picks, day, now, fetch=None, history=None):
     quand la voie est éteinte ou sans jambe. `fetch` : injectable (tests). Le relevé 1xBet de la voie ne remplace pas le compte rendu du relevé principal (record=False) et tient en
     C.SEASON_SECONDS. Ne lève jamais."""
     m = mode()
+    if m != "off":
+        refresh_state(now)                           # ce que la voie suit (status) : mesuré à chaque passage du matin, même sans relevé 1xBet
     if m == "off" or not C.XBET_ENABLED or (fetch is None and not C.SOURCES_REFRESH):
         return [], m
     try:

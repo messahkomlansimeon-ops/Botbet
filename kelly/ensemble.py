@@ -745,7 +745,7 @@ def record(rows, day, now=None, name=LOG_FILE, shadow=True):
         for k in ("sval", "ref"):
             if c.get(k) is not None:
                 row[k] = c[k]                              # voie `saison` : jambe à valeur (1) ou de remplissage (0) ; ligne de référence indépendante du prix (1)
-        for k in ("swhy", "refused"):
+        for k in ("swhy", "refused", "cup"):
             if c.get(k):
                 row[k] = c[k]                              # voie `saison` : raison du refus (veto / suspect) et ligne refusée, journalisées pour être comptées
         if c.get("strategy") == "saison" and c.get("p_ens") is not None:
@@ -830,7 +830,7 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
 
 
 ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
-ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref", "pe", "swhy", "refused")
+ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref", "pe", "swhy", "refused", "cup")
 # xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
 # règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
 
@@ -841,7 +841,7 @@ def _pack(r):
     return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
             [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp")))] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
             r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
-            r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref"), r.get("pe"), r.get("swhy"), r.get("refused")]
+            r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref"), r.get("pe"), r.get("swhy"), r.get("refused"), r.get("cup")]
 
 
 def unpack_archive_row(key, day, vals):
@@ -863,7 +863,7 @@ def unpack_archive_row(key, day, vals):
         out["strategy"] = d["strategy"]
     if d["sport_key"]:                                  # la ligue : la coupure automatique de la voie stats se juge par ligue
         out["sport_key"] = d["sport_key"]
-    for k in ("sval", "ref", "pe", "swhy", "refused"):  # voie `saison` : jambe à valeur / de remplissage, ligne de référence, proba retenue
+    for k in ("sval", "ref", "pe", "swhy", "refused", "cup"):  # voie `saison` : jambe à valeur / de remplissage, ligne de référence, proba retenue
         if d.get(k) is not None:
             out[k] = d[k]
     return out

@@ -321,8 +321,8 @@ def test_record_rows_and_dedup():
     m = game(1, "2026-10-01", 1, 2, stats_of(fo=None))
     assert s365.record(d, m, UR) and not s365.record(d, m, UR) and not s365.record(d, {}, UR) and not s365.record(d, None, UR)
     home, away = d["teams"]["1"], d["teams"]["2"]
-    assert home["m"] == [[261001, 1, 1, 1, 14, 10, 5, 3, 6, 4, None, None, 2, 3, 22, 25, 2, 1, None, None]]       # domicile : (pour, contre) ; jaunes inconnus en fin de ligne
-    assert away["m"] == [[261001, 0, 1, 1, 10, 14, 3, 5, 4, 6, None, None, 3, 2, 25, 22, 1, 2, None, None]]       # extérieur : renversé ; fautes absentes
+    assert home["m"] == [[261001, 1, 1, 1, 14, 10, 5, 3, 6, 4, None, None, 2, 3, 22, 25, 2, 1, None, None, "2"]]       # domicile : (pour, contre) ; jaunes inconnus ; l'adversaire (id 365scores) en dernier
+    assert away["m"] == [[261001, 0, 1, 1, 10, 14, 3, 5, 4, 6, None, None, 3, 2, 25, 22, 1, 2, None, None, "1"]]       # extérieur : renversé ; fautes absentes ; l'adversaire en dernier
     assert d["seen"]["1"] == 261001 and home["sk"] == [UR] and home["nm"] == "Team 1"
     # plus de S365_KEEP_MATCHES matchs : les plus anciens sont oubliés ; un nom long est gardé
     C.S365_KEEP_MATCHES = 3

@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 from .. import config as C, store
 from . import fotmob, http, names, state
+from . import rows as srows
 
 FILE = "fm_matches.json"
 KEYS = ("goals", "shots", "sot", "corners", "fouls", "cards", "throws", "offsides", "xg", "npxg", "yellow")      # nouvelles clés : toujours à la fin (yellow : jaunes seuls)
@@ -211,11 +212,12 @@ def record(d, m, sport_key):
     day = _d2i(m["d"] or str(_today()))
     d["seen"][m["id"]] = day
     d["recent"][m["id"]] = {"d": m["d"], "sk": sport_key, "h": m["home"], "a": m["away"], "s": m["s"]}
-    for tid, name, home in ((m["hid"], m["home"], 1), (m["aid"], m["away"], 0)):
+    for tid, name, home, opp in ((m["hid"], m["home"], 1, m["aid"]), (m["aid"], m["away"], 0, m["hid"])):
         row = [day, home]
         for k in KEYS:
             pair = m["s"].get(k)
             row += (pair if home else pair[::-1]) if pair else [None, None]
+        row = srows.with_opponent(row, opp, R_STATS)         # l'identifiant FotMob de l'adversaire, dernier élément (kelly/sources/rows.py)
         t = d["teams"].setdefault(tid, {"m": []})
         t.update(nm=name, d=str(_today()), sk=list(dict.fromkeys([x for x in t.get("sk", []) if x != sport_key] + [sport_key]))[-4:])
         t["m"] = sorted(t["m"] + [row], key=lambda r: r[R_DAY])[-C.FM_KEEP_MATCHES:]
@@ -226,7 +228,7 @@ def record(d, m, sport_key):
 
 def _views(rows):
     from . import footballdata as fd
-    cell = lambda r, j: r[j] if j < len(r) else None          # noqa: E731 - ligne ancienne plus courte : colonne manquante = None
+    cell = lambda r, j: srows.cell(r, j, R_STATS)              # noqa: E731 - ligne ancienne plus courte : colonne manquante = None ; jamais l'adversaire (dernier élément)
     recs = [{k: (cell(r, R_STATS + 2 * i), cell(r, R_STATS + 2 * i + 1)) for i, k in enumerate(KEYS)} for r in rows]
     n = C.APISTATS_LAST
 
