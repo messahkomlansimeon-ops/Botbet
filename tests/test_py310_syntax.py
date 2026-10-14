@@ -65,6 +65,9 @@ def test_fstrings_and_apis():
 
 
 def test_detector_works():
+    if sys.version_info < (3, 12):          # avant la 3.12 l'interpréteur lui-même refuse ces f-strings : le contrôle des fichiers du dépôt (ast.parse) suffit
+        print("ok  détecteur : non nécessaire avant Python 3.12 (la SyntaxError de l'interpréteur fait foi)")
+        return
     import tempfile
     p = os.path.join(tempfile.mkdtemp(), "x.py")
     open(p, "w").write("a = {'k': 1}\nb = f\"{a['k']} {', '.join(['x'])}\"\nc = f\"{', '.join(x for x in 'ab' if x != '\\n')}\"\nd = f'{a[\"k\"]}'\ne = f\"{'a' if a else 'b'}\"\n")

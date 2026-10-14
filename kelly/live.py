@@ -238,7 +238,7 @@ def probs(m, pred, data=None):
     for (mk, side, point) in m["odds"]:
         if mk == "totals" and O.half_line(point):
             need = point - (h0 + a0)                       # buts encore nécessaires au-dessus de la ligne
-            over = sum(x for k, x in enumerate(tot) if k > need)
+            over = math.fsum(x for k, x in enumerate(tot) if k > need)      # fsum : même résultat dans toutes les versions de Python (sum() est compensée depuis la 3.12)
             out[("totals", "Over", point)], out[("totals", "Under", point)] = over, 1 - over
     return out
 

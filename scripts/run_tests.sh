@@ -9,7 +9,7 @@ LOGS=$(mktemp -d)
 export LOGS
 run1() {
     n=$(basename "$1" .py)
-    if python -m "tests.$n" > "$LOGS/$n.log" 2>&1; then echo PASS > "$LOGS/$n.status"; else echo FAIL > "$LOGS/$n.status"; fi
+    if ${PYTHON:-python} -m "tests.$n" > "$LOGS/$n.log" 2>&1; then echo PASS > "$LOGS/$n.status"; else echo FAIL > "$LOGS/$n.status"; fi
 }
 export -f run1
 ls tests/test_*.py | xargs -P "$JOBS" -I{} bash -c 'run1 {}'
