@@ -102,8 +102,6 @@ def test_no_leak():
 
 def test_report_and_ledger():
     loader = lambda divs: {"E0": MS}                                                # noqa: E731
-    out = tempfile.mkdtemp(prefix="kelly-replay-ledger-")
-    ledger = os.path.join(out, "reserve.json")
     import io
     import contextlib
     buf = io.StringIO()
@@ -112,14 +110,12 @@ def test_report_and_ledger():
     txt = buf.getvalue()
     for s in ("REJEU FOOTBALL-DATA", "1N2 (log-loss", "Plus/moins 2,5", "Verdict 1N2", "Verdict plus/moins 2,5", "Paris simulés", "Limites", "RIEN des marchés mous"):
         assert s in txt, s
-    assert "SAISON RÉSERVÉE" not in txt and os.listdir(out) == [], "le développement ne lit pas la saison réservée et n'écrit aucun fichier"
-    assert R.main(["--final", "--divs", "E0"], loader=loader) == 2, "--final sans --ledger : refus"
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        assert R.main(["--final", "--ledger", ledger, "--divs", "E0"], loader=loader) == 0
-    assert "LECTURE UNIQUE" in buf.getvalue() and os.path.exists(ledger)
-    assert R.main(["--final", "--ledger", ledger, "--divs", "E0"], loader=loader) == 2, "une saison réservée ne se relit pas"
-    print("ok  rapport complet ; --final exige --ledger, écrit sa trace une fois et refuse de relire")
+    assert "SAISON RÉSERVÉE" not in txt, "le développement ne lit pas la saison réservée"
+    assert R.main(["--final", "--divs", "E0"], loader=loader) == 2, "la saison réservée ne se lit que par tools/audit_final.py"
+    for bad in (["--warmup-end", "2025-07-01", "--reserved-from", "2027-01-01"], ["--reserved-from", "2027-01-01"], ["--warmup-end", "2025-07-02"]):
+        assert R.main(["--divs", "E0"] + bad, loader=loader) == 2, bad              # aucune fenêtre ne peut recouvrir la période réservée
+    assert R.main(["--divs", "E0", "--warmup-end", "2024-12-01", "--reserved-from", "2025-05-01"], loader=loader) == 0, "une fenêtre de développement plus courte reste permise"
+    print("ok  rapport complet ; --final refusé ici (la saison réservée ne passe que par tools/audit_final.py)")
 
 
 def main():

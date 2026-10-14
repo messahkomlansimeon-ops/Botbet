@@ -99,6 +99,9 @@ def main(argv=None, loader=None):
     ap.add_argument("--warmup-end", default=R.WARMUP_END)
     ap.add_argument("--reserved-from", default=R.RESERVED_FROM)
     args = ap.parse_args(argv)
+    if args.reserved_from > R.RESERVED_FROM or args.warmup_end >= R.RESERVED_FROM:
+        print("Fenêtre refusée : la période réservée (à partir de 2025-07-01) ne se lit que par tools/audit_final.py.", file=sys.stderr)
+        return 2
     R._isolate_env(args.cache_dir)
     divs = [d for d in args.divs.split(",") if d]
     by_matches = (loader or R.load_matches)(divs)

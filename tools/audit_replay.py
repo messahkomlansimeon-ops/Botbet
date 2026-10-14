@@ -1,7 +1,7 @@
 """Étape 0a de l'audit, rejeu historique GRATUIT sur football-data : le modèle bat-il la cote d'ouverture de Pinnacle pour prédire la clôture ?
 
     python tools/audit_replay.py [--cache-dir DOSSIER] [--divs E0,SP1,I1,D1,F1] [--max-seconds 900]
-    python tools/audit_replay.py --final --ledger audit_reserve_ledger.json     # UNE SEULE fois : lit la saison réservée ; la trace reste À LA RACINE du dépôt (à commiter), jamais dans /tmp
+    (la saison réservée ne se lit QUE par tools/audit_final.py : pré-déclaration, une seule lecture, trace commitée)
 
 Lit seulement le cache disque déjà rempli des CSV football-data (aucun réseau, aucune écriture dans data/ ni dans le cache ; DATA_DIR est un dossier
 temporaire). Le marché 1N2 et le plus/moins 2,5 buts sont les SEULS marchés qui ont des cotes historiques : ce rejeu ne dit RIEN des corners, cartons
@@ -10,7 +10,7 @@ ni tirs, et rien de la cote 1xBet (pas d'historique) ni du moment réel de la pr
 Découpage fixé AVANT la première exécution (jamais ajusté après avoir vu un résultat) :
   - ÉCHAUFFEMENT : matchs avant WARMUP_END (2025-01-01) : servent à ajuster le modèle, ne sont JAMAIS notés ;
   - DÉVELOPPEMENT : de WARMUP_END à RESERVED_FROM (2025-07-01) : la fin de la saison 2024-25, où l'on peut regarder, comparer, se tromper ;
-  - RÉSERVÉE : de RESERVED_FROM à la fin : les saisons suivantes. Lue UNE fois, avec --final, qui exige --ledger et refuse de relire si le fichier existe.
+  - RÉSERVÉE : de RESERVED_FROM à la fin : les saisons suivantes. Lue UNE seule fois, par tools/audit_final.py (ce script-ci refuse --final).
 
 Trois verrous contre la fuite d'information :
   1. le modèle de chaque lot est ajusté (strength.walk) sur les matchs STRICTEMENT antérieurs au lot ; la liste donnée au rejeu est coupée à la fin de la
@@ -259,13 +259,12 @@ def main(argv=None, loader=None):
     ap.add_argument("--warmup-end", default=WARMUP_END)
     ap.add_argument("--reserved-from", default=RESERVED_FROM)
     args = ap.parse_args(argv)
+    if args.reserved_from > RESERVED_FROM or args.warmup_end >= RESERVED_FROM:
+        print("Fenêtre refusée : la période réservée (à partir de 2025-07-01) ne se lit que par tools/audit_final.py.", file=sys.stderr)
+        return 2
     if args.final:
-        if not args.ledger:
-            print("--final exige --ledger FICHIER (trace de l'unique lecture de la saison réservée).", file=sys.stderr)
-            return 2
-        if os.path.exists(args.ledger):
-            print(f"La saison réservée a déjà été lue (trace : {args.ledger}). Refus : une saison réservée ne se relit pas.", file=sys.stderr)
-            return 2
+        print("La lecture de la saison réservée passe UNIQUEMENT par tools/audit_final.py (pré-déclaration commitée d'abord, règle appliquée telle quelle).", file=sys.stderr)
+        return 2
     _isolate_env(args.cache_dir)
     divs = [d for d in args.divs.split(",") if d]
     by_matches = (loader or load_matches)(divs)

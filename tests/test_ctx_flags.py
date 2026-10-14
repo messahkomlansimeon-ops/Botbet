@@ -88,6 +88,11 @@ def test_configs():
     for name, _ in X.CONFIGS:
         assert name in txt, name
     assert "configuration retenue par la règle" in txt and "comparaisons faites" in txt and "PAS une décision de production" in txt
+    import io
+    import contextlib
+    with contextlib.redirect_stderr(io.StringIO()):
+        assert X.main(["--divs", "E0", "--reserved-from", "2027-01-01"], loader=lambda divs: loader) == 2, "audit_ctx ne lit pas la période réservée"
+        assert X.main(["--divs", "E0", "--warmup-end", "2025-07-01"], loader=lambda divs: loader) == 2
     print("ok  cinq configurations : mêmes matchs, prédictions différentes, marché inchangé, règle de choix et nombre de comparaisons affichés")
 
 
