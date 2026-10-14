@@ -1,0 +1,34 @@
+{
+ "prereg": {
+  "declared_by": "utilisateur (revue du superviseur à f060a1a)",
+  "declared_on": "2026-10-14",
+  "step": "Étape 1 (contexte d'équipe)",
+  "status": "PRÉ-DÉCLARATION, écrite AVANT toute lecture de l'Étape 1",
+  "start_condition": "pas avant trois jours de données réelles de la section G",
+  "chain_cleaning": {
+   "why": "trois couches empiriques s'empilent sur les mêmes résultats : means.factor (moyennes), calib (famille, championnat, sens, tranche : probabilités), leg_discount (jambes)",
+   "rule": "rejeu walk-forward d'abord avec les trois couches ÉTEINTES (p0 et mu bruts), puis une couche ajoutée à la fois ; critère : log-vraisemblance binomiale négative hors échantillon sur les colonnes football-data (HC/AC, HY/AY, HS/AS, HST/AST, HF/AF) ; on ne garde que la chaîne qui améliore",
+   "flags_to_plan": [
+    "--no-means",
+    "--no-calib",
+    "--no-leg-discount"
+   ],
+   "in": [
+    "strength.walk",
+    "tools/audit_ctx.py"
+   ],
+   "no_context_factor_before": "aucun facteur de contexte (forme, repos, enjeu, confiance) n'est ajouté avant que cette chaîne soit fixée"
+  },
+  "selection_bias": {
+   "mechanism": "fair._stat_options génère ~18 options par stat et par match ; best_per_family garde la meilleure contre 1xBet ; best_combo maximise la probabilité sous contrainte de cote : chaque étage choisit la ligne où Kelly s'écarte le plus de 1xBet",
+   "report": "calibration par sens (plus / moins) rapportée DEUX fois : (a) sur toutes les lignes générées, (b) sur les seules lignes choisies ; (b) - (a) = taille du biais de sélection, par famille",
+   "hypothesis": {
+    "if_a_fair_and_b_overconfident_on_moins": "la correction va au MOMENT DU CHOIX (retrait vers le marché), pas dans les moyennes",
+    "if_a_already_overconfident": "la correction va dans les moyennes"
+   }
+  },
+  "secondary_prior": "sur les buts, le contexte (forme surtout) a plutôt nui (observation de la saison réservée, non testée) : à utiliser comme prior à l'Étape 1, pas comme conclusion",
+  "frozen_by": "cette pré-déclaration ne peut plus être modifiée après sa première lecture ; toute extension est ajoutée dans `extensions`"
+ },
+ "extensions": []
+}
