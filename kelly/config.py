@@ -460,6 +460,11 @@ LIVE_PREP_GAMES = _int("LIVE_PREP_GAMES", 10)       # derniers matchs d'une équ
 LIVE_PREP_HISTORY = _int("LIVE_PREP_HISTORY", 40)   # matchs gardés EN BASE par équipe (historique cumulé à chaque lecture ; équipe purgée après LIVE_PREP_PURGE_DAYS jours sans relecture)
 LIVE_MATCH_MIN = _int("LIVE_MATCH_MIN", 20)         # un match 1xBet et un match 365scores sont le même si leurs coups d'envoi sont à N min près (et les noms plausibles)
 LIVE_PREP_KEEP_DAYS = _int("LIVE_PREP_KEEP_DAYS", 3)   # une équipe préparée n'est pas relue avant N jours (son historique reste en base)
+# Objectif du constructeur de combinés (combos._best_combo) : « prob » = maximiser la probabilité du combiné à cote totale dans la fourchette (comportement d'avant) ;
+# « ev » = maximiser l'espérance Π(p x cote). Défaut « prob » tant que le rejeu pré-déclaré (combos_ledger.json) n'a pas tranché.
+COMBO_OBJECTIVE = _mode("COMBO_OBJECTIVE", "prob", ("prob", "ev"))
+# Part maximale de jambes de remplissage (strategy « fill ») d'un combiné des voies sharpgap et stats (la voie saison n'a pas ce plafond). 1 = pas de plafond.
+COMBO_MAX_FILL_SHARE = min(1.0, max(0.0, _float("COMBO_MAX_FILL_SHARE", 1.0)))
 MAX_LEGS = _int("MAX_LEGS", 25)            # simple borne de sécurité, pas un réglage de jeu
 DP_BIN = 0.005             # pas de discrétisation du log des cotes pour l'optimiseur (kelly/combos.py)
 

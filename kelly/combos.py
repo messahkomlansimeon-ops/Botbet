@@ -220,6 +220,50 @@ def _dp(items, weights, lps, bmax, kdim, saturate):
     return dp, choices
 
 
+def _dp_fill(items, weights, lps, fills, bmax, kdim, fdim):
+    """Comme _dp (sans regroupement des états) avec, dans l'état, le nombre de jambes de remplissage : état = k * fdim + f. dp[s][b] ; choix = j * (kdim * fdim) + état précédent."""
+    S = kdim * fdim
+    dp = [[NEG] * (bmax + 1) for _ in range(S)]
+    dp[0][0] = 0.0
+    top = [0] + [-1] * (S - 1)
+    choices = []
+    for group in items:
+        new = [row[:] for row in dp]
+        ch = [[-1] * (bmax + 1) for _ in range(S)]
+        ntop = top[:]
+        for j in group:
+            w, lp, fj = weights[j], lps[j], fills[j]
+            for s in range(S):
+                if top[s] < 0:
+                    continue
+                k, f = divmod(s, fdim)
+                if k + 1 >= kdim or f + fj >= fdim:
+                    continue
+                ns = (k + 1) * fdim + f + fj
+                src, dst, cdst = dp[s], new[ns], ch[ns]
+                hi = min(top[s], bmax - w)
+                for b in range(hi + 1):
+                    v = src[b]
+                    if v != NEG and v + lp > dst[b + w]:
+                        dst[b + w] = v + lp
+                        cdst[b + w] = j * S + s
+                ntop[ns] = max(ntop[ns], min(top[s] + w, bmax))
+        dp, top = new, ntop
+        choices.append(ch)
+    return dp, choices
+
+
+def is_fill_leg(c):
+    """Jambe de remplissage soumise au plafond C.COMBO_MAX_FILL_SHARE : strategy « fill » hors voie saison (qui envoie du remplissage par choix)."""
+    return c.get("strategy") == "fill" and c.get("lane") != "saison"
+
+
+def fill_ok(legs, share=None):
+    """Au plus floor(part x nombre de jambes) jambes de remplissage."""
+    share = C.COMBO_MAX_FILL_SHARE if share is None else share
+    return sum(1 for c in legs if is_fill_leg(c)) <= math.floor(share * len(legs) + 1e-9)
+
+
 def _rebuild(choices, kdim, k, b, weights):
     out = []
     for ch in reversed(choices):
@@ -303,7 +347,7 @@ def best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs
 
 
 def _best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_legs=None):
-    """Combiné de cote totale dans [min_odds, max_odds] qui maximise la probabilité (combo_prob : produit des probas, prudence par jambe), au plus une
+    """Combiné de cote totale dans [min_odds, max_odds] qui maximise la probabilité (combo_prob : produit des probas, prudence par jambe) ou, avec C.COMBO_OBJECTIVE = « ev », l'espérance (proba x cote), au plus une
     jambe par match, au moins 2 jambes ; `max_legs` (C.MAX_LEGS par défaut, une borne de sécurité ; ou le nombre de paris choisi : « combi 20 max 4 »)
     et `min_legs` (« combi 20 pile 4 » : min = max) bornent le nombre de jambes. -> (jambes triées par heure, cote, proba) ou None. Optimisation exacte à
     la discrétisation près (pas `step` en log-cote), puis vérification de la vraie cote : jamais de combiné hors fourchette."""
@@ -324,11 +368,15 @@ def _best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_leg
     weights = [max(1, round(math.log(c["odds"]) / step)) for c in legs]
     d = leg_discount()
     lps = [math.log(c["prob"]) + math.log(leg_factor(c, d)) - EPS for c in legs]      # prudence par jambe : à cote égale, moins de jambes (le nombre imposé reste respecté)
+    if C.COMBO_OBJECTIVE == "ev":                    # espérance : + log(cote) par jambe, soit log(cote totale) en tout (la fourchette borne ce terme : il pousse vers le haut de la fourchette)
+        lps = [lp + math.log(c["odds"]) for lp, c in zip(lps, legs)]
     by_event = {}
     for j, c in enumerate(legs):
         by_event.setdefault(c["id"], []).append(j)
     items = list(by_event.values())
     lo_b = max(0, int(lo_l / step) - slack)
+
+    capped_out = []
 
     def finish(dp, choices, kdim, ks):
         cands = sorted(((dp[k][b], b, k) for k in ks for b in range(lo_b, bmax + 1) if dp[k][b] != NEG), reverse=True)
@@ -338,16 +386,36 @@ def _best_combo(legs, min_odds, max_odds=None, max_legs=None, step=None, min_leg
                 continue
             odds = math.prod(legs[j]["odds"] for j in idx)
             if min_odds <= odds <= max_odds:
-                return [legs[j] for j in idx], odds, combo_prob([legs[j] for j in idx], d)
+                if fill_ok([legs[j] for j in idx]):
+                    return [legs[j] for j in idx], odds, combo_prob([legs[j] for j in idx], d)
+                capped_out.append(1)             # un candidat refusé pour le plafond de remplissage : l'optimisation exacte sous plafond sera lancée
+        return None
+
+    def with_fill_cap():
+        """Le meilleur combiné est refait avec le nombre de jambes de remplissage dans l'état de la programmation dynamique : le plafond est respecté dans l'optimisation, pas par un tri après coup."""
+        fills = [1 if is_fill_leg(c) else 0 for c in legs]
+        fdim = min(sum(fills), math.floor(C.COMBO_MAX_FILL_SHARE * max_legs + 1e-9)) + 1
+        kdim = max_legs + 1
+        dp, choices = _dp_fill(items, weights, lps, fills, bmax, kdim, fdim)
+        cands = sorted(((dp[s][b], b, s) for s in range(kdim * fdim) for b in range(lo_b, bmax + 1)
+                        if dp[s][b] != NEG and divmod(s, fdim)[0] >= min_legs and divmod(s, fdim)[1] <= math.floor(C.COMBO_MAX_FILL_SHARE * divmod(s, fdim)[0] + 1e-9)), reverse=True)
+        for _, b, s in cands[:200]:
+            idx = _rebuild(choices, kdim * fdim, s, b, weights)
+            chosen = [legs[j] for j in idx]
+            odds = math.prod(c["odds"] for c in chosen)
+            if min_legs <= len(chosen) <= max_legs and min_odds <= odds <= max_odds and fill_ok(chosen):
+                return chosen, odds, combo_prob(chosen, d)
         return None
 
     dp, choices = _dp(items, weights, lps, bmax, 3, True)
-    best = finish(dp, choices, 3, (2,)) if min_legs == 2 else None       # « pile N » : le nombre de jambes est compté dans l'état tout de suite
+    best = finish(dp, choices, 3, (2,)) if min_legs == 2 and C.COMBO_OBJECTIVE != "ev" else None      # « ev » : une jambe de valeur peut AJOUTER de l'espérance, le regroupement « 2 jambes ou plus » n'est plus exact       # « pile N » : le nombre de jambes est compté dans l'état tout de suite
     if best is None:
         # Les meilleurs combinés dépassent peut-être la borne de sécurité `max_legs` : on la compte alors dans l'état.
         kdim = max_legs + 1
         dp, choices = _dp(items, weights, lps, bmax, kdim, False)
         best = finish(dp, choices, kdim, range(min_legs, kdim))
+    if capped_out:                                   # le plafond a écarté un des meilleurs candidats : l'optimum SOUS plafond (jamais un combiné légal mais moins bon)
+        best = with_fill_cap() or best
     if best is None:
         return None
     best[0].sort(key=lambda c: c.get("commence", ""))
