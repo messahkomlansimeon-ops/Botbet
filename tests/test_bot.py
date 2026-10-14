@@ -1874,12 +1874,13 @@ def test_messages_human():
                   why="cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)", best_odds=2.05, book="Betfair")]
     msg = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"})
     assert isinstance(msg, telegram.Html) and msg.startswith(
-        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances · espérance +9,4 %\n\n"
+        "<b>🛡️ SÛR — cote 2,95</b>\n🎯 2 paris · 37 % de chances · espérance +9,4 %\n"
+        "📈 Espérance du combiné : +9,4 % (valeur 2/2, remplissage 0/2)\n\n"
         "🇧🇷 <i>21h00 · Brasileirão</i>\n<b>1. Flamengo – Vasco &amp; Fils</b>\n🏆 Flamengo gagne · <b>1,55</b>\n🟢 <i>retenu 70 %</i>\n"
         "💡 <i>Très probable : 70 % de chances</i>\n\n🌍 <i>22h30 · L</i>\n<b>2. Santos – Gremio</b>\n"), msg
     assert msg.endswith("\n━━━━━━━━━━━━\n<i>💰 Mise : fixe ton capital avec « 💼 Mon capital »</i>"), msg     # sans budget du jour : aucune mise en unités
     with_budget = fmt.combo(C.COMBOS[0][0], legs, 2.95, 0.371, 2.0, {"k1": "safe", "k2": "value"}, stake_txt="1 500 FCFA")
-    assert "espérance +9,4 %\n💰 Mise : <b>1 500 FCFA</b>\n\n🇧🇷" in with_budget and "Mon capital" not in with_budget, with_budget
+    assert "espérance +9,4 %\n📈 Espérance du combiné : +9,4 % (valeur 2/2, remplissage 0/2)\n💰 Mise : <b>1 500 FCFA</b>\n\n🇧🇷" in with_budget and "Mon capital" not in with_budget, with_budget
     assert "Mise conseillée" not in with_budget and "🟠" not in with_budget and "solide" not in with_budget, with_budget     # aucun pari moins sûr : pas de légende
     assert ("⚽ Plus de 2,5 buts · <b>1,90</b> <i>(jusqu'à 2,05 chez Betfair)</i>\n🟢 <i>retenu 53 %</i>\n"
             "💡 <i>Cote plus haute qu'ailleurs (1,90 contre 1,78 en moyenne)</i>") in msg, msg

@@ -107,6 +107,7 @@ def test_display_and_goal():
     legs = [leg, leg | {"key": "k2", "id": "e2", "home": "C", "away": "D"}]
     msg = str(fmt.combo("🛡️ SÛR (cote 5 à 7)", legs, 6.25, 0.25, stake_txt=money.stake_words(1500, 0.25, 6.25)))
     assert ("🎯 2 paris · 25 % selon Kelly · 20 % selon 1xBet\n📊 Espérance : +56,2 % selon Kelly · +26,6 % selon 1xBet\n"
+            "📈 Espérance du combiné : +56,2 % (valeur 2/2, remplissage 0/2)\n"
             "💰 Mise : <b>1 500 FCFA → si ça passe : +7 875 FCFA</b>") in msg, msg
     assert "🎯 Pour" not in msg and "d'un coup" not in msg                         # plus de « ce qu'il faudrait miser pour l'objectif » : jamais de course à l'objectif
     assert app.money_line([]).startswith("💼 Capital 50 000 FCFA · reste aujourd'hui 1 500 / 1 500 FCFA "

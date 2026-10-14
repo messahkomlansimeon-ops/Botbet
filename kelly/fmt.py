@@ -400,7 +400,22 @@ def one_in(p):
     return f"1 chance sur {thousands(n)}"
 
 
-def combo_chances(picks, prob, odds_total, ev=True):
+def is_fill_leg(c):
+    """Jambe de remplissage : strategy « fill », ou jambe `saison` sans valeur (sval absent ou nul)."""
+    return c.get("strategy") == "fill" or (c.get("strategy") == "saison" and not c.get("sval"))
+
+
+def combo_ev_line(picks, prob, odds_total, mini=False):
+    """« 📈 Espérance du combiné : +4 % (valeur 3/5, remplissage 2/5) » : Π(p x cote) − 1, soit la proba retenue du combiné (prudence par jambe comprise) x sa cote − 1 ; toujours dite, même négative.
+    « valeur » : jambes qui ne sont pas du remplissage (strategy « fill ») ; à la cote MINI (jambes sans cote 1xBet) la ligne le dit. '' sans cote ou sans proba."""
+    if not odds_total or prob is None or not picks:
+        return ""
+    fill = sum(1 for c in picks if is_fill_leg(c))
+    mini = " à la cote mini" if mini else ""
+    return f"📈 Espérance du combiné{mini} : {signed((prob * odds_total - 1) * 100, ' %')} (valeur {len(picks) - fill}/{len(picks)}, remplissage {fill}/{len(picks)})"
+
+
+def combo_chances(picks, prob, odds_total, ev=True, mini=False):
     """Lignes des chances d'un combiné (HTML) : « 🎯 3 paris · 29 % selon Kelly · 15 % selon 1xBet » puis « 📊 Espérance : +54 % selon Kelly · −18 % selon
     1xBet » quand toutes ses jambes ont leur chance selon 1xBet sans sa marge (combos.market_prob : l'avis du marché ; audit du 13/10, les résultats réels
     tombaient entre les deux, plus près de 1xBet) ; sinon « 🎯 3 paris · 29 % de chances · espérance +12 % ». `ev` : avec l'espérance. Ticket « loterie »
@@ -423,7 +438,8 @@ def combo_chances(picks, prob, odds_total, ev=True):
         txt += "\n" + i(esc(f"🎰 Ticket loterie : {one_in(p)} {who}." if p else "🎰 Ticket loterie.")
                         + esc(f" En moyenne il rend {pct(-back)} de moins que la mise : {cap} au plus." if back is not None and back < 0
                               else f" Mise petite : {cap} au plus."))
-    return txt
+    line = combo_ev_line(picks, prob, odds_total, mini)
+    return txt + ("\n" + line if line else "")
 
 
 def _header(title, chances, stake, note, coupon):
@@ -587,7 +603,7 @@ def fair_combo(min_total, picks, prob, stake=None, stake_txt=None, title=None, c
         tail = "COTES 1XBET DU DERNIER RELEVÉ" + (f" ({when})" if when else "")
     name = title or ("💎 COMBINÉ" if real else "🎲 COMBINÉ À VÉRIFIER CHEZ 1XBET")
     head, stake_foot = _header(f"{name} — {'cote' if real else 'cote mini'} {odds_txt(min_total)}" + (" · " + tail if old or (title and not real) else ""),
-                               combo_chances(picks, prob, min_total, ev=False), stake_line(stake_txt, "" if real else "(si 1xBet paie la cote mini)"),
+                               combo_chances(picks, prob, min_total, ev=False, mini=not real), stake_line(stake_txt, "" if real else "(si 1xBet paie la cote mini)"),
                                note, coupon)
     foot = i(f"🕒 Cotes du dernier relevé ({esc(when)}) : 1xBet ne répond pas, vérifie-les avant de valider." if old and when else
              "🕒 Cotes du dernier relevé : 1xBet ne répond pas, vérifie-les avant de valider." if old else
