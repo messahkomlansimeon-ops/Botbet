@@ -1,5 +1,7 @@
 # Kelly
 
+[![tests](https://github.com/messahkomlansimeon-ops/Botbet/actions/workflows/tests.yml/badge.svg)](https://github.com/messahkomlansimeon-ops/Botbet/actions/workflows/tests.yml)
+
 Kelly est un bot Telegram personnel de paris sportifs (et oui, elle mise selon le critère de Kelly). Chaque matin elle règle les paris de la veille (un bloc clair par combiné), apprend de la cote de clôture, fait le **tour du monde** des matchs du jour (Europe, Amériques, Asie, Afrique, sélections : même un jour sans grand championnat), puis envoie le pari du jour et des combinés agressifs construits en priorité sur les marchés que les bookmakers pricent mal. Pour les matchs que le budget de cotes ne couvre pas, elle donne ses propres **pronostics avec la « cote juste »** (sans cote de bookmaker) à comparer chez 1xBet.
 
 ## Ce qu'il envoie

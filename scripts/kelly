@@ -47,7 +47,58 @@ notify() {      # message Telegram depuis le script (code de n'importe quelle ve
     ( cd "$DIR" && python -c "import sys; from kelly import envfile; envfile.load(); from kelly import telegram; telegram.send(sys.argv[1])" "$1" ) > /dev/null 2>&1
 }
 
+# intégration continue : « kelly update » n'installe pas un commit dont la CI (GitHub Actions, .github/workflows/tests.yml) n'est pas verte. L'état vient de l'API publique de GitHub
+# (dépôt public, sans jeton) : verte | rouge | en cours | injoignable. KELLY_CI_FIXTURE (un fichier JSON, ou « unreachable ») remplace le réseau pour les tests (tests/test_ci_guard.py).
+ci_repo() {
+    local u
+    u=$(git -C "$DIR" remote get-url origin 2>/dev/null | sed -E 's#^.*github\.com[:/]##; s#\.git$##; s#/$##')
+    echo "${KELLY_CI_REPO:-${u:-messahkomlansimeon-ops/Botbet}}"
+}
+ci_state() {
+    python - "$1" "$(ci_repo)" <<'PY'
+import json, os, sys, urllib.request
+sha, repo = sys.argv[1], sys.argv[2]
+try:
+    fx = os.environ.get("KELLY_CI_FIXTURE")
+    if fx:
+        raw = open(fx).read()
+        if raw.strip() == "unreachable":
+            raise OSError("injoignable")
+        data = json.loads(raw)
+    else:
+        req = urllib.request.Request(f"https://api.github.com/repos/{repo}/commits/{sha}/check-runs?per_page=100",
+                                     headers={"Accept": "application/vnd.github+json", "User-Agent": "kelly-update"})
+        data = json.load(urllib.request.urlopen(req, timeout=15))
+    runs = data["check_runs"]
+except Exception:
+    print("injoignable")
+    sys.exit(0)
+if any(r.get("status") == "completed" and r.get("conclusion") not in ("success", "skipped", "neutral") for r in runs):
+    print("rouge")
+elif not runs or any(r.get("status") != "completed" for r in runs):
+    print("en cours")
+else:
+    print("verte")
+PY
+}
+ci_gate() {      # $1 : commit à installer, $2 : --force ; code 1 = refus
+    local s
+    s=$(ci_state "$1")
+    case "$s" in
+        verte) echo "✅ CI : verte" ;;
+        injoignable) echo "⚠️ CI : injoignable (GitHub ne répond pas) : j'installe quand même, le test de démarrage reste fait." ;;
+        *)
+            echo "CI : $s"
+            if [ "$2" = "--force" ]; then echo "⚠️ --force : j'installe malgré la CI ($s)."; return 0; fi
+            if [ "$s" = "rouge" ]; then echo "❌ Mise à jour refusée : les tests de ce commit échouent sur GitHub. Kelly continue avec la version actuelle (kelly update --force pour passer outre)."
+            else echo "❌ Mise à jour refusée : les tests de ce commit tournent encore sur GitHub (une dizaine de minutes). Réessaie plus tard (kelly update --force pour passer outre)."; fi
+            return 1 ;;
+    esac
+}
+
 case "$1" in
+    ci-state) ci_state "$2" ;;
+    ci-gate) ci_gate "$2" "$3" ;;
     start)
         cd "$DIR" || exit 1
         mkdir -p logs
@@ -90,6 +141,10 @@ case "$1" in
         cd "$DIR" || exit 1
         mkdir -p logs
         old=$(git rev-parse HEAD)
+        if git fetch -q 2>/dev/null; then       # la CI du commit à installer (le dernier de la branche suivie) doit être verte, avant de toucher à quoi que ce soit
+            new=$(git rev-parse '@{u}' 2>/dev/null)
+            if [ -n "$new" ] && [ "$new" != "$old" ]; then ci_gate "$new" "$2" || exit 1; fi
+        fi
         keep_mirror
         echo "🔄 Mise à jour du dépôt..."
         if ! git pull; then

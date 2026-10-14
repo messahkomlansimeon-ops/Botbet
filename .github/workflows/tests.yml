@@ -1,0 +1,26 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"        # la version de Termux sur le téléphone
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q kelly tools bot.py
+      - run: bash -n scripts/kelly
+      - name: Suite complète (8 processus, test_tune compris) + aucune écriture dans .cache/sources
+        run: scripts/run_tests.sh
