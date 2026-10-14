@@ -165,6 +165,55 @@ def combo_money(days=None, today=None):
     return out
 
 
+def season_rows(days=None, today=None):
+    """Lignes du journal de la voie `saison` qui sont des JAMBES (valeur ou remplissage : `sval`), de la période ; les lignes de référence sans verdict n'en font pas partie."""
+    from . import seasonlane
+    cut = _since(days, today)
+    return [r for r in seasonlane.journal_rows() if isinstance(r, dict) and r.get("sval") is not None and (r.get("date") or "") >= cut]
+
+
+def season_detail(days=None, today=None, plain=False):
+    """Suite de la ligne « saison » du bilan par voie : réalisé contre annoncé (proba retenue) et CLV 1xBet avec son intervalle à 95 % (marges PAR MATCH) des jambes du journal de la voie,
+    séparés valeur / remplissage, puis l'argent des combinés notés par palier de cote (« cote 10 : +1 200 FCFA sur 3 »). '' sans rien de réglé ni de noté. Ne lève jamais."""
+    try:
+        from . import combos as CB, fair, money
+        rows = [r for r in season_rows(days, today) if settled(r)]
+        parts = []
+        for label, sel in (("valeur", [r for r in rows if r.get("sval") == 1]), ("remplissage", [r for r in rows if r.get("sval") == 0])):
+            if not sel:
+                continue
+            w = sum(1 for r in sel if r["result"] == "win")
+            ann = [r["pe"] for r in sel if r.get("pe") is not None]              # la proba RETENUE annoncée ; une ligne sans `pe` (écrite avant ce champ) n'entre pas dans la moyenne annoncée
+            txt = f"{label} : {w}/{len(sel)} (réalisé {round(w / len(sel) * 100)} %" + (f" pour {round(sum(ann) / len(ann) * 100)} % annoncé" if ann else "") + ")"
+            n, m, h, gone = clv(sel)
+            if n:
+                txt += f", {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" sur {n}"
+            parts.append(txt)
+        bets = store.load_doc("bets.json", {"combos": []})
+        trk = store.load_doc("tracked.json", [])
+        tiers, custom = {}, (0.0, 0)
+        for x, g in money._counted(bets, trk if isinstance(trk, list) else [], fair.load_combos(), days, today):
+            if x.get("legs") is None:
+                continue
+            sn = CB.season_no(x.get("tier"))
+            if sn is not None:
+                a = tiers.get(sn, (0.0, 0))
+                tiers[sn] = (a[0] + g, a[1] + 1)
+            elif x["legs"] and all(l.get("strategy") == "saison" for l in x["legs"]):       # « saison N » : combiné sur mesure bâti sur les seules jambes de la voie
+                custom = (custom[0] + g, custom[1] + 1)
+        notes = [f"cote {fmt_odds(k)} : {money.signed(round(v[0]))} sur {v[1]}" for k, v in sorted(tiers.items())] + ([f"sur mesure : {money.signed(round(custom[0]))} sur {custom[1]}"] if custom[1] else [])
+        if notes:
+            parts.append("combinés notés " + " ; ".join(notes))
+        return (" · " + " · ".join(parts)) if parts else ""
+    except Exception as e:                      # noqa: BLE001
+        print(f"[lanes] détail de la voie saison illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return ""
+
+
+def fmt_odds(x):
+    return str(int(x)) if float(x).is_integer() else f"{x:g}".replace(".", ",")
+
+
 def lane_lines(rows, days=None, today=None, plain=False):
     """Lignes du bilan par voie (texte brut) : jambes réglées (gagnées sur jouées) et CLV 1xBet par voie, puis l'argent des combinés par `has_value`. [] sans rien de réglé."""
     from . import money
@@ -174,6 +223,11 @@ def lane_lines(rows, days=None, today=None, plain=False):
     log = [r for r in journal_rows() if (r.get("date") or "") >= cut]
     for lane in LANES + ("legacy",):
         mine = [res for ln, res in legs.values() if ln == lane]
+        if not mine and lane == "saison":
+            det = season_detail(days, today, plain)
+            if det:
+                out.append("saison : aucun combiné réglé" + det)
+            continue
         if not mine:
             continue
         w = sum(1 for res in mine if res == "win")
@@ -184,6 +238,8 @@ def lane_lines(rows, days=None, today=None, plain=False):
                 txt += f" · {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" (sur {n} lignes du journal)"
         if lane == "live":
             txt += " · hors voies (dimensionnement d'avant) ; " + live_calib_text(days, today)
+        if lane == "saison":
+            txt += season_detail(days, today, plain)
         out.append(txt)
     try:
         cm = combo_money(days, today)
@@ -370,7 +426,9 @@ def leg_clv_rows(days=None, today=None):
     ligne au journal (clé changée) ou sans relevé assez proche. Une jambe présente dans plusieurs combinés compte une fois par combiné."""
     from . import fair
     cut = _since(days, today)
+    from . import seasonlane
     by_key = {r.get("key"): r for r in journal_rows() if r.get("key")}
+    by_key |= {r.get("key"): r for r in seasonlane.journal_rows() if r.get("key")}        # clés distinctes (« |saison ») : jamais d'écrasement d'une autre voie
     out = []
     bets = (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])
     for combos in (fair.load_combos(), bets, fair.load_ghost()):
@@ -407,7 +465,8 @@ def leg_clv_lines(days=None, today=None):
     if not rows:
         return []
     live = [r for r in rows if (r[0].get("strategy") or None) == "live"]
-    rows = [r for r in rows if (r[0].get("strategy") or None) != "live"]          # les jambes live (hors voies, jamais au journal d'ensemble) ne gonflent pas la couverture : elles ont leur ligne
+    sea = [r for r in rows if (r[0].get("strategy") or None) == "saison"]
+    rows = [r for r in rows if (r[0].get("strategy") or None) not in ("live", "saison")]          # les jambes live (hors voies, jamais au journal d'ensemble) et `saison` (journal à part) ne gonflent pas la couverture : elles ont leur ligne
     out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match ; "
            "une jambe sans prix pris, sans ligne au journal ou sans relevé proche n'est pas mesurée : seules les lignes restées les mêmes sont vues)"]
     for lane in ("sharpgap", "stats", "fill", None):
@@ -419,6 +478,15 @@ def leg_clv_lines(days=None, today=None):
         name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
         out.append(f"{name} : {n} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" · {round(pos / n * 100)} % battent le dernier prix"
                    + ("" if n >= 30 else " (trop peu pour conclure)"))
+    if sea:                                     # la voie `saison` à part : sa couverture et son CLV ne se mélangent à ceux d'aucune autre voie
+        meas = [(l, v) for l, _, v in sea if v is not None]
+        if meas:
+            n, m, h = stats([v for _, v in meas], [l.get("id") for l, _ in meas])
+            pos = sum(1 for _, v in meas if v > 0)
+            out.append(f"saison (à part : voie propre) : {len(meas)} mesurées sur {len(sea)} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "")
+                       + f" · {round(pos / n * 100)} % battent le dernier prix" + ("" if n >= 30 else " (trop peu pour conclure)"))
+        else:
+            out.append(f"saison (à part : voie propre) : {len(sea)} jambes, aucune mesurée")
     if live:                                    # toujours dite, mesurée ou non : le live est visible à part, hors voies
         meas = [v for _, _, v in live if v is not None]
         out.append(f"live (à part : hors voies) : {len(live)} jambes, " + (f"{len(meas)} mesurées" if meas else live_calib_text(days, today)))
@@ -431,7 +499,7 @@ def leg_clv_lines(days=None, today=None):
         pass
     tiers = {}
     for l, c, v in rows:
-        if v is not None and (l.get("strategy") or None) not in ("fill", "live"):
+        if v is not None and (l.get("strategy") or None) not in ("fill", "live", "saison"):
             tiers.setdefault(_tier_name(c), []).append(v)
     for t, vs in tiers.items():
         neg = sum(1 for v in vs if v < 0)

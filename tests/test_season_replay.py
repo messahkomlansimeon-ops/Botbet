@@ -95,8 +95,11 @@ def test_ledger_matches_tool():
 def main():
     test_nb_logpmf()
     recs, cnt, tab = test_replay_rules()
+    real_before = open(R.LEDGER, "rb").read()
     path = os.path.join(tempfile.mkdtemp(prefix="kelly-sreplay-ledger-"), "season_ledger.json")
-    shutil.copy(R.LEDGER, path)
+    fresh = json.load(open(R.LEDGER))
+    fresh["final"] = None                                   # copie SANS résultat (le vrai ledger a le sien depuis la lecture réelle)
+    json.dump(fresh, open(path, "w"), ensure_ascii=False)
     doc = R.write_final(tab, cnt, ["E0"], recs, ledger_path=path)
     assert doc["final"]["counts"]["scored"] == cnt["scored"] and doc["prereg"] == json.load(open(R.LEDGER))["prereg"]
     try:
@@ -105,7 +108,7 @@ def main():
     except SystemExit as e:
         assert "déjà écrit" in str(e)
     print("ok  ledger : le résultat s'écrit UNE seule fois, la pré-déclaration reste intacte")
-    assert json.load(open(R.LEDGER))["final"] is None, "le vrai ledger n'est pas touché par les tests"
+    assert open(R.LEDGER, "rb").read() == real_before, "le vrai ledger n'est pas touché par les tests"
     test_ledger_matches_tool()
     # garde-fous de l'outil
     for bad in (["--final", "--divs", "E0"], ["--final", "--smoke"]):

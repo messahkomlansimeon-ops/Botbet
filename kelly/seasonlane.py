@@ -239,7 +239,7 @@ def _rank(v):
     return (v["kind"] == "value", v["p"] >= C.FAIR_COMBO_MIN_P, ev * v["p"] if ev > 0 else ev)
 
 
-def _apply(c, v, refs, ref_line=False):
+def _apply(c, v, refs, ref_line=False, leg=True):
     """Pose sur une COPIE du pronostic `c` la ligne évaluée `v` (voir _line) : le pari, sa proba retenue, son prix, ses avis, son étiquette `saison`. `sval` : 1 (valeur), 0 (remplissage) ;
     absent pour une ligne de référence sans verdict (`ref_only`, jamais une jambe). -> la copie."""
     d = dict(c)
@@ -248,7 +248,7 @@ def _apply(c, v, refs, ref_line=False):
     p = v["p"]
     d.update(prob=round(p, 4), p_ens=round(p, 4), p_model=round(v["pm"], 4), p0=round(v["p0"], 4), base=round(v["base"], 4), fair=round(1 / p, 2), xodds=v["odd"], xev=round(v["ev"], 4),
              ew=round(v["wm"], 4), esrc="saison", strategy="saison", lane="saison")
-    if v["kind"]:
+    if v["kind"] and leg:
         d.update(sval=1 if v["kind"] == "value" else 0, min_odds=round((1 + (C.SEASON_MARGIN if v["kind"] == "value" else C.SEASON_FILL_MIN_EV)) / p, 2))
     else:
         d.update(ref_only=1, min_odds=round(1 / p, 2))
@@ -273,7 +273,7 @@ def price(c, px, refs, now, wdata=None, cdata=None):
     """Met le pronostic `c` au prix 1xBet de `px` : -> (jambe choisie ou None, ligne de référence ou None). La jambe est la meilleure ligne des alternatives du marché (valeur d'abord,
     puis assez probable pour un combiné, puis espérance), None si aucune ne vaut ni la valeur ni le remplissage. La ligne de référence est celle du marché la plus proche de
     FAIR_P_TARGET qui a un prix ET un avis de marché, quel que soit le verdict : la seule dont on apprend (voir le haut du module). Quand la jambe choisie est aussi la référence, elle porte
-    ref = 1 et il n'y a pas de seconde ligne ; sinon la référence est rendue à part (sval absent si elle n'a ni valeur ni remplissage : `ref_only`)."""
+    ref = 1 et il n'y a pas de seconde ligne ; sinon la référence est rendue à part (sval absent : `ref_only`, jamais une jambe)."""
     wdata = load_weights() if wdata is None else wdata
     cdata = load_calib() if cdata is None else cdata
     evals = []
@@ -288,7 +288,7 @@ def price(c, px, refs, now, wdata=None, cdata=None):
     good = [v for v in scored if v["kind"]]
     best = max(good, key=_rank) if good else None
     chosen = _apply(c, best, refs, ref_line=best is ref_v) if best else None
-    ref = None if best is ref_v else _apply(c, ref_v, refs, ref_line=True)
+    ref = None if best is ref_v else _apply(c, ref_v, refs, ref_line=True, leg=False)       # la référence n'est JAMAIS une jambe (pas de sval) quand une autre ligne a été choisie
     return chosen, ref
 
 

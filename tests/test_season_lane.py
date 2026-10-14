@@ -95,6 +95,8 @@ def test_price_value_fill_and_none():
     # ligne de référence : la plus proche de FAIR_P_TARGET, sans regarder le prix
     ref_alt = min(c["alts"], key=lambda a: abs(a[2] - C.FAIR_P_TARGET))
     rows = [d for d in (chosen, ref) if d]
+    if ref is not None:
+        assert "sval" not in ref and ref.get("ref_only") == 1 and ref["ref"] == 1, ref                # la référence d'une autre ligne n'est jamais une jambe
     assert any(d.get("ref") == 1 and d["name"] == ref_alt[0] and d["point"] == ref_alt[1] for d in rows), (ref_alt, [(d["name"], d["point"], d.get("ref")) for d in rows])
     print("ok  prix : proba retenue = log-cotes modèle/marché (wm 0,35), sval 0/1, xref posé, sans avis de marché aucune jambe, ligne de référence indépendante du prix")
 
@@ -132,6 +134,28 @@ def test_run_isolation_and_journal():
     SL.run(scan, [], DAY, NOW, fetch=fetch, history={})                    # relance : le journal ne double pas
     assert len(store.load(SL.LOG, [])) == n1
     print("ok  passage du matin : jambes étiquetées « saison », journal à part (avis pm / px, sans fantôme de gel), rien d'écrit chez les autres voies, relance sans doublon")
+
+
+def test_second_pass_promotes_reference_to_leg():
+    scan = setup()
+    pronos = SL.make(scan, NOW, DAY)
+    legs, _ = SL.run(scan, [], DAY, NOW, fetch=fetch_of(pronos, over_odds=3.4, under_odds=1.25), history={})
+    log = store.load(SL.LOG, [])
+    only_ref = [r for r in log if r.get("ref_only")]
+    k = next((r for r in log if r.get("sval") is None and r.get("ref")), None)
+    if k is None:                                           # le faux 1xBet choisit toujours la référence : on fabrique le cas (même clé, d'abord sans sval)
+        k = dict(log[0])
+        k.pop("sval", None)
+        k["ref_only"] = 1
+        log[0] = k
+        store.save(SL.LOG, log)
+    key = k["key"]
+    c = {"key": key, "id": k["id"], "sport_key": SK, "home": k["home"], "away": k["away"], "commence": KO, "market": k["market"], "name": k["name"], "point": k["point"],
+         "p_model": 0.6, "p_x": 0.55, "p0": 0.6, "xodds": 1.9, "sval": 1, "ref": 1, "strategy": "saison", "p_ens": 0.58}
+    ensemble.record([c], str(DAY), NOW, name=SL.LOG, shadow=False)
+    row = next(r for r in store.load(SL.LOG, []) if r["key"] == key)
+    assert row.get("sval") == 1, row
+    print("ok  deuxième passage : une ligne d'abord écrite comme simple référence devient la jambe jouée (sval reporté)")
 
 
 def test_modes():
@@ -232,7 +256,7 @@ def test_settle_log_with_learner_and_archive():
 
 
 def main():
-    for t in (test_make, test_price_value_fill_and_none, test_fill_and_value_rules, test_run_isolation_and_journal, test_modes, test_run_guards, test_has_value, test_learn_reference_rows_only,
+    for t in (test_make, test_price_value_fill_and_none, test_fill_and_value_rules, test_run_isolation_and_journal, test_second_pass_promotes_reference_to_leg, test_modes, test_run_guards, test_has_value, test_learn_reference_rows_only,
               test_settle_log_with_learner_and_archive):
         t()
     print("tests voie saison (jambes) : OK")

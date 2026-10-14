@@ -132,6 +132,9 @@ def lines():
            + f" · jambes sans valeur : {'oui' if C.FILL_LEGS else 'non'}",
            f"Part de mise : sharpgap {C.KELLY_FRACTION_SHARPGAP:g} · stats {C.KELLY_FRACTION_STATS:g} (part de ta limite du jour, pas du Kelly) · combiné sans valeur : mise "
            + (f"fixe {C.NOVALUE_STAKE:g} (« sans valeur »)" if C.NOVALUE_STAKE > 0 else "aucune (suivi en fantôme)")]
+    out.append(f"saison : {season_mode()} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} % · marge {C.SEASON_MARGIN * 100:g} % · paliers {', '.join(f'{t:g}' for t in C.SEASON_TIERS)} · part de mise "
+               f"{C.KELLY_FRACTION_SEASON:g}" + (f" · plafond ticket {C.SEASON_TICKET_MAX:g}" if C.SEASON_TICKET_MAX > 0 else "")
+               + (" · ligues : " + ", ".join(sorted(C.SEASON_LEAGUES)[:4]) if C.SEASON_LEAGUES else " · toutes les ligues couvertes"))
     ghost = sorted(set(C.STATS_GHOST_LEAGUES) | set(st.get("leagues") or {}))
     out.append("Stats en fantôme : " + ("toutes les ligues hors football-data" if C.STATS_GHOST_OUTSIDE_FD else "aucune par défaut")
                + (f" + {', '.join(ghost[:6])}{'…' if len(ghost) > 6 else ''}" if ghost else ""))
