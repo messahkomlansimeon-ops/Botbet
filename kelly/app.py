@@ -2197,12 +2197,56 @@ def _handle_command(text):
         live = upcoming(picks)
         if not live and not upcoming(pronos) and waiting_note(today):
             return waiting_note(today)
-        return custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live,
-                            when=picks_when, kinds=kinds or None, bold=bold, nlegs=(n, exact) if n else None)
+        reply = custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live,
+                             when=picks_when, kinds=kinds or None, bold=bold, nlegs=(n, exact) if n else None)
+        return _with_sweep(reply, sweep_line(live, upcoming(pronos)))
     return "Commande inconnue. /aide pour la liste."
 
 
 MIN_COMBI = 1.01                         # cote visée minimale de « /combi N »
+
+SWEEP_FAMILIES = ("goals", "h2h", "dc", "btts", "team_goals", "corners", "cards", "yellow", "shots", "sot", "fouls", "throws", "offsides", "player")      # familles que « combi N » peut balayer
+
+
+def sweep_line(picks, pronos):
+    """« 📊 12 matchs · 9 familles analysées · 214 lignes évaluées · 31 jambes possibles (jusqu'à 5 marchés par match ; un combiné n'en prend qu'un par match) · non balayées : touches, hors-jeu » :
+    ce que « combi N » avait à sa disposition (les pronostics et paris du jour chiffrés chez 1xBet), famille par famille, jamais seulement la meilleure ligne d'un match. '' sans aucune cote 1xBet."""
+    try:
+        return _sweep_line(picks, pronos)
+    except Exception as e:               # noqa: BLE001  une ligne d'information ne doit jamais faire perdre un combiné déjà bâti
+        print(f"[combi] ligne de balayage ignorée : {type(e).__name__}", file=sys.stderr)
+        return ""
+
+
+def _sweep_line(picks, pronos):
+    legs = CB.fair_legs(pronos)
+    rows = [c for c in pronos if c.get("xodds")]
+    if not legs:                                      # « combi N » bâtit soit sur les pronostics, soit sur les paris réels, jamais les deux
+        legs = CB.make_pool(picks)
+        rows = [c for c in picks if c.get("xodds")]
+    if not rows:
+        return ""
+    fams = {calib.family(c["market"]) for c in rows}
+    lines = sum(len(c.get("alts") or [None]) for c in rows)
+    per = {}
+    for c in legs:
+        per[c["id"]] = per.get(c["id"], 0) + 1
+    miss = [calib.LABELS.get(f, f) for f in SWEEP_FAMILIES if f not in fams]
+    s = lambda n, one, many: f"{n} {one if n <= 1 else many}"      # noqa: E731
+    return (f"📊 {s(len({c['id'] for c in rows}), 'match', 'matchs')} · {s(len(fams), 'famille analysée', 'familles analysées')} · {s(lines, 'ligne évaluée', 'lignes évaluées')}"
+            f" · {s(len(legs), 'jambe possible', 'jambes possibles')}" + (f" (jusqu'à {max(per.values())} marchés par match ; un combiné n'en prend qu'un par match)" if per and max(per.values()) > 1 else "")
+            + (f" · non balayées : {', '.join(miss)}" if miss else ""))
+
+
+def _with_sweep(reply, line):
+    """Le message `reply` suivi de la ligne de balayage `line` (même type, mêmes boutons) ; inchangé sans ligne ou pour une réponse qui n'est pas un texte."""
+    if not line or not isinstance(reply, str):
+        return reply
+    out = type(reply)(str(reply) + "\n\n" + (fmt.i(fmt.esc(line)) if isinstance(reply, Html) else line))
+    for attr in ("markup", "confirm"):
+        if getattr(reply, attr, None) is not None:
+            setattr(out, attr, getattr(reply, attr))
+    return out
 
 
 def combi_target(args):

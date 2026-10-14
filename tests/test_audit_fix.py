@@ -600,7 +600,7 @@ def test_combi_and_bilan_inputs():
                 assert isinstance(r, str) and "1,01" in r and "Erreur" not in r and "combi ok" not in r, (t, r)
             for t, want in (("combi 10 000", 10000.0), ("/combi 3 000", 3000.0), ("/combi 20", 20.0), ("/combi 2,5", 2.5), ("/combi 1.01", 1.01),
                             ("combi 10000", 10000.0), ("/combi 10 000 000", 1e7)):
-                assert app.handle_command(t) == "combi ok" and seen[-1] == want, (t, seen[-1:])
+                assert str(app.handle_command(t)).startswith("combi ok") and seen[-1] == want, (t, seen[-1:])
             for t in ("/combi", "/combi abc", "/combi -5", "/combi inf", "/combi nan"):
                 assert app.handle_command(t) == "Exemple : /combi 30, ou /combi 20 tirs fautes", t
     finally:

@@ -67,11 +67,76 @@ def test_remember_and_rebuild():
     assert kw["live"] is True and kw["fresh_min"] == C.XBET_COMBI_FRESH_MIN and 0 < kw["deadline"] - time.monotonic() <= C.SEASON_SECONDS, kw
     assert set(kw["ids"]) == {"e1", "e3", "e4"}, "les matchs prédits seulement, pas les commencés ni les équipes sans modèle"
     line = SL.summary_line(info)
-    assert line == "🔎 2 matchs lus chez 1xBet sur 5 non commencés (dont 1 de coupe) · 1 équipe sous 4 matchs (Zed) · 1 match sans prix · 1 équipe non reconnue (Inconnu FC) · 1 match de ligues non suivies", line
+    first, second = line.split("\n")
+    assert first == "🔎 2 matchs lus chez 1xBet sur 5 non commencés (dont 1 de coupe) · 1 équipe sous 4 matchs (Zed) · 1 match sans prix · 1 équipe non reconnue (Inconnu FC) · 1 match de ligues non suivies", first
+    assert second.startswith("📊 2 matchs · 1 famille analysée · 11 lignes évaluées · ") and second.endswith("non balayées : touches, hors-jeu, joueurs"), second
     many = dict(info, few={f"E{i}" for i in range(7)}, unknown=set(), other=0)
     assert "7 équipes sous 4 matchs (E0, E1, E2, E3…)" in SL.summary_line(many), SL.summary_line(many)
     assert [r for r in store.load(SL.LOG, []) if r["id"] in ("e1", "e3")], "lignes journalisées (CLV par jambe)"
     print("ok  reconstruction : matchs non commencés (coupes comprises) relus en direct, bilan exact (lus, de coupe, équipes sous 4 matchs, sans prix, non reconnues), journalisé")
+
+
+def multi_fetch(pronos):
+    """Faux 1xBet qui chiffre TOUTES les familles des pronostics (plus/moins et oui/non) : un match a plusieurs marchés intéressants."""
+    def fetch(events, **kw):
+        out = {}
+        for k, ev in events:
+            px = {}
+            for c in pronos:
+                if c["id"] != ev["id"]:
+                    continue
+                for name, pt, *_ in c["alts"]:
+                    if name in ("Over", "Under"):
+                        px[(c["market"], "Over", pt)], px[(c["market"], "Under", pt)] = 2.3, 1.7
+                    elif name in ("Yes", "No"):
+                        px[(c["market"], "Yes", pt)], px[(c["market"], "No", pt)] = 1.9, 1.9
+            out[ev["id"]] = {"gid": 7000 + sum(map(ord, ev["id"])) % 1000, "px": px, "refs": {k_: [7000, 1 + i, 0] for i, k_ in enumerate(px)}}
+        return out
+    return fetch
+
+
+def test_several_markets_per_match():
+    """Un match peut avoir PLUSIEURS marchés intéressants : le balayage les garde tous (un combiné n'en prend qu'un par match) et le dit."""
+    scan = world()
+    SL.remember_events(scan, T.DAY)
+    pronos = SL.make({"leagues": {k: [e for e in v if e["id"] not in ("e2", "e7")] for k, v in scan["leagues"].items()}}, NOW, T.DAY)
+    legs, info = SL.rebuild(NOW, multi_fetch(pronos))
+    assert info["families"] >= 4 and info["lines"] > 20 and info["legs"] > info["legs_matches"] >= 2 and info["per_match_max"] >= 2, info
+    by = {}
+    for c in legs:
+        by.setdefault(c["id"], set()).add(c["market"])
+    assert any(len(v) >= 2 for v in by.values()), by
+    line = SL.summary_line(info).split("\n")[1]
+    assert f"{info['families']} familles analysées" in line and f"{info['lines']} lignes évaluées" in line and f"jusqu'à {info['per_match_max']} marchés par match ; un combiné n'en prend qu'un par match" in line, line
+    # le combiné, lui, ne prend qu'un pari par match
+    combo = CB_plan(legs)
+    assert combo and len({l["id"] for l in combo[0]}) == len(combo[0])
+    print("ok  balayage : plusieurs marchés retenus par match (familles, lignes évaluées, jambes retenues dites), un seul par match dans le combiné")
+
+
+def CB_plan(legs):
+    from kelly import combos as CB
+    return next((c for _, c in CB.season_plan(legs, [3]) if c), None)
+
+
+def test_combi_sweep_line():
+    """« combi N » : la même ligne de balayage (familles analysées, lignes évaluées, jambes possibles, familles non balayées)."""
+    pr = lambda i, m, name, pt, alts, **kw: {"key": f"m{i}|{m}||{pt}|{name}", "id": f"m{i}", "market": m, "name": name, "point": pt, "xodds": 1.8, "prob": 0.7, "min_odds": 1.5, "conf": 0.8,     # noqa: E731
+                                          "alts": [[name, pt, 0.7, None]] * alts, "home": "A", "away": "B", "sport_key": "soccer_epl"} | kw
+    pronos = [pr(1, "totals", "Over", 2.5, 3), pr(1, "alternate_totals_corners", "Over", 9.5, 4), pr(1, "btts", "Yes", None, 2), pr(2, "totals", "Over", 2.5, 3), pr(2, "team_shots_total", "Over", 24.5, 5)]
+    line = app.sweep_line([], pronos)
+    assert line.startswith("📊 2 matchs · 4 familles analysées · 17 lignes évaluées · "), line
+    assert "non balayées :" in line and "touches" in line and "hors-jeu" in line, line
+    missing = line.split("non balayées :")[1]
+    assert "corners" not in missing and "les 2 marquent" not in missing and "tirs," not in missing, "les familles chiffrées ne sont pas dites non balayées"
+    assert app.sweep_line([], [dict(p, xodds=None) for p in pronos]) == "", "sans cote 1xBet : pas de ligne"
+    from kelly.telegram import Html
+    r = Html("combiné")
+    r.markup = {"inline_keyboard": [[{"text": "x", "callback_data": "y"}]]}
+    out = app._with_sweep(r, line)
+    assert isinstance(out, Html) and out.markup == r.markup and "📊 2 matchs" in str(out) and str(out).startswith("combiné"), out
+    assert app._with_sweep("texte", line).endswith(line) and app._with_sweep(r, "") is r
+    print("ok  « combi N » : ligne 📊 (matchs, familles analysées, lignes évaluées, jambes possibles, familles non balayées), message et boutons inchangés")
 
 
 def test_many_leagues_load_documents_once():
@@ -228,6 +293,8 @@ def main():
     real = (season.collect, SL.known_leagues)
     try:
         test_remember_and_rebuild()
+        test_several_markets_per_match()
+        test_combi_sweep_line()
         test_many_leagues_load_documents_once()
         test_cap_and_failures()
         test_kelly_day_after_midnight_utc()

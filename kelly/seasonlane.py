@@ -336,7 +336,10 @@ def _apply(c, v, refs, ref_line=False, leg=True):
     return d
 
 
-def price(c, px, refs, now, wdata=None, cdata=None):
+NOT_SWEPT = ("touches", "hors-jeu", "joueurs")      # familles que le modèle de saison ne calcule pas (pas de moyennes par équipe) : dites dans la ligne de balayage
+
+
+def price(c, px, refs, now, wdata=None, cdata=None, tally=None):
     """Met le pronostic `c` au prix 1xBet de `px` : -> (jambe choisie ou None, ligne de référence ou None, ligne refusée journalisée ou None). La jambe est la meilleure ligne des alternatives du marché (valeur d'abord,
     puis assez probable pour un combiné, puis espérance), None si aucune ne vaut ni la valeur ni le remplissage. La ligne de référence est celle du marché la plus proche de
     FAIR_P_TARGET qui a un prix ET un avis de marché, quel que soit le verdict : la seule dont on apprend (voir le haut du module). Quand la jambe choisie est aussi la référence, elle porte
@@ -348,6 +351,9 @@ def price(c, px, refs, now, wdata=None, cdata=None):
         odd = xbet.lookup(px, c["market"], name, point)
         if odd:
             evals.append(_line(c, px, name, point, p0, base, odd, now, wdata, cdata))
+    if tally is not None and evals:                   # balayage : lignes évaluées (avec un prix 1xBet) et familles qui ont au moins une ligne chiffrée
+        tally["lines"] = tally.get("lines", 0) + len(evals)
+        tally.setdefault("fams", set()).add(ensemble.family(c["market"]))
     scored = [v for v in evals if v["p"] is not None]
     if not scored:
         return None, None, None
@@ -482,12 +488,12 @@ def rebuild(now, fetch=None):
     info["read"] = sum(1 for i in ids if (found.get(i) or {}).get("px"))
     info["cup_read"] = sum(1 for i in cups if (found.get(i) or {}).get("px"))
     wdata, cdata = load_weights(), load_calib()
-    legs, rows, priced = [], [], set()
+    legs, rows, priced, tally = [], [], set(), {"lines": 0, "fams": set()}
     for c in pronos:
         f = found.get(c["id"])
         if not f or not f.get("px"):
             continue
-        chosen, ref, extra = price(c, f["px"], f.get("refs"), now, wdata, cdata)
+        chosen, ref, extra = price(c, f["px"], f.get("refs"), now, wdata, cdata, tally)
         for d in (chosen, ref, extra):
             if d is not None:
                 d["xgid"] = f["gid"]
@@ -499,6 +505,10 @@ def rebuild(now, fetch=None):
             legs.append(chosen)
     asked = {e["id"] for _, e in events}
     info["unread"] = len(ids - asked)                  # prédits mais au-delà du plafond de matchs : jamais demandés à 1xBet
+    per = {}
+    for c in legs:
+        per[c["id"]] = per.get(c["id"], 0) + 1
+    info.update(lines=tally["lines"], families=len(tally["fams"]), legs=len(legs), legs_matches=len(per), per_match_max=max(per.values(), default=0))
     info["no_price"] = len(asked - priced)             # demandés mais AUCUNE ligne n'a de prix ni d'avis de marché (match introuvable chez 1xBet, marché absent, ou relevé arrêté par le délai)
     record(rows, day, now)
     return legs, info
@@ -516,6 +526,11 @@ def summary_line(info):
         out += f" · {s(info.get('no_model', 0) + info.get('other', 0), 'match', 'matchs')} de ligues non suivies"
     if info.get("unread"):
         out += f" · {s(info['unread'], 'match non relu', 'matchs non relus')} (au-delà du plafond de {C.SEASON_MAX_MATCHES} matchs)"
+    if info.get("lines"):                             # le balayage : tout ce qui est évalué, pas seulement ce qui est gardé ; un match garde PLUSIEURS marchés intéressants (un combiné n'en prend qu'un)
+        out += (f"\n📊 {s(info['read'], 'match', 'matchs')} · {s(info['families'], 'famille analysée', 'familles analysées')} · {s(info['lines'], 'ligne évaluée', 'lignes évaluées')}"
+                f" · {s(info['legs'], 'jambe retenue', 'jambes retenues')} sur {s(info['legs_matches'], 'match', 'matchs')}"
+                + (f" (jusqu'à {info['per_match_max']} marchés par match ; un combiné n'en prend qu'un par match)" if info['per_match_max'] > 1 else "")
+                + f" · non balayées : {', '.join(NOT_SWEPT)}")
     return out
 
 
