@@ -80,7 +80,7 @@ def test_make_and_lane():
     scan = T.setup()
     models_obs = {"soccer_x": rename(league(10, 5, seed=1, mean_h=1.9, mean_a=1.5, corners=(6.5, 5.5), disp=0.1), "Xe"),
                   "soccer_y": rename(league(10, 5, seed=2, mean_h=1.2, mean_a=0.9, corners=(4.5, 3.5), disp=0.1), "Yo")}
-    season.collect = lambda sk, on, loaders=None: (models_obs.get(sk, []), "football-data" if sk in models_obs else None)
+    season.collect = lambda sk, on, loaders=None, docs=None: (models_obs.get(sk, []), "football-data" if sk in models_obs else None)
     SL.known_leagues = lambda _filtered=True: ["soccer_x", "soccer_y"]
     ko = T.KO
     scan = {"leagues": {CUP: [{"id": "c1", "sport_key": CUP, "home_team": "XeT1", "away_team": "YoT3", "commence_time": ko, "league": "LDC"},

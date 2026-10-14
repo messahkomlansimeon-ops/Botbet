@@ -28,7 +28,7 @@ def setup():
     for name in UNTOUCHED + (SL.LOG, SL.WEIGHTS_FILE, SL.CALIB_FILE):
         store.remove(name) if name in store.names("") or store.load(name, None) is not None else None
     obs = league(8, 6, seed=7, disp=0.1)
-    season.collect = lambda sport_key, on, loaders=None: (obs, "football-data")
+    season.collect = lambda sport_key, on, loaders=None, docs=None: (obs, "football-data")
     return {"leagues": {SK: [{"id": "e1", "sport_key": SK, "home_team": "T1", "away_team": "T4", "commence_time": KO, "league": "EPL"},
                              {"id": "e2", "sport_key": SK, "home_team": "T2", "away_team": "T5", "commence_time": KO, "league": "EPL"}]}}
 
@@ -71,7 +71,7 @@ def test_make():
     finally:
         C.SEASON_LEAGUES = frozenset()
     assert SL.make(scan, NOW + timedelta(hours=9), DAY) == [], "match commencé : pas de pronostic"
-    season.collect = lambda sport_key, on, loaders=None: ([], None)
+    season.collect = lambda sport_key, on, loaders=None, docs=None: ([], None)
     season.reset()
     assert SL.make(scan, NOW, DAY) == [], "ligue non couverte : rien"
     print("ok  pronostics de la voie : un par match et par marché, clés « |saison », lignes dans la plage de proba ; ligue hors voie, match commencé, ligue non couverte : rien")

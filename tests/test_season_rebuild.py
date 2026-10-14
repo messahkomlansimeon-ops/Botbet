@@ -17,6 +17,7 @@ from kelly import app, config as C, lanes, season, seasonlane as SL, store  # no
 
 CUP = "soccer_uefa_champs_league"
 NOW = T.NOW
+REAL_COLLECT = season.collect
 
 
 def world():
@@ -26,7 +27,7 @@ def world():
                                                                                                        row("XeT0", "2026-09-20", 0, goals=(1, 1), corners=(5, 5))]
     y = rename(league(10, 5, seed=2, mean_h=1.2, mean_a=0.9, corners=(4.5, 3.5), disp=0.1), "Yo")
     obs = {"soccer_x": x, "soccer_y": y}
-    season.collect = lambda sk, on, loaders=None: (obs.get(sk, []), "football-data" if sk in obs else None)
+    season.collect = lambda sk, on, loaders=None, docs=None: (obs.get(sk, []), "football-data" if sk in obs else None)
     SL.known_leagues = lambda _filtered=True: ["soccer_x", "soccer_y"]
     season.reset()
     ko = T.KO
@@ -66,9 +67,36 @@ def test_remember_and_rebuild():
     assert kw["live"] is True and kw["fresh_min"] == C.XBET_COMBI_FRESH_MIN and 0 < kw["deadline"] - time.monotonic() <= C.SEASON_SECONDS, kw
     assert set(kw["ids"]) == {"e1", "e3", "e4"}, "les matchs prédits seulement, pas les commencés ni les équipes sans modèle"
     line = SL.summary_line(info)
-    assert line == "🔎 2 matchs lus chez 1xBet sur 5 non commencés (dont 1 de coupe) · 1 équipe sous 4 matchs · 1 match sans prix · 1 équipe non reconnue", line
+    assert line == "🔎 2 matchs lus chez 1xBet sur 5 non commencés (dont 1 de coupe) · 1 équipe sous 4 matchs (Zed) · 1 match sans prix · 1 équipe non reconnue (Inconnu FC) · 1 match de ligues non suivies", line
+    many = dict(info, few={f"E{i}" for i in range(7)}, unknown=set(), other=0)
+    assert "7 équipes sous 4 matchs (E0, E1, E2, E3…)" in SL.summary_line(many), SL.summary_line(many)
     assert [r for r in store.load(SL.LOG, []) if r["id"] in ("e1", "e3")], "lignes journalisées (CLV par jambe)"
     print("ok  reconstruction : matchs non commencés (coupes comprises) relus en direct, bilan exact (lus, de coupe, équipes sous 4 matchs, sans prix, non reconnues), journalisé")
+
+
+def test_many_leagues_load_documents_once():
+    """Beaucoup de ligues connues (FotMob, 365scores...) : cup_models charge chaque document UNE fois, jamais une fois par ligue (sinon `saison N` pend sur le téléphone)."""
+    from kelly import apistats
+    from kelly.sources import fmmatch, s365
+    world()
+    season.collect = REAL_COLLECT                                      # le vrai collect (le monde de test l'avait remplacé) : il lit les documents stockés
+    SL.known_leagues = lambda _filtered=True: [f"soccer_l{i}" for i in range(60)]
+    season.reset()
+    calls = {"n": 0}
+    reals = (fmmatch.load, s365.load, apistats.load)
+
+    def counting(load):
+        def f():
+            calls["n"] += 1
+            return load()
+        return f
+    fmmatch.load, s365.load, apistats.load = (counting(x) for x in reals)
+    try:
+        SL.cup_models(T.DAY)
+    finally:
+        fmmatch.load, s365.load, apistats.load = reals
+    assert calls["n"] == 3, calls                                     # un chargement par source, pas 3 x 60 ligues
+    print("ok  60 ligues connues : trois documents de sources chargés une seule fois")
 
 
 def test_cap_and_failures():
@@ -200,6 +228,7 @@ def main():
     real = (season.collect, SL.known_leagues)
     try:
         test_remember_and_rebuild()
+        test_many_leagues_load_documents_once()
         test_cap_and_failures()
         test_kelly_day_after_midnight_utc()
         test_monthly_cap_guard()

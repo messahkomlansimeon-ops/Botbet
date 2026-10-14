@@ -153,9 +153,9 @@ def _key(ev_id, market, name, point):
 
 def cup_models(today):
     """{clé de ligue: modèle `saison`} de TOUS les championnats suivis (même hors SEASON_LEAGUES : une coupe a besoin du championnat de chaque équipe)."""
-    out = {}
+    out, docs = {}, season.load_docs()                  # trois gros documents chargés UNE fois, pas une fois par ligue
     for sk in known_leagues(False):
-        m = season.get(sk, today, fallback=fallback_for(sk))
+        m = season.get(sk, today, fallback=fallback_for(sk), docs=docs)
         if m:
             out[sk] = m
     return out
@@ -185,7 +185,7 @@ def make(scan, now, today=None, info=None):
     celle dont la proba est la plus proche de FAIR_P_TARGET (c'est la ligne de RÉFÉRENCE, choisie sans regarder le prix). Seulement les ligues couvertes par le modèle de saison.
     `info` (dict) reçoit le compte : matchs examinés, de coupe, prédits, équipes sous le minimum de matchs, équipes non reconnues."""
     info = info if info is not None else {}
-    for k in ("events", "cup_events", "predicted"):
+    for k in ("events", "cup_events", "predicted", "no_model"):
         info.setdefault(k, 0)
     info.setdefault("few", set())
     info.setdefault("unknown", set())
@@ -202,6 +202,7 @@ def make(scan, now, today=None, info=None):
         else:
             model = season.get(key, today, fallback=fallback_for(key))
         if not model:
+            info["no_model"] += sum(1 for ev in evs if _ko(ev) > now)       # ligue sans assez de matchs cette saison dans les données stockées : comptée, dite
             continue
         for ev in sorted(evs, key=lambda e: e["commence_time"]):
             if _ko(ev) <= now:
@@ -404,12 +405,13 @@ def remember_events(scan, day):
         keep = set(known_leagues(False)) | set(C.SEASON_CUPS)
         evs = [{k: ev.get(k) for k in ("id", "sport_key", "league", "home_team", "away_team", "commence_time", "xgid") if ev.get(k) is not None}
                | {"sport_key": ev.get("sport_key") or key} for key, lst in (scan.get("leagues") or {}).items() if key in keep for ev in lst]
-        store.save(EVENTS_FILE, {"day": str(day), "events": evs}, compact=True)
+        other = sum(1 for key, lst in (scan.get("leagues") or {}).items() if key not in keep for _ in lst)
+        store.save(EVENTS_FILE, {"day": str(day), "events": evs, "other": other}, compact=True)
     except Exception as e:                          # noqa: BLE001
         print(f"[saison] matchs du jour non gardés : {type(e).__name__}: {e}", file=sys.stderr)
 
 
-def events_from_monde(kday):
+def events_from_monde(kday, stats=None):
     """Matchs du jour Kelly `kday` lus dans le cache du tour du monde (data/monde.json, écrit chaque matin par l'ancien comme le nouveau code) quand le passage du matin n'a pas gardé les
     siens (installation en cours de journée) : [{id, sport_key, league, home_team, away_team, commence_time}] des ligues que la voie traite. Le cache n'a que « HH:MM » UTC : avant
     C.DAY_END_HOUR h le match est du lendemain civil ; l'identifiant est un condensé stable (« mx-… », sans « | »). Aucun xgid : 1xBet cherche le match par les noms."""
@@ -421,6 +423,8 @@ def events_from_monde(kday):
         return []
     keep = set(known_leagues(False)) | set(C.SEASON_CUPS)
     day, out = _date.fromisoformat(str(kday)[:10]), []
+    if stats is not None:
+        stats["other"] = sum(len(lst) for key, lst in (d.get("leagues") or {}).items() if key not in keep)      # matchs d'autres ligues, que la voie ne traite pas
     for key, lst in (d.get("leagues") or {}).items():
         if key not in keep:
             continue
@@ -443,7 +447,7 @@ def rebuild(now, fetch=None):
     Ne lève jamais. `fetch` : injectable (mêmes arguments que xbet.fetch_day)."""
     from datetime import timedelta
     from . import xprice
-    info = {"events": 0, "cup_events": 0, "predicted": 0, "read": 0, "cup_read": 0, "no_price": 0, "unread": 0, "few": set(), "unknown": set()}
+    info = {"events": 0, "cup_events": 0, "predicted": 0, "read": 0, "cup_read": 0, "no_price": 0, "unread": 0, "no_model": 0, "other": 0, "few": set(), "unknown": set()}
     day = str(now.date())
     if fetch is None and not month_ok():              # le relevé principal passe avant : la voie se tait au-delà de C.SEASON_MONTH_PCT % du plafond mensuel
         info["capped"] = True
@@ -453,8 +457,9 @@ def rebuild(now, fetch=None):
         kday = (store.load("today.json", {}) or {}).get("day") or day            # le jour KELLY (jusqu'à 04:00 UTC le lendemain), pas la date UTC
         day = str(doc.get("day") or day) if isinstance(doc, dict) else day
         evs = doc.get("events") or [] if isinstance(doc, dict) and day == str(kday) else []
+        info["other"] = int(doc.get("other") or 0) if evs and isinstance(doc, dict) else 0
         if not evs:                                   # le passage du matin n'a pas gardé les matchs (installé en cours de journée) : le cache du tour du monde
-            evs = events_from_monde(kday)
+            evs = events_from_monde(kday, info)
             day = str(kday)
             info["from_monde"] = bool(evs)
         evs = [e for e in evs if _ko(e) > now + timedelta(minutes=C.XBET_SOON_MIN)]
@@ -503,9 +508,12 @@ def summary_line(info):
     """Une ligne : ce que la reconstruction a trouvé (« 🔎 12 matchs lus chez 1xBet sur 20 non commencés (dont 4 de coupe) · 5 équipes sous 4 matchs · 3 matchs sans prix · 2 équipes non reconnues »)."""
     s = lambda n, one, many: f"{n} {one if n <= 1 else many}"      # noqa: E731
     out = f"🔎 {s(info['read'], 'match lu', 'matchs lus')} chez 1xBet sur {info['events']} non commencés (dont {info['cup_read']} de coupe)"
-    out += f" · {s(len(info['few']), 'équipe', 'équipes')} sous {C.SEASON_MIN_MATCHES} matchs · {s(info['no_price'], 'match sans prix', 'matchs sans prix')}"
+    names = lambda xs: f" ({', '.join(sorted(xs)[:4])}{'…' if len(xs) > 4 else ''})" if xs else ""      # noqa: E731 - les noms, pour comprendre pourquoi un match manque
+    out += f" · {s(len(info['few']), 'équipe', 'équipes')} sous {C.SEASON_MIN_MATCHES} matchs{names(info['few'])} · {s(info['no_price'], 'match sans prix', 'matchs sans prix')}"
     if info["unknown"]:
-        out += f" · {s(len(info['unknown']), 'équipe non reconnue', 'équipes non reconnues')}"
+        out += f" · {s(len(info['unknown']), 'équipe non reconnue', 'équipes non reconnues')}{names(info['unknown'])}"
+    if info.get("no_model") or info.get("other"):
+        out += f" · {s(info.get('no_model', 0) + info.get('other', 0), 'match', 'matchs')} de ligues non suivies"
     if info.get("unread"):
         out += f" · {s(info['unread'], 'match non relu', 'matchs non relus')} (au-delà du plafond de {C.SEASON_MAX_MATCHES} matchs)"
     return out

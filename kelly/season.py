@@ -387,7 +387,14 @@ def snapshot(on, leagues, loaders=None):
 _memo = {}
 
 
-def get(sport_key, on=None, loaders=None, fallback=None):
+def load_docs():
+    """Les documents des sources par équipe (FotMob, 365scores, API-Football), chargés UNE fois pour passer à `get` / `collect` quand on traite beaucoup de ligues."""
+    from . import apistats
+    from .sources import fmmatch, s365
+    return {"fotmob": fmmatch.load()["teams"], "365scores": s365.load()["teams"], "api-football": apistats.load()}
+
+
+def get(sport_key, on=None, loaders=None, fallback=None, docs=None):
     """Modèle `saison` du jour d'une ligue (mémoire du processus, jamais écrit sur le disque), ou None. Ne lève jamais."""
     try:
         from . import strength
@@ -395,12 +402,12 @@ def get(sport_key, on=None, loaders=None, fallback=None):
         key = (sport_key, on.isoformat(), C.SEASON_PRIOR_K, bool(fallback))
         if loaders is None and key in _memo:
             return _memo[key]
-        obs, src = collect(sport_key, on, loaders)
+        obs, src = collect(sport_key, on, loaders, docs)
         model = fit(obs, on, sport_key, fallback=fallback) if obs else None
         if model:
             model["source"] = src
         if loaders is None:
-            if len(_memo) > 200:
+            if len(_memo) > 2000:
                 _memo.clear()
             _memo[key] = model
         return model
