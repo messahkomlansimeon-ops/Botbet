@@ -543,7 +543,43 @@ def test_absurd_odds_ask_confirmation():
         store.save("bets.json", {"picks": [], "combos": [N.combo(N.SUR, 5.0, 1000, FCFA)]})
         chat.on_callback(f"joue|sur|{DAY}", 5)
         out = chat.route("500")[1]
-    assert out.startswith(played.CONFIRM) and played.find("sur", DAY).item.get("played") is None, out
+    assert out.startswith("Noté à 5,00 pour 500 FCFA, c'est bien ça ?") and played.find("sur", DAY).item.get("played") is None, out      # un nombre entier seul >= 50 : c'est la mise
+    with Fakes():
+        assert chat.route("oui")[1].startswith("✅ Noté")
+    x = played.find("sur", DAY).item["played"]
+    assert x["odds"] == 5.0 and x["stake"] == 500, x
+    # cote du combiné connue (25,06) : un nombre entier seul est la mise dès qu'il vaut 50 ou plus, ou qu'il est à plus de ±50 % de la cote ; sinon c'est une cote
+    for reply, kind in (("400", "stake"), ("2k", "stake"), ("1 000", "stake"), ("60", "stake"), ("10", "stake"), ("5,40", "odds"), ("25,06", "odds"), ("30", "odds"), ("35", "odds"), ("40", "stake"), ("abc", "bad")):
+        played.command(["sur", "0"], DAY)
+        chat.clear_pending()
+        with Fakes():
+            store.save("bets.json", {"picks": [], "combos": [N.combo(N.SUR, 25.06, 1000, FCFA)]})
+            chat.on_callback(f"joue|sur|{DAY}", 5)
+            out = chat.route(reply)[1]
+            amount = {"2k": 2000, "1 000": 1000}.get(reply, reply)
+        if kind == "stake":
+            assert out.startswith(f"Noté à 25,06 pour {money.money(float(amount))}, c'est bien ça ?") and chat.get_pending()["confirm"] == {"odds": 25.06, "stake": int(amount)}, (reply, out)
+            assert played.find("sur", DAY).item.get("played") is None, "rien n'est noté avant le « oui »"
+        elif kind == "odds":
+            assert "c'est bien ça" not in out, (reply, out)
+        else:
+            assert out.startswith("Je n'ai pas compris"), (reply, out)
+    # gros combiné (cote >= 50) : un entier de l'ordre de sa cote est une cote, jamais une mise
+    played.command(["sur", "0"], DAY)
+    chat.clear_pending()
+    with Fakes():
+        store.save("bets.json", {"picks": [], "combos": [N.combo(N.SUR, 120.0, 1000, FCFA)]})
+        chat.on_callback(f"joue|sur|{DAY}", 5)
+        out = chat.route("130")[1]
+    assert "c'est bien ça" not in out, out
+    # un décimal seul reste une cote (jamais une mise de 5,40 FCFA) ; deux nombres : cote puis mise, comme avant
+    played.command(["sur", "0"], DAY)
+    chat.clear_pending()
+    with Fakes():
+        store.save("bets.json", {"picks": [], "combos": [N.combo(N.SUR, 25.06, 1000, FCFA)]})
+        chat.on_callback(f"joue|sur|{DAY}", 5)
+        out = chat.route("25,06 400")[1]
+    assert out.startswith("✅ Noté") and played.find("sur", DAY).item["played"] == played.find("sur", DAY).item["played"] and played.find("sur", DAY).item["played"]["stake"] == 400, out
     print("ok  10 cote > 3x ou < 1/3 de la cote du pari (ou > 1000 pour un pari simple) : confirmation « oui » avant de noter ; cote plausible : noté")
 
 

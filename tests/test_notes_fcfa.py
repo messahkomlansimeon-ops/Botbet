@@ -208,7 +208,7 @@ def test_default_stake_without_budget():
     with Fakes():
         assert app.handle_command("/joue sur 5,40").startswith("Avec quelle mise en FCFA ?") and chat.get_pending()["what"] == "sur"
         assert chat.route("5,40 2 000")[1].startswith("✅ Noté") and store.load("bets.json", {})["combos"][0]["played"]["stake"] == 2000
-    # les protections de la saisie libre restent : « 2 000 » seul est ambigu, une cote absurde est refusée, l'attente reste
+    # les protections de la saisie libre restent : pari déjà noté (« Autre cote »), la cote est demandée : un entier seul n'est pas lu comme une mise, une cote absurde est refusée, l'attente reste
     chat.clear_pending()
     with Fakes():
         chat.on_callback(f"joue|sur|{DAY}", 12)
@@ -446,7 +446,7 @@ def test_custom_is_a_note():
                 assert " à 4,60 → si ça passe" in out and fair.load_combos()[0]["played"]["stake"] > 0, out
             else:                                       # aucune mise conseillée : la cote et la mise
                 assert "À quelle cote et avec quelle mise en FCFA ?" in reply, reply
-                assert chat.route("2 000")[1].startswith("Je n'ai pas compris la cote")              # ici « 2 000 » est ambigu (cote ou mise ?) : redemandé
+                assert chat.route("2 000")[1].startswith("Noté à ") and "pour 2 000 FCFA, c'est bien ça ?" in chat.route("2 000")[1]      # « 2 000 » seul = la mise, à confirmer
                 out = chat.route("4,60 800")[1]
                 assert "💰 800 FCFA à 4,60 →" in out, out
     print("ok  4 « Je le joue » = une note : cote 1xBet connue jamais demandée (mise conseillée : noté tout de suite ; sinon seule la mise) ; cote mini : cote (et mise) demandées")
@@ -976,7 +976,7 @@ def test_known_odds_never_asked():
     with Fakes():
         ask = chat.on_callback(f"joue|sur|{DAY}", 93)
         assert ask.startswith("À quelle cote as-tu joué") and "ta mise sera de 1 000 FCFA" in ask and "odds" not in chat.get_pending(), ask
-        assert chat.route("2 000")[1].startswith("Je n'ai pas compris la cote")            # ici la garde d'ambiguïté s'applique
+        assert chat.route("2 000")[1].startswith("Noté à 5,00 pour 2 000 FCFA, c'est bien ça ?")            # « 2 000 » seul = la mise, à confirmer
         assert "💰 1 000 FCFA à 5,40 →" in chat.route("5,40")[1]
     print("ok  10 cote 1xBet connue jamais demandée (noté tout de suite avec une mise conseillée, sinon seule la mise ; montant seul = mise ; « cote mise » "
           "corrige) ; cote de référence / mini : la cote est demandée ; « Autre cote » la demande")

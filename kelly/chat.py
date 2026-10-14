@@ -276,6 +276,10 @@ def _bad_answer(p, ref, known):
             "Une cote entière avec une mise s'écrit avec ses décimales : 2,00 500.")
 
 
+STAKE_MIN_AS_STAKE = 50          # réponse d'un seul nombre, cote du pari connue : à partir de 50 (ou à plus de ±50 % de la cote connue) c'est la mise, pas la cote
+STAKE_ODDS_BAND = 0.5
+
+
 def _answer(p, text):
     """La réponse envoyée après un appui sur ✅ / ✏️ (« 5,40 », « 5,40 2 000 »...) : notée avec played.command ; les boutons du message
     deviennent « ✅ Joué à … », « ✏️ Autre cote », « ↩️ Annuler » (ou la liste « Mes paris » entière est rafraîchie). Cote douteuse ou ambiguë
@@ -283,7 +287,8 @@ def _answer(p, text):
     11 061,90) ; une cote plus de 3 fois (ou moins du tiers) celle du pari demande confirmation (played.far_from_ref).
     Cote déjà CONNUE (p["odds"] : cote 1xBet lue par Kelly, ou cote tapée) : on n'attend que la mise, un montant seul (« 1000 », « 1 000 »,
     « 2000 », « 2k ») est la mise (aucune ambiguïté à garder : ce n'est pas une cote), et « cote mise » (« 11000 1000 ») corrige aussi la cote. Un
-    décimal seul (« 5,40 ») est une cote : la mise est alors demandée, avec cette cote. Sans mise conseillée, la mise est demandée et l'attente
+    décimal seul (« 5,40 ») est une cote : la mise est alors demandée, avec cette cote. Cote du pari connue mais pas encore donnée : un nombre ENTIER seul (« 400 », « 2k ») qui vaut
+    STAKE_MIN_AS_STAKE ou plus, ou qui est à plus de ±STAKE_ODDS_BAND de la cote connue, est la MISE : « Noté à 25,06 pour 400 FCFA, c'est bien ça ? » (un « oui » la note). Sans mise conseillée, la mise est demandée et l'attente
     reste ouverte."""
     t = played.find(p["what"], p["day"])
     ref = t.ref if t is not None and not isinstance(t, str) and t.ref else None
@@ -300,6 +305,17 @@ def _answer(p, text):
                 return _bad_answer(p, ref, known)
             else:                                   # « 5,40 » : une autre cote, la mise reste à donner
                 args = [text]
+    elif ref and not (t.item.get("played") if t is not None and not isinstance(t, str) else None):     # cote du pari connue mais pas encore donnée : un nombre ENTIER seul qui n'a rien d'une cote est la mise (à confirmer)
+        tokens, mult, foreign = money.strip_unit(money.split_tokens([text]))
+        amount, n = money.take_amount(tokens)
+        if amount is not None and n == len(tokens) and not foreign and amount > 0 and (float(amount).is_integer() or mult != 1):
+            value = amount * mult
+            if (value >= STAKE_MIN_AS_STAKE and ref < STAKE_MIN_AS_STAKE) or abs(value / ref - 1) > STAKE_ODDS_BAND:      # gros combiné (cote >= 50) : « 11062 » est une cote
+                stake = int(value)
+                msg = played.Confirm(f"Noté à {fmt.odds_txt(ref)} pour {money.money(stake)}, c'est bien ça ? Réponds « oui », ou renvoie la cote (et la mise) si 1xBet t'a payé autre chose.")
+                msg.confirm = {"odds": ref, "stake": stake}
+                set_pending(p["what"], p["day"], p.get("msg"), confirm=msg.confirm, lst=p.get("list"))
+                return msg
     if args == [text]:
         odds, stake, err = played.parse_odds_stake([text], strict=not known)
         if err or odds is None or not 1 < odds < top:

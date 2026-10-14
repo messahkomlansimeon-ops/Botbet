@@ -299,7 +299,7 @@ def test_autre_cote_answer():
             chat.on_callback(f"joue|sur|{DAY}", 13)
             before = store.load("bets.json", {})["combos"][0]["played"]
             _, reply = chat.route(txt)
-            assert "pas compris la cote" in reply, (txt, reply)
+            assert "pas compris la cote" in reply, (txt, reply)      # pari déjà noté (« Autre cote ») : la cote est demandée, un entier seul n'est jamais lu comme une mise
             assert chat.get_pending() and chat.get_pending()["msg"] == 13, txt
             assert store.load("bets.json", {})["combos"][0]["played"] == before, txt
         assert chat.route("2,00 500")[1].startswith("✅ Noté") and chat.get_pending() is None
