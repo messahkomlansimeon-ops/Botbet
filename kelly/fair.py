@@ -744,3 +744,42 @@ def record_custom(row, day):
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
     store.save(COMBOS_FILE, _keep(rows, cut))      # un combiné noté reste : « depuis le début » (money.result) le compte
     return new
+
+
+# ---------- combinés SANS valeur : suivis en fantôme, non envoyés ----------
+
+GHOST_COMBOS_FILE = "ghost_combos.json"
+
+
+def unsent(legs):
+    """Un combiné construit automatiquement doit-il rester fantôme (toutes ses jambes `fill`, voies connues) ? Faux si NOVALUE_SEND (config) ou ensemble éteint."""
+    from . import ensemble
+    return bool(C.ENSEMBLE_ENABLED and not C.NOVALUE_SEND and legs and ensemble.has_value(legs) is False)
+
+
+def load_ghost():
+    rows = store.load(GHOST_COMBOS_FILE, [])
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def ghost_record(target, combo, day, kind):
+    """Garde dans data/ghost_combos.json un combiné sans valeur NON ENVOYÉ (même forme qu'une ligne de fair_combos.json : jambes, cote, proba, has_value=False) pour le CLV par jambe et
+    le suivi ; jamais de mise, de coupon ni de bouton. Un seul par jour et par jeu de jambes. `kind` : 'matin réel', 'matin à vérifier' ou 'fenêtre stats'. -> True (ajouté ou déjà suivi)."""
+    from datetime import date, timedelta
+    rows = load_ghost()
+    row = combo_row(target, combo, day) | {"kind": kind, "unsent": 1}
+    if any(r.get("date") == row["date"] and set(r.get("keys") or []) == set(row["keys"]) for r in rows):
+        return True                                 # déjà suivi (relance, nouveau passage) : compté comme fantôme, jamais doublé
+    rows.append(row)
+    cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
+    store.save(GHOST_COMBOS_FILE, [r for r in rows if (r.get("date") or "") >= cut])
+    return True
+
+
+def ghost_drop(day, keys):
+    """Un combiné qui était fantôme part finalement (relance où une jambe a gagné de la valeur, NOVALUE_SEND) : sa ligne fantôme tombe, il est suivi comme un combiné envoyé."""
+    keys = set(keys)
+    rows = load_ghost()
+    kept = [r for r in rows if not (r.get("date") == str(day) and set(r.get("keys") or []) == keys)]
+    if len(kept) != len(rows):
+        store.save(GHOST_COMBOS_FILE, kept)

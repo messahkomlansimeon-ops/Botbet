@@ -109,7 +109,7 @@ def frozen(fam):
 
 SHARPGAP_FAMILIES = frozenset(("goals", "btts", "dc", "h2h", "team_goals"))      # voie « sharpgap » : les cinq familles dont le poids du modèle est figé à 0
 STATS_LANE = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))     # voie « stats » : le modèle binomial négatif mélangé au marché
-STRATEGIES = ("sharpgap", "stats", "fill")
+STRATEGIES = ("sharpgap", "stats", "fill", "live")                # « live » : jambes des combinés LIVE, hors voies (ni retard 1xBet ni modèle de stats) ; dimensionnement d'avant
 
 
 def strategy_of(c):

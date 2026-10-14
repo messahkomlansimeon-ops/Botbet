@@ -20,6 +20,7 @@ os.environ["XBET_PROXY"] = "http://user:secret@proxy.test:80"
 from kelly import app, bankroll, calib, chat, config as C, custom, fair, fmt, migrate, money, played, settle, store, telegram, track, xalerts, xprice  # noqa: E402
 from kelly.sources import xbet  # noqa: E402
 C.NOVALUE_STAKE = 50.0       # les combinés du jeu d'essai n'ont pas de valeur au sens des voies : mise fixe optionnelle (défaut 0 = suivi en fantôme) pour exercer le flux de mise
+C.NOVALUE_SEND = True       # les combinés des jeux d'essai n'ont pas de valeur au sens des voies : ils doivent être ENVOYÉS pour exercer les messages (défaut du bot : fantôme)
 
 DAY = "2030-01-01"
 KO = f"{DAY}T19:00:00Z"

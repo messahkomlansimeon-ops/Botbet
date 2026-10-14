@@ -26,6 +26,7 @@ import requests  # noqa: E402
 from kelly import app, calib, chat, combos as CB, config as C, custom, fair, fmt, money, played, statswindow, store, telegram, xprice  # noqa: E402,F401
 from kelly.sources import fmmatch, http, state, xbet  # noqa: E402
 C.NOVALUE_STAKE = 50.0       # les combinés du jeu d'essai n'ont pas de valeur au sens des voies : mise fixe optionnelle (défaut 0 = suivi en fantôme) pour exercer le flux de mise
+C.NOVALUE_SEND = True       # les combinés des jeux d'essai n'ont pas de valeur au sens des voies : ils doivent être ENVOYÉS pour exercer les messages (défaut du bot : fantôme)
 
 # Ces tests vérifient la règle d'avant (meilleure ligne au prix 1xBet sur la seule proba de Kelly), toujours celle des touches et des hors-jeu : familles
 # de l'ensemble d'avant le 12/10. Le mélange avec 1xBet des familles de stats est testé dans tests/test_stats_ensemble.py.

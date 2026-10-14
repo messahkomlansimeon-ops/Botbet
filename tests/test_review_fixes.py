@@ -15,6 +15,7 @@ from tests import test_combi_track as T       # fixe DATA_DIR (dossier temporair
 from kelly import (app, chat, combos as CB, config as C, custom, fair, fmt, gapbets, live, money, played, settle, statswindow, store,  # noqa: E402
                    telegram, xprice)
 C.NOVALUE_STAKE = 50.0       # les combinés du jeu d'essai n'ont pas de valeur au sens des voies : mise fixe optionnelle (défaut 0 = suivi en fantôme) pour exercer le flux de mise
+C.NOVALUE_SEND = True       # les combinés des jeux d'essai n'ont pas de valeur au sens des voies : ils doivent être ENVOYÉS pour exercer les messages (défaut du bot : fantôme)
 
 DAY, FCFA = T.DAY, "FCFA"
 UTC = timezone.utc

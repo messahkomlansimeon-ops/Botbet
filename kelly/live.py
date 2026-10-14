@@ -305,7 +305,7 @@ def legs(raw, now=None, data=None, model_for=None):
                    "px": round(p_x[k], 4) if k in p_x else None, "odds": cf, "xodds": cf, "xref": [m["gid"], t, param], "xgid": m["gid"],
                    "min_odds": round(1 / max(p, 1e-6) * (1 + C.FAIR_MARGIN), 2), "pick": fmt.label(mk, side, point, None, "soccer"),
                    "minute": m["minute"], "score": f"{m['score'][0]}-{m['score'][1]}", "tranche": tr, "live": True, "conf": pred.get("q"),
-                   "src": pred.get("src") or "modèle"}
+                   "src": pred.get("src") or "modèle"} | ({"strategy": "live"} if C.ENSEMBLE_ENABLED else {})        # étiquette « live » : hors voies, mesurée à part
             if 0.03 < p < 0.97:
                 seen.append(leg)
             gap = abs(p - leg["px"]) if leg["px"] is not None else 1.0

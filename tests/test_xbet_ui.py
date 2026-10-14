@@ -19,6 +19,8 @@ import inspect  # noqa: E402
 
 from kelly import app, bankroll, calib, chat, combos as CB, fair, fmt, money, monde, played, settle, store, telegram, track, xprice  # noqa: E402
 from kelly.sources import http, state, xbet  # noqa: E402
+from kelly import config as C  # noqa: E402
+C.NOVALUE_SEND = True       # les combinés des jeux d'essai n'ont pas de valeur au sens des voies : ils doivent être ENVOYÉS pour exercer les messages (défaut du bot : fantôme)
 
 DAY = "2030-01-01"
 KO = f"{DAY}T19:00:00Z"

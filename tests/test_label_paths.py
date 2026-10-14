@@ -53,8 +53,8 @@ def test_discarded_and_other_families():
     finally:
         xprice._price = orig
     # compteur : live ignoré, documents abîmés ignorés, ensemble éteint = pas de ligne
-    store.save("fair_combos.json", [{"date": __import__("datetime").date.today().isoformat(), "legs": [{"xodds": 1.5, "live": True}, {"xodds": 1.5, "strategy": "fill"}]}, "pas un dict", None])
-    assert lanestats.unlabeled() == (0, 1) and lanestats.unlabeled_line().startswith("jambes sans étiquette : 0 / 1")
+    store.save("fair_combos.json", [{"date": __import__("datetime").date.today().isoformat(), "legs": [{"xodds": 1.5, "live": True, "strategy": "live"}, {"xodds": 1.5, "strategy": "fill"}, {"xodds": 1.6}]}, "pas un dict", None])
+    assert lanestats.unlabeled() == (1, 3) and lanestats.unlabeled_line().startswith("jambes sans étiquette : 1 / 3"), "une jambe live étiquetée compte comme étiquetée ; seule la jambe sans voie manque"
     C.ENSEMBLE_ENABLED = False
     try:
         assert lanestats.unlabeled_line() == ""

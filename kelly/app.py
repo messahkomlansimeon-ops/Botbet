@@ -140,7 +140,7 @@ RETRY_BUTTON = "touche « 🎟️ Vérifier ce combiné »"        # sous un com
 
 
 def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None, odds_time=None, fair_coupons=None, gaps=None,
-              gap_out=None):
+              gap_out=None, ghost_out=None):
     """Messages du jour + enregistrement des paris envoyés. `world` : cache « tour du monde » (monde.build), `pronos` :
     pronostics sans cote (fair.make), `fair_combos` : [(palier, combiné à cote juste | None)] (combos.fair_plan), un message
     chacun, à part des combinés réels. Un message par combiné ; les paliers impossibles à bâtir avec
@@ -160,6 +160,19 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     built = [(t, c) for t, c in plan if c]
     missing = [t for t, c in plan if not c and t not in rejected and t not in again]
     built_fair = [(t, c) for t, c in fair_combos if c]
+    n_ghost = 0
+    ghost_line = ""                                  # combinés SANS valeur (toutes jambes fill) : construits et journalisés, jamais envoyés (NOVALUE_SEND les réaffiche) ; une relance garde ceux déjà envoyés
+    for lst, kind, known in ((built, "matin réel", resent), (built_fair, "matin à vérifier", {str(k) for k in again_fair})):
+        for t, c in list(lst):
+            if str(t) not in {str(k) for k in known} and fair.unsent(c[0]):
+                lst.remove((t, c))
+                n_ghost += fair.ghost_record(t, c, day, kind)
+                if kind == "matin à vérifier" and ghost_out is not None:
+                    ghost_out.add(str(t))
+            else:
+                fair.ghost_drop(day, [l["key"] for l in c[0]])         # envoyé finalement (relance où une jambe a gagné de la valeur, NOVALUE_SEND) : plus un fantôme
+    if n_ghost:
+        ghost_line = fmt.i(f"👻 {n_ghost} combiné{'s' if n_ghost > 1 else ''} sans valeur suivi{'s' if n_ghost > 1 else ''} en fantôme, non envoyé{'s' if n_ghost > 1 else ''}")
     if top_gap and gap_out is not None:                  # ... mais il reste un écart sharp : marqué dans le suivi pour mesurer sa clôture contre Pinnacle
         gap_out.append((top, top_gap[0], None, None))
     stakes, spent, kept, poor = day_stakes(top, built, built_fair, gaps)
@@ -167,7 +180,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     if fair_stakes is not None:
         fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple) and k[0] == "fair")})   # 0 compris
     # sans budget ni capital : pas de montant, mais « Kelly ne conseille pas de miser dessus » reste dit quand le pari perd en moyenne
-    mise = lambda st, prob=None, odds=None: money.stake_words(st if money.active() else None, prob, odds)    # noqa: E731
+    mise = lambda st, prob=None, odds=None, nov=False: money.stake_words(st if money.active() else None, prob, odds, novalue=nov)    # noqa: E731
     if picks:
         n_world = monde.total(world) if world else 0
         seen = (f"{n_world} matchs analysés dans le monde, {n_events} avec des cotes réelles" if n_world
@@ -183,6 +196,8 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                                     else "(cotes relevées chez 1xBet)"))
             else:
                 head.append(f"🎲 {n_f} à vérifier chez 1xBet " + fmt.i("(cotes de Kelly, pas du bookmaker)"))
+        if n_ghost:
+            head.append(ghost_line)
         if money.capital_mode():
             head.append(money.capital_line())
         head.append(money.budget_line(spent, kept, poor) if money.active() else
@@ -197,6 +212,8 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         if rejected:
             head.append(fmt.i(fmt.esc(CB.ev_line(rejected))))
         messages.append(telegram.with_buttons(Html("\n".join(head)), chat.menu()))
+    elif n_ghost:                                    # jour sans pari réel : la ligne passe seule (jamais un silence sur un combiné retenu en fantôme)
+        messages.append(Html(ghost_line))
     if world:
         try:
             messages.append(monde.tour_du_monde(world, len(CB.best_per_match(pronos)), why_no_odds))
@@ -234,8 +251,9 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         old = resent.get(title) or {}                              # relance : même code coupon et même heure de cotes que le combiné déjà envoyé
         when = old.get("at") or odds_time if title in resent else odds_time
         coupon = (old.get("coupon") if title in resent and old.get("coupon") else xbet.save_coupon(picks_)) if xcombo else None      # combiné aux cotes 1xBet
+        nov = bool(C.ENSEMBLE_ENABLED and ensemble.has_value(picks_) is False)       # sans valeur et envoyé (NOVALUE_SEND) : toujours dit, jamais de mise conseillée
         messages.append(chat.with_played_button(fmt.combo(title, picks_, odds_, prob, st, {c["key"]: CB.leg_reason(c) for c in picks_},
-                                                          stake_txt=mise(st, prob, odds_), coupon=coupon, when=when,
+                                                          stake_txt=mise(st, prob, odds_, nov), coupon=coupon, when=when,
                                                           retry=RETRY_BUTTON if xcombo and not coupon else None),
                                                 played.norm(fmt.tier_word(title)), day, stake=st, xrefresh=xcombo, code=coupon))
         sent_picks += picks_
@@ -251,8 +269,9 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         coupon = (old.get("coupon") if old.get("coupon") else xbet.save_coupon(legs)) if xfair else None
         if fair_coupons is not None and coupon:
             fair_coupons[target] = coupon
+        nov = bool(C.ENSEMBLE_ENABLED and ensemble.has_value(legs) is False)         # sans valeur et envoyé (NOVALUE_SEND) : toujours dit, jamais de mise conseillée
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                               stake_txt=mise(stakes.get(("fair", target)), CB.stake_prob(legs, prob), min_total),
+                                                               stake_txt=mise(stakes.get(("fair", target)), CB.stake_prob(legs, prob), min_total, nov),
                                                                title=CB.shots_title(target), coupon=coupon, when=when,
                                                                retry=RETRY_BUTTON if xfair and not coupon else None),
                                                 f"v{target}", day, stake=stakes.get(("fair", target)),
@@ -731,6 +750,14 @@ def announce_repairs():
         return None
 
 
+def record_fair_morning(fair_combos, day, fair_stakes, fair_coupons, odds_at, ghost=()):
+    """Enregistre (fair_combos.json) les combinés à vérifier du matin ENVOYÉS ; `ghost` (build_day, ghost_out) : paliers retenus en fantôme (sans valeur, non envoyés), qui n'y entrent
+    jamais : ni mise, ni coupon, ni bouton. Un palier est exclu parce que build_day l'a RETIRÉ, pas parce que ses clés ressemblent à un fantôme d'une autre lecture. -> nombre enregistré."""
+    ghost = {str(t) for t in ghost}
+    return fair.record_combos([(t, c) for t, c in fair_combos if c and str(t) not in ghost], day, fair_stakes, money.cur() if fair_stakes else None,
+                              coupons=fair_coupons, at=odds_at, replace=True)
+
+
 def run_daily(sample=False, retry=False):
     """Le passage du matin. `retry` (lancé par le runner, pas --force) : liste des matchs injoignable -> MorningRetry (rien n'est fait ni envoyé) tant
     que C.DAILY_SCAN_TRIES essais n'ont pas eu lieu aujourd'hui."""
@@ -806,9 +833,9 @@ def run_daily(sample=False, retry=False):
             fair_combos = _resend_fair(pronos, _recorded_fair(day), fair_plan_all(pronos, picks, gaps))
         except Exception as e:                      # noqa: BLE001 - les combinés à cote juste sont facultatifs
             print(f"[fair] combinés à cote juste ignorés : {type(e).__name__}: {e}", file=sys.stderr)
-    fair_stakes, fair_coupons, gap_rows = {}, {}, []
+    fair_stakes, fair_coupons, gap_rows, ghost_out = {}, {}, [], set()
     messages, sent_picks, sent_combos = build_day(picks, day, world, pronos, why, fair_combos, fair_stakes, odds_time=odds_at,
-                                                  fair_coupons=fair_coupons, gaps=gaps, gap_out=gap_rows)
+                                                  fair_coupons=fair_coupons, gaps=gaps, gap_out=gap_rows, ghost_out=ghost_out)
     if not sample:                                  # ⚠️ Ce matin : journée inhabituelle, relevé 1xBet coupé, proxy refusé (rien si tout va bien)
         alert = _step("contrôle du jour", lambda: dayhealth.message(day, dayhealth.counts(world, picks, pronos), now_utc()))
         if alert:
@@ -820,8 +847,7 @@ def run_daily(sample=False, retry=False):
         except Exception as e:                      # noqa: BLE001 - le suivi neuf ne bloque pas le matin
             print(f"[sharp] suivi des écarts ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     settle.record_combos(sent_combos, day, replace=True)       # relance du même jour : voir _resend_real
-    fair.record_combos([(t, c) for t, c in fair_combos if c], day, fair_stakes, money.cur() if fair_stakes else None,
-                       coupons=fair_coupons, at=odds_at, replace=True)
+    record_fair_morning(fair_combos, day, fair_stakes, fair_coupons, odds_at, ghost_out)
     keep = keep_pronos(pronos, fair_combos)         # /top, /match, /combi et le relevé de 15:00 les relisent
     # xbet_at : heure du dernier relevé 1xBet des pronostics (relevés de l'après-midi compris), picks_at : celle des paris réels (le matin) ;
     # affichées avec les cotes 1xBet (/top, /match, /analyse)

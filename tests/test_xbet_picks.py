@@ -16,6 +16,7 @@ os.environ["XBET_PROXY"] = "http://user:secret@proxy.test:80"
 
 from kelly import app, combos as CB, config as C, fmt, settle, store, track, xprice  # noqa: E402
 from kelly.sources import xbet  # noqa: E402
+C.NOVALUE_SEND = True       # les combinés des jeux d'essai n'ont pas de valeur au sens des voies : ils doivent être ENVOYÉS pour exercer les messages (défaut du bot : fantôme)
 
 DAY = "2026-10-09"
 TYP, XB, PROB = 1.6, 1.5, 0.7                       # cote typique des books, cote 1xBet, proba de consensus

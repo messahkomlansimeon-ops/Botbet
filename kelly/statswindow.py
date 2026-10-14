@@ -360,13 +360,23 @@ def plan_combo(app, today, doc, rows, now):
     if tier is None:
         return None
     usage = app.day_usage(day, rows)                 # un seul Usage pour tous les tickets du jour (combinés réels, à vérifier, stats, pari du jour, écarts sharp)
-    combo = CB.fair_stats_window(app.upcoming(today["pronos"], now), usage=usage, accept=lambda c: in_window(c, now) and fresh(c, now))
+    skip = set()
+    for _ in range(4):                               # un meilleur candidat SANS valeur (toutes jambes fill) est suivi en fantôme puis écarté : le suivant, avec une jambe à valeur, a sa chance
+        combo = CB.fair_stats_window(app.upcoming(today["pronos"], now), usage=usage,
+                                     accept=lambda c: in_window(c, now) and fresh(c, now) and c["key"] not in skip)
+        if not combo or not fair.unsent(combo[0]):
+            break
+        fair.ghost_record(tier, combo, day, "fenêtre stats")
+        skip.add(combo[0][0]["key"])
+        combo = None
     if not combo:
         return None
     legs, total, prob = combo
     keys = {l["key"] for l in legs}
     if any(keys == set(c["keys"]) for c in doc["combos"]) or any(keys == set(r.get("keys") or []) for r in rows if r.get("date") == day):
         return None                                 # jamais deux fois les mêmes jambes
+    if any(keys == set(r.get("keys") or []) for r in fair.load_ghost() if r.get("date") == day):
+        return None                                 # déjà suivi en fantôme (sans valeur, non envoyé) : pas replanifié à chaque passage
     ages = [(age_min(l, now), l.get("xat")) for l in legs]
     when = max(ages, key=lambda a: a[0] if a[0] is not None else 9999)[1] or now.strftime("%H:%M")      # l'heure de la cote la plus ancienne : honnête
     return {"tier": tier, "legs": legs, "total": total, "prob": prob, "when": when, "keys": sorted(keys)}
@@ -377,6 +387,10 @@ def send_combo(app, plan, day, now):
     les boutons habituels (« ✅ Je l'ai joué », « 🎟️ Vérifier ce combiné », « 📋 Copier le code »). Le code est demandé à 1xBet SANS verrou ; l'enregistrement est écrit AVANT
     l'envoi (une relance ne le double pas). -> le palier envoyé, ou None."""
     legs, total, prob, tier, when = plan["legs"], plan["total"], plan["prob"], plan["tier"], plan["when"]
+    if fair.unsent(legs):                           # combiné SANS valeur : suivi en fantôme, ni code coupon (aucun réseau), ni message, ni place dans le plafond du jour
+        fair.ghost_record(tier, (legs, total, prob), day, "fenêtre stats")
+        print(f"[stats] combiné {tier} sans valeur : suivi en fantôme, non envoyé", file=sys.stderr)
+        return None
     coupon = app._coupon(legs)                      # réseau 1xBet (ticket sans mise) : hors verrou
     stake = app._budget_stake(prob, total, legs=legs)
     with locked():

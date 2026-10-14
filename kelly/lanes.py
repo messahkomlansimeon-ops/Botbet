@@ -106,8 +106,8 @@ def item_fields(legs, single=False):
     le comportement d'avant. Un pari seul sans valeur garde Kelly comme avant."""
     legs = list(legs or [])
     labels = [(l or {}).get("strategy") for l in legs]
-    if not legs or any(x is None for x in labels) or not C.ENSEMBLE_ENABLED:
-        return {}
+    if not legs or any(x is None for x in labels) or "live" in labels or not C.ENSEMBLE_ENABLED:
+        return {}                                   # jambe live : hors voies, le dimensionnement live reste celui d'avant
     value = [x for x in labels if x in ("sharpgap", "stats")]
     if value:
         return {"frac": min(frac(x) for x in value)}

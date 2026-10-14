@@ -10,7 +10,7 @@ from collections import defaultdict
 from . import config as C, ensemble, store
 
 LEAD_OK_MIN = 90
-LANES = ("sharpgap", "stats", "fill")
+LANES = ("sharpgap", "stats", "fill", "live")
 OBJ_MIN_N = 300                                # objectif 1 : lignes réglées minimales avant de conclure
 CUT_MIN_N = 300                                # coupure de la voie stats entière
 CUT_MIN_N_LEAGUE = 200                         # coupure et retour d'une ligue
@@ -182,6 +182,8 @@ def lane_lines(rows, days=None, today=None, plain=False):
             n, m, h, gone = clv([r for r in log if r.get("strategy") == lane and settled(r)])
             if n:
                 txt += f" · {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" (sur {n} lignes du journal)"
+        if lane == "live":
+            txt += " · hors voies (dimensionnement d'avant) ; CLV non mesurable : aucun relevé de clôture live"
         out.append(txt)
     try:
         cm = combo_money(days, today)
@@ -321,13 +323,16 @@ def cut_lines():
                 how = f"« voies {sk} on »" if sk in (st.get("leagues") or {}) else f"STATS_ON_LEAGUES={sk} (ou retire-la de STATS_GHOST_LEAGUES)"
                 out.append(f"✅ {sk} : CLV 1xBet fantôme {_pc(d.get('mean') or 0)} ± {_pc(d.get('half') or 0, False)} sur {d.get('n')} lignes réglées, deux lundis de suite. "
                            f"Retour proposé, à faire à la main : {how}.")
+        la = live_alert()
+        if la:
+            out.append(la)
     except Exception as e:                      # noqa: BLE001
         print(f"[lanes] lignes de coupure illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     return out
 
 
 def unlabeled(today=None):
-    """(sans étiquette, total) des lignes du jour qui portent un prix 1xBet : jambes des combinés du jour (hors jambes LIVE : leur voie n'est pas définie, à étiqueter plus tard) +
+    """(sans étiquette, total) des lignes du jour qui portent un prix 1xBet : jambes des combinés du jour (les jambes `live` ont leur propre étiquette : elles comptent comme étiquetées) +
     lignes du journal d'ensemble du jour. Une ligne créée après le lot des étiquettes complètes en a toujours une (fill à défaut) ; seules les lignes d'avant (legacy) peuvent
     en manquer. Documents abîmés : les éléments illisibles sont ignorés."""
     from datetime import date
@@ -337,7 +342,7 @@ def unlabeled(today=None):
     for combos in (fair.load_combos(), (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])):
         for c in combos if isinstance(combos, list) else []:
             if isinstance(c, dict) and str(c.get("date") or "")[:10] == day:
-                legs += [l for l in c.get("legs") or [] if isinstance(l, dict) and l.get("xodds") and not l.get("live")]
+                legs += [l for l in c.get("legs") or [] if isinstance(l, dict) and l.get("xodds")]
     rows = [r for r in journal_rows() if isinstance(r, dict) and r.get("date") == day and r.get("xodds")]
     allx = legs + rows
     return sum(1 for x in allx if not x.get("strategy")), len(allx)
@@ -368,7 +373,7 @@ def leg_clv_rows(days=None, today=None):
     by_key = {r.get("key"): r for r in journal_rows() if r.get("key")}
     out = []
     bets = (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])
-    for combos in (fair.load_combos(), bets):
+    for combos in (fair.load_combos(), bets, fair.load_ghost()):
         for c in combos if isinstance(combos, list) else []:
             if not isinstance(c, dict) or (c.get("date") or "") < cut:
                 continue
@@ -403,20 +408,45 @@ def leg_clv_lines(days=None, today=None):
         return []
     out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match ; "
            "une jambe sans prix pris, sans ligne au journal ou sans relevé proche n'est pas mesurée : seules les lignes restées les mêmes sont vues)"]
-    for lane in ("sharpgap", "stats", "fill", None):
+    for lane in ("sharpgap", "stats", "fill", "live", None):
         mine = [(l, c, v) for l, c, v in rows if (l.get("strategy") or None) == lane and v is not None]
         if not mine:
             continue
         n, m, h = stats([v for _, _, v in mine], [l.get("id") or c.get("date") for l, c, _ in mine])
         pos = sum(1 for _, _, v in mine if v > 0)
-        name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
+        name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", "live": "live (à part : hors voies)", None: "avant les étiquettes"}[lane]
         out.append(f"{name} : {n} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" · {round(pos / n * 100)} % battent le dernier prix"
                    + ("" if n >= 30 else " (trop peu pour conclure)"))
+    try:
+        from . import fair
+        g = [r for r in fair.load_ghost() if (r.get("date") or "") >= _since(days, today)]
+        if g:
+            out.append(f"{len(g)} combiné{'s' if len(g) > 1 else ''} sans valeur suivi{'s' if len(g) > 1 else ''} en fantôme (non envoyé{'s' if len(g) > 1 else ''}) : leurs jambes sont comptées ci-dessus")
+    except Exception:                           # noqa: BLE001
+        pass
     tiers = {}
     for l, c, v in rows:
-        if v is not None and (l.get("strategy") or None) != "fill":
+        if v is not None and (l.get("strategy") or None) not in ("fill", "live"):
             tiers.setdefault(_tier_name(c), []).append(v)
     for t, vs in tiers.items():
         neg = sum(1 for v in vs if v < 0)
         out.append(f"palier {t} : {round(neg / len(vs) * 100)} % des jambes à valeur à CLV négatif ({neg}/{len(vs)})")
     return out
+
+
+LIVE_ALERT_N = 200                             # jambes live mesurées avant de rendre un verdict
+
+
+def live_alert():
+    """Règle inscrite le 14/10 : si le CLV des jambes `live` contre le dernier prix 1xBet connu est négatif avec un IC à 95 % sur LIVE_ALERT_N jambes mesurées, on REVIENT vers l'utilisateur
+    (message au bilan du matin) ; AUCUNE coupure automatique du live. Aujourd'hui aucun relevé de clôture live n'existe : les jambes ne sont pas mesurables (n = 0), la règle ne peut pas
+    encore se déclencher. -> ligne de texte ou ''."""
+    try:
+        pairs = [(l, v) for l, _, v in leg_clv_rows() if l.get("strategy") == "live" and v is not None]
+        n, m, h = stats([v for _, v in pairs], [l.get("id") or i for i, (l, _) in enumerate(pairs)])      # marges par match : les jambes d'un même match sont corrélées
+        if n >= LIVE_ALERT_N and verdict(n, m, h, LIVE_ALERT_N) == "neg":
+            return (f"⚠️ Jambes live : CLV 1xBet {_pc(m)} ± {_pc(h, False)} sur {n} jambes, intervalle sous zéro. Décision à prendre avec toi "
+                    "(aucune coupure automatique du live).")
+    except Exception as e:                      # noqa: BLE001
+        print(f"[lanes] alerte live illisible : {type(e).__name__}: {e}", file=sys.stderr)
+    return ""

@@ -66,6 +66,7 @@ def test_legs_and_guards():
     assert keep and all(c["id"] == "lv1" and c["prob"] >= 0.6 and c["odds"] >= 1.15 and abs(c["prob"] - c["px"]) <= 0.08
                         and c["prob"] * c["odds"] - 1 >= 0.02 for c in keep), keep
     assert all(c["tranche"] == "60-75" and c["live"] and c["xref"][0] == 1 for c in seen)
+    assert seen and all(c.get("strategy") == "live" for c in seen + keep), "étiquette « live » : hors voies, mesurée à part"
     thin = live.legs([game(1, 63)], now=NOW, data={}, model_for=lambda m, k: {"pred": PRED["pred"] | {"q": 0.1}})
     assert thin[2]["known"] == 0, "données trop maigres : jamais"
     far = live.legs([game(1, 63, odds=[{"T": 9, "P": 1.5, "C": 4.0}, {"T": 10, "P": 1.5, "C": 1.2}])], now=NOW, data={}, model_for=lambda m, k: PRED if k else None)[0]
