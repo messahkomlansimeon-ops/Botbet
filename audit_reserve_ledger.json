@@ -1,0 +1,51 @@
+{
+ "prereg": {
+  "declared_by": "utilisateur",
+  "declared_on": "2026-10-14",
+  "reserved": {
+   "from": "2025-07-01",
+   "to": "2027-01-01",
+   "divs": [
+    "E0",
+    "SP1",
+    "I1",
+    "D1",
+    "F1"
+   ],
+   "read": "UNE seule fois"
+  },
+  "compared_to": "prix d'ouverture Pinnacle (PSH/PSD/PSA, P>2.5/P<2.5)",
+  "configs": {
+   "contexte éteint": "strength.predict(ctx=False)",
+   "contexte actuel": "strength.predict(ctx=True)",
+   "poids du modèle": 0.12
+  },
+  "markets": [
+   "1N2",
+   "plus/moins 2,5"
+  ],
+  "metrics": [
+   "log-loss",
+   "distance à la clôture"
+  ],
+  "interval": "95 %, écart apparié par match, agrégat 5 ligues",
+  "rule": "poids 12 % conservé sur un marché seulement si au moins une configuration bat l'ouverture sur les DEUX métriques avec une borne haute d'écart < 0 ; les deux passent : la plus petite distance à la clôture ; une seule : celle-là ; aucune : poids 0 sur ce marché et ses dérivés, sharpgap seul",
+  "min_matches": 30,
+  "derived": {
+   "1N2": [
+    "double_chance"
+   ],
+   "plus/moins 2,5": [
+    "btts",
+    "team_totals_home",
+    "team_totals_away"
+   ]
+  },
+  "team_totals": "les buts par équipe (team_totals_home/away) suivent le plus/moins 2,5 (mêmes λ domicile/extérieur que le total) ; ils restent dans la collecte du dernier prix 1xBet (décision 3) et pourront faire l'objet d'une décision propre plus tard, sur leurs données, si le CLV 1xBet les sauve",
+  "comparisons": 8,
+  "what_it_measures": "un PROXY de la production : strength.walk au réglage par défaut (demi-vie 110 j, sans réglage hebdomadaire), sans mélange xG (fair.with_xg), sans calib.calibrate, avec un poids FIXE de 12 % au lieu des poids appris par famille (ensemble.json), mis en commun avec l'ouverture de Pinnacle seulement ; cinq ligues football-data seulement, 1N2 et plus/moins 2,5 seulement. Le verdict ne peut pas être lu comme plus que cela.",
+  "other_reading": "aucune ; tout chiffre inattendu est noté « observé, non testé », sans décision"
+ },
+ "prereg_sha": "d5845afa6cb43b166e180fafb2fb23a172391e09a678e6c361a83a89050532b3",
+ "written_at": "2026-10-14T02:50:50+00:00"
+}
