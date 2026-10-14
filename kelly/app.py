@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, lanes, lanestats,
+from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                xprice, xworld)
 from .sources import fmmatch, http, state, xbet
@@ -663,6 +663,10 @@ def log_opinions(rows, day, now=None):
     """Journal des avis de l'ensemble (ensemble.record) : le modèle, 1xBet sans marge et le book de référence de chaque pronostic ou pari réel, gardés jusqu'à
     leur règlement (settle.settle_ensemble) pour que les poids apprennent dans TOUTES les familles, décidées par l'ensemble ou non. Ne lève jamais.
     -> nombre de lignes ajoutées."""
+    try:
+        gapdist.observe(rows, now or now_utc())     # décision 5 : distribution des écarts 1xBet / sharp par heure (document à part, aucun effet sur un pari) ; ne lève jamais
+    except Exception as e:                          # noqa: BLE001
+        print(f"[gapdist] ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     if not ensemble.logging_on():
         return 0
     try:
