@@ -18,6 +18,7 @@ def ll(best, k):
 
 def test_button_and_words():
     assert any("📊 Marchés" in row for row in chat.MENU) and chat.BUTTONS["📊 Marchés"] == "/marches"
+    assert any("🌱 Saison" in row for row in chat.MENU) and chat.route("🌱 Saison")[0] == "/saison"      # bouton du menu pour la voie saison
     assert chat.route("📊 Marchés")[0] == chat.route("marchés")[0] == chat.route("Marches")[0] == "/marches"
     assert "📊 <b>Marchés</b>" in str(app.HELP)
     print("ok  bouton « 📊 Marchés » dans le menu, « marchés » compris, aide à jour")
