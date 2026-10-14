@@ -24,12 +24,17 @@ from . import config as C, fmt, money, played, progress, store, telegram, track
 
 PENDING_FILE = "pending.json"
 PENDING_MINUTES = 30
-MENU = [["🎯 Un combiné", "🔴 Live"], ["🔝 Paris du jour", "🧾 Mes paris"], ["📊 Mes résultats", "📊 Marchés", "🩺 Status"],
-        ["💼 Mon capital", "📈 Tendances", "🌱 Saison", "❓ Aide"]]
-# « 🔄 Mettre à jour tous les paris » n'est plus dans le menu (action rare) : bouton sous « 🔝 Paris du jour » (callback « maj »), et « maj » / ancien bouton marchent
-BUTTONS = {"🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan", "🧾 Mes paris": "/joue",
-           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "💼 Mon capital": "/capital", "❓ Aide": "/aide",      # « À noter », « Mon budget » : anciens libellés
-           "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes",     # anciens libellés du menu
+MENU = [["🎯 Combiné", "🔝 Du jour"], ["🧾 Mes paris", "🔴 Live"], ["📊 Résultats", "➕ Plus"]]      # le quotidien en 3 rangées de 2 ; le reste est sous « ➕ Plus » (boutons sous le message, MORE)
+MORE_BUTTON = "➕ Plus"
+MORE = [[("💼 Capital", "m|cap"), ("🌱 Saison", "m|sai")], [("📈 Tendances", "m|ten"), ("🧮 Marchés", "m|mar")],
+        [("🩺 Status", "q|status"), ("❓ Aide", "m|aid")], [("🔄 Actualiser les cotes", "m|maj")]]      # la sauvegarde reste « sauvegarde » écrit : elle tient le verrou jusqu'à 300 s
+MORE_CMD = {"cap": "/capital", "sai": "/saison", "ten": "/tendances", "mar": "/marches", "maj": "/cotes", "aid": "/aide"}      # « m|<clé> » : la commande ; « q|<mot> » : réponse rapide sans verrou (telegram.poll, comme le texte écrit)
+# « 🔄 Mettre à jour tous les paris » n'est plus dans le menu (action rare) : bouton sous « 🔝 Du jour » (callback « maj »), et « maj » / ancien bouton marchent
+# Anciens libellés (claviers déjà affichés sur le téléphone avant la mise à jour) : ils répondent toujours.
+BUTTONS = {"🔝 Du jour": "/top", "🎯 Combiné": None, "📊 Résultats": "/bilan", "🧾 Mes paris": "/joue",
+           "🔝 Paris du jour": "/top", "🎯 Un combiné": None, "📊 Mes résultats": "/bilan",
+           "🧾 À noter": "/joue", "💰 Mon budget": "/budget", "💼 Mon capital": "/capital", "❓ Aide": "/aide",
+           "🔄 Mettre à jour tous les paris": "/cotes", "🔄 Actualiser les cotes": "/cotes",
            "🩺 Status": "/status", "📊 Marchés": "/marches", "📈 Tendances": "/tendances", "🌱 Saison": "/saison"}
 COMBI_TARGETS = (3, 5, 10, 20, 50)
 UNIT = r"(?:fcfa|cfa|xof|francs?|frs?|f|k|eur|euros?|usd|dollars?|[€$£¥])"        # unités d'un montant : « 2k », « 2000F », « 50 € »
@@ -531,6 +536,11 @@ def quick(text):
     return progress.describe() if WORDS_ALONE.get(t.lstrip("/")) == "/etat" else None
 
 
+def more_menu():
+    """Le sous-menu « ➕ Plus » : les outils moins fréquents, en boutons sous le message."""
+    return telegram.with_buttons("➕ Plus d'options", telegram.inline(MORE))
+
+
 def route(text):
     """Ce qu'il faut faire d'un message : (commande « / », None) à passer au traitement des commandes, ou (None, réponse). Une question ouverte (cote ou
     mise attendue, confirmation) n'est refermée que par un message qui a un sens pour Kelly (commande, bouton, équipe connue) : « ok », « le », un
@@ -563,6 +573,9 @@ def route(text):
     if t == LIVE_BUTTON:
         clear_pending()
         return None, live_picker()
+    if t == MORE_BUTTON:
+        clear_pending()
+        return None, more_menu()
     if t in BUTTONS:
         clear_pending()
         return (BUTTONS[t], None) if BUTTONS[t] else (None, combi_picker())
@@ -618,6 +631,11 @@ def on_callback(data, message_id=None):
     """Réponse à un appui sur un bouton sous un message (voir les callback_data de ce module)."""
     from . import app
     parts = (data or "").split("|")
+    if parts[0] == "q" and len(parts) == 2:               # réponse rapide (« q|status ») arrivée jusqu'ici (poll sans `quick`) : même réponse, sous le verrou
+        return quick(parts[1])
+    if parts[0] == "m" and len(parts) == 2:               # un bouton de « ➕ Plus »
+        clear_pending()
+        return app.handle_command(MORE_CMD[parts[1]]) if parts[1] in MORE_CMD else None
     if parts[0] == "rg" and len(parts) == 4:              # « ✅ Gagné / ❌ Perdu / ↩️ Remboursé » sous « ❓ Résultat introuvable » (played.ask_messages)
         reply = played.answer(parts[1], parts[2], parts[3], str(datetime.now(timezone.utc).date()))
         if message_id and reply.startswith(("✅", "Le ")):     # réglé (ou déjà réglé) : les boutons disparaissent, plus de double appui

@@ -17,10 +17,10 @@ def ll(best, k):
 
 
 def test_button_and_words():
-    assert any("📊 Marchés" in row for row in chat.MENU) and chat.BUTTONS["📊 Marchés"] == "/marches"
-    assert any("🌱 Saison" in row for row in chat.MENU) and chat.route("🌱 Saison")[0] == "/saison"      # bouton du menu pour la voie saison
+    assert any(("🧮 Marchés", "m|mar") in row for row in chat.MORE) and chat.MORE_CMD["mar"] == "/marches" and chat.BUTTONS["📊 Marchés"] == "/marches"      # sous « ➕ Plus » ; l'ancien bouton répond encore
+    assert any(("🌱 Saison", "m|sai") in row for row in chat.MORE) and chat.route("🌱 Saison")[0] == "/saison"      # bouton de « ➕ Plus » pour la voie saison
     assert chat.route("📊 Marchés")[0] == chat.route("marchés")[0] == chat.route("Marches")[0] == "/marches"
-    assert "📊 <b>Marchés</b>" in str(app.HELP)
+    assert "🧮 <b>Marchés</b>" in str(app.HELP)
     print("ok  bouton « 📊 Marchés » dans le menu, « marchés » compris, aide à jour")
 
 

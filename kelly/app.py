@@ -1641,15 +1641,18 @@ MAX_BILAN_DAYS = 3650                    # « /bilan N » : N jours au plus (10 
 HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 
 <b>Les boutons en bas</b>
-🎯 <b>Un combiné</b> : choisis la cote, les types de paris (victoire, buts, corners, tirs, fautes…) et le nombre de paris
-🔴 <b>Live</b> : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score
-🔝 <b>Paris du jour</b> : les meilleurs paris encore jouables ; dessous, 🔄 <b>Mettre à jour les cotes</b> (ou écris <i>maj</i>)
+🎯 <b>Combiné</b> : choisis la cote, les types de paris (victoire, buts, corners, tirs, fautes…) et le nombre de paris
+🔝 <b>Du jour</b> : les meilleurs paris encore jouables ; dessous, 🔄 <b>Mettre à jour les cotes</b> (ou écris <i>maj</i>)
 🧾 <b>Mes paris</b> : tes paris du jour, à noter quand tu les joues
-📊 <b>Mes résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
-🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage)
-🧮 <b>Saison</b> (écris <i>saison</i> ou <i>saison 10</i>) : la voie « saison en cours », qui juge les équipes sur les seuls matchs de cette saison ; son état, ou un combiné à la cote voulue
-📊 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
-💼 <b>Mon capital</b> : ton capital, ta limite du jour, ce que tu as déjà misé et tes deux objectifs mesurés (CLV 1xBet, capital)
+🔴 <b>Live</b> : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score
+📊 <b>Résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
+➕ <b>Plus</b> : les autres outils, en boutons sous le message :
+   💼 <b>Mon capital</b> (bouton « Capital ») : ton capital, ta limite du jour, ce que tu as déjà misé et tes deux objectifs mesurés (CLV 1xBet, capital)
+   🌱 <b>Saison</b> (ou écris <i>saison</i>, <i>saison 10</i>) : la voie « saison en cours », qui juge les équipes sur les seuls matchs de cette saison ; son état, ou un combiné à la cote voulue
+   📈 <b>Tendances</b> : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
+   🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
+   🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage) · ❓ <b>Aide</b> · 🔄 <b>Actualiser les cotes</b>
+Le bouton <b>/</b> à gauche de la zone de saisie liste aussi les commandes principales.
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
@@ -3228,6 +3231,7 @@ def run_commands(serve=False):
                 migrate.ensure()                    # sous le verrou : un passage du matin n'écrit pas les mêmes documents en même temps
         except store.LockTimeout:
             print("[migration] verrou occupé (un passage la fait déjà) : bot à l'écoute tout de suite", file=sys.stderr)
+        telegram.set_commands()                     # menu « / » de Telegram (une fois par démarrage)
         last_flush = float("-inf")
         while True:
             try:

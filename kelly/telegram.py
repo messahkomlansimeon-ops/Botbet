@@ -335,6 +335,21 @@ def _flush(box, chat):
     return sent, remaining
 
 
+COMMANDS = [("combi", "Un combiné à la cote voulue"), ("top", "Les meilleurs paris du jour"), ("joue", "Mes paris du jour, à noter"), ("live", "Un combiné sur les matchs en cours"),
+            ("bilan", "Mes résultats"), ("capital", "Mon capital et ma limite du jour"), ("saison", "La voie « saison en cours »"), ("tendances", "Corners, cartons, tirs par équipe"),
+            ("marches", "Marché par marché : Kelly est-elle fiable ?"), ("status", "L'état de Kelly"), ("aide", "Mode d'emploi et boutons")]      # le menu « / » de Telegram
+
+
+def set_commands(commands=None):
+    """Enregistre le menu « / » (liste des commandes avec leur description) auprès de Telegram ; True si accepté, False sinon (jamais d'exception : cosmétique)."""
+    try:
+        api("setMyCommands", commands=[{"command": c, "description": d} for c, d in (commands or COMMANDS)])
+        return True
+    except Exception as e:      # noqa: BLE001 - sans réseau ou sans jeton : le clavier du bas marche quand même
+        print(f"[telegram] menu « / » non enregistré : {e}", file=sys.stderr)
+        return False
+
+
 def answer_callback(callback_id, text=None):
     """Acquitte un appui sur un bouton (sinon Telegram laisse un sablier). Ne lève jamais."""
     try:
@@ -566,6 +581,17 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
         if cq:
             answer_callback(cq.get("id"))           # tout de suite, avant une éventuelle attente du verrou : pas de sablier
             cmsg = cq.get("message") or {}
+            data = cq.get("data") or ""
+            if quick and data.startswith("q|") and str(cmsg.get("chat", {}).get("id")) == str(chat):      # « 🩺 Status » de « ➕ Plus » : répondu SANS le verrou, comme le mot écrit (même pendant le passage du matin)
+                try:
+                    fast = quick(data[2:])
+                except Exception as e:                  # noqa: BLE001 - traitement normal à la place
+                    print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+                    fast = None
+                if fast:
+                    send(fast)
+                    _save_offset(state)
+                    continue
             if on_callback and str(cmsg.get("chat", {}).get("id")) == str(chat):
                 if defer:
                     _later(on_callback, [cq.get("data") or "", cmsg.get("message_id")], True)

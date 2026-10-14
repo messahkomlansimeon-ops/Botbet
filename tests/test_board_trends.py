@@ -197,7 +197,7 @@ def test_trends():
         assert "Premier League" in glob and "T11" in glob and "Tendances · 🚩 Corners" in glob, glob
         assert "Aucun championnat" in telegram.plain(trends.report(["corners", "zzz"], data=ts))
         assert chat.route("📈 Tendances")[0] == "/tendances" and chat.route("tendances tirs premier")[0] == "/tendances tirs premier"
-        assert ["📈 Tendances" in row for row in chat.MENU].count(True) == 1 and "tendances" in str(app.HELP)
+        assert [("📈 Tendances", "m|ten") in row for row in chat.MORE].count(True) == 1 and "tendances" in str(app.HELP)
     finally:
         fd.profiles, fmmatch.profiles = old
     print("ok  📈 tendances : modèle de Kelly (football-data), FotMob ailleurs (jamais via une coupe d'Europe), par championnat et par équipe ; bouton du menu")
