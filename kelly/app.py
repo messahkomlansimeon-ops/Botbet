@@ -1454,8 +1454,20 @@ def run_track(events_for=None, now=None, xfetch=None):
     if calls and events_for is None:
         print(f"[budget] {budget.line()}", file=sys.stderr)
     _market_alerts(alerts, closing, rows, now, xfetch)
+    mark_xclose(now)                                # audit : dernier prix 1xBet (cache disque) des lignes du journal dont le match approche
     cache.flush()
     return n, alerts
+
+
+def mark_xclose(now=None):
+    """Note, sans AUCUNE requête, le dernier prix 1xBet connu (cache disque) des lignes du journal d'ensemble dont le match approche (`xclose`, voir
+    ensemble.mark_x_close) : la clôture 1xBet des marchés de stats, qui n'ont pas de prix sharp. Appelé après run_track et après run_stats_window (qui
+    relit 1xBet) ; sous le verrou des données comme eux. Ne lève jamais. -> nombre de lignes modifiées."""
+    try:
+        return ensemble.mark_x_close(now)
+    except Exception as e:                          # noqa: BLE001 - audit seulement
+        print(f"[suivi] prix 1xBet de clôture ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
 
 
 def run_stats_window(now=None, fetch=None, seconds=None):

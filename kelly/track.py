@@ -192,7 +192,10 @@ def _audit_close(r, c):
             cell = xbet.cached_cell(r["xref"])
             if cell is not None:
                 age = round((state.clock() - cell.at) / 60) if isinstance(cell.at, (int, float)) else None
-                r["xclose"] = {"odds": cell.cf, "age_min": age, "susp": bool(cell.blocked)}
+                lead = None
+                if isinstance(cell.at, (int, float)) and r.get("commence"):
+                    lead = round((datetime.fromisoformat(str(r["commence"]).replace("Z", "+00:00")).timestamp() - cell.at) / 60)
+                r["xclose"] = {"odds": cell.cf, "age_min": age, "lead_min": lead, "susp": bool(cell.blocked)}
     except Exception as e:                          # noqa: BLE001 - un champ d'audit ne bloque jamais une clôture
         print(f"[suivi] champs d'audit de clôture ignorés : {type(e).__name__}: {e}", file=sys.stderr)
 

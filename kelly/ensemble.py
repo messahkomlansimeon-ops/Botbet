@@ -644,17 +644,73 @@ def record(rows, day, now=None, name=LOG_FILE):
             continue
         old = by_key.get(c["key"])
         if old is not None:
+            if old.get("result") is None and not old.get("xref") and c.get("xref"):
+                old["xref"] = c["xref"]                    # audit : la référence 1xBet sert à lire son dernier prix (mark_x_close) ; le prix de la prise ne change pas
             if old.get("result") is None:                  # la lecture de la décision reste ; la relecture tardive est gardée à part
                 old["late"] = {"at": now.isoformat(timespec="minutes")} | {k: round(v, 4) for k, v in (("pm", pm), ("px", px), ("ps", ps)) if v is not None}
             continue
         row = {k: c.get(k) for k in ROW} | {"prob": None if pm is None else round(pm, 4), "pm": None if pm is None else round(pm, 4),
                                             "px": None if px is None else round(px, 4), "ps": None if ps is None else round(ps, 4),
                                             "date": str(day), "at": now.isoformat(timespec="minutes"), "result": None}
+        if c.get("xref"):
+            row["xref"] = c["xref"]                        # audit : [GameId, Type, Param] 1xBet de la prise (hors ROW)
         log.append(row)
         by_key[row["key"]] = row
         n += 1
     store.save(name, prune_log(log, date.fromisoformat(str(day))))
     return n
+
+
+X_CLOSE_WINDOW_MIN = 150          # on relit le cache 1xBet des lignes dont le match commence dans moins de 150 min (et jusqu'à 10 min après le coup d'envoi)
+
+
+def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
+    """Audit du CLV des marchés de stats (sans prix sharp : la seule référence est 1xBet) : pour chaque ligne du journal non réglée, avec une référence
+    1xBet (`xref`) et un match proche, note `xclose` = le DERNIER prix 1xBet lu dans le CACHE DISQUE (xbet.cached_cell, jamais de réseau) : {odds, read (ISO),
+    read_ts, lead_min (minutes entre ce relevé et le coup d'envoi), susp}. Un relevé plus récent remplace l'ancien ; un pari retiré par 1xBet ne remplace PAS
+    le dernier prix connu, il pose `xgone` (1xBet ferme les sous-matchs de stats ≈ 30 min avant le match, Kelly ne les relit plus à moins de 45 min : le
+    « dernier prix » date donc de 45 à 105 min avant le coup d'envoi au mieux ; lead_min le dit). Ne lève jamais. -> nombre de lignes modifiées."""
+    try:
+        from .sources import xbet
+        now = now or datetime.now(timezone.utc)
+        log = store.load(name, [])
+        if not isinstance(log, list):
+            return 0
+        n = 0
+        for r in log:
+            if r.get("result") is not None or not r.get("xref") or not r.get("commence"):
+                continue
+            try:
+                ko = datetime.fromisoformat(str(r["commence"]).replace("Z", "+00:00"))
+                if ko.tzinfo is None:
+                    ko = ko.replace(tzinfo=timezone.utc)
+                ahead = (ko - now).total_seconds() / 60
+            except (ValueError, TypeError):
+                continue
+            if not -10 <= ahead <= window_min:
+                continue
+            cell = xbet.cached_cell(r["xref"])
+            if cell is None or not isinstance(cell.at, (int, float)):
+                continue
+            lead = round((ko.timestamp() - cell.at) / 60)
+            if cell.cf is None:                            # le relevé en cache ne propose plus ce pari : on garde le dernier prix connu
+                if not r.get("xgone"):
+                    r["xgone"] = {"lead_min": lead}
+                    n += 1
+                continue
+            old = r.get("xclose") or {}
+            if old.get("read_ts") is not None and old["read_ts"] >= cell.at:
+                continue                                   # rien de plus récent que ce qu'on a déjà
+            r["xclose"] = {"odds": cell.cf, "read": datetime.fromtimestamp(cell.at, timezone.utc).isoformat(timespec="minutes"), "read_ts": cell.at,
+                           "lead_min": lead, "susp": bool(cell.blocked)}
+            r.pop("xgone", None)                           # le pari est de nouveau listé (suspendu puis rouvert) : un prix plus récent existe
+            n += 1
+        if n:
+            store.save(name, log)
+        return n
+    except Exception as e:                          # noqa: BLE001 - un champ d'audit ne bloque jamais le passage
+        print(f"[ensemble] prix 1xBet de clôture ignoré : {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
 
 
 def settle_log(settle_one, name=LOG_FILE):

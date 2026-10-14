@@ -17,8 +17,11 @@ from kelly.sources import state, xbet  # noqa: E402
 NOW = datetime(2030, 1, 1, 18, 0, tzinfo=timezone.utc)
 
 
+KO = datetime(2030, 1, 1, 19, 0, tzinfo=timezone.utc)
+
+
 def row(key, xref=None):
-    return {"key": key, "closed_at": None, "odds": 2.0, "xref": xref, "xodds": 2.4 if xref else None}
+    return {"key": key, "closed_at": None, "odds": 2.0, "xref": xref, "xodds": 2.4 if xref else None, "commence": KO.isoformat()}
 
 
 def pick(key, **kw):
@@ -28,19 +31,19 @@ def pick(key, **kw):
 def test_fields():
     old = xbet.cached_cell
     try:
-        xbet.cached_cell = lambda ref: xbet.Cell(2.3, state.clock() - 600, False)          # relevé vieux de 10 minutes
+        xbet.cached_cell = lambda ref: xbet.Cell(2.3, KO.timestamp() - 70 * 60, False)          # relevé lu 70 minutes avant le coup d'envoi
         rows = [row("a", [901, 1, 0]), row("b")]
         n = track.close(rows, [pick("a", prob_book=0.5234, prob_src="pinnacle", n_sharp=1), pick("b", prob_book=0.4, prob_src="consensus")], NOW)
         a, b = rows
         assert n == 2 and a["clv"] is not None and b["clv"] is not None
         assert a["close_book"] == {"p": 0.5234, "src": "pinnacle", "n_sharp": 1}, a
-        assert a["xclose"] == {"odds": 2.3, "age_min": 10, "susp": False}, a
+        assert a["xclose"]["odds"] == 2.3 and a["xclose"]["lead_min"] == 70 and a["xclose"]["susp"] is False and "age_min" in a["xclose"], a
         assert b["close_book"]["src"] == "consensus" and "xclose" not in b, "sans référence 1xBet : pas de prix 1xBet de clôture"
 
         xbet.cached_cell = lambda ref: xbet.Cell(None, state.clock() - 60, False)          # le relevé en cache ne propose plus ce pari
         rows = [row("c", [901, 1, 0])]
         track.close(rows, [pick("c")], NOW)
-        assert rows[0]["xclose"] == {"odds": None, "age_min": 1, "susp": False} and "close_book" not in rows[0], rows[0]
+        assert rows[0]["xclose"]["odds"] is None and rows[0]["xclose"]["age_min"] == 1 and "close_book" not in rows[0], rows[0]
 
         xbet.cached_cell = lambda ref: None                                                    # match absent du cache
         rows = [row("d", [901, 1, 0])]

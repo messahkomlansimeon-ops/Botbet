@@ -71,14 +71,14 @@ def pinnacle_pack(m):
     return {"odds_o3": list(o3), "q_o3": q_o3, "q_c3": q_c3, "odds_oo": list(oo), "q_oo": q_oo[0], "q_co": q_co[0]}
 
 
-def replay(matches, div, test_from, test_to, deadline=None):
+def replay(matches, div, test_from, test_to, deadline=None, ctx=True):
     """Prédit pas à pas (strength.walk, réglage par défaut) les matchs de [test_from, test_to[ et rassemble, pour ceux qui ont toutes les cotes Pinnacle,
     ce qu'il faut pour mesurer. -> (liste d'enregistrements, dict de comptes : prédits, sans modèle, sans cotes, arrêté par le temps)."""
     from kelly import strength as S
     S._xg_memo.clear()                                               # buts implicites mémorisés par (div, date, équipes) : jamais d'un rejeu à l'autre
     past = [m for m in matches if m["date"] < test_to]               # physiquement rien après la fin de la fenêtre
     recs, cnt = [], {"predicted": 0, "no_model": 0, "no_odds": 0, "timeout": 0}
-    for m, p3, po in S.walk(past, test_from, test_to, step_days=STEP_DAYS, div=div):
+    for m, p3, po in S.walk(past, test_from, test_to, step_days=STEP_DAYS, ctx=ctx, div=div):
         if deadline is not None and time.time() > deadline:
             cnt["timeout"] = 1
             break
@@ -240,11 +240,11 @@ def load_matches(divs):
     return by
 
 
-def run(by_div_matches, test_from, test_to, seconds=None):
+def run(by_div_matches, test_from, test_to, seconds=None, ctx=True):
     deadline = time.time() + seconds if seconds else None
     by_div, counts = {}, {}
     for div, ms in by_div_matches.items():
-        recs, cnt = replay(ms, div, test_from, test_to, deadline)
+        recs, cnt = replay(ms, div, test_from, test_to, deadline, ctx)
         by_div[div], counts[div] = recs, cnt
     return by_div, counts
 

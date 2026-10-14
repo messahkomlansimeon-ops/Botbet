@@ -11,6 +11,7 @@ Ne touche jamais au dossier donné : seul `kelly.db` en est copié dans un dossi
   D. le modèle contre le marché seul : log-loss du modèle, de 1xBet, du sharp et de l'ensemble, avec le poids du modèle comme variable
      (0 %, 12 %, 25 %), par famille de marché ; la ligne de base est le MARCHÉ SEUL, pas « contexte éteint » ;
   E. le rythme réel de paris réglés et le temps qu'il faut pour conclure ;
+  G. les marchés de stats : CLV contre le dernier prix 1xBet et couverture de ce prix (règle des 70 %) ;
   F. ce que ce rapport peut et ne peut pas conclure.
 Chaque moyenne est donnée avec n et une marge d'erreur à 95 % : en dessous de MIN_N lignes elle est marquée « trop peu pour conclure »."""
 import argparse
@@ -57,6 +58,38 @@ def load(data_dir):
             doc = json.loads(row[0]) if row else []
             out.append(doc if isinstance(doc, list) else [])
         return out[0], out[1]
+    finally:
+        con.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def links(data_dir):
+    """{"played": clés des paris de combinés JOUÉS ou de lignes suivies jouées, "sent": clés de TOUT combiné envoyé (fair_combos, bets)} d'une copie de kelly.db.
+    Sert à séparer, au journal d'ensemble, les lignes réelles des fantômes."""
+    out = {"played": set(), "sent": set()}
+    src = os.path.join(data_dir, "kelly.db")
+    if not os.path.exists(src):
+        return out
+    tmp = tempfile.mkdtemp(prefix="kelly-audit-")
+    dst = os.path.join(tmp, "kelly.db")
+    shutil.copy(src, dst)
+    con = sqlite3.connect(f"file:{dst}?mode=ro", uri=True)
+    try:
+        def doc(name):
+            row = con.execute("select body from docs where name=?", (name,)).fetchone()
+            return json.loads(row[0]) if row else None
+        for c in (doc("fair_combos.json") or []):
+            if isinstance(c, dict):
+                out["sent"].update(c.get("keys") or [])
+                if (c.get("played") or {}).get("odds"):
+                    out["played"].update(c.get("keys") or [])
+        for c in ((doc("bets.json") or {}).get("combos") or []):
+            if isinstance(c, dict):
+                out["sent"].update(c.get("keys") or [])
+        for r in (doc("tracked.json") or []):
+            if isinstance(r, dict) and r.get("played"):
+                out["played"].add(r.get("key"))
+        return out
     finally:
         con.close()
         shutil.rmtree(tmp, ignore_errors=True)
@@ -275,6 +308,69 @@ def section_e(rows, log):
     return out
 
 
+STATS_PREFIXES = ("team_shots", "team_sot", "team_fouls", "team_throws", "team_offsides", "team_corners", "alternate_totals_corners", "alternate_totals_cards",
+                  "team_yellow", "team_cards")
+LEAD_OK_MIN = 90                  # un relevé 1xBet ≤ 90 min avant le coup d'envoi compte comme « clôture » (décision 3 : seuil de couverture 70 %)
+COVERAGE_MIN = 0.70
+
+
+def is_stat(market):
+    return str(market or "").startswith(STATS_PREFIXES)
+
+
+def _kind(r, lk):
+    k = r.get("key")
+    return "joué" if k in lk["played"] else "dans un combiné envoyé (non joué)" if k in lk["sent"] else "fantôme"
+
+
+def _ko_hour(r):
+    try:
+        return datetime.fromisoformat(str(r["commence"]).replace("Z", "+00:00")).strftime("%Hh")
+    except (KeyError, ValueError):
+        return "?"
+
+
+def _cover(rs):
+    ok = [r for r in rs if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r["xclose"].get("lead_min") is not None
+          and r["xclose"]["lead_min"] <= LEAD_OK_MIN]
+    return f"{len(ok)}/{len(rs)} = {len(ok) / len(rs):.0%}" if rs else "0/0"
+
+
+def section_g(log, lk=None):
+    """CLV 1xBet des marchés de stats (journal d'ensemble) et couverture du prix de clôture. Pas de prix sharp sur ces marchés."""
+    lk = lk or {"played": set(), "sent": set()}
+    rows = [r for r in log if is_stat(r.get("market"))]
+    withref = [r for r in rows if r.get("xref") and r.get("commence")]
+    good = [r for r in withref if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r["xclose"].get("lead_min") is not None
+            and r["xclose"]["lead_min"] <= LEAD_OK_MIN]
+    out = ["G. MARCHÉS DE STATS : CLV CONTRE 1xBET (aucun prix sharp n'existe sur ces marchés ; la seule référence est le dernier prix 1xBet)",
+           f"   {len(rows)} lignes de stats au journal, dont {len(withref)} avec la référence 1xBet (collectée depuis l'Étape 0b)."]
+    cover = len(good) / len(withref) if withref else 0.0
+    out.append(f"   Couverture globale : {len(good)}/{len(withref)} lignes avec un relevé 1xBet ≤ {LEAD_OK_MIN} min avant le coup d'envoi = {cover:.0%} "
+               f"(seuil {COVERAGE_MIN:.0%}) : " + ("aucune ligne avec référence encore : rien à décider." if not withref else
+               "SOUS le seuil : relever réellement le prix 1xBet à la clôture (décision 3 : lignes portant un pari réel ou fantôme, un relevé par match dans les 90 min "
+               "avant le coup d'envoi, plafond 40 requêtes/jour, interrupteur de config, à chiffrer avec toi avant activation)." if cover < COVERAGE_MIN
+               else "AU-DESSUS du seuil : le cache suffit."))
+    out.append("   Rappel : 1xBet ferme les sous-matchs de stats ≈ 30 min avant le match et Kelly ne les relit plus à moins de 45 min : « le dernier prix » est au mieux")
+    out.append("   un prix de 45 à 105 min avant le coup d'envoi, pas une vraie clôture ; une couverture basse peut venir de l'HORAIRE (famille relue seulement le matin,")
+    out.append("   match de nuit) autant que d'un défaut : lire la couverture par famille et par heure avant de décider d'un relevé réseau.")
+    if withref:
+        out.append("   Couverture par famille : " + " ; ".join(f"{k} {_cover(g)}" for k, g in sorted(_group(withref, lambda r: family_of(r.get('market'))).items())))
+        out.append("   Couverture par heure de coup d'envoi (UTC) : " + " ; ".join(f"{k} {_cover(g)}" for k, g in sorted(_group(withref, _ko_hour).items())))
+    out.append("   CLV 1xBet (prix pris / dernier prix 1xBet ≤ 90 min avant le match), marges PAR MATCH ; la décision d'adopter l'essai des tirs lira la ligne « joué » :")
+    for kind in ("joué", "dans un combiné envoyé (non joué)", "fantôme"):
+        g = [r for r in good if _kind(r, lk) == kind and r.get("xodds")]
+        out.append(f"     {kind:<36} {fmt_stats([math.log(r['xodds'] / r['xclose']['odds']) for r in g], [r.get('id') for r in g])}")
+    for k, g in sorted(_group([r for r in good if r.get("xodds")], lambda r: family_of(r.get("market"))).items(), key=lambda kv: -len(kv[1])):
+        out.append(f"     famille {k:<28} {fmt_stats([math.log(r['xodds'] / r['xclose']['odds']) for r in g], [r.get('id') for r in g])}")
+    if not good:
+        out.append("     Aucune ligne avec un relevé ≤ 90 min : aucun CLV 1xBet à rapporter.")
+    gone = [r for r in withref if r.get("xgone")]
+    if gone:
+        out.append(f"   {len(gone)} lignes dont le pari a été retiré par 1xBet avant le match (marché fermé, pas un prix de clôture).")
+    return out
+
+
 def section_f():
     return ["F. CE QUE CE RAPPORT PEUT ET NE PEUT PAS CONCLURE",
             "   - Il décrit une fenêtre courte et des lignes que Kelly a choisies : aucune conclusion d'avantage durable.",
@@ -284,8 +380,8 @@ def section_f():
             "   - Les familles corners, cartons, tirs ne peuvent être jugées qu'ici (fantômes) et par calibration contre les résultats réels."]
 
 
-def report(rows, log):
-    return "\n\n".join("\n".join(s) for s in (section_a(rows), section_b(rows), section_c(rows), section_d(log), section_e(rows, log), section_f()))
+def report(rows, log, lk=None):
+    return "\n\n".join("\n".join(s) for s in (section_a(rows), section_b(rows), section_c(rows), section_d(log), section_e(rows, log), section_g(log, lk), section_f()))
 
 
 def main(argv=None):
@@ -297,7 +393,7 @@ def main(argv=None):
     if not rows and not log:
         print("Aucune donnée (kelly.db absent ou vide).", file=sys.stderr)
         return 1
-    print(report(rows, log))
+    print(report(rows, log, links(args.data_dir)))
     return 0
 
 

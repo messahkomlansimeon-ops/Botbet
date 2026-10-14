@@ -74,10 +74,31 @@ def test_report():
     for head in ("A. CE QUE MESURE LE CLV", "B. CLV", "C. LE RETARD DE 1xBET", "D. LE MODÈLE CONTRE LE MARCHÉ SEUL", "E. RYTHME RÉEL", "F. CE QUE CE RAPPORT"):
         assert head in txt, head
     assert "cote typique" in txt and "PAS ton prix 1xBet" in txt and "Aucune clôture 1xBet n'est enregistrée" in txt, txt
+    assert "G. MARCHÉS DE STATS" in txt and "aucune ligne avec référence encore" in txt, "sans référence 1xBet au journal : rien à décider"
     fam = txt[txt.index("D. LE MODÈLE"):txt.index("E. RYTHME")]
     assert "piste : le modèle AIDE" in fam and "NUIT" not in fam and "comparaisons faites" in fam, fam      # le modèle est meilleur ici, et seulement à poids > 0
     assert "heure" in txt and "04h" in txt and "13h" in txt
     print("ok  rapport : 6 sections, lecture seule d'une copie, verdict « le modèle AIDE » seulement hors référence")
+
+
+def test_stats_section():
+    def srow(i, lead, odds_take=2.0, odds_close=1.9, market="team_shots_home"):
+        return {"key": f"s{i}", "id": f"m{i}", "market": market, "result": "win", "date": "2030-01-01", "pm": 0.5, "px": 0.5, "xodds": odds_take,
+                "xref": [1, 2, 3], "commence": "2030-01-01T19:00:00Z", "xclose": {"odds": odds_close, "lead_min": lead}}
+    log = [srow(i, 60) for i in range(8)] + [srow(100 + i, 130) for i in range(2)]                      # 8 relevés ≤ 90 min, 2 trop vieux : couverture 80 %
+    txt = "\n".join(A.section_g(log))
+    assert "8/10" in txt and "80%" in txt and "AU-DESSUS du seuil" in txt, txt
+    log2 = [srow(i, 60) for i in range(3)] + [srow(100 + i, 130) for i in range(7)]                      # 30 % : sous le seuil
+    txt2 = "\n".join(A.section_g(log2))
+    assert "3/10" in txt2 and "SOUS le seuil" in txt2 and "40 requêtes/jour" in txt2, txt2
+    assert "+" in txt and "shots" in txt, "CLV 1xBet par famille : log(2,0 / 1,9) > 0"
+    lk = {"played": {"s0", "s1"}, "sent": {"s0", "s1", "s2", "s3"}}                                    # s0-s1 joués, s2-s3 dans un combiné envoyé, le reste fantôme
+    split = "\n".join(A.section_g([srow(i, 60) for i in range(8)], lk))
+    assert "joué" in split and "n=2" in split and "dans un combiné envoyé (non joué)" in split and "fantôme" in split and "Couverture par famille" in split, split
+    assert "Couverture par heure de coup d'envoi" in split and "19h" in split, split
+    gone = [srow(1, 60) | {"xgone": {"lead_min": 40}}]
+    assert "retiré par 1xBet" in "\n".join(A.section_g(gone))
+    print("ok  marchés de stats : couverture des relevés ≤ 90 min, règle des 70 %, CLV 1xBet par famille, paris retirés")
 
 
 def test_empty():
@@ -96,6 +117,7 @@ def test_empty():
 def main():
     test_stats()
     test_report()
+    test_stats_section()
     test_empty()
     print("tests audit CLV : OK")
 

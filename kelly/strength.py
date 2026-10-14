@@ -944,9 +944,26 @@ def _with_newcomer(model, name):
     return out
 
 
+CTX_PARTS = ("form", "split", "rest", "h2h", "stakes")           # les cinq facteurs de contexte des buts (l'arbitre ne touche que les stats)
+
+
+def ctx_parts(ctx):
+    """Facteurs de contexte actifs pour `ctx` : True = tous (le comportement de production), False/None/() = aucun, ou une liste de noms de CTX_PARTS
+    (mesure : kelly audit, `tools/audit_ctx.py`). Un nom inconnu lève ValueError : une faute de frappe ne doit pas passer pour « facteur éteint »."""
+    if ctx is True:
+        return frozenset(CTX_PARTS)
+    if not ctx:
+        return frozenset()
+    bad = [x for x in ctx if x not in CTX_PARTS]
+    if bad:
+        raise ValueError(f"facteur de contexte inconnu : {bad} (attendu : {CTX_PARTS})")
+    return frozenset(ctx)
+
+
 def predict(model, home, away, on=None, referee=None, ctx=True):
     """Prévision d'un match. dict : {home, away, lh, la, rho, q, qs, stats:{stat:{h, a, al, at}}, notes, tm, base, ...}
-    ou None si une équipe est inconnue. `ctx=False` : force pure, sans facteurs de contexte."""
+    ou None si une équipe est inconnue. `ctx=False` : force pure, sans facteurs de contexte ; `ctx` peut aussi être une liste de facteurs à GARDER
+    parmi CTX_PARTS (mesure seulement : la production passe toujours True)."""
     if not model or not model.get("stats", {}).get("goals"):
         return None
     h, a = find_team(model, home), find_team(model, away)
@@ -1013,6 +1030,11 @@ def predict(model, home, away, on=None, referee=None, ctx=True):
                     if abs(sk["adj"]) >= 0.005:
                         notes.append(("stakes", sk["text"], sk["adj"] if key == "home" else -0.5 * sk["adj"],
                                       sk["adj"] if key == "away" else -0.5 * sk["adj"]))
+
+    use = ctx_parts(ctx)
+    if use != frozenset(CTX_PARTS):                                     # mesure : on ne garde que les facteurs demandés (ctx=True les garde tous)
+        adj_h, adj_a = [x for x in adj_h if x[0] in use], [x for x in adj_a if x[0] in use]
+        notes = [n for n in notes if n[0] in use]
 
     def mult(lst):
         f = 1.0

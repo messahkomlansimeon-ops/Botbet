@@ -77,10 +77,16 @@ def main(argv):
                 print("Kelly travaille depuis plus de 10 minutes : passage horaire abandonné", file=sys.stderr)
                 sys.exit(1)
             app.run_stats_window()                      # paris stats chez 1xBet : verrou pris seulement pour choisir puis fusionner, jamais pendant les requêtes
+            try:
+                with store.data_lock(wait=120):
+                    app.mark_xclose()                   # audit : dernier prix 1xBet (cache disque, aucune requête) des lignes du journal dont le match approche
+            except store.LockTimeout:
+                print("Kelly travaille : prix 1xBet de clôture sauté pour ce passage", file=sys.stderr)
             app.fill_match_stats()
         else:
             app.run_track()
             app.run_stats_window()
+            app.mark_xclose()
             app.fill_match_stats()
     elif "--xbet" in argv:
         if "--no-lock" in argv:                 # déjà sous `flock` (unité systemd) : en reprendre un bloquerait
