@@ -1,0 +1,24 @@
+{
+ "prereg": {
+  "declared_by": "utilisateur (lot « constructeur de combinés », 14/10/2026) ; rédigé par l'assistant AVANT toute lecture d'un résultat de variante",
+  "declared_on": "2026-10-14",
+  "question": "dans le constructeur de combinés (combos._best_combo), maximiser l'espérance (COMBO_OBJECTIVE = ev) et/ou plafonner la part de jambes de remplissage (COMBO_MAX_FILL_SHARE = 0,5) améliore-t-il le CLV par jambe des combinés, sans faire sauter trop de paliers ?",
+  "status": "PRÉ-DÉCLARATION. Comparaison PROSPECTIVE en fantôme (le rejeu historique est abandonné : ~6 jours de données, le pool complet de jambes n'était pas gardé). Aucune lecture de résultat avant la première lecture prévue ci-dessous.",
+  "why_not_replay": "fair_combos.json et bets.json ne gardent que les jambes choisies ; le pool complet du jour (toutes les jambes éligibles) n'existait nulle part. Il est désormais enregistré chaque jour (data/pool_<jour>.json puis arch/pool/<jour>.json, 90 jours).",
+  "known_limit": "À cote totale égale, maximiser P x O ou P donne le même combiné (vérifié par force brute le 14/10) : « ev » ne déplace que la cote choisie dans la fourchette du palier (vers le haut) ; le test mesure donc surtout « haut de la fourchette contre milieu ». Le plafond de remplissage est le seul changement de composition réel.",
+  "variants": {
+   "prob": "objectif probabilité, pas de plafond de remplissage (la PRODUCTION actuelle ; reconstruite dans le même cadre que les trois autres, avec son propre Usage, pour comparer à pool et règles égaux)",
+   "prob+cap": "objectif probabilité, COMBO_MAX_FILL_SHARE = 0,5",
+   "ev": "objectif espérance, pas de plafond",
+   "ev+cap": "objectif espérance, COMBO_MAX_FILL_SHARE = 0,5"
+  },
+  "build": "chaque matin, après les combinés envoyés : pour chaque variante, un Usage neuf, puis les paliers de la voie « reels » (CB.plan), « fair » (fair_plan + fair_shots_plan) et « saison » (season_plan) à partir du MÊME pool que la production. Seule la production est envoyée ; les variantes sont journalisées (data/combo_variants.json), jamais envoyées, jamais misées, hors Usage de production, hors fair_combos.json / fair_ghost / P&L / CLV par jambe existants. Un palier qui ne se construit pas est journalisé (built = false) : c'est le « palier qui saute ».",
+  "metrics": ["paliers construits", "taux de réussite réel (combinés dont toutes les jambes sont réglées)", "gain théorique à 1 u par palier aux cotes 1xBet de construction", "CLV moyen par jambe (log du prix pris / dernier prix 1xBet connu, mêmes règles que lanestats.x_clv) avec IC à 95 % groupé par MATCH", "part de jambes fill"],
+  "breakdown": "par voie (reels / fair / saison) et par palier",
+  "decision_rule": "Une variante REMPLACE la production si, après au moins 150 paliers construits (pour la variante) OU 3 semaines (21 jours depuis la première ligne), (1) son CLV moyen par jambe est >= à celui de la production ET la borne basse de l'IC à 95 % de la différence (variante - production, demi-marges des deux combinées en racine de somme des carrés) est >= 0 (l'IC exclut une dégradation), ET (2) son nombre de paliers construits n'est pas inférieur de plus de 30 % à celui de la production. Sinon rien ne change (la production reste la seule envoyée). Remplacer = régler COMBO_OBJECTIVE / COMBO_MAX_FILL_SHARE à la main.",
+  "reading": "le lundi, avec la coupure (bloc « variantes du constructeur » du bilan détaillé et du bilan de la semaine). Pas de lecture intermédiaire pour décider.",
+  "power": "n petit au début : le bloc dit « trop peu pour conclure » sous 30 jambes mesurées par variante.",
+  "defaults_now": {"COMBO_OBJECTIVE": "prob", "COMBO_MAX_FILL_SHARE": 1.0}
+ },
+ "result": null
+}
