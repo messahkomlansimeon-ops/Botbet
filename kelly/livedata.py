@@ -69,7 +69,7 @@ def load():
 def _when(iso):
     """Instant (UTC) d'une date ISO, naïve ou non ; None si illisible."""
     try:
-        t = datetime.fromisoformat(str(iso))
+        t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
     except ValueError:
         return None
     return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
@@ -195,7 +195,7 @@ def prepare(now=None, max_teams=None, seconds=None):
             todo = []
             for g in sorted(games, key=lambda g: g["start"]):
                 try:
-                    ko = datetime.fromisoformat(g["start"])
+                    ko = datetime.fromisoformat(str(g["start"]).replace("Z", "+00:00"))
                 except ValueError:
                     continue
                 if not (lo <= ko <= hi) or excluded(g["comp"], g["home"]["name"], g["away"]["name"]):
@@ -360,7 +360,7 @@ def _game(home, away, start, d):
     for lst in d.get("lists", {}).values():
         for g in lst.get("games") or []:
             try:
-                if abs((datetime.fromisoformat(g["start"]) - ko).total_seconds()) > C.LIVE_MATCH_MIN * 60:
+                if abs((datetime.fromisoformat(str(g["start"]).replace("Z", "+00:00")) - ko).total_seconds()) > C.LIVE_MATCH_MIN * 60:
                     continue
             except ValueError:
                 continue

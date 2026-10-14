@@ -358,7 +358,7 @@ def find(leg, games):
     found = []
     for g in games.values():
         try:
-            if abs((datetime.fromisoformat(g["start"]) - ko).total_seconds()) > C.LIVE_MATCH_MIN * 60:
+            if abs((datetime.fromisoformat(str(g["start"]).replace("Z", "+00:00")) - ko).total_seconds()) > C.LIVE_MATCH_MIN * 60:
                 continue
         except (TypeError, ValueError):
             continue

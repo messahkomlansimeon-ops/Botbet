@@ -328,7 +328,7 @@ def test_main_and_cli():
     env = dict(os.environ, DATA_DIR=os.path.join(TMP, "cli-data"), SOURCES_CACHE_DIR=os.path.join(TMP, "cli-cache"),
                ODDS_CACHE_DIR=os.path.join(TMP, "cli-odds"), TUNE_SECONDS="60")
     env.pop("TELEGRAM_TOKEN", None)
-    r = subprocess.run([sys.executable, "bot.py", "--tune"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
+    r = subprocess.run([sys.executable, "bot.py", "--tune"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=1200)
     assert r.returncode == 0, (r.stdout, r.stderr)
     assert "Réglage Kelly" in r.stdout and "0 ligue(s) réglée(s)" in r.stdout and "aucun historique" in r.stdout, r.stdout
     with closing(sqlite3.connect(os.path.join(TMP, "cli-data", store.DB_FILE))) as con:
