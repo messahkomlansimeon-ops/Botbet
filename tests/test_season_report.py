@@ -91,6 +91,13 @@ def test_status_line():
     out = lanes.lines()
     sl = next(x for x in out if x.startswith("saison :"))
     assert f"saison : {C.STRATEGY_SEASON}" in sl and f"poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %" in sl and "paliers 3, 10, 30, 100" in sl and "part de mise 0.15" in sl, sl
+    assert "a priori moyenne de ligue, moyennes rétrécies (football-data seulement)" in sl, sl
+    C.SEASON_PRIOR, C.SEASON_FIT = "market", "iterative"
+    try:
+        sl2 = next(x for x in lanes.lines() if x.startswith("saison :"))
+        assert "a priori de marché, ajustement à l'adversaire" in sl2, sl2
+    finally:
+        C.SEASON_PRIOR, C.SEASON_FIT = "flat", "moments"
     print("ok  status : état de la voie (interrupteur, poids du modèle, marge, paliers, part de mise)")
 
 

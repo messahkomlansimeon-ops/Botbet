@@ -149,6 +149,9 @@ def lines():
     out.append(f"saison : {season_mode()} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} % · marge {C.SEASON_MARGIN * 100:g} % · garde-fous : valeur ≤ +{C.SEASON_MAX_EDGE * 100:g} %, désaccord ≤ {C.SEASON_MAX_DISAGREE * 100:g} points · paliers {', '.join(f'{t:g}' for t in C.SEASON_TIERS)} · part de mise "
                f"{C.KELLY_FRACTION_SEASON:g}" + (f" · plafond ticket {C.SEASON_TICKET_MAX:g}" if C.SEASON_TICKET_MAX > 0 else "") + f" · relevé 1xBet jusqu'à {C.SEASON_MONTH_PCT:g} % du plafond mensuel" + f" · combinés de remplissage : {'envoyés (sans valeur)' if C.SEASON_SEND_FILL else 'en fantôme'}"
                + (" · ligues : " + ", ".join(sorted(C.SEASON_LEAGUES)[:4]) if C.SEASON_LEAGUES else " · toutes les ligues couvertes"))
+    prior_txt = "de marché" if C.SEASON_PRIOR == "market" else "moyenne de ligue"
+    fit_txt = "ajustement à l'adversaire" if C.SEASON_FIT == "iterative" else "moyennes rétrécies"
+    out[-1] += f" · moyennes d'équipe : a priori {prior_txt}, {fit_txt} (football-data seulement)"
     from . import seasonlane
     out[-1] += " · " + seasonlane.state_text()      # la même ligne « saison » : ce qui est suivi exactement (ligues, équipes, équipes avec l'adversaire enregistré)
     ghost = sorted(set(C.STATS_GHOST_LEAGUES) | set(st.get("leagues") or {}))

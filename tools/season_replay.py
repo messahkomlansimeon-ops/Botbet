@@ -115,7 +115,7 @@ def fit_models(past, obs, d, sk, div, stats, upper):
         fb = {st: {"alpha": s.get("alpha", 0.0), "atot": s.get("atot", 0.0)} for st, s in base["stats"].items() if st != "goals"}
         fb["kappa"] = S.kappa_of(base["stats"]["goals"])
     for name, k in KS.items():
-        out[name] = season.fit(obs, d, sk, k=k, fallback=fb)
+        out[name] = season.fit(obs, d, sk, k=k, fallback=fb, prior="flat", fit_mode="moments")
     return out
 
 

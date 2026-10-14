@@ -53,8 +53,9 @@ def _shrink(total, n, prior, k):
     return w * (total / n) + (1 - w) * prior
 
 
-def _fit_stat(rows, k, fallback_alpha, min_alpha_matches):
-    """rows : {équipe: [(domicile 1/0, pour, contre), ...]} d'une statistique. -> dict du modèle de cette statistique, ou None sans donnée."""
+def _fit_stat(rows, k, fallback_alpha, min_alpha_matches, priors=None):
+    """rows : {équipe: [(domicile 1/0, pour, contre), ...]} d'une statistique. -> dict du modèle de cette statistique, ou None sans donnée. `priors` : {équipe: (attaque dom., défense dom.,
+    attaque ext., défense ext.)} remplace la moyenne de ligue comme a priori de CHAQUE moyenne d'équipe (a priori de marché) ; la dispersion, elle, est toujours mesurée comme sans a priori."""
     sums = {"hf": 0.0, "ha": 0.0, "nh": 0, "af": 0.0, "aa": 0.0, "na": 0}
     team = {}
     for t, lst in rows.items():
@@ -77,9 +78,10 @@ def _fit_stat(rows, k, fallback_alpha, min_alpha_matches):
         return None
     out = {}
     for t, s in team.items():
+        p_ah, p_dh, p_aa, p_da = (priors or {}).get(t) or (lg_h, lg_a, lg_a, lg_h)
         out[t] = {"n": s["nh"] + s["na"], "nh": s["nh"], "na": s["na"],
-                  "ah": _shrink(s["hf"], s["nh"], lg_h, k), "dh": _shrink(s["ha"], s["nh"], lg_a, k),       # attaque / défense à domicile
-                  "aa": _shrink(s["af"], s["na"], lg_a, k), "da": _shrink(s["aa"], s["na"], lg_h, k)}       # ... à l'extérieur
+                  "ah": _shrink(s["hf"], s["nh"], p_ah, k), "dh": _shrink(s["ha"], s["nh"], p_dh, k),       # attaque / défense à domicile
+                  "aa": _shrink(s["af"], s["na"], p_aa, k), "da": _shrink(s["aa"], s["na"], p_da, k)}       # ... à l'extérieur
     # dispersion de la ligue : moments, avec l'attente de CHAQUE observation recalculée sans elle (sinon la mesure est trop basse) et l'adversaire moyen
     num = den = num_t = den_t = 0.0
     n_obs = 0
@@ -110,15 +112,117 @@ def _fit_stat(rows, k, fallback_alpha, min_alpha_matches):
             "t": out}
 
 
-def fit(obs, on, sport_key=None, stats=STATS, k=None, fallback=None, min_alpha_matches=None):
-    """Modèle `saison` d'une ligue. `obs` : [{"team", "d" (AAAA-MM-JJ), "home" (1/0), "s": {stat: (pour, contre)}}], une ligne par équipe et par match ; seules les lignes de
+def market_rel(mine, shrink=None):
+    """Valeurs relatives d'équipe tirées des attentes de buts implicites des cotes de CLÔTURE des matchs déjà joués (`mine` : lignes d'observation de la saison, avant le jour du
+    modèle, portant `xg` = (attente implicite de l'équipe, de l'adversaire) quand le match a ses cotes). -> {équipe: {1 ou 0 (domicile): (relatif marqué, relatif encaissé)}} : moyenne implicite de
+    l'équipe sur ce côté divisée par la moyenne de ligue de ce côté, rétrécie vers 1 avec n / (n + C.SEASON_MKT_SHRINK) ; absente = 1 partout."""
+    shrink = C.SEASON_MKT_SHRINK if shrink is None else shrink
+    lg = {1: [0.0, 0.0, 0], 0: [0.0, 0.0, 0]}
+    tm = {}
+    for o in mine:
+        xg = o.get("xg")
+        if not xg:
+            continue
+        side = 1 if o.get("home") else 0
+        lg[side][0] += xg[0]
+        lg[side][1] += xg[1]
+        lg[side][2] += 1
+        c = tm.setdefault(o["team"], {1: [0.0, 0.0, 0], 0: [0.0, 0.0, 0]})[side]
+        c[0] += xg[0]
+        c[1] += xg[1]
+        c[2] += 1
+    if not (lg[1][2] and lg[0][2]):
+        return {}
+    own = {sd: lg[sd][0] / lg[sd][2] for sd in (0, 1)}
+    out = {}
+    for t, d in tm.items():
+        r = {}
+        for sd in (1, 0):
+            n = d[sd][2]
+            if not n:
+                r[sd] = (1.0, 1.0)
+                continue
+            w = n / (n + shrink)
+            r[sd] = (w * (d[sd][0] / n / own[sd]) + (1 - w), w * (d[sd][1] / n / own[1 - sd]) + (1 - w))
+        out[t] = r
+    return out
+
+
+def _market_priors(rel, fs, e):
+    """{équipe: (attaque dom., défense dom., attaque ext., défense ext.)} d'une statistique : moyenne de ligue de CE côté x (relatif implicite) ^ e."""
+    out = {}
+    for t, r in rel.items():
+        out[t] = (fs["lg_h"] * r[1][0] ** e, fs["lg_a"] * r[1][1] ** e, fs["lg_a"] * r[0][0] ** e, fs["lg_h"] * r[0][1] ** e)
+    return out
+
+
+def _iterative(mine, stat, fs, k, rel=None, e=0.0):
+    """Moyennes d'équipe d'une statistique par ajustement itératif corrigé de l'adversaire (Maher / IPF de strength, a priori Gamma) sur les matchs de la saison, sans demi-vie ni marché.
+    Seconde passe à ka = kd = k x mu (k matchs d'une équipe moyenne, pas la méthode des moments de strength). Centre de l'a priori : 1 pour tous, ou (rel, e) la moyenne des deux côtés du relatif de
+    marché ^ e. -> `fs` modifié (moyennes de ligue lg_h = m x H, lg_a = m ; ah = lg_h A, da = lg_h D, aa = lg_a A, dh = lg_a D) ; inchangé si un match n'a pas d'adversaire connu (autre source que football-data)."""
+    from . import strength
+    pairs = []
+    for o in mine:
+        if o.get("home"):
+            pr = (o.get("s") or {}).get(stat)
+            if o.get("opp") is None or not pr or pr[0] is None or pr[1] is None:
+                if o.get("opp") is None:
+                    return fs
+                continue
+            pairs.append((o["team"], o["opp"], float(pr[0]), float(pr[1])))
+    names = sorted({x for p in pairs for x in p[:2]})
+    if len(pairs) < 2 or any(t not in fs["t"] for t in names):
+        return fs
+    idx = {t: i for i, t in enumerate(names)}
+    n = len(names)
+    rows = [(idx[h], idx[a], xh, xa, 1.0) for h, a, xh, xa in pairs]
+    tw = float(len(rows))
+    m = max(sum(xh + xa for _, _, xh, xa, _ in rows) / (2 * tw), 1e-6)
+    SA, SD, wt = [0.0] * n, [0.0] * n, [0.0] * n
+    for hi, ai, xh, xa, w in rows:
+        SA[hi] += xh
+        SA[ai] += xa
+        SD[hi] += xa
+        SD[ai] += xh
+        wt[hi] += 1.0
+        wt[ai] += 1.0
+    A0, D0 = [1.0] * n, [1.0] * n
+    if rel:
+        for t, i in idx.items():
+            r = rel.get(t)
+            if r:
+                A0[i] = 0.5 * (r[1][0] ** e + r[0][0] ** e)
+                D0[i] = 0.5 * (r[1][1] ** e + r[0][1] ** e)
+    A, D = list(A0), list(D0)
+    mu = m * 1.1
+    weak = 0.3 * mu
+    m, H, A, D, _ex = strength._ipf(rows, n, wt, m, 1.15, A, D, SA, SD, weak, weak, A0, D0)
+    mu = m * (1 + H) / 2
+    m, H, A, D, _ex = strength._ipf(rows, n, wt, m, H, A, D, SA, SD, k * mu, k * mu, A0, D0)
+    lg_h, lg_a = m * H, m
+    if lg_h <= 0 or lg_a <= 0:
+        return fs
+    t_new = {}
+    for t, v in fs["t"].items():
+        i = idx.get(t)
+        t_new[t] = dict(v) if i is None else dict(v, ah=lg_h * A[i], da=lg_h * D[i], aa=lg_a * A[i], dh=lg_a * D[i])
+    return dict(fs, lg_h=lg_h, lg_a=lg_a, t=t_new)
+
+
+def fit(obs, on, sport_key=None, stats=STATS, k=None, fallback=None, min_alpha_matches=None, prior=None, fit_mode=None):
+    """Modèle `saison` d'une ligue. `obs` : [{"team", "d" (AAAA-MM-JJ), "home" (1/0), "s": {stat: (pour, contre)}, "opp", "xg"}], une ligne par équipe et par match ; seules les lignes de
     la saison en cours (season_start) et antérieures à `on` (date) comptent. `fallback` : {stat: {"alpha", "atot"}, "kappa": x} pour les ligues de moins de
-    `min_alpha_matches` matchs (C.SEASON_ALPHA_MIN_MATCHES). -> dict JSON ou None sans aucun but observé."""
+    `min_alpha_matches` matchs (C.SEASON_ALPHA_MIN_MATCHES). `prior` (flat | market) et `fit_mode` (moments | iterative) : C.SEASON_PRIOR et C.SEASON_FIT par défaut ; ils ne touchent QUE les
+    moyennes d'équipe des familles de C.SEASON_MKT_ELASTICITY (corners, jaunes, tirs, tirs cadrés, fautes) : les buts et la dispersion restent ceux de la moyenne de ligue
+    (ledger v2). -> dict JSON ou None sans aucun but observé."""
     k = C.SEASON_PRIOR_K if k is None else k
     min_alpha_matches = C.SEASON_ALPHA_MIN_MATCHES if min_alpha_matches is None else min_alpha_matches
+    prior = C.SEASON_PRIOR if prior is None else prior
+    fit_mode = C.SEASON_FIT if fit_mode is None else fit_mode
     start, end = season_start(sport_key, on).isoformat(), on.isoformat()
     mine = [o for o in obs if start <= str(o.get("d") or "") < end]
-    model = {"v": 1, "lane": "saison", "sport_key": sport_key, "on": end, "start": start, "k": k, "rows": len(mine), "stats": {}}
+    model = {"v": 1, "lane": "saison", "sport_key": sport_key, "on": end, "start": start, "k": k, "rows": len(mine), "stats": {}, "cfg": {"prior": prior, "fit": fit_mode}}
+    rel = market_rel(mine) if prior == "market" else {}
     for stat in stats:
         rows = {}
         for o in mine:
@@ -126,6 +230,12 @@ def fit(obs, on, sport_key=None, stats=STATS, k=None, fallback=None, min_alpha_m
             if pair and pair[0] is not None and pair[1] is not None:
                 rows.setdefault(o["team"], []).append((1 if o.get("home") else 0, float(pair[0]), float(pair[1])))
         fs = _fit_stat(rows, k, (fallback or {}).get(stat), min_alpha_matches) if rows else None
+        e = C.SEASON_MKT_ELASTICITY.get(stat)
+        if fs and e is not None and (rel or fit_mode == "iterative"):
+            if rel and fit_mode != "iterative":
+                fs = dict(fs, t=_fit_stat(rows, k, (fallback or {}).get(stat), min_alpha_matches, _market_priors(rel, fs, e))["t"])
+            elif fit_mode == "iterative":
+                fs = _iterative(mine, stat, fs, k, rel or None, e)
         if fs:
             model["stats"][stat] = fs
     g = model["stats"].get("goals")
@@ -274,15 +384,23 @@ def _day(i):
     return f"20{i // 10000:02d}-{i // 100 % 100:02d}-{i % 100:02d}"
 
 
-def _from_matches(matches):
-    """Observations d'une liste de matchs football-data normalisés (footballdata.parse_csv) : deux lignes par match."""
+def _from_matches(matches, market=False):
+    """Observations d'une liste de matchs football-data normalisés (footballdata.parse_csv) : deux lignes par match. `market` : ajoute `xg` = (attente implicite de buts de l'équipe, de
+    l'adversaire) tirée des cotes de CLÔTURE du match (strength.implied_goals), absente sans ces cotes ; sert l'a priori de marché, qui ne lit que les matchs ANTÉRIEURS au jour du modèle."""
     from .sources import footballdata as fd
     out = []
     for m in matches:
+        ig = None
+        if market:
+            from . import strength
+            ig = strength.implied_goals(m)
         for side, team in (("home", m["home"]), ("away", m["away"])):
             pairs = fd._side(m, side)
-            out.append({"team": team, "d": m["date"], "home": 1 if side == "home" else 0, "s": {st: v for st, v in pairs.items() if st in STATS},
-                        "opp": m["away"] if side == "home" else m["home"]})        # football-data nomme toujours l'adversaire
+            o = {"team": team, "d": m["date"], "home": 1 if side == "home" else 0, "s": {st: v for st, v in pairs.items() if st in STATS},
+                 "opp": m["away"] if side == "home" else m["home"]}        # football-data nomme toujours l'adversaire
+            if ig:
+                o["xg"] = (ig[0], ig[1]) if side == "home" else (ig[1], ig[0])
+            out.append(o)
     return out
 
 
@@ -316,7 +434,7 @@ def collect(sport_key, on, loaders=None, docs=None):
         if not div or div in fd.NEW_DIVS:
             return []
         from . import strength
-        return _from_matches(strength.load_matches(div))
+        return _from_matches(strength.load_matches(div), market=C.SEASON_PRIOR == "market")
 
     def fotmob():
         return _from_team_rows(docs["fotmob"] if docs else fmmatch.load()["teams"], sport_key, fmmatch.KEYS, fmmatch.R_STATS)
@@ -399,11 +517,12 @@ def get(sport_key, on=None, loaders=None, fallback=None, docs=None):
     try:
         from . import strength
         on = on or strength.today()
-        key = (sport_key, on.isoformat(), C.SEASON_PRIOR_K, bool(fallback))
+        key = (sport_key, on.isoformat(), C.SEASON_PRIOR_K, bool(fallback), C.SEASON_PRIOR, C.SEASON_FIT)
         if loaders is None and key in _memo:
             return _memo[key]
         obs, src = collect(sport_key, on, loaders, docs)
-        model = fit(obs, on, sport_key, fallback=fallback) if obs else None
+        fd_ = src == "football-data"                      # a priori de marché et ajustement itératif : football-data seulement (ledger v2), les autres sources gardent la moyenne de ligue
+        model = fit(obs, on, sport_key, fallback=fallback, prior=C.SEASON_PRIOR if fd_ else "flat", fit_mode=C.SEASON_FIT if fd_ else "moments") if obs else None
         if model:
             model["source"] = src
         if loaders is None:
