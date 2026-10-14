@@ -409,6 +409,32 @@ def remember_events(scan, day):
         print(f"[saison] matchs du jour non gardés : {type(e).__name__}: {e}", file=sys.stderr)
 
 
+def events_from_monde(kday):
+    """Matchs du jour Kelly `kday` lus dans le cache du tour du monde (data/monde.json, écrit chaque matin par l'ancien comme le nouveau code) quand le passage du matin n'a pas gardé les
+    siens (installation en cours de journée) : [{id, sport_key, league, home_team, away_team, commence_time}] des ligues que la voie traite. Le cache n'a que « HH:MM » UTC : avant
+    C.DAY_END_HOUR h le match est du lendemain civil ; l'identifiant est un condensé stable (« mx-… », sans « | »). Aucun xgid : 1xBet cherche le match par les noms."""
+    import hashlib
+    from datetime import date as _date, timedelta
+    from . import monde
+    d = monde.load(kday)
+    if not d:
+        return []
+    keep = set(known_leagues(False)) | set(C.SEASON_CUPS)
+    day, out = _date.fromisoformat(str(kday)[:10]), []
+    for key, lst in (d.get("leagues") or {}).items():
+        if key not in keep:
+            continue
+        for h, a, hhmm in lst:
+            try:
+                hh, mm = (int(x) for x in str(hhmm).split(":"))
+            except ValueError:
+                continue
+            when = day + timedelta(days=1 if hh < C.DAY_END_HOUR else 0)
+            out.append({"id": "mx-" + hashlib.sha1(f"{key}|{h}|{a}|{when}".encode()).hexdigest()[:10], "sport_key": key, "league": catalogue.name(key), "home_team": h, "away_team": a,
+                        "commence_time": f"{when}T{hh:02d}:{mm:02d}:00Z"})
+    return out
+
+
 def rebuild(now, fetch=None):
     """Jambes `saison` reconstruites À LA DEMANDE (`saison N`) sur les matchs du jour pas encore commencés (championnats suivis ET coupes, LDC comprise), avec les cotes 1xBet RELUES à
     l'instant (cache de moins de C.XBET_COMBI_FRESH_MIN min repris), dans le plafond de la voie (C.SEASON_MAX_MATCHES matchs, C.SEASON_SECONDS s ; le relevé ne remplace pas le compte rendu
@@ -426,8 +452,12 @@ def rebuild(now, fetch=None):
         doc = store.load(EVENTS_FILE, {})
         kday = (store.load("today.json", {}) or {}).get("day") or day            # le jour KELLY (jusqu'à 04:00 UTC le lendemain), pas la date UTC
         day = str(doc.get("day") or day) if isinstance(doc, dict) else day
-        evs = [e for e in (doc.get("events") or [] if isinstance(doc, dict) and day == str(kday) else [])
-               if _ko(e) > now + timedelta(minutes=C.XBET_SOON_MIN)]
+        evs = doc.get("events") or [] if isinstance(doc, dict) and day == str(kday) else []
+        if not evs:                                   # le passage du matin n'a pas gardé les matchs (installé en cours de journée) : le cache du tour du monde
+            evs = events_from_monde(kday)
+            day = str(kday)
+            info["from_monde"] = bool(evs)
+        evs = [e for e in evs if _ko(e) > now + timedelta(minutes=C.XBET_SOON_MIN)]
         scan = {"leagues": {}}
         for e in evs:
             scan["leagues"].setdefault(e["sport_key"], []).append(e)

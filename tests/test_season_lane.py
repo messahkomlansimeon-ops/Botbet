@@ -50,7 +50,7 @@ def fetch_of(pronos, **odds_kw):
             for c in pronos:
                 if c["id"] == ev["id"] and c["market"] == "alternate_totals_corners":
                     px |= px_for(c, **odds_kw)
-            out[ev["id"]] = {"gid": 7000 + int(ev["id"][1:]), "px": px, "refs": {k_: [7000, 1 + i, 0] for i, k_ in enumerate(px)}}
+            out[ev["id"]] = {"gid": 7000 + sum(map(ord, ev["id"])) % 1000, "px": px, "refs": {k_: [7000, 1 + i, 0] for i, k_ in enumerate(px)}}
         return out
     return fetch
 

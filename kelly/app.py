@@ -2237,7 +2237,8 @@ def season_command(args, today, now=None, fetch=None):
     legs, stale, when = [c for c in rebuilt if lanes.usable(c)], False, now.strftime("%H:%M")
     if not info["read"]:                              # rien relu : les jambes du matin, cotes du dernier relevé
         legs, stale, when = morning, True, today.get("xbet_at")
-        line += (" — 1xBet n'a rien rendu à l'instant : jambes et cotes du matin, vérifie-les avant de valider." if info["predicted"]
+        line += (" — aucun match du jour gardé pour la voie (ni liste du matin, ni tour du monde) : jambes et cotes du matin ; la voie prendra les matchs au prochain passage du matin." if not info["events"]
+                 else " — 1xBet n'a rien rendu à l'instant : jambes et cotes du matin, vérifie-les avant de valider." if info["predicted"]
                  else " — aucun match du jour à lire (aucune équipe suivie, ou tous commencés) : jambes et cotes du matin, vérifie-les avant de valider.")
     if len(legs) < 2:
         return line + "\nPas assez de jambes « saison » jouables (il en faut au moins deux sur deux matchs différents)."

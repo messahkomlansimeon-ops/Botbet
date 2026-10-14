@@ -97,6 +97,32 @@ def test_cap_and_failures():
     print("ok  plafond de 60 matchs / 600 s respecté, 1xBet muet ou en panne = aucune jambe sans exception, matchs d'un autre jour ignorés")
 
 
+def test_fallback_on_world_cache():
+    """Installation en cours de journée : le passage du matin (ancien code) n'a pas gardé season_events.json, mais data/monde.json existe -> les matchs du jour en viennent."""
+    scan = world()
+    store.remove(SL.EVENTS_FILE)
+    store.save("today.json", {"day": str(T.DAY), "season": [], "picks": [], "pronos": []})
+    hh = (NOW + timedelta(hours=8)).strftime("%H:%M")
+    store.save("monde.json", {"day": str(T.DAY), "leagues": {"soccer_x": [["XeT1", "XeT4", hh]], CUP: [["XeT2", "YoT3", hh], ["YoT2", "XeT6", "02:30"]], "soccer_other": [["A", "B", hh]]}})
+    evs = SL.events_from_monde(str(T.DAY))
+    assert len(evs) == 3 and all(e["id"].startswith("mx-") and "|" not in e["id"] for e in evs) and len({e["id"] for e in evs}) == 3, evs
+    late = next(e for e in evs if e["home_team"] == "YoT2")
+    assert late["commence_time"].startswith(f"{T.DAY + timedelta(days=1)}T02:30"), "avant 04:00 UTC : lendemain civil du même jour Kelly"
+    assert SL.events_from_monde(str(T.DAY)) == evs, "identifiants stables"
+    assert SL.events_from_monde("2020-01-01") == [], "un autre jour : rien"
+    pronos = SL.make(world(), NOW, T.DAY)
+    store.remove(SL.EVENTS_FILE)
+    store.save("monde.json", {"day": str(T.DAY), "leagues": {"soccer_x": [["XeT1", "XeT4", hh]], CUP: [["XeT2", "YoT3", hh]]}})
+    legs, info = SL.rebuild(NOW, T.fetch_of(SL.make({"leagues": {k: [dict(e) for e in v] for k, v in {"soccer_x": SL.events_from_monde(str(T.DAY))[:1], CUP: SL.events_from_monde(str(T.DAY))[1:]}.items()}}, NOW, T.DAY)))
+    assert info["events"] == 2 and info["cup_events"] == 1 and info["read"] == 2 and info.get("from_monde") and legs, info
+    # rien du tout (ni liste du matin ni tour du monde) : la réponse le dit, sans « sur 0 » muet
+    store.remove(SL.EVENTS_FILE)
+    store.remove("monde.json")
+    out = str(app.season_command(["3"], {"day": str(T.DAY), "season": [], "xbet_at": "09:30"}, now=NOW, fetch=lambda events, **kw: {}))
+    assert "aucun match du jour gardé pour la voie" in out and "prochain passage du matin" in out and "aucun match du jour à lire" not in out, out
+    print("ok  repli : sans liste du matin, les matchs du jour viennent du tour du monde (identifiants stables, minuit UTC géré) ; sans rien, la réponse le dit")
+
+
 def test_monthly_cap_guard():
     scan = world()
     SL.remember_events(scan, T.DAY)
@@ -177,6 +203,7 @@ def main():
         test_cap_and_failures()
         test_kelly_day_after_midnight_utc()
         test_monthly_cap_guard()
+        test_fallback_on_world_cache()
         test_command()
     finally:
         season.collect, SL.known_leagues = real
