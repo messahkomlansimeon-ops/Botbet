@@ -118,7 +118,7 @@ def quality_legs(picks, special=False):
     """Les jambes qui ont une raison d'être (pour le palier spécial : seulement corners, cartons et stats joueurs), aux cotes 1xBet
     quand 1xBet a chiffré les paris du jour (x_playable) : leur valeur est alors calculée à la cote 1xBet."""
     real = any(c.get("xodds") for c in picks)
-    return [c for c in picks if (not special or mispriced(c)) and x_playable(c, real) and not cross_league_stat(c) and leg_reason(c)]
+    return [c for c in picks if c.get("lane") != "saison" and (not special or mispriced(c)) and x_playable(c, real) and not cross_league_stat(c) and leg_reason(c)]
 
 
 def make_pool(picks):
@@ -522,7 +522,7 @@ def fair_legs(pronos):
     cote 1xBet (relevé en panne) : la cote minimale à exiger, « à vérifier »."""
     real = any(c.get("xodds") for c in pronos)
     return [c | {"odds": c.get("xodds") or c["min_odds"]} for c in pronos
-            if fair_eligible(c) and viable(c) and (c.get("xodds") or not real)]
+            if c.get("lane") != "saison" and fair_eligible(c) and viable(c) and (c.get("xodds") or not real)]       # une ligne appartient à la voie qui l'a construite : jamais une jambe `saison` ici
 
 
 def _fair_best(legs, lo, hi, max_legs=None, min_legs=None):
@@ -656,7 +656,7 @@ def season_plan(legs, tiers=None, usage=None):
     combiné maximale (_best_combo : l'essai des tirs de best_combo ne concerne pas cette voie). `usage` : celui de toute la journée (mêmes règles de réutilisation que les autres tickets) ;
     un combiné de REMPLISSAGE est envoyé (C.SEASON_SEND_FILL, « sans valeur ») et consomme comme les autres ; avec l'interrupteur éteint il reste en fantôme et ne consomme rien (ensemble.unsent)."""
     usage = usage if usage is not None else Usage()
-    pool = sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds")), key=lambda c: -c["prob"])      # par proba retenue (p_ens) décroissante : jamais par écart au marché
+    pool = sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"), key=lambda c: -c["prob"])      # par proba retenue (p_ens) décroissante : jamais par écart au marché
     out = []
     for target in (tiers if tiers is not None else C.SEASON_TIERS):
         lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)
@@ -693,7 +693,7 @@ def season_patch(legs, pool, lo, hi, fresh_ids=None, usage=None):
     added = []
     if not keep or total < lo or len(keep) < 2:
         used = {c["id"] for c in keep}
-        spares = [c for c in pool if c["id"] not in used and c.get("xodds") and c.get("sval") is not None and lanes.usable(c) and (usage is None or usage.allowed(c))]
+        spares = [c for c in pool if c["id"] not in used and c.get("xodds") and c.get("sval") is not None and c.get("lane") == "saison" and lanes.usable(c) and (usage is None or usage.allowed(c))]
         best = {}
         for c in spares:                                    # une jambe par match : la plus probable
             if c["id"] not in best or c["prob"] > best[c["id"]]["prob"]:

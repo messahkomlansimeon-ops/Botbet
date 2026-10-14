@@ -133,6 +133,23 @@ def test_morning_section_and_record():
     print("ok  matin : section « saison en cours » (un message par palier), mises prises sur le budget du jour, suivi sous « ss<N> », relance sans doublon")
 
 
+def test_no_mixed_combo():
+    legs = setup()
+    other = [{"key": f"o{i}|totals||2.5|Over", "id": f"o{i}", "strategy": "sharpgap", "market": "totals", "name": "Over", "point": 2.5, "prob": 0.8, "xodds": 1.5, "odds": 1.5,
+              "commence": "2026-10-14T20:00:00Z", "sport_key": "soccer_epl", "home": "A", "away": "B", "min_odds": 1.4, "xref": [1, 2, 3]} for i in range(10)]
+    # une ligne appartient à la voie qui l'a construite : le plan `saison` ignore toute jambe d'une autre voie, même mieux notée ...
+    plan = CB.season_plan(other + legs)
+    assert any(c for _, c in plan) and all(l.get("lane") == "saison" for _, c in plan if c for l in c[0]), "aucune jambe d'une autre voie dans un combiné saison"
+    assert CB.season_plan(other) == [(t, None) for t in ("ss3", "ss10", "ss30", "ss100")]
+    # ... et les combinés des autres voies ignorent toute jambe saison
+    assert all(c.get("lane") != "saison" for c in CB.fair_legs(other + legs)) and CB.make_pool(legs) == [], "ni fair_legs ni make_pool ne reprennent une jambe saison"
+    # le remplacement en direct ne puise jamais hors de la voie
+    base = CB.season_plan(legs, [3])[0][1][0]
+    res = CB.season_patch(base[:1], pool=[dict(c, sval=1) for c in other] + [dict(c, sval=1) for c in legs if c["id"] != base[0]["id"]], lo=2.4, hi=3.6, fresh_ids={c["id"] for c in legs + other})
+    assert res and all(l.get("lane") == "saison" for l in res[0]), res
+    print("ok  jamais de combiné mixte : le plan, les remplaçants et les pools des autres voies s'ignorent mutuellement (une ligne appartient à la voie qui l'a construite)")
+
+
 def test_fill_only_is_ghost():
     legs = setup()
     C.SEASON_SEND_FILL = False
@@ -305,7 +322,7 @@ def test_live_recheck_helpers():
 
 
 def main():
-    for t in (test_plan_tiers_and_ranges, test_value_first_then_fill, test_usage_rules, test_item_fields_and_cap, test_morning_section_and_record, test_fill_only_is_ghost, test_fill_only_is_sent,
+    for t in (test_plan_tiers_and_ranges, test_value_first_then_fill, test_usage_rules, test_item_fields_and_cap, test_morning_section_and_record, test_no_mixed_combo, test_fill_only_is_ghost, test_fill_only_is_sent,
               test_no_automatic_changes_and_no_leak, test_sval_persisted_and_stake_isolation, test_live_recheck_helpers, test_commands):
         t()
     print("tests voie saison (combinés) : OK")
