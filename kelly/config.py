@@ -309,6 +309,7 @@ FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0)
 FAIR_TRACK_STATS = _int("FAIR_TRACK_STATS", 100)  # en plus, pronostics de stats (corners, cartons, tirs, fautes...) suivis en silence par jour, réglés sans requête de
                                                   # plus (match déjà relevé, ou CSV football-data) : la fiabilité de ces marchés s'apprend 5 à 10 fois plus vite
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
+FAIR_TRACK_GHOST = _int("FAIR_TRACK_GHOST", 60)  # lignes d'une voie / ligue en fantôme (jamais choisies pour un pari) suivies en plus par passage : réglées, comptées dans la calibration et l'essai des tirs ; « plus de » des tirs d'abord
 # Cotes 1xBet (kelly/sources/xbet.py) : le prix exact des pronostics chez le bookmaker de l'utilisateur, lu le matin (gratuit, poli)
 XBET_ENABLED = _bool("XBET_ENABLED", True)
 XBET_SECONDS = _int("XBET_SECONDS", 1200)           # temps maximal du relevé 1xBet du matin (3 s entre requêtes)

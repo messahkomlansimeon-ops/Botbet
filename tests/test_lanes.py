@@ -250,6 +250,28 @@ def test_day_stakes_end_to_end():
     print("ok  day_stakes de bout en bout : sharpgap inchangé, combiné sans valeur = un pas d'arrondi sans rien retirer aux autres, voie stats = 60 %")
 
 
+def test_ghost_lines_count_in_trial():
+    """Décision du 14/10 : l'essai des tirs « plus de » compte les lignes passées en fantôme dans n et dans le taux réalisé ; seul le gain aux cotes 1xBet les exclut."""
+    from kelly import calib, fair
+    store.save(fair.FILE, [])
+    store.save(calib.FILE, {})
+    bra = [prono("team_shots_home", "Over", 5.5 + i, lane="stats", sport="soccer_brazil_campeonato") | {"id": f"b{i}", "key": f"b{i}|team_shots_home||{5.5 + i}|Over"} for i in range(3)]
+    epl = prono("team_shots_home", "Over", 5.5, lane="stats", sport="soccer_epl") | {"id": "e1", "key": "e1|team_shots_home||5.5|Over"}
+    assert not lanes.usable(bra[0]) and lanes.usable(epl)
+    n = fair.record(bra + [epl], "2026-10-14", shown=[])
+    rows = {r["id"]: r for r in fair.load()}
+    assert n == 4 and all(rows[f"b{i}"].get("ghost") == 1 and rows[f"b{i}"].get("x") == 1 for i in range(3)), rows
+    assert "ghost" not in rows["e1"], "une ligne jouable n'est pas marquée"
+    for r in rows.values():
+        r["result"] = "win" if r["id"] in ("b0", "b1", "e1") else "loss"
+    calib.add(list(rows.values()), None)
+    cell = calib.load()["_cell"]["|".join(calib.TRIAL)]
+    assert cell[0] == 4.0 and cell[1] == 3.0, cell                                    # n = 4 (3 fantômes + 1 jouable), 3 gagnés
+    nr = calib.load().get("_new_rows") or []
+    assert nr == [["2026-10-14", "e1", "shots", 1.55, 1]], nr                          # seule la ligne jouable entre dans le gain aux cotes 1xBet
+    print("ok  essai des tirs : les lignes en fantôme sont suivies, réglées et comptées dans n / taux réalisé ; leur gain 1xBet est exclu")
+
+
 def main():
     test_modes()
     test_usable_and_gates()
@@ -257,6 +279,7 @@ def main():
     test_selection_points()
     test_bypasses_and_robustness()
     test_day_stakes_end_to_end()
+    test_ghost_lines_count_in_trial()
     print("tests voies : OK")
 
 

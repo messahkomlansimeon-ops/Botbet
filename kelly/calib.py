@@ -239,7 +239,7 @@ def add(rows, today=None, defer=None):
         accumulate(data, r, r["result"] == "win", w)
         if r.get("rule") == C.RULE and family(r["market"]) in C.STATS_NEW_FAMILIES:     # compteur « depuis la correction » : la proba ANNONCÉE
             accumulate(data.setdefault("_new", {}), r | {"p0": r["prob"]}, r["result"] == "win", w)      # (mélange avec 1xBet), pas celle du modèle seul
-            if r.get("xodds"):                                                         # gain réel à la cote 1xBet, par match (new_roi)
+            if r.get("xodds") and not r.get("ghost"):                                  # gain réel à la cote 1xBet, par match (new_roi) : jamais les lignes en fantôme (jamais misées) ; leur n et leur taux réalisé comptent
                 data.setdefault("_new_rows", []).append([str(r.get("date") or "")[:10], str(r.get("id") or r["key"].split("|")[0]), family(r["market"]),
                                                          round(float(r["xodds"]), 3), 1 if r["result"] == "win" else 0])
         r["calib"] = True

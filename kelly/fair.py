@@ -501,6 +501,11 @@ def record(pronos, day, shown=None):
     extra += [c for c in rest if c["market"].startswith(("team_corners_", "team_yellow_"))][:TRACK_NEW]
     stats_extra, free = _stats_extra([c for c in rest if c not in extra], main + extra)
     extra += stats_extra
+    if C.ENSEMBLE_ENABLED:                                          # voie / ligue en fantôme : jamais choisie, mais suivie et réglée comme les autres (décision du 14/10 : l'essai des tirs les compte)
+        from . import lanes
+        ghost = [c for c in rest if c not in extra and c.get("xodds") and not lanes.usable(c)]
+        ghost.sort(key=lambda c: 0 if c["market"].startswith(("team_shots_", "team_sot_")) and c.get("name") == "Over" else 1)
+        extra += ghost[:C.FAIR_TRACK_GHOST]
     seen = set()                                                    # (jour, match, marché) déjà pris dans CE passage (ligne connue, mise à jour ou neuve)
     for c in main + extra:
         old = by_key.get(c["key"])
@@ -520,6 +525,7 @@ def record(pronos, day, shown=None):
                 by_key[c["key"]] = old
             elif old is None:
                 by_key[c["key"]] = row = ({k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
+                                          | ({"ghost": 1} if C.ENSEMBLE_ENABLED and not _usable(c) else {})
                                           | ({"free": 1} if c["key"] in free else {}) | _rule(c) | ({"strategy": c["strategy"]} if c.get("strategy") else {}))
                 rows.append(row)
                 n += 1
@@ -534,6 +540,11 @@ def record(pronos, day, shown=None):
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_KEEP_DAYS))
     store.save(FILE, [r for r in rows if r["date"] >= cut])
     return n
+
+
+def _usable(c):
+    from . import lanes
+    return lanes.usable(c)
 
 
 def _rule(c):
