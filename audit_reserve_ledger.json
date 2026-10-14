@@ -47,5 +47,96 @@
   "other_reading": "aucune ; tout chiffre inattendu est noté « observé, non testé », sans décision"
  },
  "prereg_sha": "d5845afa6cb43b166e180fafb2fb23a172391e09a678e6c361a83a89050532b3",
- "written_at": "2026-10-14T02:50:50+00:00"
+ "written_at": "2026-10-14T02:50:50+00:00",
+ "final": {
+  "at": "2026-10-14T02:51:16+00:00",
+  "matches": 888,
+  "by_league": {
+   "E0": 210,
+   "SP1": 187,
+   "I1": 198,
+   "D1": 141,
+   "F1": 152
+  },
+  "ids_sha": "c2be781cf0370983b188abf7dc565ef47ad12f3e5f7e20252960ea0f5afbac5b",
+  "decision": {
+   "1N2": {
+    "weight": 0.0,
+    "config": null,
+    "why": "aucune configuration ne bat l'ouverture sur les deux métriques : poids 0, sharpgap seul",
+    "derived_weight_zero": [
+     "double_chance"
+    ]
+   },
+   "plus/moins 2,5": {
+    "weight": 0.0,
+    "config": null,
+    "why": "aucune configuration ne bat l'ouverture sur les deux métriques : poids 0, sharpgap seul",
+    "derived_weight_zero": [
+     "btts",
+     "team_totals_home",
+     "team_totals_away"
+    ]
+   }
+  },
+  "table": {
+   "1N2": {
+    "contexte éteint": {
+     "n": 888,
+     "kl_mix": 0.0022567477213632212,
+     "log-loss": [
+      0.0010142539848747366,
+      0.0009937222978895015
+     ],
+     "distance à la clôture": [
+      0.0001549221583086731,
+      6.186489091918008e-05
+     ],
+     "passes": false
+    },
+    "contexte actuel": {
+     "n": 888,
+     "kl_mix": 0.002270488461650664,
+     "log-loss": [
+      0.0012081751911560644,
+      0.0010890309588351037
+     ],
+     "distance à la clôture": [
+      0.00016866289859611587,
+      6.709181449642866e-05
+     ],
+     "passes": false
+    }
+   },
+   "plus/moins 2,5": {
+    "contexte éteint": {
+     "n": 888,
+     "kl_mix": 0.0016640540081595575,
+     "log-loss": [
+      0.0006324693531573698,
+      0.0007170844877484937
+     ],
+     "distance à la clôture": [
+      5.360191118605772e-05,
+      4.2539593411995154e-05
+     ],
+     "passes": false
+    },
+    "contexte actuel": {
+     "n": 888,
+     "kl_mix": 0.0016616626224680846,
+     "log-loss": [
+      0.0008943693100678056,
+      0.0008507930653069259
+     ],
+     "distance à la clôture": [
+      5.1210525494584776e-05,
+      4.862294462640278e-05
+     ],
+     "passes": false
+    }
+   }
+  },
+  "report_sha": "7548aeb83baef6127760030608b2ed19d7a0b86b40bfedddd32696a7a09b8e18"
+ }
 }
