@@ -406,17 +406,22 @@ def leg_clv_lines(days=None, today=None):
     rows = leg_clv_rows(days, today)
     if not rows:
         return []
+    live = [r for r in rows if (r[0].get("strategy") or None) == "live"]
+    rows = [r for r in rows if (r[0].get("strategy") or None) != "live"]          # les jambes live (hors voies, jamais au journal d'ensemble) ne gonflent pas la couverture : elles ont leur ligne
     out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match ; "
            "une jambe sans prix pris, sans ligne au journal ou sans relevé proche n'est pas mesurée : seules les lignes restées les mêmes sont vues)"]
-    for lane in ("sharpgap", "stats", "fill", "live", None):
+    for lane in ("sharpgap", "stats", "fill", None):
         mine = [(l, c, v) for l, c, v in rows if (l.get("strategy") or None) == lane and v is not None]
         if not mine:
             continue
         n, m, h = stats([v for _, _, v in mine], [l.get("id") or c.get("date") for l, c, _ in mine])
         pos = sum(1 for _, _, v in mine if v > 0)
-        name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", "live": "live (à part : hors voies)", None: "avant les étiquettes"}[lane]
+        name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
         out.append(f"{name} : {n} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" · {round(pos / n * 100)} % battent le dernier prix"
                    + ("" if n >= 30 else " (trop peu pour conclure)"))
+    if live:                                    # toujours dite, mesurée ou non : le live est visible à part, hors voies
+        meas = [v for _, _, v in live if v is not None]
+        out.append(f"live (à part : hors voies) : {len(live)} jambes, " + (f"{len(meas)} mesurées" if meas else "CLV non mesurable (aucun relevé de clôture live)"))
     try:
         from . import fair
         g = [r for r in fair.load_ghost() if (r.get("date") or "") >= _since(days, today)]

@@ -105,6 +105,8 @@ def test_live_label():
     lines = lanestats.lane_lines([], None)
     assert any(x.startswith("live : 1 gagnée sur 2") and "hors voies" in x and "CLV non mesurable" in x for x in lines), lines
     assert lanestats.live_alert() == "", "aucune mesure de clôture live : la règle ne peut pas se déclencher"
+    cl = lanestats.leg_clv_lines()
+    assert cl[0].startswith("jambes mesurées : 0 / ") and "live" not in cl[0] and "live (à part : hors voies) : 2 jambes, CLV non mesurable (aucun relevé de clôture live)" in cl, cl      # visible à part, hors du ratio de couverture
     store.save("fair_combos.json", [])
     # règle d'alerte : 200 jambes mesurées et IC sous zéro -> message, jamais de coupure
     rows = [(dict(live_leg, id=f"g{i}"), {}, -0.03 + (0.001 if i % 2 else -0.001)) for i in range(220)]
