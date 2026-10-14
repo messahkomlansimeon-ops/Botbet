@@ -371,7 +371,7 @@ def plan(picks, tiers=None, usage=None, rejected=None):
         combo, neg = best_with_ev(legs, lo, hi)
         if neg and rejected is not None:
             rejected.append(title)
-        if combo:
+        if combo and not ensemble.unsent(combo[0]):   # un combiné SANS valeur (fantôme, jamais envoyé) ne consomme aucune réutilisation : il ne prive pas un combiné réel de ses jambes
             usage.add(combo[0])
         out.append((title, combo))
     return out
@@ -604,7 +604,7 @@ def fair_plan(pronos, tiers=None, usage=None):
     out = []
     for target, lo, hi in (tiers if tiers is not None else C.FAIR_COMBO_TIERS):
         combo = _fair_best(usage.filter(legs), lo, hi)
-        if combo:
+        if combo and not ensemble.unsent(combo[0]):   # sans valeur = fantôme : aucune réutilisation consommée
             usage.add(combo[0])
         out.append((target, combo))
     return out
@@ -619,7 +619,7 @@ def fair_shots_plan(pronos, tiers=None, usage=None):
     for target, prefix, _, lo, hi in (tiers if tiers is not None else C.FAIR_SHOTS_TIERS):
         legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(prefix)]
         combo = _fair_best(legs, lo, hi)
-        if combo:
+        if combo and not ensemble.unsent(combo[0]):   # sans valeur = fantôme : aucune réutilisation consommée
             usage.add(combo[0])
         out.append((target, combo))
     return out

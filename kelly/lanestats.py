@@ -183,7 +183,7 @@ def lane_lines(rows, days=None, today=None, plain=False):
             if n:
                 txt += f" · {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" (sur {n} lignes du journal)"
         if lane == "live":
-            txt += " · hors voies (dimensionnement d'avant) ; CLV non mesurable : aucun relevé de clôture live"
+            txt += " · hors voies (dimensionnement d'avant) ; " + live_calib_text(days, today)
         out.append(txt)
     try:
         cm = combo_money(days, today)
@@ -421,7 +421,7 @@ def leg_clv_lines(days=None, today=None):
                    + ("" if n >= 30 else " (trop peu pour conclure)"))
     if live:                                    # toujours dite, mesurée ou non : le live est visible à part, hors voies
         meas = [v for _, _, v in live if v is not None]
-        out.append(f"live (à part : hors voies) : {len(live)} jambes, " + (f"{len(meas)} mesurées" if meas else "CLV non mesurable (aucun relevé de clôture live)"))
+        out.append(f"live (à part : hors voies) : {len(live)} jambes, " + (f"{len(meas)} mesurées" if meas else live_calib_text(days, today)))
     try:
         from . import fair
         g = [r for r in fair.load_ghost() if (r.get("date") or "") >= _since(days, today)]
@@ -439,19 +439,64 @@ def leg_clv_lines(days=None, today=None):
     return out
 
 
-LIVE_ALERT_N = 200                             # jambes live mesurées avant de rendre un verdict
+LIVE_ALERT_N = 200                             # jambes live réglées avant de rendre un verdict
+
+
+def live_calib_rows(days=None, today=None):
+    """[(id du match, chance annoncée, 1 si gagnée sinon 0)] des jambes `live` RÉGLÉES (paris suivis envoyés + jambes des combinés), une fois par jambe (clé). Aucune requête : les
+    résultats existent déjà. Une jambe sans chance annoncée n'est pas comptée."""
+    from . import fair
+    cut = _since(days, today)
+    out, seen = [], set()
+
+    def put(leg, day):
+        k = leg.get("key")
+        p = leg.get("prob")
+        if (k and k not in seen and leg.get("strategy") == "live" and leg.get("result") in ("win", "loss") and (day or "") >= cut
+                and isinstance(p, (int, float)) and not isinstance(p, bool) and 0 < p < 1):
+            seen.add(k)
+            out.append((leg.get("id") or str(k).split("|")[0], float(p), 1 if leg["result"] == "win" else 0))
+
+    for r in store.load_doc("tracked.json", []):
+        if isinstance(r, dict) and r.get("sent"):
+            put(r, r.get("date"))
+    docs = [fair.load_combos(), (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])]
+    for combos in docs:
+        for c in combos if isinstance(combos, list) else []:
+            for leg in (c.get("legs") or []) if isinstance(c, dict) else []:
+                if isinstance(leg, dict):
+                    put(leg, c.get("date"))
+    return out
+
+
+def live_calib(days=None, today=None):
+    """(n, taux annoncé, taux réalisé, écart réalisé − annoncé, demi-marge à 95 % de l'écart) des jambes live réglées ; marges PAR MATCH (les jambes d'un même match sont corrélées).
+    (0, None, None, None, None) sans jambe."""
+    rows = live_calib_rows(days, today)
+    if not rows:
+        return 0, None, None, None, None
+    n, d, h = stats([y - p for _, p, y in rows], [i for i, _, _ in rows])
+    return n, sum(p for _, p, _ in rows) / n, sum(y for _, _, y in rows) / n, d, h
+
+
+def live_calib_text(days=None, today=None):
+    """« CLV non mesurable (pas de clôture relevée), calibration n/200 » (+ annoncé / réalisé / écart dès qu'il y a des jambes réglées)."""
+    n, pa, pr, d, h = live_calib(days, today)
+    txt = f"CLV non mesurable (pas de clôture relevée), calibration {n}/{LIVE_ALERT_N}"
+    if n:
+        txt += f" : annoncé {round(pa * 100)} %, réalisé {round(pr * 100)} %" + (f", écart {_pc(d)} ± {_pc(h, False)}" if h is not None else "") + ("" if n >= LIVE_ALERT_N else " (trop peu pour conclure)")
+    return txt
 
 
 def live_alert():
-    """Règle inscrite le 14/10 : si le CLV des jambes `live` contre le dernier prix 1xBet connu est négatif avec un IC à 95 % sur LIVE_ALERT_N jambes mesurées, on REVIENT vers l'utilisateur
-    (message au bilan du matin) ; AUCUNE coupure automatique du live. Aujourd'hui aucun relevé de clôture live n'existe : les jambes ne sont pas mesurables (n = 0), la règle ne peut pas
-    encore se déclencher. -> ligne de texte ou ''."""
+    """Règle du 14/10, remplacée le 15/10 (aucun prix de clôture live n'est relevé, le CLV live n'est pas mesurable) : taux RÉALISÉ contre taux ANNONCÉ des jambes `live` réglées. Sur au moins
+    LIVE_ALERT_N jambes, si le réalisé est sous l'annoncé avec un IC à 95 % (par match) qui exclut zéro, on REVIENT vers l'utilisateur (bilan du matin) ; AUCUNE coupure automatique du
+    live. Aucune requête. -> ligne de texte ou ''."""
     try:
-        pairs = [(l, v) for l, _, v in leg_clv_rows() if l.get("strategy") == "live" and v is not None]
-        n, m, h = stats([v for _, v in pairs], [l.get("id") or i for i, (l, _) in enumerate(pairs)])      # marges par match : les jambes d'un même match sont corrélées
-        if n >= LIVE_ALERT_N and verdict(n, m, h, LIVE_ALERT_N) == "neg":
-            return (f"⚠️ Jambes live : CLV 1xBet {_pc(m)} ± {_pc(h, False)} sur {n} jambes, intervalle sous zéro. Décision à prendre avec toi "
-                    "(aucune coupure automatique du live).")
+        n, pa, pr, d, h = live_calib()
+        if n >= LIVE_ALERT_N and verdict(n, d, h, LIVE_ALERT_N) == "neg":
+            return (f"⚠️ Jambes live : réalisé {round(pr * 100)} % contre {round(pa * 100)} % annoncé ({_pc(d)} ± {_pc(h, False)}) sur {n} jambes, intervalle sous zéro. "
+                    "Décision à prendre avec toi (aucune coupure automatique du live).")
     except Exception as e:                      # noqa: BLE001
         print(f"[lanes] alerte live illisible : {type(e).__name__}: {e}", file=sys.stderr)
     return ""

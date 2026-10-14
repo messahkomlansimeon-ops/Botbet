@@ -150,6 +150,11 @@ def has_value(legs):
     return None
 
 
+def unsent(legs):
+    """Un combiné construit automatiquement reste-t-il fantôme (toutes ses jambes `fill`, voies connues) ? Faux si NOVALUE_SEND ou ensemble éteint."""
+    return bool(C.ENSEMBLE_ENABLED and not C.NOVALUE_SEND and legs and has_value(legs) is False)
+
+
 def model_silent(market):
     """Le modèle n'a-t-il AUCUNE voix sur ce marché (famille figée) : ni poids, ni veto, ni filtre « ligne plus faible qu'un match moyen » (xprice, combos.viable) ?"""
     return frozen(family(market))

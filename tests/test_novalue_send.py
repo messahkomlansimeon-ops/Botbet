@@ -103,22 +103,26 @@ def test_live_label():
     n, total = lanestats.unlabeled()
     assert (n, total) == (0, 2), "les jambes live comptent comme étiquetées"
     lines = lanestats.lane_lines([], None)
-    assert any(x.startswith("live : 1 gagnée sur 2") and "hors voies" in x and "CLV non mesurable" in x for x in lines), lines
+    assert any(x.startswith("live : 1 gagnée sur 2") and "hors voies" in x and "CLV non mesurable (pas de clôture relevée), calibration 0/200" in x for x in lines), lines
     assert lanestats.live_alert() == "", "aucune mesure de clôture live : la règle ne peut pas se déclencher"
     cl = lanestats.leg_clv_lines()
-    assert cl[0].startswith("jambes mesurées : 0 / ") and "live" not in cl[0] and "live (à part : hors voies) : 2 jambes, CLV non mesurable (aucun relevé de clôture live)" in cl, cl      # visible à part, hors du ratio de couverture
+    assert cl[0].startswith("jambes mesurées : 0 / ") and "live" not in cl[0] and "live (à part : hors voies) : 2 jambes, CLV non mesurable (pas de clôture relevée), calibration 0/200" in cl, cl      # visible à part, hors du ratio de couverture
     store.save("fair_combos.json", [])
-    # règle d'alerte : 200 jambes mesurées et IC sous zéro -> message, jamais de coupure
-    rows = [(dict(live_leg, id=f"g{i}"), {}, -0.03 + (0.001 if i % 2 else -0.001)) for i in range(220)]
-    real = lanestats.leg_clv_rows
-    lanestats.leg_clv_rows = lambda *a, **k: rows
-    try:
-        msg = lanestats.live_alert()
-        assert msg.startswith("⚠️ Jambes live : CLV 1xBet −3,0 %") and "aucune coupure automatique" in msg, msg
-        lanestats.leg_clv_rows = lambda *a, **k: rows[:199]
-        assert lanestats.live_alert() == "", "199 jambes : pas assez"
-    finally:
-        lanestats.leg_clv_rows = real
+    # règle d'alerte (calibration, aucune requête) : 200 jambes réglées, réalisé sous l'annoncé avec un IC par match qui exclut zéro -> message, jamais de coupure
+    def book(n, wins_every, prob=0.8):
+        legs = [dict(live_leg, key=f"g{i}|totals||1.5|Over", id=f"g{i // 2}", prob=prob, result="win" if i % wins_every else "loss") for i in range(n)]
+        store.save("fair_combos.json", [{"date": TODAY, "tier": "lc1", "result": None, "legs": legs}])
+    book(220, 3)                                         # ~67 % réalisés pour 80 % annoncés
+    msg = lanestats.live_alert()
+    assert msg.startswith("⚠️ Jambes live : réalisé 66 % contre 80 % annoncé") and "aucune coupure automatique" in msg and "sur 220 jambes" in msg, msg
+    assert "calibration 220/200 : annoncé 80 %, réalisé 66 %" in lanestats.live_calib_text()
+    book(199, 3)
+    assert lanestats.live_alert() == "" and "calibration 199/200" in lanestats.live_calib_text() and "trop peu" in lanestats.live_calib_text(), "199 jambes : pas assez"
+    book(220, 5)                                         # 80 % réalisés pour 80 % annoncés : calibré
+    assert lanestats.live_alert() == "", lanestats.live_alert()
+    book(220, 2, prob=0.4)                               # 50 % réalisés pour 40 % annoncés : sur-performance, pas d'alerte
+    assert lanestats.live_alert() == ""
+    store.save("fair_combos.json", [])
     print("ok  jambes live : étiquette hors voies, dimensionnement d'avant, comptées comme étiquetées, visibles à part ; alerte à 200 jambes sans coupure")
 
 
@@ -189,7 +193,56 @@ def test_stats_window_looks_past_a_ghost():
     print("ok  fenêtre des stats : un candidat sans valeur est suivi en fantôme puis écarté, le suivant (avec valeur) est proposé")
 
 
+def test_ghost_keys_that_gain_value_are_planned():
+    setup()
+    values = priced(3, 1.55)
+    fair.ghost_record(5, (values, 2.2, 0.3), DAY, "fenêtre stats")                       # mêmes jambes suivies en fantôme à un passage précédent (sans valeur à l'époque)
+    real, realu, rin, rfr = statswindow.CB.fair_stats_window, app.upcoming, statswindow.in_window, statswindow.fresh
+    statswindow.CB.fair_stats_window = lambda pronos, usage=None, accept=None: (values, 2.2, 0.3)
+    app.upcoming = lambda pronos, now: pronos
+    statswindow.in_window = statswindow.fresh = lambda c, now: True
+    try:
+        plan = statswindow.plan_combo(app, {"day": DAY, "pronos": values}, {"combos": []}, [], N.at(9))
+    finally:
+        statswindow.CB.fair_stats_window, app.upcoming, statswindow.in_window, statswindow.fresh = real, realu, rin, rfr
+    assert plan is not None and not fair.unsent(plan["legs"]), plan
+    fair.ghost_drop(DAY, plan["keys"])
+    assert fair.load_ghost() == [], "il part : plus un fantôme"
+    print("ok  fenêtre des stats : des jambes d'abord en fantôme qui ont gagné de la valeur sont proposées, leur ligne fantôme tombe")
+
+
+def test_ghost_does_not_consume_reuse():
+    setup()
+    from kelly import combos as CB
+    fills, values = priced(4, 1.30), priced(4, 1.55)
+    tiers = [(2, 2.0, 4.0), (3, 2.0, 4.0)]
+    real_fl, CB.fair_legs = CB.fair_legs, lambda ps: [c | {"odds": c["xodds"]} for c in ps]      # la sélection des jambes n'est pas ce qu'on teste
+    try:
+        _ghost_reuse(CB, fills, values, tiers)
+    finally:
+        CB.fair_legs = real_fl
+
+
+def _ghost_reuse(CB, fills, values, tiers):
+    u = CB.Usage()
+    plan = CB.fair_plan(fills, tiers=tiers, usage=u)
+    assert [c for _, c in plan] and all(c and fair.unsent(c[0]) for _, c in plan), plan
+    assert not u.by_event, "combinés sans valeur (fantômes) : aucune réutilisation consommée, ni de quoi priver un combiné réel"
+    u = CB.Usage()
+    plan = CB.fair_plan(values, tiers=tiers[:1], usage=u)
+    assert plan[0][1] and not fair.unsent(plan[0][1][0]) and u.by_event, "un combiné avec valeur consomme comme avant"
+    u = CB.Usage()
+    plan = CB.fair_plan(values[:2] + fills[2:], tiers=tiers[:1], usage=u)
+    assert plan[0][1] and u.by_event, "il suffit d'une jambe à valeur pour consommer"
+    u = CB.Usage()
+    u.add(fills[:1])
+    assert u.by_event, "un pari seul (pari du jour, écart sharp) fill compte toujours : seul un COMBINÉ fantôme ne consomme rien"
+    print("ok  un combiné fantôme ne consomme pas la réutilisation des jambes (Usage), un combiné envoyé oui")
+
+
 def main():
+    test_ghost_does_not_consume_reuse()
+    test_ghost_keys_that_gain_value_are_planned()
     test_unsent_rules()
     test_morning_not_sent()
     test_stats_window_not_sent()

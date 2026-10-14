@@ -754,7 +754,7 @@ GHOST_COMBOS_FILE = "ghost_combos.json"
 def unsent(legs):
     """Un combiné construit automatiquement doit-il rester fantôme (toutes ses jambes `fill`, voies connues) ? Faux si NOVALUE_SEND (config) ou ensemble éteint."""
     from . import ensemble
-    return bool(C.ENSEMBLE_ENABLED and not C.NOVALUE_SEND and legs and ensemble.has_value(legs) is False)
+    return ensemble.unsent(legs)
 
 
 def load_ghost():

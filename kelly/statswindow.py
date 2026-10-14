@@ -375,8 +375,6 @@ def plan_combo(app, today, doc, rows, now):
     keys = {l["key"] for l in legs}
     if any(keys == set(c["keys"]) for c in doc["combos"]) or any(keys == set(r.get("keys") or []) for r in rows if r.get("date") == day):
         return None                                 # jamais deux fois les mêmes jambes
-    if any(keys == set(r.get("keys") or []) for r in fair.load_ghost() if r.get("date") == day):
-        return None                                 # déjà suivi en fantôme (sans valeur, non envoyé) : pas replanifié à chaque passage
     ages = [(age_min(l, now), l.get("xat")) for l in legs]
     when = max(ages, key=lambda a: a[0] if a[0] is not None else 9999)[1] or now.strftime("%H:%M")      # l'heure de la cote la plus ancienne : honnête
     return {"tier": tier, "legs": legs, "total": total, "prob": prob, "when": when, "keys": sorted(keys)}
@@ -402,6 +400,7 @@ def send_combo(app, plan, day, now):
             return None
         if not fair.record_combos([(tier, (legs, total, prob))], day, {tier: stake}, money.cur() if stake else None, coupons={tier: coupon}, at=when):
             return None
+        fair.ghost_drop(day, plan["keys"])           # mêmes jambes suivies en fantôme à un passage précédent : il part, ce n'est plus un fantôme
         doc["combos"].append({"tier": tier, "keys": plan["keys"], "at": now.strftime("%H:%M"), "coupon": coupon})
         store.save(FILE, doc)
         kos = sorted(_ko(l) for l in legs)
