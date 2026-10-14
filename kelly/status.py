@@ -246,10 +246,12 @@ def learning_lines(top=6):
     except Exception:                                   # noqa: BLE001 - facultatif
         pass
     ens = [(f, ensemble.weights(f)) for f in ("goals", "dc", "btts", "h2h")]
-    ready = [calib.LABELS.get(f, f) for f, w in ens if w["n_m"] >= C.ENSEMBLE_MIN_N]
-    wait = [f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in ens if w["n_m"] < C.ENSEMBLE_MIN_N]
+    still = [(f, w) for f, w in ens if not w["frozen"]]
+    ready = [calib.LABELS.get(f, f) for f, w in still if w["n_m"] >= C.ENSEMBLE_MIN_N]
+    wait = [f"{calib.LABELS.get(f, f)} {int(w['n_m'])}/{int(C.ENSEMBLE_MIN_N)}" for f, w in still if w["n_m"] < C.ENSEMBLE_MIN_N]
+    frozen_txt = (", ".join(calib.LABELS.get(f, f) for f, w in ens if w["frozen"]) + " : modèle à 0 % (figé, audit du 14/10)") if len(still) < len(ens) else ""
     out.append("⚖️ Avis face au marché : " + " · ".join(x for x in ((", ".join(ready) + (" prêts" if len(ready) > 1 else " prêt")) if ready else "",
-                                                                    ", ".join(wait)) if x))
+                                                                    ", ".join(wait), frozen_txt) if x))
     ld = live.calib_data()
     tr = sorted(((k, a) for k, a in ld.items() if a[0]), key=lambda x: -x[1][0])
     for k, (n, w, s) in tr[:4]:

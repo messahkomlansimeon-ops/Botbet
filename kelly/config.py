@@ -615,6 +615,11 @@ ENSEMBLE_ENABLED = _bool("ENSEMBLE_ENABLED", True)
 ENSEMBLE_ACTIVE_FAMILIES = _set("ENSEMBLE_ACTIVE_FAMILIES", ("goals", "h2h", "dc", "btts", "team_goals",      # team_goals = buts d'une équipe (Poisson seul : jamais décidé par le modèle seul)
                                                              "corners", "cards", "yellow", "shots", "sot", "fouls"))
 ENSEMBLE_LOG = _bool("ENSEMBLE_LOG", True)
+# Poids du modèle FIGÉ à 0 (audit du 14/10, saison réservée lue une fois, règle pré-déclarée dans audit_reserve_ledger.json) : sur ces familles la proba retenue est celle du
+# MARCHÉ seul (sharp démarginé s'il existe, mêlé à 1xBet démarginé, sinon 1xBet seul) ; le modèle ne pèse rien, ne met pas de veto, n'écarte aucune ligne, ne décide jamais
+# sans avis de marché, et sans avis sharp aucun pari n'est validé (ni « valeur » ni « probable » : ce serait 1xBet contre 1xBet). Il reste calculé et journalisé (« fantôme »).
+# Son poids n'est plus appris. « ENSEMBLE_FROZEN_MODEL=none » : comportement d'avant (retour arrière).
+ENSEMBLE_FROZEN_MODEL = _set("ENSEMBLE_FROZEN_MODEL", ("goals", "h2h", "dc", "btts", "team_goals"))
 # Compteur « depuis la correction » (calib, data["_new"]) : les pronostics de ces familles choisis avec la nouvelle règle (mélange avec 1xBet, « rule » 2
 # dans data/fair.json) sont aussi comptés à part ; dès STATS_NEW_MIN résultats, l'exclusion des combinés (combos.data_ok) se décide sur eux seuls, pas
 # sur les résultats de l'ancienne règle (tirs : 45 % réalisés pour 65 % annoncés, lignes choisies sur le plus gros désaccord avec 1xBet).

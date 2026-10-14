@@ -102,6 +102,16 @@ def prior_model(fam):
     return C.ENSEMBLE_PRIOR_MODEL.get(fam, C.ENSEMBLE_PRIOR_OTHER)
 
 
+def frozen(fam):
+    """Le poids du modèle de la famille `fam` est-il figé à 0 (config.ENSEMBLE_FROZEN_MODEL, audit du 14/10) ? Alors la proba retenue est celle du marché seul."""
+    return bool(C.ENSEMBLE_ENABLED) and fam in C.ENSEMBLE_FROZEN_MODEL
+
+
+def model_silent(market):
+    """Le modèle n'a-t-il AUCUNE voix sur ce marché (famille figée) : ni poids, ni veto, ni filtre « ligne plus faible qu'un match moyen » (xprice, combos.viable) ?"""
+    return frozen(family(market))
+
+
 def enabled():
     """L'ensemble est-il allumé (config.ENSEMBLE_ENABLED) ? Faux : comportement d'avant, rien de calculé, affiché ni journalisé."""
     return bool(C.ENSEMBLE_ENABLED)
@@ -372,17 +382,21 @@ def _weight(acc, prior, sd, need=None):
     return prior + r * (_post_mean(acc, prior, sd) - prior)
 
 
-def weights(fam, data=None):
-    """Poids de la famille : {"wm" (modèle face au marché), "ws" (sharp face à 1xBet), "prior_wm", "prior_ws", "n_m", "n_s" (effectifs appris)}."""
-    cache = data is None
-    d = load() if cache else data                  # load() vide le cache des poids si le document a changé
+def weights(fam, data=None, raw=False):
+    """Poids de la famille : {"wm" (modèle face au marché), "ws" (sharp face à 1xBet), "prior_wm", "prior_ws", "n_m", "n_s" (effectifs appris), "frozen"}.
+    Famille figée (voir frozen) : wm = 0 quoi que l'apprentissage ait mesuré ; "wm_raw" garde le poids qu'il aurait eu (le journal fantôme s'en sert). `raw` : le poids
+    d'avant, sans gel (le fantôme rejoue l'ancienne règle)."""
+    cache = data is None and not raw
+    d = load() if data is None else data           # load() vide le cache des poids si le document a changé
     if cache and fam in _memo.get("w", {}):
         return _memo["w"][fam]
     st = (d.get("fam") or {}).get(fam) or {}
     out = {"wm": _weight(st.get("m"), prior_model(fam), prior_sd(fam, "m"), min_n(fam)),
            "ws": _weight(st.get("s"), C.ENSEMBLE_PRIOR_SHARP, prior_sd(fam, "s"), min_n(fam, "s")),
            "prior_wm": prior_model(fam), "prior_ws": C.ENSEMBLE_PRIOR_SHARP,
-           "n_m": round((st.get("m") or {}).get("n", 0.0), 1), "n_s": round((st.get("s") or {}).get("n", 0.0), 1)}
+           "n_m": round((st.get("m") or {}).get("n", 0.0), 1), "n_s": round((st.get("s") or {}).get("n", 0.0), 1), "frozen": False}
+    if not raw and frozen(fam):
+        out |= {"wm_raw": out["wm"], "wm": 0.0, "frozen": True}
     if cache:
         _memo.setdefault("w", {})[fam] = out
     return out
@@ -427,7 +441,7 @@ def learn(rows):
         fam = family(r["market"])
         wt = 1.0 / per_match[(fam, str(r.get("date") or ""), r.get("id") or key.split("|")[0])]
         st = data["fam"].setdefault(fam, {})
-        if pm is not None:
+        if pm is not None and not frozen(fam):                     # famille figée : le poids du modèle n'est plus appris (celui du sharp, ci-dessous, continue)
             w = weights(fam, data)                                 # ws courant : l'avis du marché dont on mesure le poids du modèle
             p_mkt = pool_market(ps, px, w["ws"])[0]
             _add(st.setdefault("m", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool(pm, p_mkt, g), y) for g in GRID], wt)
@@ -443,18 +457,20 @@ def learn(rows):
 
 # ---------- proba retenue et décision ----------
 
-def combine(fam, p_model=None, p_x=None, p_sharp=None, data=None):
+def combine(fam, p_model=None, p_x=None, p_sharp=None, data=None, raw=False):
     """Proba retenue et détail : (p_ens ou None, parts). parts : famille, les trois avis, p_mkt, poids appris (wm, ws), poids EFFECTIFS
-    {"model", "sharp", "x"} (somme 1), sources utilisées (« sharp+x+model »...)."""
-    w = weights(fam, data)
+    {"model", "sharp", "x"} (somme 1), sources utilisées (« sharp+x+model »...). Famille figée (voir frozen) : la proba retenue est celle du MARCHÉ seul, et SANS avis de
+    marché il n'y a pas de proba (None) : jamais le modèle seul ; parts["p_model"] reste l'avis du modèle, pour l'affichage et le journal. `raw` : sans gel."""
+    w = weights(fam, data, raw)
+    silent = w["frozen"]
     p_mkt, msrc = pool_market(p_sharp, p_x, w["ws"])
-    p = pool(p_model, p_mkt, w["wm"])
-    wm = w["wm"] if (p_model is not None and p_mkt is not None) else (1.0 if p_model is not None else 0.0)
+    p = pool(None if silent else p_model, p_mkt, w["wm"])
+    wm = 0.0 if silent else (w["wm"] if (p_model is not None and p_mkt is not None) else (1.0 if p_model is not None else 0.0))
     ws = w["ws"] if (p_sharp is not None and p_x is not None) else (1.0 if p_sharp is not None else 0.0)
     eff = {"model": wm, "sharp": (1 - wm) * ws, "x": (1 - wm) * (1 - ws) if p_mkt is not None else 0.0}
-    src = "+".join(n for n, v in (("sharp", p_sharp), ("x", p_x), ("model", p_model)) if v is not None)
+    src = "+".join(n for n, v in (("sharp", p_sharp), ("x", p_x), ("model", None if silent else p_model)) if v is not None)
     return p, {"family": fam, "p_model": p_model, "p_x": p_x, "p_sharp": p_sharp, "p_mkt": p_mkt, "wm": w["wm"], "ws": w["ws"],
-               "w": eff, "src": src, "n": w["n_m"], "market_weight": 1 - w["wm"]}
+               "w": eff, "src": src, "n": w["n_m"], "market_weight": 1 - w["wm"], "frozen": silent}
 
 
 def opinions(c, price=None, approx=False):
@@ -478,14 +494,15 @@ def prob(c, price=None, approx=False, data=None):
     return p, parts
 
 
-def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_approx_used=False):
+def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_approx_used=False, raw=False):
     """Décision sur une ligne : {"ok", "why", "p", "ev", "ev_x", "gap", "kind", "parts"}. ok : cote x p_ens >= 1 + marge et pas de veto (« valeur »), ou « probable » sans avis sharp (voir plus haut). why si pas ok :
     « no_prob » (aucun avis), « no_market » (aucun avis de marché pour confirmer le modèle), « veto » (écart modèle-marché
     trop grand), « price » (1xBet paie trop peu), « no_sharp » / « not_probable » (sans avis sharp : « probable » éteint, ou proba retenue trop basse). ev = p_ens x cote - 1.
     gap = |p_model - p_mkt| ou None. kind : « value » (avis sharp ou famille légère) | « probable » (sans avis sharp) | None. ev_x = proba 1xBet sans marge x cote - 1 ou None."""
     margin = C.ENSEMBLE_MARGIN if margin is None else margin
-    p, parts = combine(family(market), p_model, p_x, p_sharp, data)
+    p, parts = combine(family(market), p_model, p_x, p_sharp, data, raw)
     parts["x_approx"] = x_approx_used
+    silent = parts["frozen"]
     out = {"ok": False, "why": "", "p": p, "ev": None, "gap": None, "parts": parts, "kind": None, "ev_x": None}
     if p is None:
         out["why"] = "no_prob"
@@ -497,10 +514,10 @@ def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_app
         out["gap"] = abs(p_model - parts["p_mkt"])
     if parts["p_mkt"] is None and (heavy or C.ENSEMBLE_REQUIRE_MARKET):
         out["why"] = "no_market"
-    elif heavy and out["gap"] is not None and out["gap"] > C.ENSEMBLE_MAX_DISAGREE:
+    elif heavy and not silent and out["gap"] is not None and out["gap"] > C.ENSEMBLE_MAX_DISAGREE:       # famille figée : le modèle n'a pas de veto
         out["why"] = "veto"
     elif heavy and p_sharp is None and family(market) in PROBABLE_FAMILIES:     # pas d'avis sharp : jamais « valeur », au mieux « probable »
-        if not C.ENSEMBLE_PROBABLE:
+        if silent or not C.ENSEMBLE_PROBABLE:                                    # famille figée : sans sharp, rien (« probable » serait 1xBet contre 1xBet)
             out["why"] = "no_sharp"
         elif p < C.ENSEMBLE_PROBABLE_MIN_P:
             out["why"] = "not_probable"
@@ -566,10 +583,14 @@ def lines(data=None, short=False):
     out = []
     if short:
         ws = sorted(((fam, weights(fam, d)) for fam in d.get("fam") or {}), key=lambda x: -x[1]["n_m"])
-        return [f"{calib.LABELS.get(fam, fam).capitalize()} · {w['wm'] * 100:.0f} %{_arrow(w['wm'], w['prior_wm'])} · "
+        return [f"{calib.LABELS.get(fam, fam).capitalize()} · {w['wm'] * 100:.0f} %{' (figé)' if w['frozen'] else _arrow(w['wm'], w['prior_wm'])} · "
                 f"{w['ws'] * 100:.0f} %{_arrow(w['ws'], w['prior_ws'])} · {w['n_m']:.0f}" for fam, w in ws]
     for fam in sorted(d.get("fam") or {}):
         w = weights(fam, d)
+        if w["frozen"]:
+            out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour 0 % (figé par l'audit du 14/10 : le modèle ne bat pas Pinnacle), Pinnacle "
+                       f"{w['ws'] * 100:.0f} % du marché (prévu {w['prior_ws'] * 100:.0f} %) — {w['n_m']:.0f} résultats")
+            continue
         out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour {w['wm'] * 100:.0f} % (prévu {w['prior_wm'] * 100:.0f} %), Pinnacle "
                    f"{w['ws'] * 100:.0f} % du marché (prévu {w['prior_ws'] * 100:.0f} %) — {w['n_m']:.0f} résultats")
     return out
@@ -654,11 +675,31 @@ def record(rows, day, now=None, name=LOG_FILE):
                                             "date": str(day), "at": now.isoformat(timespec="minutes"), "result": None}
         if c.get("xref"):
             row["xref"] = c["xref"]                        # audit : [GameId, Type, Param] 1xBet de la prise (hors ROW)
+        if frozen(family(c["market"])):
+            row["shadow"] = shadow_of(c, pm, px, ps)       # le modèle, en fantôme : ce qu'il aurait décidé (jamais joué, jamais appris)
         log.append(row)
         by_key[row["key"]] = row
         n += 1
     store.save(name, prune_log(log, date.fromisoformat(str(day))))
     return n
+
+
+def shadow_of(c, pm, px, ps):
+    """Le modèle d'une famille FIGÉE, en fantôme (étiquette « modèle seul ») : son espérance seule au prix 1xBet de la prise, « model_value » (espérance >= marge, sans
+    veto ni mélange) et ce que l'ancienne règle (poids appris, veto, « probable ») aurait décidé. Sans effet sur un pari, le bilan, l'apprentissage ou le règlement :
+    c'est la seule façon de rouvrir la question, plus tard, sur le vrai modèle de production, contre le dernier prix 1xBet connu. Ne lève jamais."""
+    out = {"label": "modèle seul (fantôme, figé le 2026-10-14)"}
+    try:
+        price = c.get("xodds")
+        if pm is not None and price:
+            ev = pm * price - 1
+            out |= {"ev": round(ev, 4), "model_value": ev >= C.ENSEMBLE_MARGIN}
+        if price and (pm is not None or px is not None or ps is not None):
+            v = value_of(c["market"], pm, px, ps, price, raw=True)
+            out |= {"old_ok": bool(v["ok"]), "old_kind": v["kind"], "old_why": v["why"], "old_p": None if v["p"] is None else round(v["p"], 4)}
+    except Exception as e:                          # noqa: BLE001 - le fantôme ne bloque jamais le journal
+        out["error"] = type(e).__name__
+    return out
 
 
 X_CLOSE_WINDOW_MIN = 150          # on relit le cache 1xBet des lignes dont le match commence dans moins de 150 min (et jusqu'à 10 min après le coup d'envoi)

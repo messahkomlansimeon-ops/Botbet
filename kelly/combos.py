@@ -465,9 +465,11 @@ def viable(c):
     le veto (c["xveto"]) et une cote 1xBet sous la cote mini relevée (c["min_odds"], (1 + marge) / p_ens) écartent le pari comme avant. La référence c["base"] est
     une proba du MODÈLE (un match moyen vu par Kelly) : elle se compare à la proba du modèle (c["p_model"]), pas à p_ens (voir ensemble.model_prob)."""
     from . import ensemble
+    if ensemble.model_silent(c["market"]) and c.get("p_ens") is None:       # famille figée : sans proba retenue du MARCHÉ (c["p_ens"]), le modèle ne décide pas seul
+        return False
     if c.get("prob", 0) < C.VIABLE_MIN_P or not data_ok(c):
         return False
-    if c.get("base") is not None and ensemble.model_prob(c) < c["base"]:
+    if c.get("base") is not None and not ensemble.model_silent(c["market"]) and ensemble.model_prob(c) < c["base"]:       # famille figée : le modèle n'écarte rien
         return False
     if c.get("xodds") and c["xodds"] < c.get("min_odds", 0):              # 1xBet paie moins que la cote mini de Kelly : pas joué
         return False
@@ -497,7 +499,7 @@ def best_per_match(pronos):
     real = any(c.get("xodds") for c in pronos)
     best = {}
     # à la cote 1xBet : le pari du match qui rapporte le plus (valeur x proba, comme xprice.choose) ; sinon le mieux classé
-    for c in sorted(pronos, key=lambda c: -(c["xev"] * c["prob"] if real and c.get("xodds") else c.get("score", 0))):
+    for c in sorted(pronos, key=lambda c: -((c.get("xev") or 0.0) * c["prob"] if real and c.get("xodds") else c.get("score", 0))):       # xev absent : ligne écartée plus loin (viable)
         if c["id"] not in best and viable(c) and (c.get("xodds") or not real):
             best[c["id"]] = c
     return list(best.values())

@@ -11,6 +11,7 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-goalmk-")
+os.environ["ENSEMBLE_FROZEN_MODEL"] = "none"       # ces tests fixent le comportement D'AVANT le gel du poids du modèle (audit du 14/10) : un ensemble vide le reproduit exactement
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-goalmk-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-goalmk-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)

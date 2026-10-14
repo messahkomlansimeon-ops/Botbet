@@ -8,6 +8,7 @@ import tempfile
 from urllib.parse import parse_qsl, urlparse
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-")
+os.environ["ENSEMBLE_FROZEN_MODEL"] = "none"       # fixtures faites main de pronostics de buts SANS proba retenue du marché (c["p_ens"]) : ces tests fixent la mécanique d'avant le gel du poids du modèle (la règle figée est dans tests/test_frozen_model.py)
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-xbet-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)

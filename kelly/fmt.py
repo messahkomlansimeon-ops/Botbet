@@ -326,12 +326,18 @@ def x_prob(c):
     return next((c[k] for k in ("p_x", "xp", "px") if c.get(k) is not None), None)
 
 
+def prob_label(c):
+    """« retenu » quand c["prob"] est la proba du MARCHÉ (famille dont le poids du modèle est figé à 0, audit du 14/10), « Kelly » quand c'est celle du modèle."""
+    from . import ensemble                           # import tardif (voir opinion_line)
+    return "retenu" if ensemble.model_silent(c.get("market") or "") else "Kelly"
+
+
 def chances_line(c, weak=False, extra=""):
     """« 🟢 <i>Kelly 67 % · 1xBet 48 % (+19)</i> » : pastille (🟢 solide, 🟠 moins sûr : `weak`), les chances retenues par Kelly et, si on la connaît,
     celle de 1xBet sans marge, avec l'écart en points dès 3 points. `extra` : précision ajoutée en fin de ligne (« mal payé »)."""
     px = x_prob(c)
     gap = round((c["prob"] - px) * 100) if px is not None else 0
-    txt = (f"Kelly {pct(c['prob'])}" + (f" · 1xBet {pct(px)}" if px is not None else "")
+    txt = (f"{prob_label(c)} {pct(c['prob'])}" + (f" · 1xBet {pct(px)}" if px is not None else "")
            + (f" ({'+' if gap > 0 else '−'}{abs(gap)})" if abs(gap) >= 3 else "") + (f" · {extra}" if extra else ""))
     return f"{WEAK if weak else SOLID} {i(esc(txt))}"
 
@@ -503,13 +509,15 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
             px = x_prob(c)
             odds_vs = f" · 1xBet {pct(px)}" if px is not None else ""
             if c.get("xodds"):
+                who = prob_label(c)
                 at = f" (lue à {esc(c.get('xat') or when)})" if partial and (c.get("xat") or when) else ""
                 if c.get("xkind") == "probable":
                     lines.append(f"🎯 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
-                    lines.append(i(f"   Kelly {pct(c['prob'])}{odds_vs} · probable, pas une valeur (aucun book de référence){data}"))
+                    lines.append(i(f"   {who} {pct(c['prob'])}{odds_vs} · probable, pas une valeur (aucun book de référence){data}"))
                     continue
                 lines.append(f"💎 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
-                lines.append(i(f"   Kelly {pct(c['prob'])}{odds_vs} · valeur {c['xev'] * 100:+.0f} %{data}"))
+                ev_txt = f" · valeur {c['xev'] * 100:+.0f} %" if c.get("xev") is not None else ""       # famille figée sans avis de marché : pas d'espérance
+                lines.append(i(f"   {who} {pct(c['prob'])}{odds_vs}{ev_txt}{data}"))
             else:
                 lines.append(f"👉 {esc(c['pick'])} · mini {b(num(c['min_odds']))}")
                 lines.append(i(f"   Kelly {pct(c['prob'])}{data}"))

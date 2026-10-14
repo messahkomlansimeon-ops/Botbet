@@ -62,7 +62,7 @@ def test_combo_marks():
     assert blocks[0] == ("🇪🇸 <i>19h00 · Liga</i>\n<b>1. H1 – A1</b> · 🔗3\n🚩 Plus de 9,5 corners · <b>1,90</b>\n🟢 <i>Kelly 66 % · 1xBet 49 % (+17)</i>"), blocks[0]
     assert blocks[1] == ("🇪🇸 <i>19h00 · Liga</i>\n<b>2. Lyon &lt;B&gt; – A2</b>\n🏁 Plus de 3,5 hors-jeu au total · <b>1,90</b>\n"
                          "🟠 <i>Kelly 62 % · 1xBet 47 % (+15) · mal payé</i>"), blocks[1]       # nom d'équipe échappé
-    assert blocks[2] == "🇪🇸 <i>19h00 · Liga</i>\n<b>3. H3 – A3</b>\n🛡️ Double chance : H3 ou Nul · <b>1,90</b>\n🟢 <i>Kelly 78 % · 1xBet 77 %</i>", blocks[2]  # écart < 3 pts
+    assert blocks[2] == "🇪🇸 <i>19h00 · Liga</i>\n<b>3. H3 – A3</b>\n🛡️ Double chance : H3 ou Nul · <b>1,90</b>\n🟢 <i>retenu 78 % · 1xBet 77 %</i>", blocks[2]  # écart < 3 pts
     assert len(blocks) == 4 and blocks[3].startswith("━━━━━━━━━━━━\n<i>🟢 solide · 🟠 moins sûr · 🔗 déjà dans N de tes tickets</i>\n"), blocks
     assert "<i>💰 Mise : fixe ton capital" in blocks[3] and "🎟️ Code : <code>SKU6L</code>" in blocks[3] and "Cotes 1xBet de 08:50" in blocks[3], blocks[3]
     assert "<B>" not in msg and not any(w in msg.lower() for w in fmt.JARGON if w != "score"), msg

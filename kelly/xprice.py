@@ -87,7 +87,7 @@ def _choose_ens(c, px):
         if not price:
             continue
         v, pm, b = _ens_line(c, px, name, point, p0, base, price, data)
-        if (b is not None and pm < b) or not v["ok"] or v["p"] < C.VIABLE_MIN_P:
+        if (b is not None and pm < b and not ensemble.model_silent(c["market"])) or not v["ok"] or v["p"] < C.VIABLE_MIN_P:       # famille figée : le modèle n'écarte aucune ligne
             continue
         rank = line_rank(v)
         if key is None or rank > key:
@@ -253,11 +253,19 @@ def _price_ens(c, px, refs=None):
         cur = next((a for a in c.get("alts") or [] if (a[0], a[1]) == (c["name"], c["point"])), None) \
             or [c["name"], c["point"], c.get("p0", c.get("p_model", c["prob"])), None]            # ligne hors c["alts"] : sa proba brute, sans référence
         v, pm, b = _ens_line(c, px, c["name"], c["point"], cur[2], cur[3], odd, ensemble.load())
+        if v["p"] is None:                          # famille figée SANS aucun avis de marché : pas de proba retenue, jamais celle du modèle seul (pari écarté, « no_market »)
+            for k in ("xkind", "xev", "xev_x", "p_ens", "p_x", "p_sharp"):
+                c.pop(k, None)                      # rien de périmé d'un relevé précédent
+            c.update(p_model=round(pm, 4), xodds=odd, xwhy="no_market", xveto=1, min_odds=max(c.get("min_odds") or 0, round(odd + 0.01, 2)))
+            ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
+            if ref:
+                c["xref"] = ref
+            return "low"
         _ens_fields(c, v, pm, cur[2], odd, False)
         ref = (refs or {}).get((c["market"], c["name"], None if c["point"] is None else float(c["point"])))
         if ref:
             c["xref"] = ref
-        return "weak" if (v["p"] is not None and v["p"] < C.VIABLE_MIN_P) or (b is not None and pm < b) else "low"
+        return "weak" if (v["p"] is not None and v["p"] < C.VIABLE_MIN_P) or (b is not None and pm < b and not ensemble.model_silent(c["market"])) else "low"
     return None
 
 

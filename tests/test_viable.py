@@ -5,6 +5,7 @@ import os
 import tempfile
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-viable-")
+os.environ["ENSEMBLE_FROZEN_MODEL"] = "none"       # fixtures faites main de pronostics de buts SANS proba retenue du marché (c["p_ens"]) : ces tests fixent la mécanique d'avant le gel du poids du modèle (la règle figée est dans tests/test_frozen_model.py)
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-viable-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-viable-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)

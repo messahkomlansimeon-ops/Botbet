@@ -6,6 +6,7 @@ import os
 import tempfile
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-statsens-")
+os.environ["ENSEMBLE_FROZEN_MODEL"] = "none"       # ces tests fixent le comportement D'AVANT le gel du poids du modèle (audit du 14/10) : un ensemble vide le reproduit exactement
 os.environ.pop("TELEGRAM_TOKEN", None)
 os.environ.pop("XBET_PROXY", None)
 os.environ.pop("S365_PROXY", None)

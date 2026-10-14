@@ -2713,7 +2713,7 @@ def underpaid_lines(rows, limit=4):
     if not top:
         return ""
     lines = [fmt.b("⚠️ Probables mais mal payés"), fmt.i("1xBet paie moins que leur juste valeur : jamais seuls, seulement pour compléter un « combi … min N ».")]
-    lines += [f"• {fmt.esc(c['pick'])} · Kelly {fmt.pct(c['prob'])} · 1xBet {fmt.odds_txt(c['xodds'])} (juste {fmt.odds_txt(round(1 / c['prob'], 2))})"
+    lines += [f"• {fmt.esc(c['pick'])} · {fmt.prob_label(c)} {fmt.pct(c['prob'])} · 1xBet {fmt.odds_txt(c['xodds'])} (juste {fmt.odds_txt(round(1 / c['prob'], 2))})"
               for c in top]
     return "\n".join(lines)
 
