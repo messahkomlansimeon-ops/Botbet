@@ -97,6 +97,29 @@ def test_cap_and_failures():
     print("ok  plafond de 60 matchs / 600 s respecté, 1xBet muet ou en panne = aucune jambe sans exception, matchs d'un autre jour ignorés")
 
 
+def test_monthly_cap_guard():
+    scan = world()
+    SL.remember_events(scan, T.DAY)
+    from kelly.sources import xbet
+    real = xbet.usage
+    xbet.usage = lambda today=None: {"month": "2026-10", "bytes": int(0.9 * C.XBET_MONTH_MB * 1e6), "requests": 1, "days": {}}
+    called = []
+    real_fetch = xbet.fetch_day
+    xbet.fetch_day = lambda *a, **k: called.append(1) or {}
+    try:
+        assert not SL.month_ok()
+        legs, info = SL.rebuild(NOW)                                      # sans fetch injecté : relevé réel -> bloqué par le plafond
+        assert legs == [] and info.get("capped") and not called, (info, called)
+        assert SL.run(scan, [], T.DAY, NOW, history={}) == ([], "on") and not called
+        out = str(app.season_command(["3"], {"day": str(T.DAY), "season": [], "xbet_at": "09:30"}, now=NOW))
+        assert "plafond mensuel de données 1xBet atteint à 85 %" in out, out
+        xbet.usage = lambda today=None: {"month": "2026-10", "bytes": int(0.5 * C.XBET_MONTH_MB * 1e6), "requests": 1, "days": {}}
+        assert SL.month_ok()
+    finally:
+        xbet.usage, xbet.fetch_day = real, real_fetch
+    print("ok  plafond mensuel : au-delà de 85 % des données 1xBet du mois la voie ne relit plus (le relevé du matin passe avant), dit dans la réponse")
+
+
 def test_kelly_day_after_midnight_utc():
     scan = world()
     SL.remember_events(scan, T.DAY)                                   # jour Kelly D (matchs du soir des Amériques jusqu'à 04:00 UTC le lendemain)
@@ -153,6 +176,7 @@ def main():
         test_remember_and_rebuild()
         test_cap_and_failures()
         test_kelly_day_after_midnight_utc()
+        test_monthly_cap_guard()
         test_command()
     finally:
         season.collect, SL.known_leagues = real

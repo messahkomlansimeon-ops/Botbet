@@ -137,7 +137,7 @@ def lines():
            f"Part de mise : sharpgap {C.KELLY_FRACTION_SHARPGAP:g} · stats {C.KELLY_FRACTION_STATS:g} (part de ta limite du jour, pas du Kelly) · combiné sans valeur : mise "
            + (f"fixe {C.NOVALUE_STAKE:g} (« sans valeur »)" if C.NOVALUE_STAKE > 0 else "aucune (suivi en fantôme)")]
     out.append(f"saison : {season_mode()} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} % · marge {C.SEASON_MARGIN * 100:g} % · garde-fous : valeur ≤ +{C.SEASON_MAX_EDGE * 100:g} %, désaccord ≤ {C.SEASON_MAX_DISAGREE * 100:g} points · paliers {', '.join(f'{t:g}' for t in C.SEASON_TIERS)} · part de mise "
-               f"{C.KELLY_FRACTION_SEASON:g}" + (f" · plafond ticket {C.SEASON_TICKET_MAX:g}" if C.SEASON_TICKET_MAX > 0 else "") + f" · combinés de remplissage : {'envoyés (sans valeur)' if C.SEASON_SEND_FILL else 'en fantôme'}"
+               f"{C.KELLY_FRACTION_SEASON:g}" + (f" · plafond ticket {C.SEASON_TICKET_MAX:g}" if C.SEASON_TICKET_MAX > 0 else "") + f" · relevé 1xBet jusqu'à {C.SEASON_MONTH_PCT:g} % du plafond mensuel" + f" · combinés de remplissage : {'envoyés (sans valeur)' if C.SEASON_SEND_FILL else 'en fantôme'}"
                + (" · ligues : " + ", ".join(sorted(C.SEASON_LEAGUES)[:4]) if C.SEASON_LEAGUES else " · toutes les ligues couvertes"))
     from . import seasonlane
     out[-1] += " · " + seasonlane.state_text()      # la même ligne « saison » : ce qui est suivi exactement (ligues, équipes, équipes avec l'adversaire enregistré)

@@ -35,6 +35,14 @@ def mode():
     return lanes.season_mode()
 
 
+def month_ok():
+    """Le plafond mensuel de données 1xBet (C.XBET_MONTH_MB) laisse de la place à la voie (C.SEASON_MONTH_PCT %) : au-delà, elle ne relit plus 1xBet (le relevé du matin passe avant)."""
+    try:
+        return xbet.usage()["bytes"] < C.SEASON_MONTH_PCT / 100 * C.XBET_MONTH_MB * 1e6
+    except Exception:                          # noqa: BLE001 - compteur illisible : pas de blocage
+        return True
+
+
 def league_ok(sport_key):
     return not C.SEASON_LEAGUES or sport_key in C.SEASON_LEAGUES
 
@@ -411,6 +419,9 @@ def rebuild(now, fetch=None):
     from . import xprice
     info = {"events": 0, "cup_events": 0, "predicted": 0, "read": 0, "cup_read": 0, "no_price": 0, "unread": 0, "few": set(), "unknown": set()}
     day = str(now.date())
+    if fetch is None and not month_ok():              # le relevé principal passe avant : la voie se tait au-delà de C.SEASON_MONTH_PCT % du plafond mensuel
+        info["capped"] = True
+        return [], info
     try:
         doc = store.load(EVENTS_FILE, {})
         kday = (store.load("today.json", {}) or {}).get("day") or day            # le jour KELLY (jusqu'à 04:00 UTC le lendemain), pas la date UTC
@@ -532,6 +543,9 @@ def run(scan, picks, day, now, fetch=None, history=None):
         remember_events(scan, day)                   # les matchs du jour, pour reconstruire les jambes à la demande (`saison N`)
         refresh_state(now)                           # ce que la voie suit (status) : mesuré à chaque passage du matin, même sans relevé 1xBet
     if m == "off" or not C.XBET_ENABLED or (fetch is None and not C.SOURCES_REFRESH):
+        return [], m
+    if fetch is None and not month_ok():
+        print(f"[saison] plafond mensuel de données 1xBet atteint à {C.SEASON_MONTH_PCT:g} % : pas de relevé pour la voie ce matin", file=sys.stderr)
         return [], m
     try:
         pronos = make(scan, now, day)

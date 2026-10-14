@@ -2233,7 +2233,7 @@ def season_command(args, today, now=None, fetch=None):
         return f"La voie « saison » est {'en fantôme (calculée, jamais jouée)' if mode == 'ghost' else 'éteinte'} : aucun combiné proposé."
     telegram.send("⏳ Je relis les matchs du jour chez 1xBet…", queue=False)
     rebuilt, info = seasonlane.rebuild(now, fetch)
-    line = seasonlane.summary_line(info)
+    line = seasonlane.summary_line(info) + (f" · ⚠️ plafond mensuel de données 1xBet atteint à {C.SEASON_MONTH_PCT:g} % : pas de relecture" if info.get("capped") else "")
     legs, stale, when = [c for c in rebuilt if lanes.usable(c)], False, now.strftime("%H:%M")
     if not info["read"]:                              # rien relu : les jambes du matin, cotes du dernier relevé
         legs, stale, when = morning, True, today.get("xbet_at")
