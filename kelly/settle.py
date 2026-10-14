@@ -765,6 +765,13 @@ def _bilan_detail(bets, days, rows, picks, combos):
                       + ([fmt.i(e(lanestats.unlabeled_line()))] if lanestats.unlabeled_line() else []))
     except Exception as ex:                         # noqa: BLE001
         print(f"[bilan] voies illisibles : {type(ex).__name__}: {ex}", file=sys.stderr)
+    try:
+        from . import lanestats
+        lc = lanestats.leg_clv_lines(days)
+        if lc:
+            blocks.append(["📏 <b>CLV par jambe des combinés</b> " + fmt.i("(les jambes sans valeur à part)")] + [e("• " + x) for x in lc])
+    except Exception as ex:                         # noqa: BLE001
+        print(f"[bilan] CLV par jambe illisible : {type(ex).__name__}: {ex}", file=sys.stderr)
     q = [e("✅ " + _block("Envoyés", sent)), e("👻 " + _block("Suivis en silence", ghost))]
     if picks:
         brier = sum((r["prob"] - (1.0 if r["result"] == "win" else 0.0)) ** 2 for r in picks) / len(picks)

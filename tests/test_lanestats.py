@@ -251,6 +251,33 @@ def test_review_fixes():
     print("ok  correctifs de relecture : commande en liste de mots, relevé suspendu / en jeu, 30 matchs, retour d'une ligue repart de zéro, document abîmé, virgules")
 
 
+def test_leg_clv():
+    """CLV par jambe des combinés : prix 1xBet pris contre dernier prix connu (ligne du journal de même clé), jambes `fill` à part, part de jambes à valeur à CLV négatif par palier,
+    couverture dite (une jambe sans relevé proche n'est jamais comptée comme neutre)."""
+    legs = [("a1", "sharpgap", 2.2, 2.0), ("a2", "sharpgap", 1.8, 2.0), ("b1", "stats", 2.1, 2.0), ("c1", "fill", 1.5, 1.4), ("c2", "fill", 1.3, 1.5), ("d1", "sharpgap", None, None)]
+    store.save(ensemble.LOG_FILE, [row(k, st, odds=o, close=c, key=k, id=k) for k, st, o, c in legs if o])
+    L._memo["key"] = None
+    mk = lambda k, st: {"key": k, "strategy": st, "id": k, "xodds": 2.0, "result": None, "min_odds": 1.5}        # noqa: E731
+    store.save("fair_combos.json", [
+        {"date": TODAY, "tier": 5, "result": None, "legs": [mk("a1", "sharpgap"), mk("a2", "sharpgap"), mk("c1", "fill")]},
+        {"date": TODAY, "tier": 8, "result": None, "legs": [mk("b1", "stats"), mk("c2", "fill"), mk("d1", "sharpgap"), mk("zz", None)]}])
+    rows = L.leg_clv_rows()
+    assert len(rows) == 7 and sum(1 for _, _, v in rows if v is not None) == 5, [(l["key"], v) for l, _, v in rows]
+    out = L.leg_clv_lines()
+    assert out[0].startswith("jambes mesurées : 5 / 7"), out
+    sg = next(x for x in out if x.startswith("sharpgap : 2 jambes"))
+    assert "50 % battent le dernier prix" in sg and "trop peu pour conclure" in sg, sg
+    assert any(x.startswith("stats : 1 jambes") for x in out) and any(x.startswith("fill (à part : jambes sans valeur) : 2 jambes") for x in out), out
+    assert not any(x.startswith("avant les étiquettes") for x in out), "la jambe sans relevé n'est pas mesurée"
+    t5 = next(x for x in out if x.startswith("palier") and "(1/2)" in x)
+    assert "50 % des jambes à valeur à CLV négatif" in t5, t5
+    paliers = [x for x in out if x.startswith("palier")]
+    assert len(paliers) == 2 and any("0 % des jambes à valeur à CLV négatif (0/1)" in x for x in paliers), paliers       # palier 8 : b1 positive ; c2 (fill) ne compte pas
+    assert L.leg_clv_lines(days=1, today="2030-01-01") == []
+    store.save("fair_combos.json", [])
+    print("ok  CLV par jambe : par voie, fill à part, part négative par palier, couverture dite")
+
+
 def main():
     test_clv()
     test_lines_and_objectives()
@@ -260,6 +287,7 @@ def main():
     test_league_cut_and_return()
     test_status_and_morning()
     test_review_fixes()
+    test_leg_clv()
     print("tests mesures par voie : OK")
 
 

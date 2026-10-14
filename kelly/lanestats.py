@@ -352,3 +352,58 @@ def unlabeled_line(today=None):
         print(f"[lanes] compteur d'étiquettes illisible : {type(e).__name__}: {e}", file=sys.stderr)
         return ""
     return f"jambes sans étiquette : {n} / {total} (lignes du jour)"
+
+
+# ---------- CLV par jambe des combinés ----------
+
+def leg_clv_rows(days=None, today=None):
+    """[(jambe, combiné, CLV 1xBet ou None)] des jambes des combinés (à vérifier + notés) de la période : CLV = log(prix 1xBet pris / dernier prix 1xBet connu) de la ligne du journal
+    d'ensemble ayant la même clé (relevé ≤ 90 min avant le match, voir x_clv) ; None si la jambe n'a pas de ligne au journal ou pas de relevé assez proche. Une jambe présente dans
+    plusieurs combinés du jour compte une fois par combiné (c'est le combiné qui la porte)."""
+    from . import fair
+    cut = _since(days, today)
+    by_key = {r.get("key"): r for r in journal_rows() if r.get("key")}
+    out = []
+    for combos in (fair.load_combos(), (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])):
+        for c in combos if isinstance(combos, list) else []:
+            if not isinstance(c, dict) or (c.get("date") or "") < cut:
+                continue
+            for leg in c.get("legs") or []:
+                if isinstance(leg, dict) and leg.get("key"):
+                    row = by_key.get(leg["key"])
+                    out.append((leg, c, x_clv(row) if row else None))
+    return out
+
+
+def _tier_name(c):
+    from . import fmt
+    try:
+        return fmt.tier_name(c.get("tier"))
+    except Exception:                           # noqa: BLE001
+        return str(c.get("tier"))
+
+
+def leg_clv_lines(days=None, today=None):
+    """Lignes du bilan détaillé (texte brut) : CLV 1xBet par jambe des combinés, par voie — les jambes `fill` à part — et part des jambes à CLV négatif par palier.
+    La couverture (jambes mesurées / jambes) est toujours dite : une jambe sans relevé proche n'est pas comptée comme neutre. [] sans combiné."""
+    rows = leg_clv_rows(days, today)
+    if not rows:
+        return []
+    out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match)"]
+    for lane in ("sharpgap", "stats", "fill", None):
+        mine = [(l, c, v) for l, c, v in rows if (l.get("strategy") or None) == lane and v is not None]
+        if not mine:
+            continue
+        n, m, h = stats([v for _, _, v in mine], [l.get("id") or c.get("date") for l, c, _ in mine])
+        pos = sum(1 for _, _, v in mine if v > 0)
+        name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
+        out.append(f"{name} : {n} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" · {round(pos / n * 100)} % battent le dernier prix"
+                   + ("" if n >= 30 else " (trop peu pour conclure)"))
+    tiers = {}
+    for l, c, v in rows:
+        if v is not None and (l.get("strategy") or None) != "fill":
+            tiers.setdefault(_tier_name(c), []).append(v)
+    for t, vs in tiers.items():
+        neg = sum(1 for v in vs if v < 0)
+        out.append(f"palier {t} : {round(neg / len(vs) * 100)} % des jambes à valeur à CLV négatif ({neg}/{len(vs)})")
+    return out
