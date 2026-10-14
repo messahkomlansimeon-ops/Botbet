@@ -551,6 +551,11 @@ STATS_GHOST_OUTSIDE_FD = _bool("STATS_GHOST_OUTSIDE_FD", True)
 # Mise : part du budget d'un pari = palier x confiance (money.allocate) ; la fraction de Kelly de la voie la module RELATIVEMENT à KELLY_FRACTION_REF (0,25 : le calibrage historique,
 # donc sharpgap ne bouge pas et stats pèse 0,15 / 0,25 = 60 %). Un combiné prend la fraction de sa voie la plus prudente parmi ses jambes à valeur. KELLY_FRACTION n'a jamais dimensionné
 # une mise réelle (seul bankroll.stake, mort, la lit) : conservé, égal à celle de sharpgap.
+# Voie `saison` (kelly/season.py) : modèle des matchs de la saison en cours seulement. Les autres réglages de la voie (interrupteur, poids du marché, marge, paliers) viennent avec ses jambes.
+SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 6.0))                     # rétrécissement vers la moyenne de la ligue : poids n / (n + k)
+SEASON_MIN_MATCHES = max(1, _int("SEASON_MIN_MATCHES", 4))                   # matchs minimum par équipe cette saison, sinon pas de prévision
+SEASON_ALPHA_MIN_MATCHES = max(1, _int("SEASON_ALPHA_MIN_MATCHES", 30))      # matchs de ligue minimum pour mesurer la dispersion (sinon repli du rejeu)
+SEASON_MIN_TEAMS = max(2, _int("SEASON_MIN_TEAMS", 8))                       # une ligue est couverte si au moins 8 équipes ont SEASON_MIN_MATCHES matchs cette saison
 KELLY_FRACTION_REF = 0.25
 KELLY_FRACTION_SHARPGAP = _float("KELLY_FRACTION_SHARPGAP", 0.25)
 KELLY_FRACTION_STATS = _float("KELLY_FRACTION_STATS", 0.15)
