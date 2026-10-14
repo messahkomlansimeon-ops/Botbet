@@ -113,7 +113,7 @@ def test_probable_flow_display_and_stakes():
             if sharp:
                 assert prob * total > 1 and st[("fair", 5)] > 0, (prob, total, st)       # jambes confirmées par un book de référence : mise comme avant
             else:
-                assert st[("fair", 5)] == 50, st                         # une jambe sans avis sharp est « fill » : combiné SANS valeur, hors Kelly, mise fixe = un pas d'arrondi (audit du 14/10 ; avant : aucune mise)
+                assert st[("fair", 5)] == 0, st                          # une jambe sans avis sharp : combiné SANS valeur, suivi en fantôme, aucune mise (décision du 14/10 ; NOVALUE_STAKE > 0 = mise fixe optionnelle)
                 assert money.stake_words(0, CB.stake_prob(legs, prob), total) == money.NO_EDGE
                 assert "Kelly ne conseille pas" in (app._stake_words(app._budget_stake(CB.stake_prob(legs, prob), total), CB.stake_prob(legs, prob), total))
     finally:

@@ -68,11 +68,11 @@ def test_back_or_not():
     reset(dict(OLD) | {"_new": {"shots": [30, 19, 19.5]}, "_new_rows": rows("shots", 30, 19, 1.72)})   # 63 % pour 65 % : juste, gain +9 % ± 20 %
     assert calib.viable_factor("team_shots_total") >= C.VIABLE_MIN_K and not CB.data_ok(leg())          # juste, mais gain pas encore prouvé
     note = calib.new_rule_note("shots")
-    assert note == " · nouvelle règle : 30 · 63 % / 65 % · gain +9 % (± 20 %, 30 matchs) → gain pas encore prouvé", note
+    assert note == " · nouvelle règle : 30 · 63 % / 65 % · gain théorique aux cotes 1xBet +9 % (± 20 %, 30 matchs) → gain pas encore prouvé", note
     reset(dict(OLD) | {"_new": {"shots": [30, 21, 19.5]}, "_new_rows": rows("shots", 30, 21, 1.72)})   # 70 % : gain +20 % ± 19 %, au pire +2 %
     assert CB.data_ok(leg()) and calib.in_combos("shots")
     note = calib.new_rule_note("shots")
-    assert note == " · nouvelle règle : 30 · 70 % / 65 % · gain +20 % (± 19 %, 30 matchs) → de retour dans les combinés", note
+    assert note == " · nouvelle règle : 30 · 70 % / 65 % · gain théorique aux cotes 1xBet +20 % (± 19 %, 30 matchs) → de retour dans les combinés", note
     line = next(x for x in status.learning_lines() if x.startswith(("🔴 Tirs", "🟢 Tirs")))
     assert "écartés" not in line and line.endswith("→ de retour dans les combinés"), line
     assert calib.factor("team_shots_total", base=1.0) < C.VIABLE_MIN_K                                   # la correction des % garde tout l'historique

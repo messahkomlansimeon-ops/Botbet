@@ -1183,7 +1183,7 @@ def _stake_txt(row):
     if st:
         return money.money(st)
     it = money.row_item(row) or {}
-    return money.no_stake_txt(it.get("prob"), it.get("odds"))
+    return money.NOVALUE_TXT if it.get("novalue") else money.no_stake_txt(it.get("prob"), it.get("odds"))
 
 
 def _record_version(sent, row, rows, combo, hhmm, coupon=None):
@@ -2154,7 +2154,8 @@ def _stake_words(st, prob=None, odds=None, legs=None):
     """La mise `st` (_budget_stake) en mots pour le message : « 1 500 FCFA (sur ton budget du jour) » ; None sans budget. Mise 0 : « pas de mise (trop
     petite pour ton budget) », ou, si `prob` et `odds` montrent une espérance négative, « Kelly ne conseille pas de miser dessus » (money.no_stake_txt).
     `legs` : voir _budget_stake."""
-    return money.stake_words(st, prob, odds, " (sur ton budget du jour)", p_mkt=CB.market_prob(legs) if legs else None)
+    return money.stake_words(st, prob, odds, " (sur ton budget du jour)", p_mkt=CB.market_prob(legs) if legs else None,
+                             novalue=bool(legs) and bool(lanes.item_fields(legs).get("novalue")))
 
 
 def _budget_stake_txt(prob, odds):

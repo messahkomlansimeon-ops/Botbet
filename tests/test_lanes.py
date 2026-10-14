@@ -114,16 +114,22 @@ def test_stakes():
     assert lanes.item_fields([sg, {}]) == {} and lanes.item_fields([]) == {}, "voie inconnue (ligne d'avant les étiquettes, live) : comportement d'avant"
     # combiné sans valeur : mise fixe = un pas d'arrondi (50 pour 5 000), hors somme des parts, hors Kelly même à espérance négative
     nv = {"kind": "fair", "tier": 6.0, "prob": 0.10, "odds": 6.0, "novalue": True}
-    assert money.allocate([nv], 5000)[0] == [50], "espérance négative mais mise fixe"
-    both = money.allocate(items + [nv], 5000)[0]
-    assert both[:2] == base and both[2] == 50, "n'enlève rien aux autres (hors de la somme des parts)"
-    assert money.allocate([nv], 5000, detail=True)[2] == 4950
+    assert money.allocate([nv], 5000)[0] == [0], "par défaut : AUCUNE mise sur un combiné sans valeur (suivi en fantôme)"
+    assert money.allocate(items + [nv], 5000)[0] == base + [0]
+    with conf(NOVALUE_STAKE=50.0):
+        assert money.allocate([nv], 5000)[0] == [50], "mise fixe optionnelle : espérance négative mais jouée à la demande"
+        both = money.allocate(items + [nv], 5000)[0]
+        assert both[:2] == base and both[2] == 50, "n'enlève rien aux autres (hors de la somme des parts)"
+    assert money.allocate([nv], 5000, detail=True)[2] == 5000
+    with conf(NOVALUE_STAKE=50.0):
+        assert money.allocate([nv], 5000, detail=True)[2] == 4950
     with conf(NOVALUE_STAKE=100.0):
         assert money.allocate([nv], 5000)[0] == [100]
     big = [{"kind": "combo", "tier": "🛡️ SÛR", "prob": 0.9, "odds": 3.0}] * 3 + [nv]
     out = money.allocate(big, 5000)[0]
     assert sum(out) <= 5000 and out[3] <= 50, out
-    assert money.allocate([nv], 20)[0] == [0.5], "petit budget : un pas d'arrondi (0,5)"
+    with conf(NOVALUE_STAKE=0.5):
+        assert money.allocate([nv], 20)[0] == [0.5], "petit budget : un pas d'arrondi (0,5)"
     with conf(NOVALUE_STAKE=30.0):
         assert money.allocate([nv], 5000)[0] == [50], "jamais sous un pas d'arrondi : la mise minimale"
     cap = money.ticket_cap
@@ -134,7 +140,8 @@ def test_stakes():
     finally:
         money.ticket_cap = cap
     full_day = [{"kind": "combo", "tier": "🛡️ SÛR", "prob": 0.99, "odds": 3.0}] * 4
-    out = money.allocate(full_day + [nv], 5000)[0]
+    with conf(NOVALUE_STAKE=50.0):
+        out = money.allocate(full_day + [nv], 5000)[0]
     assert sum(out) <= 5000 and out[4] in (0, 50), out                          # le budget n'est jamais dépassé, la mise fixe se contente du reste
     assert money.allocate([nv], 0)[0] == [0], "sans budget : rien"
     # row_item : lignes de suivi
@@ -243,7 +250,12 @@ def test_day_stakes_end_to_end():
     plain = app.day_stakes(top, built, [])[0]
     with_nv = app.day_stakes(top, built, [(6.0, ([fl, fl2], 6.0, 0.10))])
     assert with_nv[0]["🛡️ SÛR"] == plain["🛡️ SÛR"] > 0, "le combiné sans valeur ne retire rien aux autres"
-    assert with_nv[0][("fair", 6.0)] == 50 and with_nv[1] == plain["🛡️ SÛR"] + 50, "mise fixe d'un pas d'arrondi, comptée dans le misé"
+    assert with_nv[0][("fair", 6.0)] == 0 and with_nv[1] == plain["🛡️ SÛR"], "par défaut : combiné sans valeur non misé"
+    with conf(NOVALUE_STAKE=50.0):
+        fixed = app.day_stakes(top, built, [(6.0, ([fl, fl2], 6.0, 0.10))])
+    assert fixed[0][("fair", 6.0)] == 50 and fixed[1] == plain["🛡️ SÛR"] + 50, "mise fixe optionnelle, comptée dans le misé"
+    assert money.stake_words(0, 0.1, 6.0, novalue=True) == money.NOVALUE_TXT and "· sans valeur" in money.stake_words(50, 0.1, 6.0, novalue=True)
+    assert app._stake_words(0, 0.1, 6.0, legs=[fl, fl2]) == money.NOVALUE_TXT
     stats = prono("alternate_totals_corners", "Under", 9.5, lane="stats")
     stake_stats = app.day_stakes(None, [("🛡️ SÛR", ([stats, stats | {"key": "k3"}], 3.0, 0.40))], [])[0]["🛡️ SÛR"]
     assert stake_stats < plain["🛡️ SÛR"], "un combiné de la voie stats mise 60 % de la part"

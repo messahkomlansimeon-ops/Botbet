@@ -590,7 +590,7 @@ def new_rule_note(fam, data=None):
     r = new_roi(fam, data)
     if r is not None:
         hw = f"± {round(r['hw'] * 100)} %" if math.isfinite(r["hw"]) else "marge inconnue"
-        txt += f" · gain {'+' if r['roi'] >= 0 else '−'}{round(abs(r['roi']) * 100)} % ({hw}, {r['m']} match{'s' if r['m'] > 1 else ''})"
+        txt += f" · gain théorique aux cotes 1xBet {'+' if r['roi'] >= 0 else '−'}{round(abs(r['roi']) * 100)} % ({hw}, {r['m']} match{'s' if r['m'] > 1 else ''})"
     k_ok = viable_factor(rep_market(fam), data=data) >= C.VIABLE_MIN_K
     if bad_before and k_ok:
         txt += " → de retour dans les combinés" if new_rule_ok(fam, data) else " → gain pas encore prouvé"

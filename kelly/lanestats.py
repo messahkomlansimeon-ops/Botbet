@@ -246,35 +246,54 @@ def evaluate(rows=None):
 
 
 def apply(today=None):
-    """Évalue et écrit la coupure automatique. Ne fait rien si l'interrupteur STRATEGY_STATS n'est pas « on » ou si la voie est déjà coupée. Une voie coupée ne revient qu'à la main.
-    -> liste des coupures décidées cette fois (texte brut) ; ne lève jamais."""
-    from datetime import date
+    """Évalue et écrit la coupure automatique, LE LUNDI MATIN SEULEMENT, et ne la prononce que si la condition tient sur DEUX LUNDIS CONSÉCUTIFS (à 7 jours exactement : un lundi
+    manqué casse la chaîne). Même règle pour la proposition de retour d'une ligue (`back_confirmed`). Ne fait rien si STRATEGY_STATS n'est pas « on ». Une voie coupée ne revient qu'à
+    la main. -> liste des coupures décidées cette fois (texte brut) ; ne lève jamais."""
+    from datetime import date, timedelta
     from . import config as C, lanes
     try:
         if C.STRATEGY_STATS != "on":
             return []
+        day = date.fromisoformat(str(today or date.today())[:10])
+        if day.weekday() != 0:
+            return []
         doc = dict(lanes.state())
         st = dict(doc.get("stats") or {})
-        if st.get("mode") == "ghost":
-            return []
+        prev = st.get("watch") if isinstance(st.get("watch"), dict) else {}
+        week_ago, iso = str(day - timedelta(days=7)), str(day)
+        watch = {}
+
+        def twice(key):
+            watch[key] = iso
+            return prev.get(key) == week_ago
+
+        cut = st.get("mode") == "ghost"
         ev = evaluate()
-        day = str(today or date.today())
         new = []
         n, m, h, v = ev["global"]
-        if v == "neg":
+        if not cut and v == "neg" and twice("global"):
             tot = len([r for r in _eligible(journal_rows()) if not lanes.league_ghost(r.get("sport_key")) and r.get("sport_key")])
-            st.update(mode="ghost", since=day, reason=f"CLV 1xBet {_pc(m)} ± {_pc(h, False)} sur {n} lignes avec relevé 1xBet ≤ {LEAD_OK_MIN} min avant le match (sur {tot} réglées)",
-                      n=n, mean=round(m, 4), half=round(h, 4))
+            st.update(mode="ghost", since=iso, reason=f"CLV 1xBet {_pc(m)} ± {_pc(h, False)} sur {n} lignes avec relevé 1xBet ≤ {LEAD_OK_MIN} min avant le match (sur {tot} réglées), "
+                      "constaté deux lundis de suite", n=n, mean=round(m, 4), half=round(h, 4))
             new.append(f"voie stats coupée : {st['reason']}")
-        else:
+            cut = True
+        if not cut:
             leagues = dict(st.get("leagues") or {})
             for sk, (n, m, h, v) in sorted(ev["leagues"].items()):
-                if v == "neg":
-                    leagues[sk] = {"since": day, "n": n, "mean": round(m, 4), "half": round(h, 4)}
-                    new.append(f"ligue {sk} en fantôme : CLV 1xBet {_pc(m)} ± {_pc(h, False)} sur {n} lignes")
+                if v == "neg" and twice("league:" + sk):
+                    leagues[sk] = {"since": iso, "n": n, "mean": round(m, 4), "half": round(h, 4)}
+                    new.append(f"ligue {sk} en fantôme : CLV 1xBet {_pc(m)} ± {_pc(h, False)} sur {n} lignes, constaté deux lundis de suite")
             if new:
                 st["leagues"] = leagues
-        if new:
+        back = dict(st.get("back_confirmed") or {}) if isinstance(st.get("back_confirmed"), dict) else {}
+        for sk, (n, m, h, v) in sorted(ev["back"].items()):
+            if v == "pos" and twice("back:" + sk):
+                back[sk] = {"since": back.get(sk, {}).get("since", iso) if isinstance(back.get(sk), dict) else iso, "n": n, "mean": round(m, 4), "half": round(h, 4)}
+            elif v != "pos":
+                back.pop(sk, None)
+        st["back_confirmed"] = back
+        st["watch"] = watch
+        if st != dict(doc.get("stats") or {}):
             lanes.write_state(doc | {"stats": st})
         return new
     except Exception as e:                      # noqa: BLE001 - la coupure ne bloque jamais le message du matin
@@ -294,10 +313,12 @@ def cut_lines():
         for sk, d in sorted((st.get("leagues") or {}).items()):
             out.append(f"🛑 {sk} en fantôme depuis le {(d or {}).get('since')} : CLV 1xBet {_pc((d or {}).get('mean') or 0)} sur {(d or {}).get('n')} lignes. "
                        f"Pour la remettre : « voies {sk} on ».")
-        for sk, (n, m, h, v) in sorted(evaluate()["back"].items()):
-            if v == "pos":
+        back = st.get("back_confirmed") if isinstance(st.get("back_confirmed"), dict) else {}
+        for sk, d in sorted(back.items()):                               # confirmé deux lundis de suite (apply) ; plus rien à évaluer ici
+            if lanes.league_ghost(sk) and isinstance(d, dict):
                 how = f"« voies {sk} on »" if sk in (st.get("leagues") or {}) else f"STATS_ON_LEAGUES={sk} (ou retire-la de STATS_GHOST_LEAGUES)"
-                out.append(f"✅ {sk} : CLV 1xBet fantôme {_pc(m)} ± {_pc(h, False)} sur {n} lignes réglées. Retour proposé, à faire à la main : {how}.")
+                out.append(f"✅ {sk} : CLV 1xBet fantôme {_pc(d.get('mean') or 0)} ± {_pc(d.get('half') or 0, False)} sur {d.get('n')} lignes réglées, deux lundis de suite. "
+                           f"Retour proposé, à faire à la main : {how}.")
     except Exception as e:                      # noqa: BLE001
         print(f"[lanes] lignes de coupure illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     return out

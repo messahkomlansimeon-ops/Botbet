@@ -102,7 +102,7 @@ def frac(lane):
 
 def item_fields(legs, single=False):
     """Champs de money.allocate pour un pari (`single`) ou un combiné de jambes `legs` : {"frac": fraction de Kelly de la voie la plus prudente parmi les jambes à valeur}, ou
-    {"novalue": True} pour un combiné dont TOUTES les jambes sont « fill » (mise fixe, hors Kelly). {} quand une jambe n'a pas d'étiquette (ligne d'avant les étiquettes, combiné live) :
+    {"novalue": True} pour un combiné dont TOUTES les jambes sont « fill » (par défaut aucune mise : suivi en fantôme ; mise fixe optionnelle NOVALUE_STAKE, hors Kelly). {} quand une jambe n'a pas d'étiquette (ligne d'avant les étiquettes, combiné live) :
     le comportement d'avant. Un pari seul sans valeur garde Kelly comme avant."""
     legs = list(legs or [])
     labels = [(l or {}).get("strategy") for l in legs]
@@ -120,7 +120,7 @@ def lines():
     out = [f"sharpgap : {C.STRATEGY_SHARPGAP} · stats : {C.STRATEGY_STATS}" + (" (coupée automatiquement : fantôme)" if st.get("mode") == "ghost" else "")
            + f" · jambes sans valeur : {'oui' if C.FILL_LEGS else 'non'}",
            f"Kelly : sharpgap {C.KELLY_FRACTION_SHARPGAP:g} · stats {C.KELLY_FRACTION_STATS:g} · combiné sans valeur : mise "
-           + (f"fixe {C.NOVALUE_STAKE:g}" if C.NOVALUE_STAKE else "minimale (un pas d'arrondi)")]
+           + (f"fixe {C.NOVALUE_STAKE:g} (« sans valeur »)" if C.NOVALUE_STAKE > 0 else "aucune (suivi en fantôme)")]
     ghost = sorted(set(C.STATS_GHOST_LEAGUES) | set(st.get("leagues") or {}))
     out.append("Stats en fantôme : " + ("toutes les ligues hors football-data" if C.STATS_GHOST_OUTSIDE_FD else "aucune par défaut")
                + (f" + {', '.join(ghost[:6])}{'…' if len(ghost) > 6 else ''}" if ghost else ""))
@@ -142,6 +142,7 @@ def resume(arg):
             return "La voie stats n'est pas coupée automatiquement."
         st.pop("mode", None)
         st.pop("reason", None)
+        st["watch"] = {}                            # la chaîne des deux lundis repart de zéro
         st["since_ok"] = str(date.today())          # la coupure ne regarde plus que les lignes réglées à partir d'aujourd'hui
         write_state(doc | {"stats": st})
         return "✅ Voie stats remise à « on ». La coupure automatique repart de zéro à partir d'aujourd'hui."
@@ -149,6 +150,8 @@ def resume(arg):
     if arg in leagues:
         leagues.pop(arg)
         st["leagues"] = leagues
+        st["back_confirmed"] = {k: v for k, v in (st.get("back_confirmed") or {}).items() if k != arg}
+        st["watch"] = {k: v for k, v in (st.get("watch") or {}).items() if not k.endswith(":" + arg)}
         st["returned"] = dict(st.get("returned") or {}) | {arg: str(date.today())}       # la ligue repart de zéro : ni son passé ni sa période fantôme ne comptent
         write_state(doc | {"stats": st})
         return f"✅ {arg} sort des ligues en fantôme (coupure automatique)."

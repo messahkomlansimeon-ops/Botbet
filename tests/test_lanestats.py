@@ -14,6 +14,15 @@ for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY", "ENSEMBLE_FROZEN_MODEL")
 from kelly import ensemble, lanestats as L, learn, money, settle, store  # noqa: E402
 
 TODAY = str(date.today())
+WED = "2026-10-14"
+M1, M2, M3 = "2026-10-12", "2026-10-19", "2026-10-26"                    # trois lundis consécutifs
+
+
+def decide():
+    """La coupure n'est prononcée qu'au 2e lundi consécutif : le 1er ne décide rien."""
+    first = L.apply(M1)
+    assert first == [], first
+    return L.apply(M2)
 
 
 def row(i, lane="stats", odds=2.0, close=2.0, lead=60, res="win", **kw):
@@ -109,15 +118,22 @@ def test_cutoff():
     two = lambda n: noisy(n // 2 + n % 2, "soccer_epl") + noisy(n // 2, "soccer_spain_la_liga")           # deux ligues sous 200 lignes : seule la voie entière peut couper
     store.save(ensemble.LOG_FILE, two(299))
     L._memo["key"] = None
-    assert L.evaluate()["global"][3] is None and L.apply(TODAY) == [] and not lanes.state().get("stats")
+    assert L.evaluate()["global"][3] is None and decide() == [] and not lanes.state()["stats"].get("mode") and not lanes.state()["stats"].get("leagues")
+    store.save(lanes.STATE_FILE, {})
+    lanes.reset()
     store.save(ensemble.LOG_FILE, two(300))
     L._memo["key"] = None
     ev = L.evaluate()
     assert ev["global"][0] == 300 and ev["global"][3] == "neg" and all(v[3] is None for v in ev["leagues"].values()), ev
-    done = L.apply(TODAY)
+    before = dict(lanes.state())
+    assert L.apply(WED) == [] and lanes.state() == before, "un mercredi : rien n'est évalué ni écrit"
+    assert L.apply(M1) == [] and lanes.mode("stats", "soccer_epl") == "on", "1er lundi : constaté, pas prononcé"
+    assert L.apply(M3) == [] and lanes.mode("stats", "soccer_epl") == "on", "lundis NON consécutifs (14 jours) : la chaîne est cassée"
+    done = L.apply(M3 and "2026-11-02")
     assert done and done[0].startswith("voie stats coupée : CLV 1xBet −"), done
     assert lanes.state()["stats"]["mode"] == "ghost" and lanes.mode("stats", "soccer_epl") == "ghost" and not lanes.usable({"market": "alternate_totals_corners", "sport_key": "soccer_epl"})
-    assert L.apply(TODAY) == [], "déjà coupée : une seule décision"
+    assert "deux lundis de suite" in lanes.state()["stats"]["reason"]
+    assert L.apply("2026-11-09") == [], "déjà coupée : une seule décision"
     first = L.cut_lines()[0]
     assert first.startswith("🛑 Voie stats coupée depuis le ") and "voies stats on" in first, first
     # retour à la main seulement ; la mesure repart de ce jour (les anciennes lignes ne recoupent pas tout de suite)
@@ -125,7 +141,7 @@ def test_cutoff():
     yesterday_rows = noisy(300, "soccer_epl", day="2000-01-01")
     store.save(ensemble.LOG_FILE, yesterday_rows)
     L._memo["key"] = None
-    assert L.apply(TODAY) == [] and lanes.mode("stats", "soccer_epl") == "on", "lignes d'avant la remise : ignorées"
+    assert decide() == [] and lanes.mode("stats", "soccer_epl") == "on", "lignes d'avant la remise : ignorées"
     store.save(lanes.STATE_FILE, {})
     lanes.reset()
     print("ok  coupure de la voie stats : 300 lignes réglées avec intervalle sous zéro, une seule décision, retour à la main, mesure repartie de la remise")
@@ -143,25 +159,31 @@ def test_league_cut_and_return():
     # une ligue jouée à 200 lignes au CLV négatif est coupée, la voie (200 < 300) ne l'est pas
     store.save(ensemble.LOG_FILE, noisy(200, "soccer_epl", 1.8))
     L._memo["key"] = None
-    done = L.apply(TODAY)
+    done = decide()
     assert done == [done[0]] and done[0].startswith("ligue soccer_epl en fantôme : CLV 1xBet −"), done
     st = lanes.state()["stats"]
     assert "mode" not in st and "soccer_epl" in st["leagues"] and lanes.mode("stats", "soccer_epl") == "ghost" and lanes.mode("stats", "soccer_spain_la_liga") == "on"
     assert any("soccer_epl en fantôme depuis le" in x and "voies soccer_epl on" in x for x in L.cut_lines())
     # retour PROPOSÉ (jamais appliqué) : CLV fantôme positif, intervalle au-dessus de zéro, 200 lignes réglées APRÈS la coupure
-    store.save(ensemble.LOG_FILE, noisy(200, "soccer_epl", 2.4))
+    store.save(ensemble.LOG_FILE, noisy(200, "soccer_epl", 2.4, day="2026-10-20"))        # lignes fantômes réglées APRÈS la coupure du 19
     L._memo["key"] = None
+    assert not [x for x in L.cut_lines() if x.startswith("✅")], "rien de proposé avant la confirmation de deux lundis"
+    assert L.apply(M1) == []
+    assert not [x for x in L.cut_lines() if x.startswith("✅")], "un seul lundi : pas encore proposé"
+    assert L.apply(M2) == []
     prop = [x for x in L.cut_lines() if x.startswith("✅ soccer_epl")]
     assert prop and "Retour proposé, à faire à la main" in prop[0] and "voies soccer_epl on" in prop[0], L.cut_lines()
     assert lanes.mode("stats", "soccer_epl") == "ghost", "proposé, pas appliqué"
-    assert L.apply(TODAY) == [] and lanes.mode("stats", "soccer_epl") == "ghost"
-    store.save(ensemble.LOG_FILE, noisy(199, "soccer_epl", 2.4))
+    assert L.apply(M3) == [] and lanes.mode("stats", "soccer_epl") == "ghost"
+    store.save(ensemble.LOG_FILE, noisy(199, "soccer_epl", 2.4, day="2026-10-20"))
     L._memo["key"] = None
+    assert L.apply("2026-11-02") == [] and not lanes.state()["stats"]["back_confirmed"], "la condition ne tient plus : la proposition disparaît"
     assert not [x for x in L.cut_lines() if x.startswith("✅")], "199 lignes : pas de proposition"
     assert "sort des ligues en fantôme" in lanes.command("soccer_epl on") and lanes.mode("stats", "soccer_epl") == "on"
     # ligue hors football-data : en fantôme par défaut, retour par STATS_ON_LEAGUES (config), proposé quand son CLV fantôme est positif
     store.save(ensemble.LOG_FILE, noisy(200, "soccer_brazil_campeonato", 2.4))
     L._memo["key"] = None
+    assert decide() == []
     prop = [x for x in L.cut_lines() if "soccer_brazil_campeonato" in x]
     assert prop and "STATS_ON_LEAGUES=soccer_brazil_campeonato" in prop[0], L.cut_lines()
     from kelly import config as C
@@ -174,7 +196,7 @@ def test_league_cut_and_return():
     # la voie ne compte pas les lignes déjà en fantôme : 400 lignes très négatives au Brésil ne coupent pas la voie
     store.save(ensemble.LOG_FILE, noisy(400, "soccer_brazil_campeonato", 1.5))
     L._memo["key"] = None
-    assert L.evaluate()["global"][0] == 0 and L.apply(TODAY) == []
+    assert L.evaluate()["global"][0] == 0 and decide() == []
     store.save(lanes.STATE_FILE, {})
     lanes.reset()
     print("ok  coupure d'une ligue à 200 lignes, retour proposé (jamais appliqué) à 200 lignes positives, STATS_ON_LEAGUES, lignes fantômes hors du jugement de la voie")

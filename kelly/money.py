@@ -231,10 +231,10 @@ def allocate(items, budget=None, detail=False):
     if cap is not None:                              # mode capital : jamais plus de TICKET_SHARE du capital sur un ticket (le reste est gardé)
         stakes = [min(st, cap) for st in stakes]
     stakes = [min(st, LOTTERY_STAKE) if _lottery(it) else st for st, it in zip(stakes, items)]     # ticket « loterie » : 100 FCFA au plus (gardé)
-    room = budget - sum(stakes)                      # combinés SANS valeur : mise fixe (NOVALUE_STAKE, sinon un pas d'arrondi), APRÈS les autres, même plafond de ticket, prise sur le reste du jour
+    room = budget - sum(stakes)                      # combinés SANS valeur : par défaut AUCUNE mise (suivi en fantôme) ; NOVALUE_STAKE > 0 : mise fixe optionnelle, APRÈS les autres, même plafond de ticket, prise sur le reste du jour
     for i, it in enumerate(items):
-        if isinstance(it, dict) and it.get("novalue"):
-            fixed = max(C.NOVALUE_STAKE, step)       # jamais sous un pas d'arrondi : « la mise minimale »
+        if isinstance(it, dict) and it.get("novalue") and C.NOVALUE_STAKE > 0:
+            fixed = max(C.NOVALUE_STAKE, step)       # jamais sous un pas d'arrondi
             st = min(fixed, cap if cap is not None else fixed, LOTTERY_STAKE if _lottery(it) else fixed, room)
             stakes[i] = math.floor(max(0.0, st) / step) * step
             room -= stakes[i]
@@ -329,18 +329,22 @@ def no_stake_txt(prob=None, odds=None):
     return "pas de mise (trop petite pour ton budget)"
 
 
-def stake_words(st, prob=None, odds=None, suffix="", p_mkt=None):
+NOVALUE_TXT = "👻 sans valeur : suivi en fantôme, pas de mise"
+
+
+def stake_words(st, prob=None, odds=None, suffix="", p_mkt=None, novalue=False):
     """Mise `st` (allocate) en mots ; sans budget ni capital (None) : NO_EDGE si le pari perd en moyenne (`prob`, `odds`), None sinon. 0 : voir
     no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant (pas en mode capital, où la ligne dit ce que rapporte la mise). `p_mkt` :
     chances selon 1xBet (ticket « loterie », is_lottery)."""
     if st is None:
         return NO_EDGE if prob is not None and odds is not None and not has_edge(prob, odds) else None
     if not st:
-        return no_stake_txt(prob, odds)
+        return NOVALUE_TXT if novalue else no_stake_txt(prob, odds)
+    tag = " · sans valeur" if novalue else ""            # mise fixe optionnelle d'un combiné sans valeur : toujours dite
     if capital_mode():
         lot = " · ticket loterie" if is_lottery(prob, odds, p_mkt) else ""
-        return money(st) + lot + (f" → si ça passe : {signed(round(st * (odds - 1)))}" if odds and odds > 1 else "")
-    return money(st) + suffix
+        return money(st) + tag + lot + (f" → si ça passe : {signed(round(st * (odds - 1)))}" if odds and odds > 1 else "")
+    return money(st) + tag + suffix
 
 
 def _r(x):

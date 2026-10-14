@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from tests import test_combi_track as T       # fixe DATA_DIR (dossier temporaire), proxy simulé, monde de test (pari, pronostic 💎, Fakes, combi sur mesure...)
 from kelly import (app, chat, combos as CB, config as C, custom, fair, fmt, gapbets, live, money, played, settle, statswindow, store,  # noqa: E402
                    telegram, xprice)
+C.NOVALUE_STAKE = 50.0       # les combinés du jeu d'essai n'ont pas de valeur au sens des voies : mise fixe optionnelle (défaut 0 = suivi en fantôme) pour exercer le flux de mise
 
 DAY, FCFA = T.DAY, "FCFA"
 UTC = timezone.utc
