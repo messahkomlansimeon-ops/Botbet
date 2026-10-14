@@ -310,6 +310,26 @@
    "not_touched": "audit_reserve_ledger.json, step1_ledger.json et le rejeu v1 (prereg, prereg_sha, final) ne sont pas modifiés."
   },
   "prereg_sha": "b48bfaf5f4e86682f1f5038b9ad4fa7c281ce50b6a0ddbf6bd4c516890411985",
-  "written_at": "2026-10-14T21:55:44+00:00"
+  "written_at": "2026-10-14T21:55:44+00:00",
+  "clarifications": [
+   {
+    "at": "2026-10-14",
+    "before_any_reading": true,
+    "on": "market_prior_b.relative_values",
+    "text": "« moyenne de ligue de ce côté » s'entend, pour les buts ENCAISSÉS, du côté ADVERSE : encaissés à domicile / moyenne de ligue des buts implicites à l'extérieur (et l'inverse), sinon le relatif serait biaisé d'environ 0,8. Les buts marqués se divisent par la moyenne de ligue de leur propre côté. C'est ce que fait kelly/season.py (market_rel). La pré-déclaration (sha) n'est pas modifiée."
+   },
+   {
+    "at": "2026-10-14",
+    "before_any_reading": true,
+    "on": "iterative_fit_c.algorithm",
+    "text": "Dans (d), le centre A0 / D0 de marché sert aux DEUX passes (la première, à a priori faible 0,3 x mu, comme la seconde, 12 x mu) ; dans (c) A0 = D0 = 1 aux deux passes."
+   },
+   {
+    "at": "2026-10-14",
+    "before_any_reading": true,
+    "on": "rule",
+    "text": "L'outil exige aussi au moins 30 matchs pour l'agrégat (comme pour les familles) ; sans effet avec plusieurs milliers de matchs. Il refuse d'écrire v2.final si une des 18 divisions de v1 manque (moins de 60 matchs en cache)."
+   }
+  ]
  }
 }
