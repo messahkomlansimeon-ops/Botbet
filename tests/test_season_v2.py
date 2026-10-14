@@ -22,6 +22,11 @@ ATT = dict(zip(TEAMS, (1.30, 1.15, 1.10, 1.00, 1.00, 0.90, 0.85, 0.70)))
 DEF = dict(zip(TEAMS, (0.85, 0.80, 1.00, 1.00, 1.05, 1.10, 1.15, 1.25)))      # > 1 : encaisse plus
 
 
+def fit(obs, on, sk, prior="flat", fit_mode="moments", **kw):
+    """Les tests nomment leurs options : (a) = flat / moments sauf demande (les défauts de la production sont market / iterative depuis la lecture v2)."""
+    return S.fit(obs, on, sk, prior=prior, fit_mode=fit_mode, **kw)
+
+
 def make(schedule, noise=0.0):
     """Lignes d'observation de matchs sans bruit (valeurs = attentes exactes) : buts et une stat par famille (même structure de force), `xg` = attentes de buts exactes (cotes de clôture parfaites)."""
     obs, day = [], date(2026, 8, 5)
@@ -45,27 +50,30 @@ def round_robin(reps=2):
 
 
 def test_defaults_unchanged():
+    """Réglages par défaut = ceux adoptés à la lecture v2 (market / iterative) ; (a) reste disponible en explicite (retour en arrière) et ne lit jamais les cotes."""
     obs = make(round_robin(1))
-    base = S.fit(obs, ON, SK)
-    assert C.SEASON_PRIOR == "flat" and C.SEASON_FIT == "moments"
-    explicit = S.fit(obs, ON, SK, prior="flat", fit_mode="moments")
+    assert C.SEASON_PRIOR == "market" and C.SEASON_FIT == "iterative"
+    base = fit(obs, ON, SK, prior="flat", fit_mode="moments")
+    explicit = fit(obs, ON, SK, prior="flat", fit_mode="moments")
+    default = S.fit(obs, ON, SK)
+    assert default["cfg"] == {"prior": "market", "fit": "iterative"} and default["stats"]["corners"] != base["stats"]["corners"] and default["stats"]["goals"] == base["stats"]["goals"]
     strip = lambda m: {k: v for k, v in m.items() if k != "cfg"}      # noqa: E731
     assert json.dumps(strip(base), sort_keys=True) == json.dumps(strip(explicit), sort_keys=True) and base["cfg"] == {"prior": "flat", "fit": "moments"}
-    # des `xg` présents n'y changent rien tant que l'option est éteinte
+    # des `xg` présents n'y changent rien quand l'a priori de marché est éteint
     bare = [{k: v for k, v in o.items() if k != "xg"} for o in obs]
-    assert json.dumps(strip(S.fit(bare, ON, SK)), sort_keys=True) == json.dumps(strip(base), sort_keys=True)
-    print("ok  défauts (flat / moments) : modèle identique avec ou sans cotes, option explicite = défaut")
+    assert json.dumps(strip(fit(bare, ON, SK, prior="flat", fit_mode="moments")), sort_keys=True) == json.dumps(strip(base), sort_keys=True)
+    print("ok  défauts (market / iterative, lecture v2) ; (a) explicite identique avec ou sans cotes, buts du défaut = ceux de (a)")
 
 
 def test_market_prior_scope():
     obs = make(round_robin(1))
-    a = S.fit(obs, ON, SK, prior="flat")
+    a = fit(obs, ON, SK, prior="flat")
     for mode in ({"prior": "market"}, {"prior": "market", "fit_mode": "iterative"}, {"fit_mode": "iterative"}):
-        b = S.fit(obs, ON, SK, **mode)
+        b = fit(obs, ON, SK, **mode)
         assert json.dumps(b["stats"]["goals"], sort_keys=True) == json.dumps(a["stats"]["goals"], sort_keys=True), "les buts ne bougent jamais"
         for fam in FAMS:
             assert b["stats"][fam]["alpha"] == a["stats"][fam]["alpha"] and b["stats"][fam]["atot"] == a["stats"][fam]["atot"], f"la dispersion reste celle de (a) : {fam} {mode}"
-    b = S.fit(obs, ON, SK, prior="market")
+    b = fit(obs, ON, SK, prior="market")
     t0a, t0b = a["stats"]["corners"]["t"]["T0"], b["stats"]["corners"]["t"]["T0"]
     assert t0b["ah"] != t0a["ah"] and t0b["n"] == t0a["n"], "l'a priori de marché déplace la moyenne d'équipe"
     assert b["stats"]["corners"]["lg_h"] == a["stats"]["corners"]["lg_h"], "mêmes moyennes de ligue"
@@ -85,14 +93,14 @@ def test_leak_two_ways():
         return out
     dump = lambda m: json.dumps(m, sort_keys=True)      # noqa: E731
     for mode in ({"prior": "market"}, {"prior": "market", "fit_mode": "iterative"}):
-        ref = dump(S.fit(obs, on, SK, **mode))
-        later = dump(S.fit(perturbed(lambda o: o["d"] >= cut), on, SK, **mode))
+        ref = dump(fit(obs, on, SK, **mode))
+        later = dump(fit(perturbed(lambda o: o["d"] >= cut), on, SK, **mode))
         assert later == ref, f"cotes du jour du modèle et des suivants : aucun effet ({mode})"
-        earlier = dump(S.fit(perturbed(lambda o: o["d"] < cut and o["team"] in ("T0", "T1")), on, SK, **mode))
+        earlier = dump(fit(perturbed(lambda o: o["d"] < cut and o["team"] in ("T0", "T1")), on, SK, **mode))
         assert earlier != ref, f"cotes d'un match antérieur : effet attendu, l'a priori est branché ({mode})"
     for mode in ({"prior": "flat"}, {"prior": "flat", "fit_mode": "iterative"}):
-        ref = dump(S.fit(obs, on, SK, **mode))
-        assert dump(S.fit(perturbed(lambda o: o["d"] < cut), on, SK, **mode)) == ref, f"sans a priori de marché, les cotes ne comptent pour rien ({mode})"
+        ref = dump(fit(obs, on, SK, **mode))
+        assert dump(fit(perturbed(lambda o: o["d"] < cut), on, SK, **mode)) == ref, f"sans a priori de marché, les cotes ne comptent pour rien ({mode})"
     print("ok  fuite à deux sens : cotes du match prédit et des suivants sans effet, cotes antérieures avec effet pour b et d, aucun pour a et c")
 
 
@@ -102,9 +110,9 @@ def test_iterative_opponent():
     obs = make(sched)
     on = date(2026, 12, 31)
     truth = lambda t, s: s["lg_h"] * ATT[t] ** 0.5     # noqa: E731 - attaque vraie des corners à domicile (relative à une défense moyenne 1)
-    mom = S.fit(obs, on, SK)["stats"]["corners"]
-    it = S.fit(obs, on, SK, fit_mode="iterative")["stats"]["corners"]
-    mk = S.fit(obs, on, SK, prior="market", fit_mode="iterative")["stats"]["corners"]
+    mom = fit(obs, on, SK)["stats"]["corners"]
+    it = fit(obs, on, SK, fit_mode="iterative")["stats"]["corners"]
+    mk = fit(obs, on, SK, prior="market", fit_mode="iterative")["stats"]["corners"]
     ex = lambda s: S._expect(s, "T0", "T7")       # noqa: E731 - attente de T0 à domicile contre une défense faible (1,25)
     true_h = 5.0 * 1.2 * ATT["T0"] ** 0.5 * DEF["T7"] ** 0.5
     e_mom, e_it, e_mk = abs(ex(mom)[0] - true_h), abs(ex(it)[0] - true_h), abs(ex(mk)[0] - true_h)
@@ -114,15 +122,15 @@ def test_iterative_opponent():
 
 def test_format_and_fallback():
     obs = make(round_robin(1))
-    m = S.fit(obs, ON, SK, prior="market", fit_mode="iterative")
+    m = fit(obs, ON, SK, prior="market", fit_mode="iterative")
     p = S.predict(m, "T0", "T3")
     assert p and p["stats"]["corners"]["h"] > 0 and p["lane"] == "saison" and set(FAMS) <= set(p["stats"])
     # sans identifiant d'adversaire (autres sources) : retour aux moyennes
     no_opp = [dict(o, opp=None) for o in obs]
-    assert json.dumps(S.fit(no_opp, ON, SK, fit_mode="iterative")["stats"], sort_keys=True) == json.dumps(S.fit(no_opp, ON, SK)["stats"], sort_keys=True)
+    assert json.dumps(fit(no_opp, ON, SK, fit_mode="iterative")["stats"], sort_keys=True) == json.dumps(fit(no_opp, ON, SK)["stats"], sort_keys=True)
     # sans aucune cote : l'a priori de marché retombe sur la moyenne de ligue
     bare = [{k: v for k, v in o.items() if k != "xg"} for o in obs]
-    assert json.dumps(S.fit(bare, ON, SK, prior="market")["stats"], sort_keys=True) == json.dumps(S.fit(bare, ON, SK)["stats"], sort_keys=True)
+    assert json.dumps(fit(bare, ON, SK, prior="market")["stats"], sort_keys=True) == json.dumps(fit(bare, ON, SK)["stats"], sort_keys=True)
     # relatif d'équipe : rétréci vers 1 avec n / (n + 6), moyenne de ligue du côté en dénominateur
     rel = S.market_rel([o for o in obs if o["d"] < ON.isoformat()])
     n = 7

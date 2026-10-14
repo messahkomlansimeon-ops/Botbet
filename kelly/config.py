@@ -572,9 +572,9 @@ STATS_CUPS_MODE = _mode("STATS_CUPS_MODE", "ghost")                      # stats
 STATS_CUPS_BACK_N = max(1, _int("STATS_CUPS_BACK_N", 200))              # règle de retour : passage à « on » à la main si le CLV 1xBet fantôme des jambes de coupe est >= 0 sur autant de lignes réglées
 SEASON_LEAGUES = _set("SEASON_LEAGUES", ())
 SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 12.0))                    # rétrécissement vers la moyenne de la ligue : poids n / (n + k) ; 12 = le meilleur réglage mesuré au rejeu du 14/10 (season_ledger.json), 6 était la spécification de départ
-SEASON_PRIOR = (os.environ.get("SEASON_PRIOR") or "flat").strip().lower()      # a priori des moyennes d'équipe de la voie : flat (moyenne de ligue, défaut) | market (attentes de buts implicites des cotes de clôture déjà jouées ; football-data seulement) ; mesuré par tools/season_replay2.py, rien ne change sans sa lecture
+SEASON_PRIOR = (os.environ.get("SEASON_PRIOR") or "market").strip().lower()      # a priori des moyennes d'équipe de la voie : market (attentes de buts implicites des cotes de clôture déjà jouées ; football-data seulement ; DÉFAUT depuis la lecture v2 du 14/10, season_ledger.json) | flat (moyenne de ligue, retour en arrière)
 SEASON_PRIOR = SEASON_PRIOR if SEASON_PRIOR in ("flat", "market") else "flat"
-SEASON_FIT = (os.environ.get("SEASON_FIT") or "moments").strip().lower()        # ajustement des moyennes : moments (moyennes rétrécies, défaut) | iterative (Maher / IPF corrigé de l'adversaire ; football-data seulement)
+SEASON_FIT = (os.environ.get("SEASON_FIT") or "iterative").strip().lower()        # ajustement des moyennes : iterative (Maher / IPF corrigé de l'adversaire ; football-data seulement ; DÉFAUT depuis la lecture v2) | moments (moyennes rétrécies, retour en arrière)
 SEASON_FIT = SEASON_FIT if SEASON_FIT in ("moments", "iterative") else "moments"
 SEASON_MKT_SHRINK = max(0.0, _float("SEASON_MKT_SHRINK", 6.0))                 # a priori de marché : rétrécissement de l'attente implicite d'une équipe vers la ligue, n / (n + 6)
 SEASON_MKT_ELASTICITY = {"corners": 0.5, "yellow": 0.5, "shots": 0.5, "sot": 0.5, "fouls": 0.5}      # exposant par famille du rapport (attente implicite de l'équipe / ligue), fixé au ledger v2, jamais réglé après coup
