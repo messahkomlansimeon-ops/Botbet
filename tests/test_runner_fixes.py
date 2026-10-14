@@ -332,7 +332,8 @@ def helper_proc(logs, sighup_ignored=False):
             "R.install_signals()\n"
             "print('pret', flush=True)\n"
             "r.loop(); r.shutdown(); print('fin', flush=True)\n")
-    pre = (lambda: signal.signal(signal.SIGHUP, signal.SIG_IGN)) if sighup_ignored else None
+    # SIGHUP explicitement remis par défaut quand il n'est pas ignoré : un test lancé sous nohup (disposition SIG_IGN héritée par les sous-processus) ne doit pas changer de résultat
+    pre = (lambda: signal.signal(signal.SIGHUP, signal.SIG_IGN)) if sighup_ignored else (lambda: signal.signal(signal.SIGHUP, signal.SIG_DFL))
     p = subprocess.Popen([sys.executable, "-c", code, logs], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, preexec_fn=pre)
     pidfile = os.path.join(logs, "serve.pid")
     end = time.time() + 10
