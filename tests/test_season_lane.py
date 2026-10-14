@@ -21,6 +21,7 @@ UNTOUCHED = ("ensemble_log.json", "ensemble.json", "calib.json", "means.json", "
 
 
 def setup():
+    C.SEASON_MODEL_WEIGHT, C.SEASON_MAX_DISAGREE, C.SEASON_MAX_EDGE = 0.35, 0.5, 5.0       # réglages LARGES pour fabriquer des valeurs sur des cotes fictives : les garde-fous par défaut ont leur propre test
     C.STRATEGY_SEASON = "on"
     C.ENSEMBLE_ENABLED = True
     season.reset()
@@ -81,7 +82,7 @@ def test_price_value_fill_and_none():
     pronos = [c for c in SL.make(scan, NOW, DAY) if c["market"] == "alternate_totals_corners"]
     c = pronos[0]
     px = px_for(c, over_odds=3.4, under_odds=1.25)                     # le marché dit ~ 75 % pour « moins » : un « plus » à 3,4 est une valeur si le modèle le voit à ~35 %+
-    chosen, ref = SL.price(c, px, {k: [1, 2, 3] for k in px}, NOW)
+    chosen, ref, extra = SL.price(c, px, {k: [1, 2, 3] for k in px}, NOW)
     assert chosen is not None and chosen["strategy"] == "saison" and chosen["key"].endswith("|saison") and chosen["xref"] == [1, 2, 3]
     assert "alts" not in chosen and chosen["sval"] in (0, 1) and chosen["ew"] == C.SEASON_MODEL_WEIGHT, chosen
     # proba retenue = log-cotes du modèle (poids wm) et du marché (1xBet sans marge)
@@ -91,14 +92,14 @@ def test_price_value_fill_and_none():
     assert chosen["sval"] == (1 if chosen["prob"] * chosen["xodds"] >= 1 + C.SEASON_MARGIN else 0)
     # sans la paire (l'autre issue absente chez 1xBet) : pas d'avis de marché, aucune jambe
     only = {k: v for k, v in px.items() if k[1] == "Over"}
-    assert SL.price(c, only, None, NOW) == (None, None)
+    assert SL.price(c, only, None, NOW) == (None, None, None)
     # ligne de référence : la plus proche de FAIR_P_TARGET, sans regarder le prix
     ref_alt = min(c["alts"], key=lambda a: abs(a[2] - C.FAIR_P_TARGET))
     rows = [d for d in (chosen, ref) if d]
     if ref is not None:
         assert "sval" not in ref and ref.get("ref_only") == 1 and ref["ref"] == 1, ref                # la référence d'une autre ligne n'est jamais une jambe
     assert any(d.get("ref") == 1 and d["name"] == ref_alt[0] and d["point"] == ref_alt[1] for d in rows), (ref_alt, [(d["name"], d["point"], d.get("ref")) for d in rows])
-    print("ok  prix : proba retenue = log-cotes modèle/marché (wm 0,35), sval 0/1, xref posé, sans avis de marché aucune jambe, ligne de référence indépendante du prix")
+    print("ok  prix : proba retenue = log-cotes modèle/marché (wm), sval 0/1, xref posé, sans avis de marché aucune jambe, ligne de référence indépendante du prix")
 
 
 def test_fill_and_value_rules():
@@ -127,13 +128,40 @@ def test_run_isolation_and_journal():
     assert {c["market"] for c in legs} == {"alternate_totals_corners"}, "seul le marché chiffré par le faux 1xBet"
     log = store.load(SL.LOG, [])
     assert log and all(r["strategy"] == "saison" and r["key"].endswith("|saison") and "shadow" not in r and r.get("pm") is not None and (r.get("px") is not None) for r in log), log[:1]
-    assert any(r.get("ref") == 1 for r in log) and all(r.get("sval") is not None or r.get("ref") == 1 for r in log), "chaque ligne est une jambe (sval) ou une référence"
+    assert any(r.get("ref") == 1 for r in log) and all(r.get("sval") is not None or r.get("ref") == 1 or r.get("refused") for r in log), "chaque ligne est une jambe (sval), une référence ou une ligne refusée"
     for name in UNTOUCHED:
         assert store.load(name, None) in (None, [], {}), f"{name} ne doit pas être touché par la voie saison"
     n1 = len(log)
     SL.run(scan, [], DAY, NOW, fetch=fetch, history={})                    # relance : le journal ne double pas
     assert len(store.load(SL.LOG, [])) == n1
     print("ok  passage du matin : jambes étiquetées « saison », journal à part (avis pm / px, sans fantôme de gel), rien d'écrit chez les autres voies, relance sans doublon")
+
+
+def test_guards():
+    # unités : veto sur le désaccord modèle-marché, « suspect » au-dessus de +25 %, valeur, remplissage (réglages par défaut)
+    d = (C.SEASON_MODEL_WEIGHT, C.SEASON_MAX_DISAGREE, C.SEASON_MAX_EDGE)
+    C.SEASON_MODEL_WEIGHT, C.SEASON_MAX_DISAGREE, C.SEASON_MAX_EDGE = 0.20, 0.15, 0.25
+    try:
+        assert SL.verdict(0.60, 2.0, 0.50, 0.70) == (None, "veto"), "|0,70 - 0,50| = 0,20 > 0,15"
+        assert SL.verdict(0.70, 2.0, 0.69, 0.70) == (None, "suspect"), "espérance +40 % > +25 %"
+        assert SL.verdict(0.52, 2.0, 0.50, 0.52) == ("value", "")
+        assert SL.verdict(0.65, 1.5, 0.62, 0.64) == ("fill", "")
+        assert SL.verdict(0.30, 1.5, 0.30, 0.30) == (None, "")
+        # intégration : cotes qui s'écartent beaucoup du modèle -> lignes refusées, raison au journal, aucune jambe sur ces lignes
+        scan = setup()
+        C.SEASON_MODEL_WEIGHT, C.SEASON_MAX_DISAGREE, C.SEASON_MAX_EDGE = 0.20, 0.15, 0.25
+        pronos = SL.make(scan, NOW, DAY)
+        legs, _ = SL.run(scan, [], DAY, NOW, fetch=fetch_of(pronos, over_odds=6.0, under_odds=1.12), history={})
+        log = store.load(SL.LOG, [])
+        refused = [r for r in log if r.get("swhy")]
+        assert refused and {r["swhy"] for r in refused} <= {"veto", "suspect"} and all(r.get("sval") is None for r in refused), refused[:1]
+        assert all(r.get("swhy") is None for r in log if r.get("sval") is not None), "une jambe n'est jamais une ligne refusée"
+        from kelly import lanestats
+        txt = lanestats.season_detail()
+        assert "lignes écartées :" in txt and ("veto" in txt or "suspect" in txt), txt
+    finally:
+        C.SEASON_MODEL_WEIGHT, C.SEASON_MAX_DISAGREE, C.SEASON_MAX_EDGE = d
+    print("ok  garde-fous : veto (désaccord > 15 points) et « suspect » (espérance > +25 %) refusent la ligne, raison au journal et comptée au bilan")
 
 
 def test_second_pass_promotes_reference_to_leg():
@@ -152,9 +180,14 @@ def test_second_pass_promotes_reference_to_leg():
     key = k["key"]
     c = {"key": key, "id": k["id"], "sport_key": SK, "home": k["home"], "away": k["away"], "commence": KO, "market": k["market"], "name": k["name"], "point": k["point"],
          "p_model": 0.6, "p_x": 0.55, "p0": 0.6, "xodds": 1.9, "sval": 1, "ref": 1, "strategy": "saison", "p_ens": 0.58}
+    log = store.load(SL.LOG, [])
+    for r in log:
+        if r["key"] == key:
+            r.update(swhy="veto", refused=1)                  # d'abord refusée au 1er passage
+    store.save(SL.LOG, log)
     ensemble.record([c], str(DAY), NOW, name=SL.LOG, shadow=False)
     row = next(r for r in store.load(SL.LOG, []) if r["key"] == key)
-    assert row.get("sval") == 1, row
+    assert row.get("sval") == 1 and "swhy" not in row and "refused" not in row, row        # devenue jambe : plus une ligne écartée
     print("ok  deuxième passage : une ligne d'abord écrite comme simple référence devient la jambe jouée (sval reporté)")
 
 
@@ -256,7 +289,7 @@ def test_settle_log_with_learner_and_archive():
 
 
 def main():
-    for t in (test_make, test_price_value_fill_and_none, test_fill_and_value_rules, test_run_isolation_and_journal, test_second_pass_promotes_reference_to_leg, test_modes, test_run_guards, test_has_value, test_learn_reference_rows_only,
+    for t in (test_make, test_price_value_fill_and_none, test_fill_and_value_rules, test_run_isolation_and_journal, test_guards, test_second_pass_promotes_reference_to_leg, test_modes, test_run_guards, test_has_value, test_learn_reference_rows_only,
               test_settle_log_with_learner_and_archive):
         t()
     print("tests voie saison (jambes) : OK")

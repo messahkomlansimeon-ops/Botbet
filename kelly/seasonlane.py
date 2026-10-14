@@ -3,7 +3,7 @@
 Isolement : cette voie ne touche ni aux voies sharpgap / stats, ni au gel de l'ensemble (config.ENSEMBLE_FROZEN_MODEL), ni à leurs documents. Elle a :
   - ses propres pronostics (une ligne par match et par marché, `c["strategy"] = "saison"`, clé terminée par « |saison » : jamais la même clé qu'un pari des autres voies) ;
   - son propre mélange avec le marché : p_ens = expit(wm x logit(p_modèle) + (1 - wm) x logit(p_marché)), p_marché = sharp (si présent et frais) et 1xBet sans marge en log-cotes
-    (ws = ENSEMBLE_PRIOR_SHARP) ; wm = SEASON_MODEL_WEIGHT (0,35), puis appris par famille (data/season_weights.json) ; sans avis de marché, aucune jambe (le modèle seul n'est
+    (ws = ENSEMBLE_PRIOR_SHARP) ; wm = SEASON_MODEL_WEIGHT (0,20), puis appris par famille (data/season_weights.json) ; sans avis de marché, aucune jambe (le modèle seul n'est
     jamais jugé) ; le gel ne s'applique pas ici, mais `ensemble.sharp_for` garde sa fraîcheur plus stricte pour les cinq familles figées ;
   - sa propre calibration par famille et sens (data/season_calib.json, les fonctions de kelly/calib.py sur CE document, sans le prior du rejeu) ;
   - son propre journal (data/season_log.json, archive arch/sea/), mêmes champs que le journal d'ensemble (pm, px, ps, xref, xclose, strategy) ;
@@ -217,21 +217,28 @@ def _line(c, px, name, point, p0, base, odd, now, wdata, cdata):
     p_s = ensemble.sharp_for(c, name, point, now)
     p_mkt = ensemble.pool_market(p_s, p_x, C.ENSEMBLE_PRIOR_SHARP)[0]
     wm = weights(fam, wdata)["wm"]
-    out = {"name": name, "point": point, "p0": p0, "base": base, "odd": odd, "pm": pm, "p_x": p_x, "p_s": p_s, "p_mkt": p_mkt, "wm": wm, "p": None, "ev": None, "ev_mkt": None, "kind": None}
+    out = {"name": name, "point": point, "p0": p0, "base": base, "odd": odd, "pm": pm, "p_x": p_x, "p_s": p_s, "p_mkt": p_mkt, "wm": wm, "p": None, "ev": None, "ev_mkt": None, "kind": None, "why": ""}
     if p_mkt is None:
         return out
     p = ensemble.pool(pm, p_mkt, wm)
-    out.update(p=p, ev=p * odd - 1, ev_mkt=p_mkt * odd - 1, kind=verdict(p, odd, p_mkt))
+    kind, why = verdict(p, odd, p_mkt, pm)
+    out.update(p=p, ev=p * odd - 1, ev_mkt=p_mkt * odd - 1, kind=kind, why=why)
     return out
 
 
-def verdict(p, odd, p_mkt):
-    """« value » (proba retenue x cote >= 1 + SEASON_MARGIN), « fill » (proba retenue >= SEASON_FILL_MIN_P et espérance au prix du marché >= SEASON_FILL_MIN_EV) ou None."""
+def verdict(p, odd, p_mkt, p_model=None):
+    """-> (« value » | « fill » | None, raison du refus ou ''). Garde-fous copiés des autres voies : « veto » si |proba du modèle - proba du marché| > SEASON_MAX_DISAGREE, « suspect » si l'espérance
+    proba retenue x cote - 1 dépasse SEASON_MAX_EDGE (donnée ou modèle faux) ; sinon valeur (p x cote >= 1 + SEASON_MARGIN) ou remplissage (p >= SEASON_FILL_MIN_P et espérance au prix du marché
+    >= SEASON_FILL_MIN_EV)."""
+    if p_model is not None and abs(p_model - p_mkt) > C.SEASON_MAX_DISAGREE:
+        return None, "veto"
+    if p * odd - 1 > C.SEASON_MAX_EDGE:
+        return None, "suspect"
     if p * odd >= 1 + C.SEASON_MARGIN:
-        return "value"
+        return "value", ""
     if p >= C.SEASON_FILL_MIN_P and p_mkt * odd - 1 >= C.SEASON_FILL_MIN_EV:
-        return "fill"
-    return None
+        return "fill", ""
+    return None, ""
 
 
 def _rank(v):
@@ -265,12 +272,14 @@ def _apply(c, v, refs, ref_line=False, leg=True):
         d.pop("xref", None)
     if ref_line:
         d["ref"] = 1
+    if v.get("why"):
+        d["swhy"] = v["why"]                           # raison du refus (« veto », « suspect ») : gardée au journal, comptée au bilan
     d.pop("alts", None)
     return d
 
 
 def price(c, px, refs, now, wdata=None, cdata=None):
-    """Met le pronostic `c` au prix 1xBet de `px` : -> (jambe choisie ou None, ligne de référence ou None). La jambe est la meilleure ligne des alternatives du marché (valeur d'abord,
+    """Met le pronostic `c` au prix 1xBet de `px` : -> (jambe choisie ou None, ligne de référence ou None, ligne refusée journalisée ou None). La jambe est la meilleure ligne des alternatives du marché (valeur d'abord,
     puis assez probable pour un combiné, puis espérance), None si aucune ne vaut ni la valeur ni le remplissage. La ligne de référence est celle du marché la plus proche de
     FAIR_P_TARGET qui a un prix ET un avis de marché, quel que soit le verdict : la seule dont on apprend (voir le haut du module). Quand la jambe choisie est aussi la référence, elle porte
     ref = 1 et il n'y a pas de seconde ligne ; sinon la référence est rendue à part (sval absent : `ref_only`, jamais une jambe)."""
@@ -283,13 +292,18 @@ def price(c, px, refs, now, wdata=None, cdata=None):
             evals.append(_line(c, px, name, point, p0, base, odd, now, wdata, cdata))
     scored = [v for v in evals if v["p"] is not None]
     if not scored:
-        return None, None
+        return None, None, None
     ref_v = min(scored, key=lambda v: abs(v["p0"] - C.FAIR_P_TARGET))
     good = [v for v in scored if v["kind"]]
     best = max(good, key=_rank) if good else None
     chosen = _apply(c, best, refs, ref_line=best is ref_v) if best else None
     ref = None if best is ref_v else _apply(c, ref_v, refs, ref_line=True, leg=False)       # la référence n'est JAMAIS une jambe (pas de sval) quand une autre ligne a été choisie
-    return chosen, ref
+    refused = [v for v in scored if v["why"] and v is not ref_v and v is not best]
+    extra = None
+    if refused:                                       # la ligne refusée la plus tentante du marché (plus grande espérance) : au journal avec sa raison, jamais une jambe ni une référence
+        worst = max(refused, key=lambda v: v["ev"])
+        extra = _apply(c, worst, refs, leg=False) | {"refused": 1}
+    return chosen, ref, extra
 
 
 def reprice(c, px, refs):
@@ -303,7 +317,7 @@ def reprice(c, px, refs):
     out = dict(c, xodds=odd, odds=odd)
     if p_mkt is not None and c.get("p_model") is not None:
         p = ensemble.pool(c["p_model"], p_mkt, c.get("ew", C.SEASON_MODEL_WEIGHT))
-        kind = verdict(p, odd, p_mkt)
+        kind, why = verdict(p, odd, p_mkt, c["p_model"])
         out.update(prob=round(p, 4), p_ens=round(p, 4), xev=round(p * odd - 1, 4), sval=None if kind is None else 1 if kind == "value" else 0)
         if p_x is not None:
             out.update(p_x=round(p_x, 4), xp=round(p_x, 4))
@@ -365,8 +379,8 @@ def run(scan, picks, day, now, fetch=None, history=None):
             f = found.get(c["id"])
             if not f or not f.get("px"):
                 continue
-            chosen, ref = price(c, f["px"], f.get("refs"), now, wdata, cdata)
-            for d in (chosen, ref):
+            chosen, ref, extra = price(c, f["px"], f.get("refs"), now, wdata, cdata)
+            for d in (chosen, ref, extra):
                 if d is not None:
                     d["xgid"] = f["gid"]
                     if f.get("cid"):
@@ -375,7 +389,12 @@ def run(scan, picks, day, now, fetch=None, history=None):
             if chosen is not None:
                 legs.append(chosen | ({"ghost": 1} if m == "ghost" else {}))
         n = record(rows, day, now)
-        print(f"[saison] {len(pronos)} pronostic(s), {len(found)} match(s) chez 1xBet, {len(legs)} jambe(s) ({sum(1 for c in legs if c.get('sval'))} à valeur), {n} avis au journal", file=sys.stderr)
+        why = {}
+        for d in rows:
+            if d.get("swhy"):
+                why[d["swhy"]] = why.get(d["swhy"], 0) + 1
+        print(f"[saison] {len(pronos)} pronostic(s), {len(found)} match(s) chez 1xBet, {len(legs)} jambe(s) ({sum(1 for c in legs if c.get('sval'))} à valeur), {n} avis au journal"
+              + (f", lignes écartées : {', '.join(f'{k} {v}' for k, v in sorted(why.items()))}" if why else ""), file=sys.stderr)
         return legs, m
     except Exception as e:                          # noqa: BLE001 - la voie ne casse jamais le matin
         print(f"[saison] voie ignorée : {type(e).__name__}: {e}", file=sys.stderr)

@@ -172,6 +172,13 @@ def season_rows(days=None, today=None):
     return [r for r in seasonlane.journal_rows() if isinstance(r, dict) and r.get("sval") is not None and (r.get("date") or "") >= cut]
 
 
+def season_rows_all(days=None, today=None):
+    """Toutes les lignes du journal de la voie `saison` de la période (jambes, références, lignes refusées)."""
+    from . import seasonlane
+    cut = _since(days, today)
+    return [r for r in seasonlane.journal_rows() if isinstance(r, dict) and (r.get("date") or "") >= cut]
+
+
 def season_detail(days=None, today=None, plain=False):
     """Suite de la ligne « saison » du bilan par voie : réalisé contre annoncé (proba retenue) et CLV 1xBet avec son intervalle à 95 % (marges PAR MATCH) des jambes du journal de la voie,
     séparés valeur / remplissage, puis l'argent des combinés notés par palier de cote (« cote 10 : +1 200 FCFA sur 3 »). '' sans rien de réglé ni de noté. Ne lève jamais."""
@@ -189,6 +196,12 @@ def season_detail(days=None, today=None, plain=False):
             if n:
                 txt += f", {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" sur {n}"
             parts.append(txt)
+        why = {}
+        for r in season_rows_all(days, today):
+            if r.get("swhy"):
+                why[r["swhy"]] = why.get(r["swhy"], 0) + 1
+        if why:
+            parts.append("lignes écartées : " + ", ".join(f"{k} {v}" for k, v in sorted(why.items())))
         bets = store.load_doc("bets.json", {"combos": []})
         trk = store.load_doc("tracked.json", [])
         tiers, custom = {}, (0.0, 0)

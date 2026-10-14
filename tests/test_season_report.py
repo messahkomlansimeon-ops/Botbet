@@ -84,7 +84,7 @@ def test_isolation():
 def test_status_line():
     out = lanes.lines()
     sl = next(x for x in out if x.startswith("saison :"))
-    assert f"saison : {C.STRATEGY_SEASON}" in sl and "poids du modèle 35 %" in sl and "paliers 3, 10, 30, 100" in sl and "part de mise 0.15" in sl, sl
+    assert f"saison : {C.STRATEGY_SEASON}" in sl and f"poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %" in sl and "paliers 3, 10, 30, 100" in sl and "part de mise 0.15" in sl, sl
     print("ok  status : état de la voie (interrupteur, poids du modèle, marge, paliers, part de mise)")
 
 

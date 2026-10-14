@@ -30,5 +30,10 @@
   "secondary_prior": "sur les buts, le contexte (forme surtout) a plutôt nui (observation de la saison réservée, non testée) : à utiliser comme prior à l'Étape 1, pas comme conclusion",
   "frozen_by": "cette pré-déclaration ne peut plus être modifiée après sa première lecture ; toute extension est ajoutée dans `extensions`"
  },
- "extensions": []
+ "extensions": [
+  {
+   "at": "2026-10-14T13:01:44+00:00",
+   "note": "demi-vie 45 jours : retirée de l'Étape 1. Tranchée le 14/10 sur la fenêtre de développement (rejeu pré-déclaré de la voie `saison`, season_ledger.json, 5 338 matchs, 18 divisions) : 45 jours est moins bon que 110 sur quatre familles de statistiques sur cinq (corners, tirs, tirs cadrés, fautes) et indécise sur les jaunes ; demi-vie 110 CONSERVÉE. Cette entrée ne modifie pas la pré-déclaration `prereg` (aucune hypothèse de demi-vie 45 n'y figurait) : elle ferme seulement la question pour l'Étape 1."
+  }
+ ]
 }

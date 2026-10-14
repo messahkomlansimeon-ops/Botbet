@@ -3,7 +3,7 @@
 Pour chaque équipe, UNIQUEMENT les matchs de la saison (ou de la compétition) en cours, sans la saison précédente, sans demi-vie, sans ancrage marché
 et sans facteur de contexte. Par statistique (buts, corners, cartons, jaunes, tirs, tirs cadrés, fautes) :
 
-  - moyennes « pour » et « contre » à domicile et à l'extérieur, rétrécies vers la moyenne de la ligue avec le poids n / (n + k), k = C.SEASON_PRIOR_K (6) ;
+  - moyennes « pour » et « contre » à domicile et à l'extérieur, rétrécies vers la moyenne de la ligue avec le poids n / (n + k), k = C.SEASON_PRIOR_K (12 : le meilleur réglage mesuré au rejeu du 14/10) ;
   - attente d'un match : domicile = attaque(A, dom.) x défense(B, ext.) / moyenne des « domicile » de la ligue ; extérieur = attaque(B, ext.) x défense(A, dom.) /
     moyenne des « extérieur » de la ligue (le facteur domicile de la ligue est ce rapport) ;
   - binomiale négative avec la dispersion de la ligue en cours (moments, plancher 0) ; sous C.SEASON_ALPHA_MIN_MATCHES matchs de ligue : repli donné par l'appelant

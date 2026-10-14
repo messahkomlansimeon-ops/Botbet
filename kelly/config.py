@@ -556,13 +556,15 @@ STATS_GHOST_OUTSIDE_FD = _bool("STATS_GHOST_OUTSIDE_FD", True)
 # seules ligues (clés sport_key) de la voie ; vide = toutes celles où au moins SEASON_MIN_TEAMS équipes ont SEASON_MIN_MATCHES matchs cette saison.
 STRATEGY_SEASON = _mode("STRATEGY_SEASON", "on")
 SEASON_LEAGUES = _set("SEASON_LEAGUES", ())
-SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 6.0))                     # rétrécissement vers la moyenne de la ligue : poids n / (n + k)
+SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 12.0))                    # rétrécissement vers la moyenne de la ligue : poids n / (n + k) ; 12 = le meilleur réglage mesuré au rejeu du 14/10 (season_ledger.json), 6 était la spécification de départ
 SEASON_MIN_MATCHES = max(1, _int("SEASON_MIN_MATCHES", 4))                   # matchs minimum par équipe cette saison, sinon pas de prévision
 SEASON_ALPHA_MIN_MATCHES = max(1, _int("SEASON_ALPHA_MIN_MATCHES", 30))      # matchs de ligue minimum pour mesurer la dispersion (sinon repli du rejeu)
 SEASON_MIN_TEAMS = max(2, _int("SEASON_MIN_TEAMS", 8))                       # une ligue est couverte si au moins 8 équipes ont SEASON_MIN_MATCHES matchs cette saison
-SEASON_MODEL_WEIGHT = min(1.0, max(0.0, _float("SEASON_MODEL_WEIGHT", 0.35)))  # poids du modèle de saison face au marché (log-cotes) ; appris par famille ensuite (SEASON_PRIOR_SD, SEASON_MIN_N)
+SEASON_MODEL_WEIGHT = min(1.0, max(0.0, _float("SEASON_MODEL_WEIGHT", 0.20)))  # poids du modèle de saison face au marché (log-cotes) : 0,20, un modèle mesuré moins bon que `strength` (rejeu du 14/10) ne pèse pas plus que lui ; appris par famille ensuite (SEASON_PRIOR_SD, SEASON_MIN_N)
 SEASON_PRIOR_SD = max(0.01, _float("SEASON_PRIOR_SD", 0.20))                 # écart-type a priori du poids appris
 SEASON_MIN_N = max(1, _int("SEASON_MIN_N", 100))                             # matchs d'une famille avant que son poids appris bouge
+SEASON_MAX_EDGE = _float("SEASON_MAX_EDGE", 0.25)                           # garde-fou : une espérance (proba retenue x cote - 1) au-dessus est suspecte (donnée ou modèle faux) : la ligne est écartée (raison « suspect »)
+SEASON_MAX_DISAGREE = _float("SEASON_MAX_DISAGREE", 0.15)                   # veto : |proba du modèle - proba du marché| au-dessus : la ligne est refusée (raison « veto »)
 SEASON_MARGIN = _float("SEASON_MARGIN", 0.02)                                # valeur : proba retenue x cote 1xBet >= 1 + marge
 SEASON_FILL_MIN_P = _float("SEASON_FILL_MIN_P", 0.60)                        # jambe de remplissage : proba retenue minimale ...
 SEASON_FILL_MIN_EV = _float("SEASON_FILL_MIN_EV", -0.08)                     # ... et espérance au prix du marché (proba du marché x cote - 1) d'au moins -8 %
