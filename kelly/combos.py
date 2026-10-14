@@ -77,6 +77,9 @@ def stats_allowed(c):
 def leg_reason(c):
     """« value » | « stats » | « safe » : la raison d'être de la jambe ; None si elle n'en a aucune (ou si un garde-fou la
     refuse : cote trop mal payée, modèle d'avant-match contre)."""
+    from . import lanes
+    if not lanes.usable(c):                         # voie en « ghost » / « off », ligue de stats en fantôme, jambe « fill » coupée (FILL_LEGS) : jamais sélectionnée
+        return None
     # Garde-fou de marge : une jambe sûre a une petite cote, où la marge du bookmaker pèse plus lourd en pourcentage
     # (1,35 au lieu de 1,44 juste = -6 %) ; elle a donc droit à un plancher plus bas que les autres.
     edge = c.get("edge")
@@ -464,7 +467,9 @@ def viable(c):
     Famille où l'ensemble décide (ensemble.is_active : buts, 1N2...) : c["prob"] est la proba RETENUE p_ens, donc le seuil C.VIABLE_MIN_P s'applique à elle ;
     le veto (c["xveto"]) et une cote 1xBet sous la cote mini relevée (c["min_odds"], (1 + marge) / p_ens) écartent le pari comme avant. La référence c["base"] est
     une proba du MODÈLE (un match moyen vu par Kelly) : elle se compare à la proba du modèle (c["p_model"]), pas à p_ens (voir ensemble.model_prob)."""
-    from . import ensemble
+    from . import ensemble, lanes
+    if not lanes.usable(c):                         # voie en « ghost » / « off », ligue de stats en fantôme, jambe « fill » coupée : calculée et journalisée, jamais sélectionnée
+        return False
     if ensemble.model_silent(c["market"]) and c.get("p_ens") is None:       # famille figée : sans proba retenue du MARCHÉ (c["p_ens"]), le modèle ne décide pas seul
         return False
     if c.get("prob", 0) < C.VIABLE_MIN_P or not data_ok(c):

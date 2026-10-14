@@ -434,6 +434,11 @@ def report(now=None):
             blocks.append([fmt.b("🧠 Ce que Kelly apprend") + " " + fmt.i("(réalisé / annoncé)")] + [fmt.esc(x) for x in learn])
     except Exception as e:                              # noqa: BLE001
         blocks.append([f"⚠️ Apprentissage : illisible ({type(e).__name__})"])
+    try:
+        from . import lanes
+        blocks.append([fmt.b("🎛️ Voies")] + [fmt.esc(x) for x in lanes.lines()])
+    except Exception as e:                              # noqa: BLE001
+        blocks.append([f"⚠️ Voies : état illisible ({type(e).__name__})"])
     blocks.append([fmt.b("🔌 Quotas")] + [fmt.esc(x) for x in api_lines()])
     bad = sum(1 for blk in blocks for line in blk if line.startswith("❌"))       # 💤 (source bloquée par son site) : dit, rien à faire de ton côté
     verdict = "tout va bien 👍" if not bad else f"{bad} point{'s' if bad > 1 else ''} à regarder ❌"

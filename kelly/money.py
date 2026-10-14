@@ -27,7 +27,7 @@ import re
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from . import fmt, store
+from . import config as C, fmt, store
 
 FILE = "mybudget.json"
 CUR = "FCFA"
@@ -198,10 +198,15 @@ def _confidence(prob, odds):
     return max(CONF_MIN, min(1.0, ev / CONF_FULL)) if ev > 0 else 0.0
 
 
-def _raw(it):
-    """Part du budget d'un pari (palier x confiance) ; 0 si ses données sont illisibles."""
+def _raw(it, with_frac=True):
+    """Part du budget d'un pari (palier x confiance) ; 0 si ses données sont illisibles. `with_frac` faux : la part AVANT la fraction de Kelly de la voie (allocate s'en sert pour
+    la somme des parts : un jour sur-souscrit ne gonfle pas les mises sharpgap parce qu'une mise stats a été réduite)."""
     try:
+        if it.get("novalue"):
+            return 0.0                              # combiné sans aucune jambe à valeur : hors Kelly, hors de la somme des parts (mise fixe, voir allocate)
         r = _share(it["kind"], it["tier"]) * _confidence(float(it["prob"]), float(it["odds"]))
+        if with_frac and it.get("frac") is not None:
+            r *= max(0.0, float(it["frac"])) / C.KELLY_FRACTION_REF       # fraction de Kelly de la voie, relative au calibrage historique (0,25 : sharpgap inchangé, stats 0,15 = 60 %)
     except (KeyError, TypeError, ValueError, AttributeError):
         return 0.0
     return r if math.isfinite(r) and r > 0 else 0.0
@@ -218,7 +223,7 @@ def allocate(items, budget=None, detail=False):
         out = ([0] * len(items), 0, budget)
         return out + (True,) if detail else out
     raw = [_raw(it) for it in items]
-    total = sum(raw)
+    total = sum(_raw(it, False) for it in items)     # somme des parts AVANT la fraction de la voie : réduire une mise stats n'augmente pas celles des autres
     scale = min(1.0, 1.0 / total) if total else 0
     step = round_step(budget)
     stakes = [math.floor(budget * r * scale / step) * step for r in raw]
@@ -226,6 +231,13 @@ def allocate(items, budget=None, detail=False):
     if cap is not None:                              # mode capital : jamais plus de TICKET_SHARE du capital sur un ticket (le reste est gardé)
         stakes = [min(st, cap) for st in stakes]
     stakes = [min(st, LOTTERY_STAKE) if _lottery(it) else st for st, it in zip(stakes, items)]     # ticket « loterie » : 100 FCFA au plus (gardé)
+    room = budget - sum(stakes)                      # combinés SANS valeur : mise fixe (NOVALUE_STAKE, sinon un pas d'arrondi), APRÈS les autres, même plafond de ticket, prise sur le reste du jour
+    for i, it in enumerate(items):
+        if isinstance(it, dict) and it.get("novalue"):
+            fixed = max(C.NOVALUE_STAKE, step)       # jamais sous un pas d'arrondi : « la mise minimale »
+            st = min(fixed, cap if cap is not None else fixed, LOTTERY_STAKE if _lottery(it) else fixed, room)
+            stakes[i] = math.floor(max(0.0, st) / step) * step
+            room -= stakes[i]
     spent = round(sum(stakes), 2)
     out = (stakes, spent, round(budget - spent, 2))
     return out + (total < 1,) if detail else out
@@ -263,10 +275,11 @@ def row_item(x):
     bets.json) : kind « combo » et son palier ; pari du jour (tracked.json) : kind « pari » à sa cote 1xBet quand il en a une."""
     try:
         if "legs" in x:
-            from . import combos
-            return {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"]), "p_mkt": combos.market_prob(x["legs"])}
+            from . import combos, lanes
+            return {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"]), "p_mkt": combos.market_prob(x["legs"])} | lanes.item_fields(x["legs"])
         if "keys" in x:
-            return {"kind": "combo", "tier": x["tier"], "prob": float(x["prob"]), "odds": float(x["odds"])}
+            return ({"kind": "combo", "tier": x["tier"], "prob": float(x["prob"]), "odds": float(x["odds"])}
+                    | ({"novalue": True} if x.get("has_value") is False and C.ENSEMBLE_ENABLED else {}) | ({"frac": float(x["frac"])} if x.get("frac") is not None else {}))
         return {"kind": "pari", "tier": "pari", "prob": float(x["prob"]), "odds": float(x.get("xodds") or x["odds"])}
     except (KeyError, TypeError, ValueError):
         return None

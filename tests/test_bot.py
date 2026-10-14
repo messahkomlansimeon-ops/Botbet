@@ -13,6 +13,7 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-test-")
+os.environ["STATS_GHOST_OUTSIDE_FD"] = "0"       # la ligue fictive du jeu d'essai (soccer_test_league) représente une ligue COUVERTE : sans cela la voie stats la mettrait en fantôme (défaut : hors football-data)
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-cache-")
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-test-odds-")
 os.environ.pop("TELEGRAM_TOKEN", None)

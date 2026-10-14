@@ -289,6 +289,9 @@ def apply(pronos, fetch=None, picks=None):
     et, s'il y a des pronostics d'une famille que l'ensemble décide, le résultat compte en plus "veto" (pronostics écartés par le désaccord
     modèle-marché ; déjà inclus dans "low")."""
     out = {"matches": 0, "value": 0, "low": 0, "weak": 0, "none": 0}
+    if C.ENSEMBLE_ENABLED:
+        from . import lanes
+        pronos = [c for c in pronos if lanes.priced(c)]          # voie « off » : rien de calculé, pas de lecture 1xBet pour ses lignes
     if not C.XBET_ENABLED or not pronos:
         return out
     if C.ENSEMBLE_ENABLED:

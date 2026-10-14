@@ -48,6 +48,12 @@ def _list(name, default):
     return [x.strip() for x in (os.environ.get(name) or default).split(",") if x.strip()]
 
 
+def _mode(name, default, allowed=("on", "ghost", "off")):
+    """Interrupteur à plusieurs états (« on » / « ghost » / « off » par défaut) lu dans l'environnement ; une valeur inconnue donne `default` (jamais une voie coupée par une faute de frappe)."""
+    raw = (os.environ.get(name) or "").strip().lower()
+    return raw if raw in allowed else default
+
+
 def _set(name, default):
     """« goals,h2h » -> frozenset({"goals", "h2h"}) ; « none » (ou aucune, 0, -, non) : ensemble vide ; variable absente ou vide : `default`."""
     raw = (os.environ.get(name) or "").strip().lower()
@@ -531,7 +537,25 @@ XALERT_LIVE_MAX = _int("XALERT_LIVE_MAX", 3)        # matchs relus en direct che
 XALERT_MAX_ITEMS = 6                                # alertes au plus dans un message
 
 # Bankroll
-KELLY_FRACTION = 0.25
+# Voies (stratégies, audit du 14/10) : sharpgap (les cinq familles sans modèle), stats (corners, cartons, tirs, tirs cadrés, fautes), fill (jambes sans valeur). Lus au démarrage,
+# affichés dans status. « on » = paris réels et jambes de combinés ; « ghost » = calculé et journalisé avec la référence 1xBet, jamais misé ni mis en combiné, hors du bilan
+# P&L, présent dans l'audit CLV ; « off » = rien de calculé. Une ligue de la voie stats en fantôme : STATS_GHOST_LEAGUES (clés sport_key), par défaut TOUTES les ligues dont
+# le CSV football-data n'a pas corners / cartons / tirs / fautes (STATS_GHOST_OUTSIDE_FD ; la coupure automatique de la voie, document strategy_state.json, en ajoute).
+STRATEGY_SHARPGAP = _mode("STRATEGY_SHARPGAP", "on")
+STRATEGY_STATS = _mode("STRATEGY_STATS", "on")
+FILL_LEGS = _bool("FILL_LEGS", True)                  # jambes sans valeur (favoris sharp 🎯, stats sous le seuil...) autorisées dans les combinés (choix de l'utilisateur sur leur longueur)
+STATS_GHOST_LEAGUES = _set("STATS_GHOST_LEAGUES", ())
+STATS_GHOST_OUTSIDE_FD = _bool("STATS_GHOST_OUTSIDE_FD", True)
+# Mise : part du budget d'un pari = palier x confiance (money.allocate) ; la fraction de Kelly de la voie la module RELATIVEMENT à KELLY_FRACTION_REF (0,25 : le calibrage historique,
+# donc sharpgap ne bouge pas et stats pèse 0,15 / 0,25 = 60 %). Un combiné prend la fraction de sa voie la plus prudente parmi ses jambes à valeur. KELLY_FRACTION n'a jamais dimensionné
+# une mise réelle (seul bankroll.stake, mort, la lit) : conservé, égal à celle de sharpgap.
+KELLY_FRACTION_REF = 0.25
+KELLY_FRACTION_SHARPGAP = _float("KELLY_FRACTION_SHARPGAP", 0.25)
+KELLY_FRACTION_STATS = _float("KELLY_FRACTION_STATS", 0.15)
+KELLY_FRACTION = KELLY_FRACTION_SHARPGAP
+# Un combiné SANS aucune jambe à valeur est « sans valeur » : pas dimensionné par Kelly, mise fixe (FCFA) ; 0 = la mise minimale, c'est-à-dire un pas d'arrondi du budget (money.round_step).
+# Elle passe par la même limite que les autres (3 % / 1 % du capital) et est déduite du reste du jour : le bilan montre ce que ces combinés coûtent.
+NOVALUE_STAKE = _float("NOVALUE_STAKE", 0)
 STAKE_CAP = {"🛡️": 0.05, "⚖️": 0.02, "🎯": 0.015, "🔥": 0.01, "💀": 0.005}   # part max de la bankroll par tier
 MIN_STAKE_SHARE = 0.002
 # Espérance minimale d'un combiné (proba x cote typique) : la marge du bookmaker se multiplie à chaque jambe. Sous ce seuil Kelly

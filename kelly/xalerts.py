@@ -23,7 +23,7 @@ import math
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import chat, combos as CB, config as C, ensemble, fair, fmt, gapbets, money, played, quiet, sharpgap, store, telegram, track, xprice
+from . import chat, combos as CB, config as C, ensemble, fair, fmt, gapbets, lanes, money, played, quiet, sharpgap, store, telegram, track, xprice
 from .sources import state, xbet
 from .telegram import Html
 
@@ -270,9 +270,9 @@ def gap_items(today, now, reader, closing=(), skip=()):
     plafonné comme les autres alertes) puis l'écart recalculé à CE prix (sharpgap.check) : sous le seuil, périmé ou pari retiré = rien. Sans lecture possible :
     rien (jamais un prix non vérifié)."""
     day = today.get("day")
-    if not C.SHARPGAP_ENABLED or not day or not today.get("picks"):
+    if not C.SHARPGAP_ENABLED or not day or not today.get("picks") or not lanes.gaps_allowed():       # voie « off » / « ghost » : aucune alerte, rien de réservé ni de suivi
         return []
-    picks = _fresh_sharp(today["picks"], closing, now)
+    picks = _fresh_sharp([c for c in today["picks"] if lanes.usable(c)], closing, now)       # ni un écart sur un marché de stats d'une ligue en fantôme
     seen, room = sharpgap.sent_keys(day), sharpgap.room(day)
     res = sharpgap.scan(today | {"picks": picks}, now, min_edge=C.SHARPGAP_EDGE - C.SHARPGAP_PRESCREEN, x_fresh=False)
     new = [x for x in res["cands"] if x["key"] not in seen and x["key"] not in skip][:room]

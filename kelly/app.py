@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets,
+from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, lanes,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                xprice, xworld)
 from .sources import fmmatch, http, state, xbet
@@ -47,17 +47,17 @@ def day_stakes(top, built, built_fair, gaps=()):
     keys, items = [], []
     if top:
         keys.append("pari")
-        items.append({"kind": "pari", "tier": "pari", "prob": top["prob"], "odds": top["odds"]})
+        items.append({"kind": "pari", "tier": "pari", "prob": top["prob"], "odds": top["odds"]} | lanes.item_fields([top], single=True))
     for g in gaps:
         keys.append(("gap", g["key"]))
         items.append(gapbets.stake_item(g))
     for title, (legs, odds_, prob) in built:
         keys.append(title)
-        items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_, "p_mkt": CB.market_prob(legs)})
+        items.append({"kind": "combo", "tier": title, "prob": prob, "odds": odds_, "p_mkt": CB.market_prob(legs)} | lanes.item_fields(legs))
     for target, (legs, min_total, prob) in built_fair:
         keys.append(("fair", target))
         items.append({"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total,        # jambe « probable » (sans avis sharp) :
-                      "p_mkt": CB.market_prob(legs)})                                                                 # proba 1xBet sans marge
+                      "p_mkt": CB.market_prob(legs)} | lanes.item_fields(legs))                                       # proba 1xBet sans marge
     stakes, spent, kept, poor = money.allocate(items, detail=True)
     return dict(zip(keys, stakes)), spent, kept, poor
 
@@ -240,7 +240,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                                                 played.norm(fmt.tier_word(title)), day, stake=st, xrefresh=xcombo, code=coupon))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
-                            "stake": st} | ({"cur": cur} if money.active() and st else {}) | fair._has_value(picks_)
+                            "stake": st} | ({"cur": cur} if money.active() and st else {}) | fair._has_value(picks_) | {k: v for k, v in lanes.item_fields(picks_).items() if k == "frac"}
                            | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
                                "coupon": coupon, "at": when} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
     for target, (legs, min_total, prob) in built_fair:
@@ -673,7 +673,10 @@ def log_opinions(rows, day, now=None):
 def morning_gaps(picks, pronos, day, odds_at):
     """Écarts sharp du matin (sharpgap.find) sur les paris réels remis au prix 1xBet : la cote 1xBet dépasse la cote juste d'un book de référence lu il y a moins de
     C.SHARPGAP_MAX_AGE_MIN minutes. [] si l'option est éteinte ou sans paris chiffrés. Ne lève jamais."""
-    if not C.SHARPGAP_ENABLED or not picks:
+    if not C.SHARPGAP_ENABLED or not picks or not lanes.gaps_allowed():      # voie sharpgap « off » / « ghost » : aucun écart annoncé ni numéroté (reserve) ni suivi (record_gap)
+        return []
+    picks = [c for c in picks if lanes.usable(c)]                            # un écart sur un marché de stats d'une ligue en fantôme n'est pas annoncé non plus
+    if not picks:
         return []
     try:
         found = sharpgap.find({"day": str(day), "picks": picks, "pronos": pronos, "picks_at": odds_at, "xbet_at": odds_at}, now_utc())
@@ -2138,7 +2141,7 @@ def _budget_stake(prob, odds, kind="fair", tier=None, legs=None):
     if not money.active():
         return None
     return money.allocate([{"kind": kind, "tier": odds if tier is None else tier, "prob": prob, "odds": odds,
-                            "p_mkt": CB.market_prob(legs) if legs else None}])[0][0]
+                            "p_mkt": CB.market_prob(legs) if legs else None} | (lanes.item_fields(legs) if legs else {})])[0][0]
 
 
 def _stake_words(st, prob=None, odds=None, legs=None):
@@ -2686,7 +2689,7 @@ def _bold_pools(picks, pronos, prefix, min_p=None, min_ev=None):
     lo_ev = C.COMBI_BOLD_MIN_EV if min_ev is None else min_ev
     real_odds = any(c.get("xodds") for c in pronos) or any(c.get("xodds") for c in picks)
     ok = lambda c, odd: (odd and (not prefix or c["market"].startswith(prefix)) and c.get("prob", 0) >= lo_p   # noqa: E731
-                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto")
+                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto") and lanes.usable(c)       # voie « ghost » / « off », ligue en fantôme, « fill » coupé
                          and (c.get("xodds") or not real_odds))
     mine = [c | {"odds": c.get("xodds") or c.get("min_odds")} for c in pronos if ok(c, c.get("xodds") or c.get("min_odds") or 0)]
     real = [c for c in picks if ok(c, c.get("xodds") or c.get("odds") or 0)]

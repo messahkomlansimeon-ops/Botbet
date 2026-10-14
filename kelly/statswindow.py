@@ -33,7 +33,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-from . import combos as CB, config as C, fair, fmt, money, quiet, store, telegram, xprice
+from . import combos as CB, config as C, fair, fmt, lanes, money, quiet, store, telegram, xprice
 from .sources import fmmatch, xbet
 
 # Marchés relus par la fenêtre : ceux de config.STATS_WINDOW_PREFIX (tirs, tirs cadrés, fautes, touches, hors-jeu) + les corners d'UNE équipe et les cartons jaunes (leurs
@@ -134,7 +134,7 @@ def select(pronos, now, doc, protected=frozenset()):
     proches du coup d'envoi d'abord (dernière chance avant que 1xBet ne ferme ces paris)."""
     by = {}
     for c in pronos:
-        if is_stat(c) and c.get("xgid") and c.get("key") not in protected and in_window(c, now) and not fresh(c, now):
+        if is_stat(c) and c.get("xgid") and c.get("key") not in protected and in_window(c, now) and not fresh(c, now) and lanes.priced(c):
             by.setdefault(c["id"], []).append(c)
     out = []
     for mid, cs in by.items():
