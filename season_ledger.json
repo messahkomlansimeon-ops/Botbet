@@ -231,5 +231,85 @@
    ],
    "decision": "aucune décision automatique ; le superviseur tranche SEASON_MODEL_WEIGHT et SEASON_PRIOR_K"
   }
- ]
+ ],
+ "v2": {
+  "prereg": {
+   "declared_by": "utilisateur (spécification du 14/10/2026 : a priori de marché et ajustement itératif pour la voie `saison`) ; précisée par l'assistant après l'avis du conseiller, AVANT tout code de modèle",
+   "declared_on": "2026-10-14",
+   "status": "PRÉ-DÉCLARATION v2, écrite AVANT le code de season.py (prior / fit) et AVANT toute lecture réelle. `prereg`, `prereg_sha` et `final` du rejeu v1 ne sont pas modifiés ; v2 a SA PROPRE lecture unique (v2.final) et SA PROPRE empreinte.",
+   "question": "un a priori d'équipe tiré des cotes de clôture (b), un ajustement itératif à l'adversaire (c), ou les deux (d), prédisent-ils mieux les cinq familles de stats que la voie `saison` actuelle (a) ?",
+   "supersedes_v1_no_aggregate": "le ledger v1 écrivait « aucun agrégat toutes familles ». Pour v2 UNIQUEMENT, un agrégat est défini ci-dessous : la somme par match des log-vraisemblances négatives des cinq familles est la log-vraisemblance conjointe sous indépendance des familles (même unité : nats par match), l'écart apparié de cette somme est donc valide.",
+   "data": {
+    "source": "identique à v1 : CSV football-data déjà en cache disque, aucune requête, divisions de v1 (E0,E1,E2,E3,SP1,SP2,I1,I2,D1,D2,F1,F2,N1,P1,B1,T1,SC0,G1), cache jamais écrit",
+    "window": "matchs datés AVANT 2025-07-01 SEULEMENT ; la fenêtre réservée de audit_reserve_ledger.json n'est PAS lue ; step1_ledger.json et audit_reserve_ledger.json ne sont pas modifiés",
+    "scored_from": "identique à v1 : un match est noté si les DEUX équipes ont déjà joué au moins 7 matchs de CETTE saison ; lots de 3 jours, tous les modèles réajustés sur les seuls matchs antérieurs au jour du lot",
+    "scored_set": "un match est noté si (a), (b), (c), (d) et strength_hl110 le prédisent TOUS ; les mêmes matchs pour tous les contrastes. Le rapport donne le nombre de matchs et dit si l'ensemble est identique à celui de v1 (ids_sha), sans que cela change quoi que ce soit",
+    "reuse_warning": "cette fenêtre de développement a déjà été lue une fois (v1, 25 comparaisons). v2 est une SECONDE lecture des mêmes matchs : les 18 comparaisons de décision de v2 s'ajoutent aux 25 de v1 (43 au total sur cette fenêtre) et les 24 contrastes de référence de v2 sont rapportés sans décision. Le seuil de 95 % n'est pas corrigé pour ces lectures multiples ; un résultat positif est donc une condition nécessaire d'adoption, pas une preuve, et sa confirmation est la mesure prospective de la voie (bilan `saison` : CLV par jambe)."
+   },
+   "models": {
+    "a": "season.fit actuel, k = 12 (moyennes brutes, a priori = moyenne de ligue de la stat et du côté)",
+    "b": "a priori de marché (option prior = 'market'), même formule que (a) pour le reste, k = 12",
+    "c": "ajustement itératif à l'adversaire (option fit = 'iterative'), a priori = moyenne de ligue (A0 = D0 = 1), k = 12",
+    "d": "(b) et (c) ensemble : ajustement itératif centré sur l'a priori de marché",
+    "strength_hl110": "référence, comme v1 : strength.build à demi-vie 110, ctx éteint, sans means.factor, sans calib, sans ancrage marché sur les stats"
+   },
+   "goals_unchanged": "les BUTS ne sont ni notés ni modifiés : dans les quatre configurations, la statistique `goals` est celle de (a) (moyenne de ligue en a priori, moyennes brutes), et la famille des buts reste figée par le ledger du gel. Une configuration adoptée change donc les moyennes des CINQ familles de stats seulement (corners, jaunes, tirs, tirs cadrés, fautes) ; h2h, totaux de buts et les deux marquent restent ceux de (a).",
+   "market_prior_b": {
+    "implied_goals": "strength.implied_goals(m) : (buts attendus domicile, extérieur) tirés des cotes de CLÔTURE du match (Pinnacle PSC*, sinon moyenne AvgC*, 1N2 + plus/moins 2,5 démarginés, solve_goals). Un match sans ce couple de cotes n'a pas d'attente implicite et ne compte pas dans l'a priori.",
+    "no_leak": "seuls les matchs de la saison datés STRICTEMENT avant le jour du lot entrent (le même filtre que season.fit). Les cotes du match prédit et des matchs postérieurs ne sont jamais lues.",
+    "relative_values": "pour une équipe t et un côté (domicile / extérieur) : marqués implicites moyens et encaissés implicites moyens sur les matchs de ce côté qui ont une attente implicite, divisés par la moyenne de ligue des attentes implicites de ce côté (domicile : buts implicites domicile ; extérieur : buts implicites extérieur), calculée sur les mêmes matchs. Rétrécissement vers 1 : rel = w x brut + (1 - w) x 1, w = n_marché / (n_marché + 6) (n_marché = nombre de matchs de ce côté avec attente implicite ; 0 -> rel = 1).",
+    "prior_per_stat": "pour une stat X (famille) : a priori d'attaque de t à domicile = moyenne de ligue de X « pour » à domicile x rel_marqués(t, dom.) ^ e_X ; défense à domicile = moyenne de ligue de X « contre » à domicile x rel_encaissés(t, dom.) ^ e_X ; idem à l'extérieur. Cet a priori remplace la moyenne de ligue dans _shrink (poids n / (n + k), k = 12).",
+    "elasticity_e": {
+     "corners": 0.5,
+     "yellow": 0.5,
+     "shots": 0.5,
+     "sot": 0.5,
+     "fouls": 0.5
+    },
+    "elasticity_note": "fixées ici, jamais réglées après coup. Le signe positif est une HYPOTHÈSE pour les jaunes et les fautes (une équipe qui domine marque plus : on suppose qu'elle a plus de tirs et de corners ; pour les cartons et les fautes l'effet est incertain). Si un résultat par famille est de mauvais signe, il est écrit « observé, non testé » et n'entraîne aucun réglage.",
+    "scope": "football-data seulement. Hors football-data, le prix 1xBet archivé n'est pas une cote de clôture, porte la marge, et le couple 1N2 + plus/moins 2,5 d'un MÊME match passé n'est pas stocké de façon systématique : ce chemin n'est ni construit ni mesuré, et toute ligue hors football-data garde (a)."
+   },
+   "iterative_fit_c": {
+    "rows": "une ligne par match de la saison avant le jour du lot : (équipe domicile, équipe extérieur, stat domicile, stat extérieur, poids 1), sans demi-vie, sans ancrage marché, sans promus ; l'adversaire est celui du CSV",
+    "algorithm": "strength._ipf (Maher / IPF, a priori Gamma) : première passe comme fit_stat (a priori faible 0,3 x mu), PUIS deuxième passe avec ka = kd = 12 x mu (mu = m x (1 + H) / 2 de la première passe) ; strength._eb_k n'est PAS utilisé (k = 12 en événements = 12 matchs d'une équipe moyenne, comme (a))",
+    "prior_center": "(c) : A0 = D0 = 1 pour toutes les équipes. (d) : A0(t) = moyenne arithmétique des deux valeurs d'a priori relatives de (b) de l'équipe (domicile et extérieur, chacune = rel ^ e_X), D0(t) idem pour les encaissés.",
+    "conversion": "vers le format de season.predict : lg_h = m x H, lg_a = m ; ah = lg_h x A, da = lg_h x D, aa = lg_a x A, dh = lg_a x D (attente domicile = lg_h x A_dom x D_ext, extérieur = lg_a x A_ext x D_dom, comme dans l'ajustement) ; n, nh, na repris de (a).",
+    "dispersion": "alpha et atot de (a) pour les QUATRE configurations (alpha de moments de la ligue-saison, repli identique à v1 : l'alpha du modèle strength_hl110 sous 30 matchs de ligue) ; seules les MOYENNES changent entre (a), (b), (c), (d)"
+   },
+   "metric": "log-vraisemblance binomiale négative HORS ÉCHANTILLON par équipe-côté, somme par match (celle de v1) ; écart apparié par match, moyenne et intervalle à 95 % (erreur-type par match, A.stats)",
+   "families": [
+    "corners",
+    "yellow",
+    "shots",
+    "sot",
+    "fouls"
+   ],
+   "aggregate": {
+    "definition": "somme, sur les cinq familles, de la log-vraisemblance négative du match, par modèle ; écart apparié de cette somme",
+    "scope": "seulement les matchs où les CINQ familles sont observées dans le CSV (HC/AC, HY/AY, HS/AS, HST/AST, HF/AF tous présents) et prédites par toutes les configurations ; les contrastes par famille, eux, utilisent tous les matchs où la famille est observée et prédite"
+   },
+   "decision_contrasts": [
+    "b - a",
+    "c - a",
+    "d - a"
+   ],
+   "decision_comparisons": "3 contrastes x (5 familles + 1 agrégat) = 18",
+   "reference_contrasts": [
+    "a - strength_hl110",
+    "b - strength_hl110",
+    "c - strength_hl110",
+    "d - strength_hl110"
+   ],
+   "reference_comparisons": "4 contrastes x (5 familles + 1 agrégat) = 24, RAPPORTÉS sans décision",
+   "total_comparisons": 42,
+   "rule": "une configuration X remplace (a) en production si : (1) l'agrégat de X - a a une borne haute d'intervalle à 95 % strictement négative (X meilleur), ET (2) aucune des cinq familles n'a pour X - a une borne basse d'intervalle à 95 % strictement positive (X pire). Moins de 30 matchs dans une famille : cette famille ne compte pas pour (2) mais est rapportée.",
+   "tie_break": "si plusieurs configurations passent, celle de plus petite moyenne d'agrégat (la plus négative) ; si deux ont la même, la plus simple (b, puis c, puis d). Aucun autre contraste (d - b, d - c) n'est lu.",
+   "single_reading": "UNE seule lecture (--final), son résultat est écrit dans v2.final ; v2.final refuse une seconde écriture. Un essai --smoke (une division, comptes seulement, jamais la table) est autorisé avant.",
+   "adoption": "rien ne change en production tant que v2.final n'est pas écrit. Si une configuration passe, elle devient le défaut de `saison` pour les ligues à source football-data dans un commit à part, avec SEASON_PRIOR (flat | market) et SEASON_FIT (moments | iterative) en config pour revenir en arrière ; la ligne `saison` de `status` dit la configuration active. Les buts et les ligues hors football-data restent à (a). Aucun passage = (a) reste, le résultat est rapporté tel quel.",
+   "leak_test": "test automatique à deux sens : (1) modifier les cotes de clôture du match prédit ET de tous les matchs postérieurs ne change AUCUN octet des prévisions de (b), (c), (d) ; (2) modifier les cotes d'un match antérieur de la saison CHANGE les prévisions de (b) et (d) (l'a priori est bien branché), pas celles de (a) ni de (c).",
+   "not_touched": "audit_reserve_ledger.json, step1_ledger.json et le rejeu v1 (prereg, prereg_sha, final) ne sont pas modifiés."
+  },
+  "prereg_sha": "b48bfaf5f4e86682f1f5038b9ad4fa7c281ce50b6a0ddbf6bd4c516890411985",
+  "written_at": "2026-10-14T21:55:44+00:00"
+ }
 }
