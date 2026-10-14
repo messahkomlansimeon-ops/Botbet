@@ -1,0 +1,52 @@
+{
+ "prereg": {
+  "declared_by": "utilisateur (spécification de la voie `saison`, 14/10/2026) ; rédigé par l'assistant, déplacé AVANT le code sur recommandation de l'avis du conseiller",
+  "declared_on": "2026-10-14",
+  "question": "la voie `saison` (kelly/season.py : matchs de la saison en cours seulement, rétrécissement vers la moyenne de la ligue, aucun ancrage marché) prédit-elle mieux les stats d'équipe que le modèle `strength` actuel (demi-vie 110) ou qu'une variante à demi-vie 45 ?",
+  "status": "PRÉ-DÉCLARATION, écrite AVANT toute exécution de season.py sur des CSV réels (A à C : jeux fictifs seulement)",
+  "data": {
+   "source": "CSV football-data déjà en cache disque (aucune requête), divisions à colonnes de stats (hors championnats « new » en année civile), liste exacte des divisions rapportée dans le résultat",
+   "window": "matchs datés AVANT 2025-07-01 SEULEMENT (fenêtre de développement). La fenêtre réservée de audit_reserve_ledger.json (2025-07-01 -> 2027-01-01) n'est PAS lue : elle est close (« tout nouveau besoin demande de nouvelles données »). Le réchauffement de `strength` (saisons précédentes) n'est jamais noté.",
+   "scored_from": "dans chaque division et saison, un match est noté si les DEUX équipes ont déjà joué au moins 7 matchs de CETTE saison (c'est leur 8e match ou plus tard) ; les matchs notés ne dépendent donc pas du modèle comparé",
+   "season_start": "1er juillet (strength.season_start) ; un match daté avant le début de la saison n'entre jamais dans le modèle `saison`"
+  },
+  "models": {
+   "saison_k3": "season.fit avec SEASON_PRIOR_K = 3",
+   "saison_k6": "season.fit avec SEASON_PRIOR_K = 6 (valeur de la spécification)",
+   "saison_k12": "season.fit avec SEASON_PRIOR_K = 12",
+   "strength_hl110": "strength.build à demi-vie 110 jours, ctx éteint, SANS means.factor, SANS calib, SANS ancrage marché sur les stats (l'ancrage ne touche que les buts)",
+   "strength_hl45": "idem à demi-vie 45 jours"
+  },
+  "dispersion": {
+   "rule": "chaque modèle utilise SA dispersion, sans élargissement alpha_eff de fair.py (rejeu : identique pour tous)",
+   "saison": "alpha de moments de la ligue-saison, calculé sur les matchs de la saison AVANT le match noté (hors échantillon), plancher 0 ; repli si moins de 30 matchs de ligue : l'alpha ajusté du modèle strength_hl110 à la même date pour la même stat (model['stats'][stat]['alpha'])",
+   "strength": "l'alpha ajusté par strength.fit_stat du modèle comparé"
+  },
+  "families": {
+   "corners": "HC / AC",
+   "yellow": "HY / AY (jaunes seuls)",
+   "shots": "HS / AS",
+   "sot": "HST / AST",
+   "fouls": "HF / AF",
+   "note": "`cards` (jaunes + rouges) n'est pas noté : 1xBet ne cote que les jaunes ; les buts ne sont pas notés (famille figée, voir ledger du gel)"
+  },
+  "metric": "log-vraisemblance binomiale négative HORS ÉCHANTILLON par équipe-côté (une observation par équipe et par match : domicile et extérieur), somme par match ; écart apparié par match entre deux modèles, moyenne et intervalle à 95 % (erreur standard par match) par famille",
+  "contrasts": [
+   "saison_k3 - strength_hl110",
+   "saison_k6 - strength_hl110",
+   "saison_k12 - strength_hl110",
+   "saison_k6 - strength_hl45",
+   "strength_hl45 - strength_hl110"
+  ],
+  "comparisons": 25,
+  "comparisons_note": "5 familles x 5 contrastes ; aucun agrégat toutes familles (unités différentes), aucun autre contraste lu",
+  "no_decision": "le résultat est RAPPORTÉ tel quel au superviseur, sans décision automatique ; il sert à régler SEASON_MODEL_WEIGHT et SEASON_PRIOR_K, et le superviseur tranche",
+  "other_reading": "aucune ; tout chiffre inattendu est noté « observé, non testé »",
+  "not_touched": "step1_ledger.json et audit_reserve_ledger.json ne sont pas modifiés ; l'Étape 1 reste verrouillée jusqu'aux trois jours de section G",
+  "ledger_moved": "la spécification plaçait ce fichier au commit D ; il est commité avant le code (règle : pré-déclaration avant toute lecture)"
+ },
+ "prereg_sha": "b7a3536c14832db538246215dcf99b20437012fb5240e11adac718c499c42c4b",
+ "written_at": "2026-10-14T11:07:25+00:00",
+ "final": null,
+ "extensions": []
+}
