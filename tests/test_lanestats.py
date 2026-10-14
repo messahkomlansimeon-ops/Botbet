@@ -257,7 +257,8 @@ def test_leg_clv():
     legs = [("a1", "sharpgap", 2.2, 2.0), ("a2", "sharpgap", 1.8, 2.0), ("b1", "stats", 2.1, 2.0), ("c1", "fill", 1.5, 1.4), ("c2", "fill", 1.3, 1.5), ("d1", "sharpgap", None, None)]
     store.save(ensemble.LOG_FILE, [row(k, st, odds=o, close=c, key=k, id=k) for k, st, o, c in legs if o])
     L._memo["key"] = None
-    mk = lambda k, st: {"key": k, "strategy": st, "id": k, "xodds": 2.0, "result": None, "min_odds": 1.5}        # noqa: E731
+    taken = {k: o for k, _, o, _ in legs}
+    mk = lambda k, st: {"key": k, "strategy": st, "id": k, "xodds": taken.get(k, 2.0), "result": None, "min_odds": 1.5}        # noqa: E731 - le prix de la jambe = celui du journal ici
     store.save("fair_combos.json", [
         {"date": TODAY, "tier": 5, "result": None, "legs": [mk("a1", "sharpgap"), mk("a2", "sharpgap"), mk("c1", "fill")]},
         {"date": TODAY, "tier": 8, "result": None, "legs": [mk("b1", "stats"), mk("c2", "fill"), mk("d1", "sharpgap"), mk("zz", None)]}])
@@ -274,6 +275,38 @@ def test_leg_clv():
     paliers = [x for x in out if x.startswith("palier")]
     assert len(paliers) == 2 and any("0 % des jambes à valeur à CLV négatif (0/1)" in x for x in paliers), paliers       # palier 8 : b1 positive ; c2 (fill) ne compte pas
     assert L.leg_clv_lines(days=1, today="2030-01-01") == []
+
+    # le prix de LA JAMBE, pas celui de la première lecture du journal : un combiné bâti plus tard a pris un autre prix
+    store.save(ensemble.LOG_FILE, [row("p1", "sharpgap", odds=2.2, close=2.0, key="p1", id="p1")])
+    L._memo["key"] = None
+    store.save("fair_combos.json", [{"date": TODAY, "tier": 5, "result": None, "legs": [{"key": "p1", "strategy": "sharpgap", "id": "p1", "xodds": 1.8}]}])
+    (_, _, v), = L.leg_clv_rows()
+    assert math.isclose(v, math.log(1.8 / 2.0)) and v < 0, v                      # prix de la jambe 1,80 contre dernier prix 2,00 (le journal disait 2,20 : +10 %)
+    store.save("fair_combos.json", [{"date": TODAY, "tier": 5, "result": None, "legs": [{"key": "p1", "strategy": "sharpgap", "id": "p1"}]}])
+    (_, _, v2), = L.leg_clv_rows()
+    assert v2 is None, "jambe sans prix pris : jamais mesurée avec le prix de la première lecture du journal"
+
+    # combinés RÉELS de bets.json : ils n'ont que `xlegs` {clé, prix, référence}, la voie vient du journal
+    store.save(ensemble.LOG_FILE, [row("r1", "sharpgap", odds=2.2, close=2.0, key="r1", id="r1"), row("r2", "stats", odds=2.0, close=2.0, key="r2", id="r2", xgone={"lead_min": 40}),
+                                   row("r3", "fill", odds=2.0, close=2.0, key="r3", id="r3", xclose={"odds": 2.0, "lead_min": 60, "susp": True}),
+                                   row("r4", "fill", odds=2.0, close=2.0, key="r4", id="r4", xclose={"odds": 2.0, "lead_min": -5, "susp": False})])
+    L._memo["key"] = None
+    store.save("fair_combos.json", [])
+    store.save("bets.json", {"picks": [], "combos": [{"date": TODAY, "tier": "🛡️ SÛR", "keys": ["r1", "r2", "r3", "r4", "gone"], "result": None,
+                                                       "xlegs": [{"key": "r1", "xodds": 1.9}, {"key": "r2", "xodds": 2.0}, {"key": "r3", "xodds": 2.0}, {"key": "r4", "xodds": 2.0},
+                                                                 {"key": "gone", "xodds": 2.0}, {"key": "r1b"}]}]})
+    got = {l["key"]: v for l, _, v in L.leg_clv_rows()}
+    assert math.isclose(got["r1"], math.log(1.9 / 2.0)), got                     # combiné réel mesuré : prix de la jambe (1,90), pas celui du journal (2,20)
+    assert got["r2"] is None and got["r3"] is None and got["r4"] is None, "pari retiré, prix suspendu, relevé après le coup d'envoi : pas de clôture"
+    assert got["gone"] is None and got["r1b"] is None, "clé sans ligne au journal, ou sans prix pris : jamais mesurée"
+    lines = L.leg_clv_lines()
+    assert lines[0].startswith("jambes mesurées : 1 / 6 "), lines[0]
+    assert any(x.startswith("palier ") and "SÛR" in x and "(1/1)" in x for x in lines), lines          # palier SÛR : 1 jambe à valeur mesurée (r1, 1,90 contre 2,00), à CLV négatif
+    store.save("bets.json", {"picks": [], "combos": []})
+    store.save("fair_combos.json", [{"date": TODAY, "tier": 5.0, "result": None, "legs": [{"key": "r1", "strategy": "sharpgap", "id": "r1", "xodds": 1.9}]}])
+    assert any(x.startswith("palier cote 5") for x in L.leg_clv_lines()), L.leg_clv_lines()
+    store.save("fair_combos.json", [{"date": TODAY, "tier": 5.0, "result": None, "legs": [{"key": "r1", "strategy": "sharpgap", "id": "r1"}]}])
+    assert L.leg_clv_rows()[0][2] is None, "une jambe sans prix pris n'est pas mesurée avec le prix du journal"
     store.save("fair_combos.json", [])
     print("ok  CLV par jambe : par voie, fill à part, part négative par palier, couverture dite")
 

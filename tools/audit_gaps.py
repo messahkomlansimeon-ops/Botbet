@@ -62,7 +62,7 @@ def _row(d, total=None):
 def section_distribution(doc):
     days = doc.get("days") or {}
     cells = [c for hours in days.values() for c in hours.values()]
-    out = ["1. DISTRIBUTION DES ÉCARTS (cote 1xBet x proba sharp - 1), sélections portant un avis sharp ; une lecture par sélection et par heure",
+    out = ["1. DISTRIBUTION DES ÉCARTS (cote 1xBet x proba sharp - 1), sélections portant un avis sharp ; la 1re lecture de chaque sélection par heure (les lignes « sharp frais » ont leur propre déduplication : le relevé frais du passage horaire n'est pas masqué par celui du matin)",
            f"   {len(days)} jour(s), {sum(c.get('n', 0) for c in cells)} lectures, {sum(c.get('weak', 0) for c in cells)} sélections à un seul book sharp sans Pinnacle (écartées)."]
     if not cells:
         return out + ["   Aucune donnée : le document n'existe pas encore (rien n'a été lu depuis l'installation)."]
@@ -81,15 +81,15 @@ def section_hours(doc):
     by = {}
     for hours in days.values():
         for h, c in hours.items():
-            a = by.setdefault(h, {"n": 0, "age": {}, "fresh": {}, "soon": {}})
+            a = by.setdefault(h, {"n": 0, "age": {}, "fresh": {}, "soon": {}, "xage": {}})
             a["n"] += c.get("n", 0)
-            for k in ("age", "fresh", "soon"):
+            for k in ("age", "fresh", "soon", "xage"):
                 for kk, v in (c.get(k) or {}).items():
                     a[k][kk] = a[k].get(kk, 0) + v
     out = ["2. FRAÎCHEUR DU PRIX SHARP PAR HEURE DE LECTURE (UTC = heure d'Abidjan) : la limite horaire"]
     if not by:
         return out + ["   Aucune donnée."]
-    out.append("   heure   lectures   sharp ≤30   31-90   91-240   >240   inconnu   frais(≤120)   frais ET match ≤90 min   écarts +3..+25 % (sharp frais / sharp frais ET ≤90 min)")
+    out.append("   heure   lectures   sharp ≤30   31-90   91-240   >240   inconnu   frais(≤120)   frais ET match ≤90 min   prix 1xBet ≤90 min (paris réels du passage horaire seulement)   écarts +3..+25 % (sharp frais / sharp frais ET ≤90 min)")
     for h in sorted(by):
         a = by[h]
         n = a["n"] or 1
@@ -97,8 +97,11 @@ def section_hours(doc):
         fresh = sum(a["fresh"].values())
         soon = sum(a["soon"].values())
         big = lambda d: sum(v for k, v in d.items() if k in ("3..5", "5..10", "10..25"))     # noqa: E731
+        xa = a["xage"]
+        xn = sum(xa.values())
+        xtxt = f"{round((xa.get('≤30', 0) + xa.get('31-90', 0)) * 100 / xn):>3}% de {xn}" if xn else "   n/a"
         out.append(f"   {h}h     {a['n']:>6}   " + "  ".join(f"{round(ages.get(k, 0) * 100 / n):>5}%" for k in ("≤30", "31-90", "91-240", ">240", "inconnu"))
-                   + f"   {round(fresh * 100 / n):>5}%   {round(soon * 100 / n):>5}%   {big(a['fresh'])} / {big(a['soon'])}")
+                   + f"   {round(fresh * 100 / n):>5}%   {round(soon * 100 / n):>5}%   {xtxt:>16}   {big(a['fresh'])} / {big(a['soon'])}")
     out.append(f"   Lecture : « sharp frais » = prix sharp relevé il y a au plus {FRESH_MIN} min (la règle de sharpgap pour annoncer un écart) ; « ≤90 min » = le match commence dans moins de 90 min.")
     out.append("   Les colonnes d'âge disent, heure par heure, quelle part des lectures dispose d'un prix sharp frais : c'est la LIMITE HORAIRE mesurée. Un relevé sharp du petit matin (04:00) passe")
     out.append(f"   au-delà de {FRESH_MIN} min en fin de matinée : s'il n'y a pas de relevé sharp plus tard, les écarts des heures suivantes ne sont pas annonçables. La dernière colonne dit combien de")
@@ -156,7 +159,7 @@ def section_ghost(doc):
 
 def section_limits():
     return ["4. CE QUE CE RAPPORT PEUT ET NE PEUT PAS CONCLURE",
-            "   - La distribution compte des LECTURES (une par sélection et par heure), pas des paris ; plusieurs lectures d'un même pari à des heures différentes sont normales.",
+            "   - La distribution compte des LECTURES (la 1re par sélection et par heure ; les colonnes « sharp frais » sont dédoublonnées à part), pas des paris ; plusieurs lectures d'un même pari à des heures différentes sont normales.",
             "   - 'Dernière lecture' d'un fantôme = le dernier passage de Kelly avant le match, pas la clôture réelle des books : la clôture sharp est approchée, la marge est large.",
             "   - Seules les sélections que Kelly relit sont vues (celles qui ont un prix 1xBet et un avis sharp) : ce n'est pas l'ensemble du marché. Les fantômes sont pris dans l'ordre d'arrivée",
             "     jusqu'à un plafond de 300 par jour : un jour très chargé en écarte la fin.",

@@ -55,14 +55,16 @@ def settled(r):
     return r.get("result") in ("win", "loss")
 
 
-def x_clv(r):
-    """log(cote prise / dernier prix 1xBet connu) d'une ligne réglée, ou None (pas de prix pris, pas de relevé assez proche, pari retiré par 1xBet)."""
+def x_clv(r, taken=None):
+    """log(cote prise / dernier prix 1xBet connu) d'une ligne réglée, ou None (pas de prix pris, pas de relevé assez proche, pari retiré par 1xBet). `taken` : le prix PRIS par
+    l'appelant (la jambe d'un combiné bâti plus tard n'a pas le prix de la première lecture du journal) ; à défaut, le prix de la ligne."""
     xc = r.get("xclose")
-    if (r.get("xgone") or not r.get("xodds") or not isinstance(xc, dict) or not xc.get("odds") or xc.get("lead_min") is None
+    price = taken if taken else r.get("xodds")
+    if (r.get("xgone") or not price or not isinstance(xc, dict) or not xc.get("odds") or xc.get("lead_min") is None
             or not 0 <= xc["lead_min"] <= LEAD_OK_MIN or xc.get("susp")):
         return None                                 # relevé avant le match seulement (pas en jeu), prix jouable (pas suspendu), pari non retiré
     try:
-        return math.log(float(r["xodds"]) / float(xc["odds"]))
+        return math.log(float(price) / float(xc["odds"]))
     except (TypeError, ValueError, ZeroDivisionError):
         return None
 
@@ -357,30 +359,40 @@ def unlabeled_line(today=None):
 # ---------- CLV par jambe des combinés ----------
 
 def leg_clv_rows(days=None, today=None):
-    """[(jambe, combiné, CLV 1xBet ou None)] des jambes des combinés (à vérifier + notés) de la période : CLV = log(prix 1xBet pris / dernier prix 1xBet connu) de la ligne du journal
-    d'ensemble ayant la même clé (relevé ≤ 90 min avant le match, voir x_clv) ; None si la jambe n'a pas de ligne au journal ou pas de relevé assez proche. Une jambe présente dans
-    plusieurs combinés du jour compte une fois par combiné (c'est le combiné qui la porte)."""
+    """[(jambe, combiné, CLV 1xBet ou None)] des jambes des combinés (à vérifier, sur mesure, ET réels de bets.json) de la période : CLV = log(prix 1xBet de la jambe / dernier prix
+    1xBet connu de sa ligne). Le dernier prix vient de la ligne du journal d'ensemble de même clé ; le prix de la jambe est celui du COMBINÉ (leg["xodds"], ou x["xodds"] de
+    `xlegs` pour un combiné de bets.json) : une jambe sans prix pris n'est PAS mesurée (jamais le prix de la première lecture du journal, que personne n'a pris). None aussi sans
+    ligne au journal (clé changée) ou sans relevé assez proche. Une jambe présente dans plusieurs combinés compte une fois par combiné."""
     from . import fair
     cut = _since(days, today)
     by_key = {r.get("key"): r for r in journal_rows() if r.get("key")}
     out = []
-    for combos in (fair.load_combos(), (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])):
+    bets = (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])
+    for combos in (fair.load_combos(), bets):
         for c in combos if isinstance(combos, list) else []:
             if not isinstance(c, dict) or (c.get("date") or "") < cut:
                 continue
-            for leg in c.get("legs") or []:
-                if isinstance(leg, dict) and leg.get("key"):
+            legs = [l for l in c.get("legs") or [] if isinstance(l, dict)]
+            if not legs:                                        # combiné réel de bets.json : ses jambes n'ont que {clé, prix, référence} (xlegs) ; la voie vient du journal
+                legs = [{"key": x.get("key"), "xodds": x.get("xodds"), "id": str(x.get("key") or "").split("|")[0],
+                         "strategy": (by_key.get(x.get("key")) or {}).get("strategy")} for x in c.get("xlegs") or [] if isinstance(x, dict)]
+            for leg in legs:
+                if leg.get("key"):
                     row = by_key.get(leg["key"])
-                    out.append((leg, c, x_clv(row) if row else None))
+                    out.append((leg, c, x_clv(row, leg.get("xodds")) if row and leg.get("xodds") else None))
     return out
 
 
 def _tier_name(c):
+    """Palier lisible : titre d'un combiné de bets.json (« 🛡️ SÛR »), « cote N » pour un combiné à cote juste (palier numérique)."""
     from . import fmt
+    t = c.get("tier")
+    if isinstance(t, (int, float)) and not isinstance(t, bool):
+        return f"cote {fmt.trim(t, 1)}"
     try:
-        return fmt.tier_name(c.get("tier"))
+        return fmt.tier_name(t)
     except Exception:                           # noqa: BLE001
-        return str(c.get("tier"))
+        return str(t)
 
 
 def leg_clv_lines(days=None, today=None):
@@ -389,7 +401,8 @@ def leg_clv_lines(days=None, today=None):
     rows = leg_clv_rows(days, today)
     if not rows:
         return []
-    out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match)"]
+    out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match ; "
+           "une jambe sans prix pris, sans ligne au journal ou sans relevé proche n'est pas mesurée : seules les lignes restées les mêmes sont vues)"]
     for lane in ("sharpgap", "stats", "fill", None):
         mine = [(l, c, v) for l, c, v in rows if (l.get("strategy") or None) == lane and v is not None]
         if not mine:

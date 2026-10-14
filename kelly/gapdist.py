@@ -68,7 +68,7 @@ def _bump(d, k, n=1):
     d[k] = d.get(k, 0) + n
 
 
-def _one(c, now, cell, seen, ghost, day, hour, new_today):
+def _one(c, now, cell, seen, ghost, day, hour, new_today, today=None):
     """Une sélection -> 1 si comptée dans la distribution, 0 sinon (`cell`, `seen` et `ghost` sont modifiés en place). Le suivi du fantôme (dernière lecture) se fait à CHAQUE
     lecture, même quand la distribution a déjà compté la sélection dans l'heure."""
     line = sharp_line(c, now)
@@ -79,14 +79,14 @@ def _one(c, now, cell, seen, ghost, day, hour, new_today):
     if lead is None or lead < 0:
         return 0
     p, src, nb, age = line
+    fresh = age is not None and age <= C.SHARPGAP_MAX_AGE_MIN
+    kid, kfresh = f"{zlib.crc32(c['key'].encode()):08x}", f"{zlib.crc32((c['key'] + '|F').encode()):08x}"       # une lecture par sélection et par heure (la 1re) ; les colonnes « sharp frais » ont leur propre déduplication
     if not (src == "pinnacle" or (nb or 0) >= C.SHARPGAP_MIN_SHARP):
-        kid = f"{zlib.crc32(c['key'].encode()):08x}"
         if kid not in seen:
             seen.add(kid)
             cell["weak"] += 1                           # un seul book sharp sans Pinnacle : pas un avis (comme sharpgap), compté à part
         return 0
     edge = price * p - 1
-    fresh = age is not None and age <= C.SHARPGAP_MAX_AGE_MIN
     reading = {"at": now.isoformat(timespec="minutes"), "p": round(p, 4), "x": price, "age": None if age is None else round(age), "lead": round(lead)}
     g = ghost.get(c["key"])
     if g is not None:                                   # dernière lecture avant le match (tout prix 1xBet) ; dernière lecture à sharp FRAIS à part (la clôture sharp mesurable)
@@ -97,23 +97,27 @@ def _one(c, now, cell, seen, ghost, day, hour, new_today):
         ghost[c["key"]] = {"day": day, "at": reading["at"], "hour": hour, "id": c.get("id"), "sport_key": c.get("sport_key"), "market": c["market"],
                            "name": c.get("name"), "point": c.get("point"), "commence": c.get("commence"), "xodds": price, "p": round(p, 4), "edge": round(edge, 4),
                            "age": reading["age"], "lead": reading["lead"], "xref": c.get("xref")}
-    kid = f"{zlib.crc32(c['key'].encode()):08x}"
-    if kid in seen:
-        return 0
-    seen.add(kid)
-    cell["keys"].append(kid)
-    b, a = bin_of(edge), age_bin(age)
-    cell["n"] += 1
-    _bump(cell["bins"], b)
-    _bump(cell["age"], a)
-    if fresh:
-        _bump(cell["fresh"], b)
+    counted = 0
+    if kid not in seen:                                 # distribution de TOUTES les lectures : la 1re de l'heure
+        seen.add(kid)
+        cell["keys"].append(kid)
+        cell["n"] += 1
+        counted = 1
+        _bump(cell["bins"], bin_of(edge))
+        _bump(cell["age"], age_bin(age))
+        if today is not None:                           # âge du prix 1xBet utilisé, pour les lectures qui portent `today` (paris réels du passage horaire seulement)
+            from . import sharpgap
+            _bump(cell.setdefault("xage", {}), age_bin(sharpgap.x_age(today, c, now)))
+    if fresh and kfresh not in seen:                    # sharp frais : la lecture du passage horaire n'est pas masquée par celle du matin
+        seen.add(kfresh)
+        cell["keys"].append(kfresh)
+        _bump(cell["fresh"], bin_of(edge))
         if lead <= 90:
-            _bump(cell["soon"], b)                      # sharp frais ET match dans moins de 90 min : la seule situation où l'écart est jouable avec un prix sharp utile
-    return 1
+            _bump(cell["soon"], bin_of(edge))           # sharp frais ET match dans moins de 90 min : la seule situation où l'écart est jouable avec un prix sharp utile
+    return counted
 
 
-def _apply(doc, rows, now):
+def _apply(doc, rows, now, today=None):
     """Range `rows` dans le document `doc` (modifié en place) -> (doc, nombre de sélections comptées)."""
     doc = doc if isinstance(doc, dict) else {}
     days = doc.setdefault("days", {})
@@ -130,7 +134,7 @@ def _apply(doc, rows, now):
     for c in rows:
         try:
             before = len(ghost)
-            n += _one(c, now, cell, seen, ghost, day, hour, new_today)
+            n += _one(c, now, cell, seen, ghost, day, hour, new_today, today)
             new_today += len(ghost) - before
         except Exception as e:                          # noqa: BLE001 - une sélection illisible ne fait pas perdre les autres
             print(f"[gapdist] sélection ignorée : {type(e).__name__}: {e}", file=sys.stderr)
@@ -144,12 +148,12 @@ def _apply(doc, rows, now):
     return doc, n
 
 
-def observe(rows, now=None):
+def observe(rows, now=None, today=None):
     """Range les sélections de `rows` (pronostics et paris réels déjà remis au prix 1xBet) dans la distribution du jour et suit les fantômes +1,5..+3 %. Lecture-modification-écriture
     ATOMIQUE (store.update : deux processus ne s'écrasent pas). -> nombre de sélections comptées ; ne lève jamais."""
     try:
         now = now or datetime.now(timezone.utc)
-        return store.update(DOC, lambda doc: _apply(doc, list(rows), now), {})
+        return store.update(DOC, lambda doc: _apply(doc, list(rows), now, today), {})
     except Exception as e:                              # noqa: BLE001 - une mesure ne bloque jamais le passage
         print(f"[gapdist] distribution ignorée : {type(e).__name__}: {e}", file=sys.stderr)
         return 0

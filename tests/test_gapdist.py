@@ -53,7 +53,7 @@ def test_observe():
     assert g["xodds"] == 2.04 and g["p"] == 0.5 and g["edge"] == 0.02, "la première lecture ne change jamais"
     assert g["last"]["x"] == 2.0 and g["last"]["p"] == 0.505 and g["last"]["lead"] == 50, g["last"]
     assert g["last_fresh"] == g["last"], "sharp frais (10 min) : c'est aussi la dernière lecture à sharp frais"
-    assert len(doc["days"]["2026-10-14"]["04"]["keys"]) == 7 and "keys" in doc["days"]["2026-10-14"]["11"]
+    assert len(doc["days"]["2026-10-14"]["04"]["keys"]) >= 7 and "keys" in doc["days"]["2026-10-14"]["11"]
     assert store.load("tracked.json", []) == before, "aucune ligne fantôme dans tracked.json"
     print("ok  distribution : tranches, âge du sharp, avance sur le match, un seul book sharp écarté, fantômes +1,5..+3 % (sharp frais, match pas imminent), dernière lecture, rien dans tracked.json")
 
@@ -115,10 +115,57 @@ def test_ghost_closing_rules():
     print("ok  fantômes : pas de clôture sans relecture, âge inconnu ou vieux écarté, clôture sharp = dernière lecture fraîche, biais de survie dit")
 
 
+def test_hourly_fresh_sharp_reaches_the_distribution():
+    """Le passage horaire rafraîchit le sharp des paris réels (xalerts._fresh_sharp) : cette lecture à sharp FRAIS entre dans les colonnes « frais » même si la lecture du matin (sharp
+    vieux) du même pari a déjà été comptée dans l'heure ; la mesure se fait AVANT les gardes (voie sharpgap coupée ou SHARPGAP_ENABLED éteint : elle continue) et ne change ni `picks` ni les annonces."""
+    import copy
+    from kelly import config as C, xalerts
+    store.save(G.DOC, {})
+    t = datetime(2026, 10, 14, 13, 5, tzinfo=timezone.utc)
+    old = sel("h1", 2.06, 0.5, now=t, age_min=540, start_in_min=70)                  # lu à 04:00 : sharp de 9 h
+    fresh = dict(old, prob_book=0.51, sharp_at=(t - timedelta(minutes=5)).isoformat())      # relevé de clôture de 13:05
+    today = {"day": "2026-10-14", "picks": [old], "picks_at": "04:30"}
+    G.observe([old], t, today)
+    snapshot = copy.deepcopy(today)
+
+    class Reader:                                                                  # relecture 1xBet en direct : 1,70 = l'écart a disparu au prix réel
+        calls = 0
+
+        def get(self, x):
+            Reader.calls += 1
+            return None
+    out = xalerts.gap_items(today, t, Reader(), closing=[fresh])
+    assert out == [] and today == snapshot, "aucune annonce, picks et today intacts"
+    cell = store.load(G.DOC, {})["days"]["2026-10-14"]["13"]
+    assert cell["n"] == 1 and cell["bins"] == {"3..5": 1} and cell["age"] == {">240": 1}, cell          # la lecture du matin, comptée une fois
+    assert cell["fresh"] == {"5..10": 1} and cell["soon"] == {"5..10": 1}, cell                          # la lecture à sharp frais (2,06 x 0,51 - 1 = +5,1 %) est comptée à part
+    assert cell["xage"] == {">240": 1}, cell["xage"]
+    # même mesure quand la voie sharpgap est coupée ou l'option éteinte : l'annonce s'arrête, pas la mesure
+    for kw in ({"SHARPGAP_ENABLED": False}, {"STRATEGY_SHARPGAP": "ghost"}):
+        old_vals = {k: getattr(C, k) for k in kw}
+        for k, v in kw.items():
+            setattr(C, k, v)
+        try:
+            from kelly import lanes
+            lanes.reset()
+            store.save(G.DOC, {})
+            assert xalerts.gap_items(today, t + timedelta(minutes=1), Reader(), closing=[fresh]) == []
+            c2 = store.load(G.DOC, {})["days"]["2026-10-14"]["13"]
+            assert c2["fresh"] == {"5..10": 1}, (kw, c2)
+        finally:
+            for k, v in old_vals.items():
+                setattr(C, k, v)
+            lanes.reset()
+    # un 2e passage dans la même heure ne recompte rien
+    assert G.observe([fresh], t + timedelta(minutes=30), today) == 0
+    print("ok  passage horaire : la lecture à sharp frais est comptée à côté de celle du matin, avant les gardes, sans toucher picks ni annonces")
+
+
 def main():
     test_observe()
     test_prune_and_robust()
     test_ghost_closing_rules()
+    test_hourly_fresh_sharp_reaches_the_distribution()
     test_report()
     print("tests gapdist : OK")
 
