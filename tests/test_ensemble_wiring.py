@@ -130,7 +130,7 @@ def refs_of(px, gid=900):
     return {k: [gid, 1 + i, 0] for i, k in enumerate(px)}
 
 
-SHADOW = {"p_model", "p_x", "p_sharp", "p_ens", "ew", "esrc"}
+SHADOW = {"p_model", "p_x", "p_sharp", "p_ens", "ew", "esrc", "strategy"}      # champs d information posés sans changer la décision (la voie, strategy, en fait partie)
 
 
 # ---------- 1. réglages ----------

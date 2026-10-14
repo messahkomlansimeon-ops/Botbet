@@ -107,6 +107,49 @@ def frozen(fam):
     return bool(C.ENSEMBLE_ENABLED) and fam in C.ENSEMBLE_FROZEN_MODEL
 
 
+SHARPGAP_FAMILIES = frozenset(("goals", "btts", "dc", "h2h", "team_goals"))      # voie « sharpgap » : les cinq familles dont le poids du modèle est figé à 0
+STATS_LANE = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))     # voie « stats » : le modèle binomial négatif mélangé au marché
+STRATEGIES = ("sharpgap", "stats", "fill")
+
+
+def strategy_of(c):
+    """Voie d'un pronostic ou d'un pari réel PRIX 1xBet posé (c["xodds"]), à poser UNE fois quand il est construit (xprice.price / _pick_price) :
+    « sharpgap » = une des cinq familles figées avec de la valeur (cote 1xBet x proba sharp - 1 >= +3 %, ensemble.value kind « value »),
+    « stats » = corners, cartons, jaunes, tirs, tirs cadrés, fautes avec de la valeur (le modèle mélangé au marché), « fill » = tout le reste, c'est-à-dire
+    une ligne qui ne peut servir que SANS valeur (favori « probable » 🎯, stat sous le seuil, touches, hors-jeu, joueurs...). None sans cote 1xBet (rien à jouer).
+    L'essai des tirs n'est pas une voie : c'est « stats » avec la famille shots / sot et le drapeau d'essai de calib."""
+    if not c.get("xodds"):
+        return None
+    fam = family(c["market"])
+    if fam not in SHARPGAP_FAMILIES and fam not in STATS_LANE:
+        return "fill"
+    kind = c.get("xkind")
+    if kind is None and is_active(c["market"]):
+        try:
+            kind = value(c).get("kind")             # pari réel (The Odds API) : pas d'xkind posé par xprice, on le rejoue avec ses avis
+        except Exception:                           # noqa: BLE001 - avis incomplets : pas de valeur
+            kind = None
+    if kind != "value":
+        return "fill"
+    return "sharpgap" if fam in SHARPGAP_FAMILIES else "stats"
+
+
+def strategy_label(row):
+    """Voie lue d'une ligne ou d'une jambe : son étiquette, ou « legacy » pour une ligne d'avant les étiquettes (jamais ré-étiquetée après coup)."""
+    return (row or {}).get("strategy") or "legacy"
+
+
+def has_value(legs):
+    """Un combiné n'a pas de voie propre : il porte celles de ses jambes. True = au moins une jambe à valeur (sharpgap / stats), False = toutes les jambes sont
+    « fill » (combiné SANS valeur), None = voies inconnues (jambes d'avant les étiquettes)."""
+    labels = [(l or {}).get("strategy") for l in legs or []]
+    if any(x in ("sharpgap", "stats") for x in labels):
+        return True
+    if labels and all(x == "fill" for x in labels):
+        return False
+    return None
+
+
 def model_silent(market):
     """Le modèle n'a-t-il AUCUNE voix sur ce marché (famille figée) : ni poids, ni veto, ni filtre « ligne plus faible qu'un match moyen » (xprice, combos.viable) ?"""
     return frozen(family(market))
@@ -687,6 +730,8 @@ def record(rows, day, now=None, name=LOG_FILE):
                                             "date": str(day), "at": now.isoformat(timespec="minutes"), "result": None}
         if c.get("xref"):
             row["xref"] = c["xref"]                        # audit : [GameId, Type, Param] 1xBet de la prise (hors ROW)
+        if c.get("strategy"):
+            row["strategy"] = c["strategy"]                # voie posée à la construction du pronostic (jamais recalculée ici)
         if frozen(family(c["market"])):
             row["shadow"] = shadow_of(c, pm, px, ps)       # le modèle, en fantôme : ce qu'il aurait décidé (jamais joué, jamais appris)
         log.append(row)

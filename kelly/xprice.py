@@ -132,6 +132,18 @@ def _weak(c):
 
 
 def price(c, px, refs=None):
+    """Met le pronostic `c` à la cote 1xBet (voir _price) puis lui pose sa voie (c["strategy"] : sharpgap / stats / fill, ensemble.strategy_of) s'il est jouable
+    ("value") ; un pronostic écarté, trop mal payé ou absent n'a pas de voie."""
+    r = _price(c, px, refs)
+    c.pop("strategy", None)
+    if r == "value" and C.ENSEMBLE_ENABLED:             # ensemble éteint : le comportement d'avant, strictement (aucune étiquette)
+        s = ensemble.strategy_of(c)
+        if s:
+            c["strategy"] = s
+    return r
+
+
+def _price(c, px, refs=None):
     """Met le pronostic `c` à la cote 1xBet (en place). -> "value" (ligne jouable chez 1xBet), "low" (1xBet paie trop peu), "weak" (ligne trop faible) ou None.
     `refs` (si fourni) : {(marché, côté, ligne): [GameId, Type, Param]} (xbet.prices) -> c["xref"], la référence du pari chez
     1xBet, pour enregistrer un ticket (un code coupon) au moment du message. "weak" : la ligne du pronostic est proposée mais elle
@@ -296,7 +308,7 @@ def apply(pronos, fetch=None, picks=None):
     for c in pronos:
         m = found.get(c["id"])
         if m:                                       # match relu chez 1xBet : les cotes d'un relevé précédent sont remplacées
-            for k in ("xodds", "xev", "xp", "xnone", "xref") + (("p_x", "p_sharp", "p_ens", "ew", "esrc", "xveto", "xwhy", "xkind", "xev_x") if C.ENSEMBLE_ENABLED else ()):
+            for k in ("xodds", "xev", "xp", "xnone", "xref", "strategy") + (("p_x", "p_sharp", "p_ens", "ew", "esrc", "xveto", "xwhy", "xkind", "xev_x") if C.ENSEMBLE_ENABLED else ()):
                 c.pop(k, None)
             c["xgid"] = m["gid"]                    # id 1xBet : le relevé de l'après-midi le relit sans menu ni liste (données)
             if m.get("cid"):
@@ -350,6 +362,10 @@ def _pick_price(c, px, refs, model=None):
                 c.pop(k, None)
             else:
                 c[k] = round(val, 4)
+        c.pop("strategy", None)
+        s = ensemble.strategy_of(c)                  # voie du pari réel remis au prix 1xBet (avec ses avis p_x / p_sharp posés ci-dessus)
+        if s:
+            c["strategy"] = s
     return True
 
 

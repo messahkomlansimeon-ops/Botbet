@@ -512,12 +512,15 @@ def record(pronos, day, shown=None):
             old = slot.get((str(day), c["id"], c["market"]))
             if old is not None and old.get("result") is None:      # la ligne a changé (relevé 1xBet) : même suivi, mis à jour
                 old.update({k: c.get(k) for k in ("key", "name", "point", "prob", "p0", "xodds")} | _rule(c))
+                old.pop("strategy", None)                           # la ligne a changé de pari : c'est un AUTRE pari, il prend la voie de sa nouvelle ligne (pas un ré-étiquetage)
+                if c.get("strategy"):
+                    old["strategy"] = c["strategy"]
                 if not _rule(c):                                    # la nouvelle ligne n'a pas été choisie par l'ensemble : plus comptée « depuis la correction »
                     old.pop("rule", None)
                 by_key[c["key"]] = old
             elif old is None:
                 by_key[c["key"]] = row = ({k: c.get(k) for k in ROW} | {"date": str(day), "result": None} | ({"x": 1} if c in extra else {})
-                                          | ({"free": 1} if c["key"] in free else {}) | _rule(c))
+                                          | ({"free": 1} if c["key"] in free else {}) | _rule(c) | ({"strategy": c["strategy"]} if c.get("strategy") else {}))
                 rows.append(row)
                 n += 1
                 continue
@@ -585,7 +588,7 @@ def summary(rows, days=None, today=None):
 
 COMBOS_FILE = "fair_combos.json"
 LEG_FIELDS = ROW + ("pick", "min_odds", "start", "league")        # une jambe de combiné garde de quoi être réglée seule
-SENT_FIELDS = LEG_FIELDS + ("odds", "xref", "xgid", "p_x")  # + de quoi refaire le combiné, son code coupon et relire le match chez 1xBet ; chance selon 1xBet
+SENT_FIELDS = LEG_FIELDS + ("odds", "xref", "xgid", "p_x", "strategy")  # + de quoi refaire le combiné, son code coupon et relire le match chez 1xBet ; chance selon 1xBet
 
 
 def load_combos():
@@ -598,6 +601,13 @@ def combo_leg(c):
     return {k: c.get(k) for k in SENT_FIELDS if c.get(k) is not None or k in LEG_FIELDS}
 
 
+def _has_value(legs):
+    """{"has_value": True | False} d'après les voies des jambes (ensemble.has_value) ; {} quand elles sont inconnues (jambes d'avant les étiquettes)."""
+    from . import ensemble
+    hv = ensemble.has_value(legs)
+    return {} if hv is None else {"has_value": hv}
+
+
 def combo_row(target, combo, day, stake=None, cur=None, coupon=None, at=None):
     """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba ; mise sur le budget du jour et devise si elle existe ; code
     coupon 1xBet de la version envoyée, `coupon`, et heure « HH:MM » de ses cotes, `at`) ; le résultat vient plus tard (settle_fair_combos)."""
@@ -605,7 +615,7 @@ def combo_row(target, combo, day, stake=None, cur=None, coupon=None, at=None):
     return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
             "keys": [c["key"] for c in legs], "legs": [combo_leg(c) | {"result": None} for c in legs],
             "result": None} | ({} if stake is None else {"stake": stake} | ({"cur": cur} if stake else {})) \
-        | ({"coupon": coupon} if coupon else {}) | ({"at": at} if at else {})                 # mise 0 : pari sans mise
+        | ({"coupon": coupon} if coupon else {}) | ({"at": at} if at else {}) | _has_value(legs)                 # mise 0 : pari sans mise
 
 
 ODDS_TOLERANCE = 0.011        # écart de cote totale toléré avant de parler d'une autre version : la cote est arrondie à 3 puis 2 décimales (custom.remember, combo_row)
@@ -639,6 +649,8 @@ def update_combo(row, combo, hhmm, coupon=None):
     row.setdefault("orig_keys", list(row.get("keys") or []))
     row.update(min_odds=round(min_total, 2), prob=round(prob, 5), keys=[c["key"] for c in legs], updated=hhmm,
                legs=[combo_leg(c) | {"result": None} for c in legs], at=hhmm)
+    row.pop("has_value", None)
+    row.update(_has_value(legs))
     if coupon:
         row["coupon"] = coupon
     else:
@@ -663,7 +675,7 @@ def kill_combo(row):
     return row
 
 
-SLIM_LEG = ("key", "result", "xodds", "odds", "min_odds")        # ce que l'argent relit d'une jambe (bankroll.won_odds, real_legs)
+SLIM_LEG = ("key", "result", "xodds", "odds", "min_odds", "strategy")        # ce que l'argent relit d'une jambe (bankroll.won_odds, real_legs)
 
 
 def _keep(rows, cut):

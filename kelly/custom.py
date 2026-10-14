@@ -48,7 +48,7 @@ def remember(day, target, lo, hi, combo, stake=None, cur=None, coupon=None, at=N
     cid = f"m{doc['n']}"
     doc["items"][cid] = {"legs": [fair.combo_leg(c) | ({k: c[k] for k in LIVE_LEG if c.get(k) is not None} if c.get("live") else {}) for c in legs], "total": round(total, 3), "prob": round(prob, 5), "target": target,
                          "lo": round(lo, 3), "hi": round(hi, 3), "stake": stake, "cur": cur, "coupon": coupon, "at": at, "src": src} \
-        | ({"kinds": list(kinds)} if kinds else {}) | ({"nmax": nlegs[0], "exact": nlegs[1] if nlegs[1] == "min" else bool(nlegs[1])} if nlegs and nlegs[0] else {})
+        | ({"kinds": list(kinds)} if kinds else {}) | fair._has_value(legs) | ({"nmax": nlegs[0], "exact": nlegs[1] if nlegs[1] == "min" else bool(nlegs[1])} if nlegs and nlegs[0] else {})
     while len(doc["items"]) > KEEP:
         doc["items"].pop(next(iter(doc["items"])))
     store.save(FILE, doc)

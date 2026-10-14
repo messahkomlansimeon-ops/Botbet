@@ -14,7 +14,7 @@ from . import combos as CB, config as C, ensemble, learn, money, sharpgap, store
 
 FIELDS = ("key", "id", "sport_key", "group", "event", "home", "away", "league", "commence", "market",
           "who", "point", "name", "pick", "odds", "best_odds", "prob", "prob_book", "prob_src", "book", "edge", "spread", "steam", "weight",
-          "score", "why", "n_books", "stake", "cur", "xodds", "xref", "coupon", "xat")
+          "score", "why", "n_books", "stake", "cur", "xodds", "xref", "coupon", "xat", "strategy")
 
 
 def load():
@@ -131,6 +131,8 @@ def record_gap(entries, day, now=None, read_at=None):
         if not cand.get("n"):                                # écart qui est AUSSI le pari du jour : seulement marqué (mesure contre Pinnacle), pas de numéro « g<n> »
             if r is not None:
                 r.update(mark)
+                if not r.get("strategy"):
+                    r["strategy"] = "sharpgap"
                 n += 1
             continue
         mark |= {"gap_n": cand["n"], "sent": True}
@@ -142,6 +144,8 @@ def record_gap(entries, day, now=None, read_at=None):
             by_key[r["key"]] = r
         r.setdefault("single", False)
         r.update(mark)
+        if not r.get("strategy"):
+            r["strategy"] = "sharpgap"                       # une ligne déjà étiquetée (construite avant l'écart) garde SA voie : jamais ré-étiquetée
         if r.get("single") is not True:                      # le pari du jour garde SON prix et SA mise
             r.update(xodds=cand["xodds"], xref=cand.get("xref"), xat=read_at or now.strftime("%H:%M"), stake=stake, cur=(money.cur() if stake else None))
             if code:

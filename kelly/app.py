@@ -240,7 +240,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                                                 played.norm(fmt.tier_word(title)), day, stake=st, xrefresh=xcombo, code=coupon))
         sent_picks += picks_
         sent_combos.append({"tier": title, "keys": [c["key"] for c in picks_], "odds": round(odds_, 2), "prob": round(prob, 5),
-                            "stake": st} | ({"cur": cur} if money.active() and st else {})
+                            "stake": st} | ({"cur": cur} if money.active() and st else {}) | fair._has_value(picks_)
                            | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
                                "coupon": coupon, "at": when} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
     for target, (legs, min_total, prob) in built_fair:
