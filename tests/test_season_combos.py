@@ -67,18 +67,18 @@ def test_usage_rules():
     legs = setup()
     u = CB.Usage()
     plan = CB.season_plan(legs, [3, 3], usage=u)
-    assert plan[0][1] and u.by_event, "un combiné avec valeur consomme la réutilisation"
-    used = {c["id"]: v for c, v in ((c, u.by_event[c["id"]]) for c in plan[0][1][0])}
-    assert all(v["n"] == 1 for v in used.values())
+    assert plan[0][1] and u.by_leg, "un combiné avec valeur consomme la réutilisation"
+    used = {CB.leg_id(c): u.by_leg[CB.leg_id(c)] for c in plan[0][1][0]}
+    assert all(v >= 1 for v in used.values())
     fills = [dict(c, sval=0, strategy="fill") for c in legs]
     u2 = CB.Usage()
     p2 = CB.season_plan(fills, [3], usage=u2)
-    assert p2[0][1] and not E.unsent(p2[0][1][0]) and u2.by_event, "un combiné de remplissage de la voie saison est ENVOYÉ : il consomme la réutilisation"
+    assert p2[0][1] and not E.unsent(p2[0][1][0]) and u2.by_leg, "un combiné de remplissage de la voie saison est ENVOYÉ : il consomme la réutilisation"
     C.SEASON_SEND_FILL = False
     try:
         u3 = CB.Usage()
         p3 = CB.season_plan(fills, [3], usage=u3)
-        assert p3[0][1] and E.unsent(p3[0][1][0]) and not u3.by_event, "SEASON_SEND_FILL éteint : fantôme, ne consomme rien"
+        assert p3[0][1] and E.unsent(p3[0][1][0]) and not u3.by_leg, "SEASON_SEND_FILL éteint : fantôme, ne consomme rien"
     finally:
         C.SEASON_SEND_FILL = True
     print("ok  réutilisation des matchs : un combiné à valeur ou de remplissage envoyé consomme (Usage de la journée), le fantôme (SEASON_SEND_FILL éteint) non")

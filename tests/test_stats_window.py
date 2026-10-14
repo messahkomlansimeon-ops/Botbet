@@ -369,27 +369,26 @@ def test_dedup_same_legs_and_caps():
 def test_reuse_rules_with_morning_combos():
     """Même Usage que les combinés du matin : une jambe RISQUÉE déjà dans un combiné du jour (ici un « ts5 » du matin) n'est pas reprise ; la jambe du combiné envoyé n'est
     ni relue ni remise à la cote (le combiné du matin ne change jamais)."""
-    leg_prono = prono("M1", FOULS, odds_=1.9, p=0.66)
+    leg_prono = prono("M1", SHOTS_H, odds_=1.9, p=0.675)          # le meilleur pari stats du jour est RISQUÉ (66 %) : déjà dans le combiné du matin, il n'est pas repris (plafond 1)
     leg = {k: leg_prono.get(k) for k in ("key", "id", "market", "name", "point", "prob", "p0", "xodds", "xref", "min_odds", "commence", "home", "away")} | {"result": None}
-    row = {"date": DAY, "tier": "ts5", "min_odds": 6.1, "prob": 0.3, "keys": [leg["key"]], "legs": [leg], "result": None}
-    setup(combos=[row])
+    rows5 = [{"date": DAY, "tier": t, "min_odds": 6.1, "prob": 0.3, "keys": [leg["key"]], "legs": [leg], "result": None} for t in ("ts5", "ts12", "ts25", "ts50", "ts100")]
+    row = rows5[0]
+    setup(combos=rows5)
     today = store.load("today.json", {})
-    strong = prono("M1", SHOTS_H, p=0.80)                         # le meilleur pari stats du jour (sûr, 80 %) : choisi sans règle de réutilisation
-    today["pronos"] = [leg_prono if c["key"] == leg_prono["key"] else strong if c["key"] == strong["key"] else c for c in today["pronos"]]
+    today["pronos"] = [leg_prono if c["key"] == leg_prono["key"] else c for c in today["pronos"]]
     store.save("today.json", today)
     snap_row = copy.deepcopy(store.load(fair.COMBOS_FILE, []))
     fx = Fx()
     rep, sent, _ = with_fakes(lambda: app.run_stats_window(NOW, fetch=fx))
     assert fx.calls and "M1" in fx.calls[0]["ids"], "M1 a encore d'autres pronostics stats à relire"
-    assert fx.calls[0]["wanted"]["M1"] == {SHOTS_H, SOT}, "la jambe du combiné du matin (protégée) n'est pas relue"
+    assert fx.calls[0]["wanted"]["M1"] == {FOULS, SOT}, "la jambe du combiné du matin (protégée) n'est pas relue"
     assert by_key()[leg_prono["key"]] == leg_prono, "... ni remise à la cote : identique au caractère près"
     assert rep["combo"] == "ts5w1"
     new = store.load(fair.COMBOS_FILE, [])
-    assert new[0] == snap_row[0], "le combiné du matin n'est pas modifié"
-    assert "M1" not in {l["id"] for l in new[1]["legs"]}, "M1 : jambe risquée déjà prise ce matin, pas reprise"
-    pool = app.upcoming(store.load("today.json", {})["pronos"], NOW)
-    free = CB.fair_stats_window(pool, usage=CB.Usage(), accept=lambda c: statswindow.in_window(c, NOW) and statswindow.fresh(c, NOW))
-    assert free and "M1" in {l["id"] for l in free[0]}, "sans la règle de réutilisation, M1 (80 %) serait choisi : le test distingue bien"
+    assert new[:5] == snap_row[:5], "les combinés du matin ne sont pas modifiés"
+    assert leg_prono["key"] not in {l["key"] for l in new[5]["legs"]}, "jambe déjà dans 5 combinés du jour (plafond des très sûres), pas reprise"
+    u = app.day_usage(DAY)
+    assert u.by_leg[leg_prono["key"]] >= 5 and not u.allowed(leg_prono) and u.allowed(dict(leg_prono, key="M1|autre")), "5 combinés du jour : plafond des très sûres atteint, une autre jambe du même match reste libre"
     print("ok  mêmes règles de réutilisation que le matin ; jambes d'un combiné envoyé jamais retouchées")
 
 
@@ -577,9 +576,11 @@ def test_combi_n_uses_window_priced_legs():
     sent3 = []
     xbet.fetch_day, telegram.send, xbet.save_coupon = live3, lambda m, *a, **k: sent3.append(m) or True, lambda legs: "CODE9"
     app.now_utc = lambda: NOW + timedelta(minutes=2)                               # l'horloge de la commande (custom_combo relit les matchs « à venir »)
+    old_du, app.day_usage = app.day_usage, lambda day, *a, **k: CB.Usage()         # les jambes des combinés déjà envoyés ce jour-là sont plafonnées : ce test regarde le chiffrage en direct, pas le plafond
     try:
         reply = app.custom_combo([], app.upcoming(pr1, NOW + timedelta(minutes=2)), 5, DAY)
     finally:
+        app.day_usage = old_du
         xprice.live_check, xbet.fetch_day, telegram.send, xbet.save_coupon, app.now_utc = real_check, old_fd, old_send, old_cp, old_now
     assert live3.calls and live3.calls[0]["kw"].get("live") is True, live3.calls
     stat_ids = {l["id"] for l in CB.fair_custom(pr1, 5)[0] if statswindow.is_stat(l)}

@@ -11,7 +11,7 @@ Plancher de qualité (config.LEG_*) : une jambe sans raison n'entre dans aucun c
            lui aussi le pari (ensemble.value) : les paris où le modèle s'écarte du marché y perdent 9 à 16 % ; jamais non plus sur un pari de
            buts / 1N2 d'une ligue où le modèle mesuré ne vaut pas le marché (prematch.goal_weight = 0)
   sûr    : proba >= LEG_SAFE_PROB
-Réutilisation d'un match dans plusieurs combinés du jour : jambe sûre jusqu'à LEG_REUSE_MAX combinés, jambe risquée une fois.
+Réutilisation d'une jambe (match, marché, sélection, ligne) dans plusieurs tickets du jour : 1 sous LEG_SAFE_PROB, LEG_REUSE_MAX dès LEG_SAFE_PROB, LEG_REUSE_VERY_SAFE dès LEG_VERY_SAFE_PROB.
 Espérance (proba x cote) : la marge du bookmaker se multiplie à chaque jambe. Un combiné sous C.COMBO_MIN_EV est rebâti avec les
 seules jambes de valeur positive (espérance du produit >= 1) ; s'il n'y en a pas assez, le palier saute.
 """
@@ -139,34 +139,49 @@ def pool_for(title, picks, pool=None):
 
 # ---------- réutilisation d'un match dans plusieurs combinés ----------
 
+def leg_id(c):
+    """Identifiant d'une jambe pour le plafond de réutilisation : match, marché, sélection, ligne (sa clé, sans l'étiquette de voie « |saison »)."""
+    k = str(c.get("key") or c.get("id") or "")
+    return k[:-len("|saison")] if k.endswith("|saison") else k
+
+
+def reuse_cap(c):
+    """Nombre de tickets du jour où la jambe `c` peut figurer : 1 sous LEG_SAFE_PROB, LEG_REUSE_MAX dès LEG_SAFE_PROB, LEG_REUSE_VERY_SAFE dès LEG_VERY_SAFE_PROB."""
+    p = c.get("prob") or 0.0
+    return C.LEG_REUSE_VERY_SAFE if p >= C.LEG_VERY_SAFE_PROB else C.LEG_REUSE_MAX if p >= C.LEG_SAFE_PROB else 1
+
+
 class Usage:
-    """Combinés déjà bâtis aujourd'hui, par match : combien de fois il est pris et s'il l'a été avec une jambe risquée."""
+    """Tickets déjà envoyés aujourd'hui, par JAMBE (match, marché, sélection, ligne) : combien de fois chacune est prise. Une jambe au plafond (reuse_cap) est écartée ;
+    les jambes écartées sont gardées dans `excluded` pour le dire dans le message."""
 
     def __init__(self):
-        self.by_event = {}                          # id du match -> {"n": nombre de combinés, "risky": bool}
+        self.by_leg = {}                            # identifiant de jambe -> nombre de tickets envoyés
+        self.excluded = {}                          # identifiant de jambe -> True : écartées par ce Usage depuis sa création
 
     def allowed(self, c):
-        u = self.by_event.get(c["id"])
-        return u is None or (is_safe(c) and not u["risky"] and u["n"] < C.LEG_REUSE_MAX)
+        return self.by_leg.get(leg_id(c), 0) < reuse_cap(c)
 
     def filter(self, legs):
-        return [c for c in legs if self.allowed(c)]
+        out = []
+        for c in legs:
+            if self.allowed(c):
+                out.append(c)
+            else:
+                self.excluded[leg_id(c)] = True
+        return out
 
     def add(self, legs):
         for c in legs:
-            u = self.by_event.setdefault(c["id"], {"n": 0, "risky": False})
-            u["n"] += 1
-            u["risky"] = u["risky"] or not is_safe(c)
+            k = leg_id(c)
+            self.by_leg[k] = self.by_leg.get(k, 0) + 1
 
     @classmethod
-    def from_sent(cls, combos, picks):
-        """Usage reconstitué depuis les combinés déjà envoyés (clés des paris dans bets.json). Une jambe introuvable dans
-        `picks` est comptée risquée : dans le doute, on ne la réutilise pas."""
-        by_key, u = {c["key"]: c for c in picks}, cls()
+    def from_sent(cls, combos, picks=()):
+        """Usage reconstitué depuis les combinés déjà envoyés (clés des paris dans bets.json). Les clés suffisent : une jambe n'a pas besoin d'être retrouvée."""
+        u = cls()
         for combo in combos:
-            for k in combo.get("keys", []):
-                c = by_key.get(k)
-                u.add([c if c else {"id": k.split("|")[0], "prob": 0.0}])
+            u.add([{"key": k} for k in combo.get("keys", [])])
         return u
 
 

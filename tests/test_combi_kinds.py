@@ -316,6 +316,10 @@ def test_bold():
     item = store.load(custom.FILE, {})["items"]["m1"]
     assert item["kinds"] == ["f"] and 30.0 <= item["total"] <= 37.5, item
     with Fakes():
+        reused = app.handle_command("combi 5000 fautes audacieux")
+    assert reused.startswith("❌ Pas de combiné à la cote 5000 (fautes), même avec des paris plus risqués.\n📉 Au plus"), reused      # les jambes déjà envoyées aujourd'hui (plafond par jambe) sont écartées
+    store.save(custom.FILE, {"day": DAY, "n": 0, "items": {}})
+    with Fakes():
         out = app.handle_command("combi 5000 fautes audacieux")
     assert out.startswith("❌ Pas de combiné à la cote 5000 (fautes), même avec des paris plus risqués.\n📉 Au plus 34,7."), out
     with Fakes():
@@ -347,6 +351,7 @@ def test_force_and_proches():
     kinds, unknown = chat.parse_kinds([w for w in rest if played.norm(w) not in chat.BOLD_WORDS])
     assert bold and kinds == ["f"] and not unknown
     assert "proche" in chat.BOLD_WORDS and "proches" in chat.BOLD_WORDS and "force" in chat.BOLD_WORDS
+    store.save(custom.FILE, {"day": DAY, "n": 0, "items": {}})          # les jambes déjà envoyées aujourd'hui sont plafonnées : on repart d'une journée vide
     weak = [fouls(10 + i, id=f"w{i}", key=f"w{i}|team_fouls_total||22.5|Over", prob=0.55, xodds=1.9) for i in range(3)]
     pool = world() + weak
     store.save("today.json", {"day": DAY, "picks": [], "pronos": pool})
@@ -354,6 +359,7 @@ def test_force_and_proches():
         out = app.handle_command("combi 30 fautes forcer")
     assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out and "🎯 Paris choisis : fautes" in out, out
     assert sorted(weak_legs(out)) == ["FH10 – FA10", "FH11 – FA11", "FH12 – FA12"] and "🟠 3 paris moins sûrs pour atteindre la cote" in out, out
+    store.save(custom.FILE, {"day": DAY, "n": 0, "items": {}})
     with Fakes():
         out2 = chat.on_callback("cforce|30|f", 9)
     assert "<b>🎲 COMBINÉ AUDACIEUX — cote " in out2, out2

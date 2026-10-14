@@ -1636,15 +1636,15 @@ def test_leg_reuse():
     # sans réutilisation autorisée (un seul combiné par jambe), un 2e combiné avec les mêmes matchs est refusé
     u = CB.Usage()
     u.add([safe[0], risky[0]])
-    assert u.allowed(safe[0]) and not u.allowed(risky[0]) and not u.allowed(mkleg(99, 2.0, 0.5, ev=risky[0]["id"]))
+    assert u.allowed(safe[0]) and not u.allowed(risky[0]) and u.allowed(mkleg(99, 2.0, 0.5, ev=risky[0]["id"])), "une AUTRE jambe du même match reste libre (plafond par jambe)"
     for _ in range(C.LEG_REUSE_MAX - 1):
         u.add([safe[0]])
     assert not u.allowed(safe[0]), "au plus LEG_REUSE_MAX combinés pour une jambe sûre"
     assert u.allowed(safe[1])
-    # une jambe sûre d'un match déjà pris avec une jambe risquée n'est pas réutilisable
-    mixed = CB.Usage()
-    mixed.add([mkleg(50, 2.0, 0.5, ev="m")])
-    assert not mixed.allowed(mkleg(51, 1.4, 0.75, ev="m"))
+    # plafond par jambe : très sûre (>= 80 %) jusqu'à LEG_REUSE_VERY_SAFE tickets
+    vs = CB.Usage()
+    vs.add([safe[0]] * 3)
+    assert not vs.allowed(safe[0]) and vs.allowed(dict(safe[0], prob=0.85))
     # /combi : mêmes règles, relativement aux combinés envoyés aujourd'hui
     picks = safe + risky
     sent = [{"keys": [risky[0]["key"], risky[1]["key"]], "date": "2026-10-01"},

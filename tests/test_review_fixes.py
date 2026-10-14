@@ -339,8 +339,8 @@ def test_relaunch_resends_recorded_combos():
 
 def test_shared_usage():
     T.reset()
-    risky = {"id": "e1", "prob": 0.60}
-    safe = {"id": "e2", "prob": 0.80}
+    risky = {"id": "e1", "key": "e1|x", "prob": 0.60}
+    safe = {"id": "e2", "key": "e2|x", "prob": 0.80}
     u = CB.Usage()
     u.add([risky, safe])
     assert not u.allowed(risky) and u.allowed(safe)
@@ -353,7 +353,7 @@ def test_shared_usage():
         quality, top, top_gap, shown, plan, rejected, usage = app.morning_plan(picks, [gap, {"key": top_key(picks)}])
     finally:
         CB.plan = old
-    assert top and usage.by_event[top["id"]]["n"] == 1 and usage.by_event["e7"]["n"] == 1, usage.by_event
+    assert top and usage.by_leg[CB.leg_id(top)] == 1 and usage.by_leg[CB.leg_id(picks[6])] == 1, usage.by_leg
     assert [g["key"] for g in shown] == [picks[6]["key"]] and len(top_gap) == 1
     # fair_plan_all part de cet Usage (et non d'un Usage vide)
     seen = {}
@@ -365,7 +365,7 @@ def test_shared_usage():
         app.fair_plan_all(T.pronos(3), picks, [gap])
     finally:
         CB.fair_plan, CB.fair_shots_plan, CB.plan = old_fp, old_sp, old
-    assert seen["a"] is seen["b"] and top["id"] in seen["a"].by_event and "e7" in seen["a"].by_event, seen
+    assert seen["a"] is seen["b"] and CB.leg_id(top) in seen["a"].by_leg and CB.leg_id(picks[6]) in seen["a"].by_leg, seen
     # end to end : une jambe risquée prise par un combiné réel n'est reprise par aucun combiné à vérifier (ni par un combiné « tirs »)
     risky_picks = [T.pick(i, score=0.9 - i / 100, prob=0.62, edge=0.05, odds=1.8) for i in range(1, 7)]
     real_legs = [risky_picks[0], risky_picks[1]]
@@ -374,7 +374,7 @@ def test_shared_usage():
     def fake_plan(p, tiers=None, usage=None, rejected=None):
         usage.add(real_legs)
         return [(C.COMBOS[0][0], (real_legs, 3.24, 0.38))] + [(t, None) for t, _, _ in C.COMBOS[1:]]
-    prons = [T.prono(i, id=f"e{i + 1}", key=f"e{i + 1}|totals||3.5|Under", prob=0.62, p0=0.62) for i in range(6)]
+    prons = [T.prono(i, id=f"e{i + 1}", key=risky_picks[i]["key"], prob=0.62, p0=0.62) for i in range(6)]      # la MÊME jambe (clé) que celle des combinés réels
     CB.plan, CB.make_pool = fake_plan, (lambda p: list(p))
     try:
         shared = app.fair_plan_all(prons, risky_picks, [])
@@ -401,23 +401,24 @@ def test_day_usage_all_families():
                                                           "result": None}]})
     fair.record_combos([(5, ([T.prono(1, id="e2", key="e2|x"), T.prono(2, id="e8", key="e8|x", prob=0.8)], 2.4, 0.5))], DAY)
     rows = fair.load_combos()
-    rows.append(rows[0] | {"tier": "m1", "custom": True, "keys": ["e6|x"], "legs": [T.prono(9, id="e6", key="e6|x")]})      # un combi sur mesure ne compte pas
+    rows.append(rows[0] | {"tier": "m1", "custom": True, "keys": ["e6|x"], "legs": [T.prono(9, id="e6", key="e6|x")]})      # la ligne de suivi d'un combi sur mesure joué ne compte pas deux fois (il compte par combi_sent.json)
     store.save(fair.COMBOS_FILE, rows)
     store.save("tracked.json", [
         {"key": picks[2]["key"], "id": "e3", "prob": 0.62, "date": DAY, "sent": True, "single": True, "result": None},
         {"key": picks[3]["key"], "id": "e4", "prob": 0.62, "date": DAY, "sent": True, "sharpgap": True, "single": False, "result": None},
         {"key": picks[4]["key"], "id": "e5", "prob": 0.62, "date": "2029-12-31", "sent": True, "single": True, "result": None}])    # un autre jour : ne compte pas
     u = app.day_usage(DAY)
-    assert set(u.by_event) == {"e1", "e8", "e2", "e3", "e4"}, u.by_event          # réels, à vérifier / stats, pari du jour, écart sharp ; ni sur mesure ni autre jour
-    for rid in ("e1", "e2", "e3", "e4"):
-        assert not u.allowed({"id": rid, "prob": 0.62}), rid                    # une jambe risquée : un seul ticket, toutes familles confondues
-    assert u.by_event["e8"]["n"] == 2 and u.allowed({"id": "e8", "prob": 0.80}), "sûre : jusqu'à LEG_REUSE_MAX"
-    u.add([{"id": "e8", "prob": 0.80}])
-    assert not u.allowed({"id": "e8", "prob": 0.80}) and C.LEG_REUSE_MAX == 3
-    assert u.allowed({"id": "e5", "prob": 0.62}) and u.allowed({"id": "e6", "prob": 0.62})
+    ks = {i: next(c["key"] for c in picks + [safe_pick] if c["id"] == i) for i in ("e1", "e3", "e4", "e5", "e8")}
+    assert set(u.by_leg) == {ks["e1"], ks["e8"], "e2|x", "e8|x", ks["e3"], ks["e4"]}, u.by_leg          # réels, à vérifier / stats, pari du jour, écart sharp ; ni sur mesure ni autre jour
+    for k in (ks["e1"], "e2|x", ks["e3"], ks["e4"]):
+        assert not u.allowed({"key": k, "prob": 0.62}), k                       # une jambe risquée : un seul ticket, toutes familles confondues
+    assert u.by_leg[ks["e8"]] == 1 and u.allowed({"key": ks["e8"], "prob": 0.80}), "sûre : jusqu'à LEG_REUSE_MAX"
+    u.add([{"key": ks["e8"]}, {"key": ks["e8"]}])
+    assert u.by_leg[ks["e8"]] == 3 and not u.allowed({"key": ks["e8"], "prob": 0.70}) and u.allowed({"key": ks["e8"], "prob": 0.85}), "3 tickets : plafond des sûres, pas des très sûres (5)"
+    assert u.allowed({"key": ks["e5"], "prob": 0.62}) and u.allowed({"key": "e6|x", "prob": 0.62})
     # _others_usage (relevé de 15:00, « Vérifier ») : les mêmes tickets, sauf la ligne refaite
     rows = fair.load_combos()
-    assert "e2" not in app._others_usage(rows, rows[0], DAY, {"day": DAY, "tiers": {}}).by_event and "e1" in app._others_usage(rows, rows[0], DAY, {"day": DAY, "tiers": {}}).by_event
+    assert "e2|x" not in app._others_usage(rows, rows[0], DAY, {"day": DAY, "tiers": {}}).by_leg and ks["e1"] in app._others_usage(rows, rows[0], DAY, {"day": DAY, "tiers": {}}).by_leg
     # la fenêtre des stats part du même Usage
     seen = {}
     old = CB.fair_stats_window
@@ -427,7 +428,7 @@ def test_day_usage_all_families():
         statswindow.plan_combo(app, today, {"combos": [], "announced": []}, fair.load_combos(), datetime(2030, 1, 1, 14, 0, tzinfo=UTC))
     finally:
         CB.fair_stats_window = old
-    assert set(seen["u"].by_event) >= {"e1", "e8", "e2", "e3", "e4"}, seen
+    assert set(seen["u"].by_leg) >= {ks["e1"], ks["e8"], "e2|x", ks["e3"], ks["e4"]}, seen
     print("ok  7b statswindow / relevé : Usage de tous les tickets du jour (combinés réels, à vérifier, stats, pari du jour, écarts sharp)")
 
 

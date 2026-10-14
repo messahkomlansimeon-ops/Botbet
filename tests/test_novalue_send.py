@@ -227,16 +227,16 @@ def _ghost_reuse(CB, fills, values, tiers):
     u = CB.Usage()
     plan = CB.fair_plan(fills, tiers=tiers, usage=u)
     assert [c for _, c in plan] and all(c and fair.unsent(c[0]) for _, c in plan), plan
-    assert not u.by_event, "combinés sans valeur (fantômes) : aucune réutilisation consommée, ni de quoi priver un combiné réel"
+    assert not u.by_leg, "combinés sans valeur (fantômes) : aucune réutilisation consommée, ni de quoi priver un combiné réel"
     u = CB.Usage()
     plan = CB.fair_plan(values, tiers=tiers[:1], usage=u)
-    assert plan[0][1] and not fair.unsent(plan[0][1][0]) and u.by_event, "un combiné avec valeur consomme comme avant"
+    assert plan[0][1] and not fair.unsent(plan[0][1][0]) and u.by_leg, "un combiné avec valeur consomme comme avant"
     u = CB.Usage()
     plan = CB.fair_plan(values[:2] + fills[2:], tiers=tiers[:1], usage=u)
-    assert plan[0][1] and u.by_event, "il suffit d'une jambe à valeur pour consommer"
+    assert plan[0][1] and u.by_leg, "il suffit d'une jambe à valeur pour consommer"
     u = CB.Usage()
     u.add(fills[:1])
-    assert u.by_event, "un pari seul (pari du jour, écart sharp) fill compte toujours : seul un COMBINÉ fantôme ne consomme rien"
+    assert u.by_leg, "un pari seul (pari du jour, écart sharp) fill compte toujours : seul un COMBINÉ fantôme ne consomme rien"
     print("ok  un combiné fantôme ne consomme pas la réutilisation des jambes (Usage), un combiné envoyé oui")
 
 

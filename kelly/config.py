@@ -504,9 +504,13 @@ LEG_SAFE_EDGE_FLOOR = _float("LEG_SAFE_EDGE_FLOOR", -0.09)   # jambes sûres : l
 LEG_PM_GAP = 0.04
 LEG_XGD = 0.5
 LEG_SAFE_PROB = _float("LEG_SAFE_PROB", 0.68)
-# Réutilisation d'un match dans plusieurs combinés du même jour : une jambe sûre (proba >= LEG_SAFE_PROB) peut figurer dans
-# au plus LEG_REUSE_MAX combinés ; une jambe risquée dans un seul.
+# Réutilisation d'une JAMBE dans plusieurs tickets du même jour : une jambe sûre (proba >= LEG_SAFE_PROB) peut figurer dans
+# au plus LEG_REUSE_MAX tickets ; une jambe risquée dans un seul.
 LEG_REUSE_MAX = _int("LEG_REUSE_MAX", 3)
+# Plafond PAR JAMBE (match, marché, sélection, ligne) sur la journée, tous les tickets envoyés confondus (matin, fenêtre des stats, « combi N », « saison N », live) :
+# 1 sous LEG_SAFE_PROB, LEG_REUSE_MAX dès LEG_SAFE_PROB, LEG_REUSE_VERY_SAFE dès LEG_VERY_SAFE_PROB. Les combinés fantômes ne comptent pas.
+LEG_VERY_SAFE_PROB = _float("LEG_VERY_SAFE_PROB", 0.80)
+LEG_REUSE_VERY_SAFE = _int("LEG_REUSE_VERY_SAFE", 5)
 
 # Priorité aux marchés mal pricés. 1N2/buts/points : efficaces, pénalisés.
 MARKET_WEIGHT = {"h2h": 0.7, "double_chance": 0.7, "totals": 0.8, "spreads": 0.8, "btts": 1.0, "team_totals_home": 0.9, "team_totals_away": 0.9,

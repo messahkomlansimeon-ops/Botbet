@@ -1282,9 +1282,9 @@ DROPPED_NOTE = " Ta note « joué à … » de l'ancienne version est retirée :
 def day_usage(day, rows=None, row=None, sent=None):
     """Usage (CB.Usage) de TOUS les tickets du jour `day`, toutes familles confondues : combinés réels envoyés (bets.json), combinés à vérifier / aux cotes 1xBet
     et ceux de la fenêtre des stats (fair_combos.json : leur dernière version envoyée), pari du jour et paris « 1xBet paie plus que le marché » (tracked.json).
-    Une jambe sûre (proba >= C.LEG_SAFE_PROB) sert dans C.LEG_REUSE_MAX tickets au plus, une jambe risquée dans un seul (CB.Usage). `row` : le combiné à
-    refaire, exclu (il ne se compte pas lui-même). Les combis sur mesure (« combi N ») n'y comptent pas : ils ne sont pas soumis à ces règles, ni un combiné
-    déclaré mort. Une jambe d'un combiné réel introuvable dans today.json est comptée risquée (CB.Usage.from_sent)."""
+    Plafond PAR JAMBE (CB.reuse_cap) : 1 ticket sous C.LEG_SAFE_PROB, C.LEG_REUSE_MAX dès C.LEG_SAFE_PROB, C.LEG_REUSE_VERY_SAFE dès C.LEG_VERY_SAFE_PROB. `row` : le combiné à
+    refaire, exclu (il ne se compte pas lui-même). Les combinés sur mesure (« combi N », « saison N », live) comptent dès qu'ils sont envoyés (custom.json) ; un combiné
+    déclaré mort et les combinés fantômes non."""
     day = str(day)[:10]
     rows = fair.load_combos() if rows is None else rows
     sent = _load_updates(day) if sent is None else sent
@@ -1297,7 +1297,9 @@ def day_usage(day, rows=None, row=None, sent=None):
             usage.add(_base_legs(sent, r))
     for r in track.load():                          # paris seuls du jour : le pari du jour et les écarts sharp annoncés
         if r.get("date") == day and r.get("sent") and (r.get("single") is True or r.get("sharpgap")):
-            usage.add([{"id": r.get("id") or str(r.get("key")).split("|")[0], "prob": r.get("prob") or 0.0}])
+            usage.add([{"key": r.get("key") or r.get("id")}])
+    for item in (custom._load(day).get("items") or {}).values():      # « combi N », « saison N » et combinés live ENVOYÉS (même non joués) : ils comptent comme les autres
+        usage.add(item.get("legs") or [])
     return usage
 
 
@@ -2035,7 +2037,7 @@ def waiting_note(today, now=None):
 def _todays_usage(day, picks):
     """Réutilisation des matchs par les combinés déjà envoyés aujourd'hui (voir combos.Usage)."""
     combos = [c for c in store.load_doc("bets.json", {"combos": []})["combos"] if c.get("date") == str(day)]
-    return CB.Usage.from_sent(combos, picks), len(combos)
+    return day_usage(day), len(combos)
 
 
 def send_backup():
@@ -2197,9 +2199,10 @@ def _handle_command(text):
         live = upcoming(picks)
         if not live and not upcoming(pronos) and waiting_note(today):
             return waiting_note(today)
+        dropped = reuse_note(today.get("day"), live, upcoming(pronos))          # avant l'envoi : ce combiné-ci ne compte pas encore
         reply = custom_combo(live, upcoming(pronos), target, today.get("day"), started=bool(picks) and not live,
                              when=picks_when, kinds=kinds or None, bold=bold, nlegs=(n, exact) if n else None)
-        return _with_sweep(reply, sweep_line(live, upcoming(pronos)))
+        return _with_sweep(reply, "\n".join(x for x in (sweep_line(live, upcoming(pronos)), dropped) if x))
     return "Commande inconnue. /aide pour la liste."
 
 
@@ -2236,6 +2239,18 @@ def _sweep_line(picks, pronos):
     return (f"📊 {s(len({c['id'] for c in rows}), 'match', 'matchs')} · {s(len(fams), 'famille analysée', 'familles analysées')} · {s(lines, 'ligne évaluée', 'lignes évaluées')}"
             f" · {s(len(legs), 'jambe possible', 'jambes possibles')}" + (f" (jusqu'à {max(per.values())} marchés par match ; un combiné n'en prend qu'un par match)" if per and max(per.values()) > 1 else "")
             + (f" · non balayées : {', '.join(miss)}" if miss else ""))
+
+
+def reuse_note(day, picks, pronos):
+    """« ♻️ 3 jambes écartées : déjà utilisées aujourd'hui » : jambes possibles de « combi N » que le plafond de réutilisation (CB.reuse_cap) retire à cet instant ; '' sinon."""
+    try:
+        u = day_usage(day)
+        u.filter(CB.fair_legs(pronos) if any(c.get("xodds") for c in pronos) else CB.make_pool(picks))
+        n = len(u.excluded)
+        return f"♻️ {n} jambe{'s' if n > 1 else ''} écartée{'s' if n > 1 else ''} : déjà utilisée{'s' if n > 1 else ''} aujourd'hui" if n else ""
+    except Exception as e:               # noqa: BLE001
+        print(f"[combi] note de réutilisation ignorée : {type(e).__name__}", file=sys.stderr)
+        return ""
 
 
 def _with_sweep(reply, line):
@@ -2294,6 +2309,10 @@ def season_command(args, today, now=None, fetch=None):
                  else " — aucun match du jour à lire (aucune équipe suivie, ou tous commencés) : jambes et cotes du matin, vérifie-les avant de valider.")
     if len(legs) < 2:
         return line + "\nPas assez de jambes « saison » jouables (il en faut au moins deux sur deux matchs différents)."
+    used = day_usage(day)
+    used.filter(legs)
+    if used.excluded:
+        line += f"\n♻️ {len(used.excluded)} jambe{'s' if len(used.excluded) > 1 else ''} écartée{'s' if len(used.excluded) > 1 else ''} : déjà utilisée{'s' if len(used.excluded) > 1 else ''} aujourd'hui"
     combo = CB.season_plan(legs, [target], usage=day_usage(day))[0][1]
     if not combo:
         top = CB.reach([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs])
@@ -2675,7 +2694,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     left = (f"🔀 Sans {'le match' if len(avoid) == 1 else f'les {len(avoid)} matchs'} de tes tickets du jour et du combiné précédent."
             if avoid else "")
     if bold:
-        return _bold_combo(picks, pronos, target, day, kinds, now, note=left, nlegs=nlegs)
+        return _bold_combo(picks, pronos, target, day, kinds, now, usage=day_usage(day), note=left, nlegs=nlegs)
     real = "Pas de cotes réelles aujourd'hui" if not started else "Plus de cotes réelles jouables aujourd'hui (matchs commencés)"
     reach = []                                      # cotes les plus hautes atteignables (réelles, puis cote mini des pronostics)
     xp, xk = any(c.get("xodds") for c in pronos), any(c.get("xodds") for c in picks)
@@ -2685,11 +2704,12 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     keep = {"day": day, "target": target, "lo": target, "hi": target * (1 + C.CUSTOM_TOLERANCE)} | ({"kinds": list(kinds)} if prefix else {}) \
         | ({"note": note} if note else {}) | ({"nlegs": [n_max, exact]} if n_max else {})
     if xp:                                          # cotes 1xBet du jour connues : le combiné se joue chez 1xBet, à SES cotes
-        fc = CB.fair_custom(pronos, target, prefix=prefix, **lim)
+        used = day_usage(day)
+        fc = CB.fair_custom(pronos, target, usage=used, prefix=prefix, **lim)
         if fc:
-            return _live_reply(fc, target, target * (1 + C.CUSTOM_TOLERANCE), keep=keep, avoid=avoid)
+            return _live_reply(fc, target, target * (1 + C.CUSTOM_TOLERANCE), keep=keep, usage=used, avoid=avoid)
     if not (xp or xk):                              # aucune cote 1xBet : d'abord les pronostics de Kelly (cote mini), jamais un prix inventé
-        fc = CB.fair_custom(pronos, target, prefix=prefix, **lim)
+        fc = CB.fair_custom(pronos, target, usage=day_usage(day), prefix=prefix, **lim)
         if fc:
             why = real if not picks else "Kelly n'a vu aucune cote de 1xBet aujourd'hui"
             return _fair_reply(fc, f"{why} : voici un combiné bâti sur les pronostics de Kelly (cote mini d'au moins {t}), à vérifier "
@@ -2721,8 +2741,8 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
             if note:
                 msg = Html(msg + "\n\n" + fmt.i(fmt.esc(note.strip())))
             if n_sent:
-                msg = Html(msg + "\n\n" + fmt.i(f"Les paris déjà dans tes combinés du jour ne sont repris que s'ils sont sûrs "
-                                                f"({fmt.pct(C.LEG_SAFE_PROB)} de chances ou plus, {C.LEG_REUSE_MAX} combinés au plus)."))
+                msg = Html(msg + "\n\n" + fmt.i(f"Un pari déjà dans tes tickets du jour n'est repris que s'il est sûr "
+                                                f"({fmt.pct(C.LEG_SAFE_PROB)} de chances ou plus : {C.LEG_REUSE_MAX} tickets au plus, {C.LEG_REUSE_VERY_SAFE} dès {fmt.pct(C.LEG_VERY_SAFE_PROB)})."))
             if all(c.get("xodds") for c in picks_):        # paris réels remis au prix 1xBet : suivi possible (cotes de référence : non)
                 cid = custom.remember(day, target, target * (1 - C.CUSTOM_TOLERANCE), target * (1 + C.CUSTOM_TOLERANCE), combo, st,
                                       money.cur() if st is not None else None, code, when, src="picks", kinds=kinds if prefix else None, nlegs=nlegs)
@@ -2742,7 +2762,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     else:
         real = ""
     if n_max and exact == "min" and not avoid:      # au moins N : le trou est comblé avec les paris les plus probables après les solides
-        filled = _bold_combo(picks, pronos, target, day, kinds, now, note=note, nlegs=nlegs, fill=True)
+        filled = _bold_combo(picks, pronos, target, day, kinds, now, usage=day_usage(day), note=note, nlegs=nlegs, fill=True)
         if filled:
             return filled
     if n_max and not avoid:                         # nombre de paris choisi : la vraie raison en une phrase, et les solutions en boutons
