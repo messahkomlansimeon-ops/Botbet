@@ -2204,54 +2204,50 @@ def combi_target(args):
     return float(v) if v is not None and math.isfinite(v) else None
 
 
-def season_command(args, today, now=None, check=None):
-    """« saison » : l'état de la voie `saison` (jambes du matin, combinés du jour, fantômes) ; « saison N » : un combiné sur mesure à la cote N bâti sur les SEULES jambes `saison` du matin
-    encore jouables (jambes de valeur d'abord, puis le remplissage), avec son code coupon, sa mise et le bouton « ✅ Je le joue » (suivi comme « combi N »). Les jambes sont celles du matin
-    (data/today.json), aucune requête."""
+def season_command(args, today, now=None, fetch=None):
+    """« saison » : l'état de la voie `saison` (jambes du matin, combinés du jour, fantômes) ; « saison N » : un combiné sur mesure à la cote N bâti sur les SEULES jambes `saison`,
+    RECONSTRUITES à la demande sur les matchs du jour pas encore commencés (championnats suivis et coupes, LDC comprise) avec les cotes 1xBet relues à l'instant (seasonlane.rebuild :
+    au plus C.SEASON_MAX_MATCHES matchs et C.SEASON_SECONDS s). Une ligne dit ce qui a été trouvé : matchs lus, de coupe, équipes sous le minimum de matchs, matchs sans prix. Jambes de valeur
+    d'abord, puis le remplissage ; code coupon, mise et bouton « ✅ Je le joue » (suivi comme « combi N »). 1xBet muet : les jambes du matin, cotes du dernier relevé, dit clairement."""
     now = now or now_utc()
     day = today.get("day") or ""
-    legs = [c for c in upcoming(today.get("season") or [], now) if lanes.usable(c)]
+    morning = [c for c in upcoming(today.get("season") or [], now) if lanes.usable(c)]
     mode = lanes.season_mode()
     if not args:
         rows = [r for r in fair.load_combos() if str(r.get("date")) == day and CB.season_no(r["tier"]) is not None]
         ghost = [r for r in fair.load_ghost() if r.get("date") == day and r.get("kind") == "saison"]
-        value = sum(1 for c in legs if c.get("sval"))
+        value = sum(1 for c in morning if c.get("sval"))
         out = [f"🧮 Saison en cours — voie : {mode} · cotes visées {', '.join(fmt.trim(t, 1) for t in C.SEASON_TIERS)} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %",
-               f"Jambes du matin encore jouables : {len(legs)} ({value} à valeur, {len(legs) - value} de remplissage)" if legs else "Aucune jambe « saison » jouable aujourd'hui."]
+               f"Jambes du matin encore jouables : {len(morning)} ({value} à valeur, {len(morning) - value} de remplissage)" if morning else "Aucune jambe « saison » jouable aujourd'hui."]
         for r in sorted(rows, key=lambda r: CB.season_no(r["tier"])):
             out.append(f"• cote {fmt.trim(r['min_odds'], 1)} ({len(r.get('legs') or [])} paris) — "
                        + ("noté joué" if r.get("played") else "envoyé") + (f" · {r['result']}" if r.get("result") else ""))
         if ghost:
             out.append(f"👻 {len(ghost)} combiné{'s' if len(ghost) > 1 else ''} sans valeur suivi{'s' if len(ghost) > 1 else ''} en fantôme (non envoyé{'s' if len(ghost) > 1 else ''})")
-        out.append("« saison 10 » : un combiné à la cote 10 sur ces jambes.")
+        out.append("« saison 10 » : un combiné à la cote 10, jambes reconstruites sur les matchs du jour pas commencés (coupes comprises), cotes relues chez 1xBet.")
         return "\n".join(out)
     target = combi_target(args)
     if target is None or target <= 1.0:
         return "Exemple : saison 10 (un combiné « saison en cours » à la cote 10), ou saison seul pour l'état de la voie."
     if mode != "on":
         return f"La voie « saison » est {'en fantôme (calculée, jamais jouée)' if mode == 'ghost' else 'éteinte'} : aucun combiné proposé."
+    telegram.send("⏳ Je relis les matchs du jour chez 1xBet…", queue=False)
+    rebuilt, info = seasonlane.rebuild(now, fetch)
+    line = seasonlane.summary_line(info)
+    legs, stale, when = [c for c in rebuilt if lanes.usable(c)], False, now.strftime("%H:%M")
+    if not info["read"]:                              # rien relu : les jambes du matin, cotes du dernier relevé
+        legs, stale, when = morning, True, today.get("xbet_at")
+        line += (" — 1xBet n'a rien rendu à l'instant : jambes et cotes du matin, vérifie-les avant de valider." if info["predicted"]
+                 else " — aucun match du jour à lire (aucune équipe suivie, ou tous commencés) : jambes et cotes du matin, vérifie-les avant de valider.")
     if len(legs) < 2:
-        return "Pas assez de jambes « saison » encore jouables aujourd'hui (il en faut au moins deux sur deux matchs différents)."
-    usage = day_usage(day)
-    combo = CB.season_plan(legs, [target], usage=usage)[0][1]
+        return line + "\nPas assez de jambes « saison » jouables (il en faut au moins deux sur deux matchs différents)."
+    combo = CB.season_plan(legs, [target], usage=day_usage(day))[0][1]
     if not combo:
         top = CB.reach([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs])
-        return f"Aucun combiné « saison » à la cote {fmt.trim(target, 1)} avec les jambes du jour" + (f" : la plus haute cote atteignable est {fmt.trim(top, 1)}." if top > 1 else ".")
+        return line + f"\nAucun combiné « saison » à la cote {fmt.trim(target, 1)} avec ces jambes" + (f" : la plus haute cote atteignable est {fmt.trim(top, 1)}." if top > 1 else ".")
     lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)
     keep = {"day": day, "target": target, "lo": lo, "hi": hi, "src": "saison"}
-    intro = f"{C.SEASON_TITLE.split(' ', 1)[0]} Combiné « saison en cours » à la cote {fmt.trim(target, 1)} (modèle des matchs de cette saison, mélangé au marché)."
-    res, hhmm, ok = _live_season(combo[0], lo, hi, now, check, usage=day_usage(day))      # relecture 1xBet EN DIRECT avant l'envoi, comme « combi N »
-    stale = False
-    if ok and res is None:
-        return ("Les paris de ce combiné « saison » ne sont plus jouables chez 1xBet et Kelly ne trouve pas de remplaçants dans la même fourchette de cote. "
-                f"Réessaie avec une autre cote que {fmt.trim(target, 1)}.")
-    if ok:
-        legs2, total, prob, removed, added, changed = res
-        combo, when = (legs2, total, prob), hhmm
-        intro += f" Cotes relues chez 1xBet à {hhmm}." + (" Un pari a été remplacé." if removed or added else "")
-    else:
-        when, stale = today.get("xbet_at"), True
-        intro += " 1xBet n'a rien rendu à l'instant (panne, ou matchs sur le point de commencer) : cotes du dernier relevé, vérifie-les avant de valider."
+    intro = f"{C.SEASON_TITLE.split(' ', 1)[0]} Combiné « saison en cours » à la cote {fmt.trim(target, 1)} (modèle des matchs de cette saison, mélangé au marché).\n{line}"
     return _fair_reply(combo, intro, title=f"{C.SEASON_TITLE} · cote {fmt.trim(target, 1)}", when=when, stale=stale, retry="redemande le combi", budget=True, keep=keep,
                        shared=_shared_counts(day, combo[0]))
 

@@ -213,32 +213,23 @@ def test_commands():
     st = app.season_command([], today, now=NOW)
     assert "Saison en cours" in st and f"{len(legs)} (" in st and "saison 10" in st, st
     store.save("today.json", today)
-    seen = {}
-
-    def check(ids, now, fresh_min=None):                       # 1xBet relu en direct : les mêmes jambes aux cotes du moment
-        seen["ids"] = set(ids)
-        return [dict(c) for c in legs if c["id"] in ids], set(ids), "10:15"
-    reply = app.season_command(["10"], today, now=NOW, check=check)
+    mute = lambda events, **kw: {}      # noqa: E731 - 1xBet muet : la reconstruction à la demande (tests/test_season_rebuild.py) retombe sur les jambes du matin
+    reply = app.season_command(["10"], today, now=NOW, fetch=mute)
     txt = str(reply)
-    assert "SAISON EN COURS · cote 10" in txt and "saison en cours" in txt and "relues chez 1xBet à 10:15" in txt, txt[:500]
-    assert len(seen["ids"]) > 5, "les matchs du combiné + des remplaçants sont relus en direct"
+    assert "SAISON EN COURS · cote 10" in txt and "1xBet n'a rien rendu" in txt and "🔎 0 match lu" in txt, txt[:500]
     labels = [b["text"] for row in reply.markup["inline_keyboard"] for b in row]
     assert any("Je le joue" in t for t in labels) and not any("Un autre" in t for t in labels), labels      # « 🔀 Un autre » sortirait de la voie
-    down = app.season_command(["10"], today, now=NOW, check=lambda ids, now, fresh_min=None: ([], set(), "10:20"))
-    assert "1xBet n'a rien rendu" in str(down) and "dernier relevé" in str(down), str(down)[:300]
-    gone = app.season_command(["10"], today, now=NOW, check=lambda ids, now, fresh_min=None: ([], {"e1"}, "10:20"))
-    assert "plus jouables chez 1xBet" in str(gone) or "SAISON EN COURS" in str(gone), str(gone)[:300]
     from kelly import custom
     items = custom._load(str(DAY))["items"]
-    assert items and list(items.values())[-1]["src"] == "saison" and all(l.get("strategy") == "saison" for l in list(items.values())[-1]["legs"]), items
+    assert items and list(items.values())[-1]["src"] == "saison" and all(l.get("lane") == "saison" for l in list(items.values())[-1]["legs"]), items
     bad = app.season_command(["abc"], today, now=NOW)
     assert "Exemple" in bad
     C.STRATEGY_SEASON = "off"
     try:
-        assert "éteinte" in app.season_command(["10"], today, now=NOW)
+        assert "éteinte" in app.season_command(["10"], today, now=NOW, fetch=mute)
     finally:
         C.STRATEGY_SEASON = "on"
-    none = app.season_command(["10000"], today, now=NOW)
+    none = app.season_command(["10000"], today, now=NOW, fetch=mute)
     assert "Aucun combiné" in str(none) and "plus haute cote" in str(none), none
     assert app.chat.route("saison 10")[0] == "/saison 10"
     print("ok  commandes : « saison » (état), « saison N » (combiné à la cote N, bouton « Je le joue »), cote impossible expliquée, voie éteinte dite")

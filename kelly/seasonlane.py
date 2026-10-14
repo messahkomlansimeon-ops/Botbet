@@ -24,6 +24,7 @@ ARCH = "arch/sea/"
 WEIGHTS_FILE = "season_weights.json"
 CALIB_FILE = "season_calib.json"
 STATE_FILE = "season_state.json"
+EVENTS_FILE = "season_events.json"
 SUFFIX = "|saison"
 MARKETS = frozenset(("totals", "btts", "double_chance", "h2h", "team_totals_home", "team_totals_away", prematch.CORNERS, prematch.CARDS)
                     + tuple(m for m in fair.STAT_SPECS if not m.startswith(("team_throws", "team_offsides"))))
@@ -152,9 +153,34 @@ def cup_models(today):
     return out
 
 
-def make(scan, now, today=None):
+def _why_none(model, models, cup, home, away):
+    """Pourquoi aucune prévision pour ce match : ("few", équipes sous C.SEASON_MIN_MATCHES matchs) ou ("unknown", équipes non reconnues ou sans modèle)."""
+    few, unknown = set(), set()
+    for name in (home, away):
+        if cup:
+            hit = season.locate(models or {}, name)
+            if not hit:
+                unknown.add(name)
+            elif models[hit[0]]["stats"]["goals"]["t"][hit[1]]["n"] < C.SEASON_MIN_MATCHES:
+                few.add(name)
+        else:
+            t = season.find_team(model, name) if model else None
+            if not t:
+                unknown.add(name)
+            elif season.teams(model)[t]["n"] < C.SEASON_MIN_MATCHES:
+                few.add(name)
+    return few, unknown
+
+
+def make(scan, now, today=None, info=None):
     """Pronostics `saison` du jour (sans prix) : un par match et par marché, avec toutes ses lignes plausibles en c["alts"] ([nom, ligne, proba brute, référence]), la ligne par défaut étant
-    celle dont la proba est la plus proche de FAIR_P_TARGET (c'est la ligne de RÉFÉRENCE, choisie sans regarder le prix). Seulement les ligues couvertes par le modèle de saison."""
+    celle dont la proba est la plus proche de FAIR_P_TARGET (c'est la ligne de RÉFÉRENCE, choisie sans regarder le prix). Seulement les ligues couvertes par le modèle de saison.
+    `info` (dict) reçoit le compte : matchs examinés, de coupe, prédits, équipes sous le minimum de matchs, équipes non reconnues."""
+    info = info if info is not None else {}
+    for k in ("events", "cup_events", "predicted"):
+        info.setdefault(k, 0)
+    info.setdefault("few", set())
+    info.setdefault("unknown", set())
     out = []
     today = today or now.date()
     models = None
@@ -172,9 +198,15 @@ def make(scan, now, today=None):
         for ev in sorted(evs, key=lambda e: e["commence_time"]):
             if _ko(ev) <= now:
                 continue
+            info["events"] += 1
+            info["cup_events"] += 1 if cup else 0
             pred = season.cup_predict(models, ev["home_team"], ev["away_team"]) if cup else season.predict(model, ev["home_team"], ev["away_team"])
             if not pred:
+                few, unknown = _why_none(model, models, cup, ev["home_team"], ev["away_team"])
+                info["few"] |= few
+                info["unknown"] |= unknown
                 continue
+            info["predicted"] += 1
             by = {}
             for mk, name, pt, p, base in options(pred, ev["home_team"], ev["away_team"]):
                 by.setdefault(mk, []).append((name, pt, p, base))
@@ -357,6 +389,87 @@ def state_text():
             f" (au {d.get('day')})")
 
 
+def remember_events(scan, day):
+    """Garde (data/season_events.json) les matchs du jour des ligues que la voie peut traiter (championnats suivis et coupes) : de quoi reconstruire les jambes À LA DEMANDE (`saison N`) sur les
+    matchs pas encore commencés, sans relire la liste des matchs. Ne lève jamais."""
+    try:
+        keep = set(known_leagues(False)) | set(C.SEASON_CUPS)
+        evs = [{k: ev.get(k) for k in ("id", "sport_key", "league", "home_team", "away_team", "commence_time", "xgid") if ev.get(k) is not None}
+               | {"sport_key": ev.get("sport_key") or key} for key, lst in (scan.get("leagues") or {}).items() if key in keep for ev in lst]
+        store.save(EVENTS_FILE, {"day": str(day), "events": evs}, compact=True)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[saison] matchs du jour non gardés : {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def rebuild(now, fetch=None):
+    """Jambes `saison` reconstruites À LA DEMANDE (`saison N`) sur les matchs du jour pas encore commencés (championnats suivis ET coupes, LDC comprise), avec les cotes 1xBet RELUES à
+    l'instant (cache de moins de C.XBET_COMBI_FRESH_MIN min repris), dans le plafond de la voie (C.SEASON_MAX_MATCHES matchs, C.SEASON_SECONDS s ; le relevé ne remplace pas le compte rendu
+    du relevé principal). Les mêmes règles que le matin (modèle, marché, valeur / remplissage, garde-fous) ; les lignes sont journalisées (CLV par jambe). -> (jambes, bilan) ; le bilan :
+    {events (non commencés), cup_events, predicted, read (matchs lus chez 1xBet), cup_read, no_price (matchs prédits sans prix), few (équipes sous le minimum), unknown (équipes non reconnues)}.
+    Ne lève jamais. `fetch` : injectable (mêmes arguments que xbet.fetch_day)."""
+    from datetime import timedelta
+    from . import xprice
+    info = {"events": 0, "cup_events": 0, "predicted": 0, "read": 0, "cup_read": 0, "no_price": 0, "unread": 0, "few": set(), "unknown": set()}
+    day = str(now.date())
+    try:
+        doc = store.load(EVENTS_FILE, {})
+        kday = (store.load("today.json", {}) or {}).get("day") or day            # le jour KELLY (jusqu'à 04:00 UTC le lendemain), pas la date UTC
+        day = str(doc.get("day") or day) if isinstance(doc, dict) else day
+        evs = [e for e in (doc.get("events") or [] if isinstance(doc, dict) and day == str(kday) else [])
+               if _ko(e) > now + timedelta(minutes=C.XBET_SOON_MIN)]
+        scan = {"leagues": {}}
+        for e in evs:
+            scan["leagues"].setdefault(e["sport_key"], []).append(e)
+        pronos = make(scan, now, now.date(), info)
+        if not pronos:
+            return [], info
+        picks = (store.load("today.json", {}) or {}).get("picks") or []
+        attach_sharp(pronos, picks, store.load("odds_history.json", {}))
+        events, wanted = xprice._events(pronos)[:C.SEASON_MAX_MATCHES], xprice._wanted(pronos)
+        kw = dict(deadline=time.monotonic() + C.SEASON_SECONDS, wanted=wanted, live=True, fresh_min=C.XBET_COMBI_FRESH_MIN)
+        found = (fetch(events, **kw) if fetch is not None else xbet.fetch_day(events, record=False, **kw)) or {}
+    except Exception as e:                          # noqa: BLE001
+        print(f"[saison] reconstruction impossible : {type(e).__name__}: {e}", file=sys.stderr)
+        return [], info
+    cups = {c["id"] for c in pronos if c.get("cup")}
+    ids = {c["id"] for c in pronos}
+    info["read"] = sum(1 for i in ids if (found.get(i) or {}).get("px"))
+    info["cup_read"] = sum(1 for i in cups if (found.get(i) or {}).get("px"))
+    wdata, cdata = load_weights(), load_calib()
+    legs, rows, priced = [], [], set()
+    for c in pronos:
+        f = found.get(c["id"])
+        if not f or not f.get("px"):
+            continue
+        chosen, ref, extra = price(c, f["px"], f.get("refs"), now, wdata, cdata)
+        for d in (chosen, ref, extra):
+            if d is not None:
+                d["xgid"] = f["gid"]
+                if f.get("cid"):
+                    d["xcid"] = f["cid"]
+                rows.append(d)
+                priced.add(c["id"])
+        if chosen is not None:
+            legs.append(chosen)
+    asked = {e["id"] for _, e in events}
+    info["unread"] = len(ids - asked)                  # prédits mais au-delà du plafond de matchs : jamais demandés à 1xBet
+    info["no_price"] = len(asked - priced)             # demandés mais AUCUNE ligne n'a de prix ni d'avis de marché (match introuvable chez 1xBet, marché absent, ou relevé arrêté par le délai)
+    record(rows, day, now)
+    return legs, info
+
+
+def summary_line(info):
+    """Une ligne : ce que la reconstruction a trouvé (« 🔎 12 matchs lus chez 1xBet sur 20 non commencés (dont 4 de coupe) · 5 équipes sous 4 matchs · 3 matchs sans prix · 2 équipes non reconnues »)."""
+    s = lambda n, one, many: f"{n} {one if n <= 1 else many}"      # noqa: E731
+    out = f"🔎 {s(info['read'], 'match lu', 'matchs lus')} chez 1xBet sur {info['events']} non commencés (dont {info['cup_read']} de coupe)"
+    out += f" · {s(len(info['few']), 'équipe', 'équipes')} sous {C.SEASON_MIN_MATCHES} matchs · {s(info['no_price'], 'match sans prix', 'matchs sans prix')}"
+    if info["unknown"]:
+        out += f" · {s(len(info['unknown']), 'équipe non reconnue', 'équipes non reconnues')}"
+    if info.get("unread"):
+        out += f" · {s(info['unread'], 'match non relu', 'matchs non relus')} (au-delà du plafond de {C.SEASON_MAX_MATCHES} matchs)"
+    return out
+
+
 def reprice(c, px, refs):
     """La jambe `c` (déjà choisie le matin) remise aux cotes `px` du moment (copie), ou None si 1xBet ne propose plus CETTE ligne. La proba du modèle (p_model), son poids (ew) et l'avis sharp
     du matin (p_sharp) restent ceux du matin ; seul l'avis de 1xBet (p_x) et le prix changent. `sval` est recalculé : 1 (valeur), 0 (remplissage) ou None (la jambe ne vaut plus ni l'un ni l'autre)."""
@@ -416,6 +529,7 @@ def run(scan, picks, day, now, fetch=None, history=None):
     C.SEASON_SECONDS. Ne lève jamais."""
     m = mode()
     if m != "off":
+        remember_events(scan, day)                   # les matchs du jour, pour reconstruire les jambes à la demande (`saison N`)
         refresh_state(now)                           # ce que la voie suit (status) : mesuré à chaque passage du matin, même sans relevé 1xBet
     if m == "off" or not C.XBET_ENABLED or (fetch is None and not C.SOURCES_REFRESH):
         return [], m
