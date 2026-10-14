@@ -51,7 +51,7 @@ def test_windows_and_fields():
     assert recs and cnt["predicted"] == len(recs) and cnt["no_model"] == 0, cnt
     assert all(R.WARMUP_END <= r["date"] < R.RESERVED_FROM for r in recs), "ni échauffement ni saison réservée dans la fenêtre de développement"
     r = recs[0]
-    assert set(r["pred"]) == {"modèle seul", "ouverture Pinnacle", "ouverture + 12 % modèle", "ouverture + 25 % modèle"}
+    assert set(r["pred"]) == {"modèle seul", "ouverture Pinnacle", "ouverture + 12 % modèle", "ouverture + 25 % modèle", R.LINEAR20}
     assert abs(sum(r["q_o3"]) - 1) < 1e-9 and abs(sum(r["q_c3"]) - 1) < 1e-9
     fin, _ = R.replay(MS, "E0", R.RESERVED_FROM, R.RESERVED_TO)
     assert fin and all(x["date"] >= R.RESERVED_FROM for x in fin) and not {x["id"] for x in fin} & {x["id"] for x in recs}

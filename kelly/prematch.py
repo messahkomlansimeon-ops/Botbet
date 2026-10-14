@@ -140,6 +140,9 @@ def deep_p(d, lh, la, market, point, name):
 def goal_weight(c):
     """Poids du modèle de buts pour ce pari : celui mesuré sur l'historique pour sa ligue (data/tuning.json, kelly/tune.py),
     sinon config.MODEL_WEIGHT["goals"]."""
+    from . import ensemble
+    if ensemble.model_silent(c.get("market") or "totals"):       # poids figé à 0 (audit du 14/10, extension par analogie non testée : voir le ledger) : ni 20 % ni réglage par championnat
+        return 0.0
     from .sources import footballdata as fd
     w = strength.goal_weight(fd.SPORT_TO_DIV.get(c.get("sport_key")))
     return C.MODEL_WEIGHT["goals"] if w is None else w
@@ -147,8 +150,9 @@ def goal_weight(c):
 
 def btts_weight(c):
     """Poids du modèle de buts pour « les 2 marquent » : celui de config (MODEL_WEIGHT["goals"]), JAMAIS le poids mesuré par tune.py, qui est celui
-    du plus/moins de 2,5 buts (football-data n'a aucune cote historique des 2 marquent : le poids du modèle sur ce marché n'est pas mesuré)."""
-    return C.MODEL_WEIGHT["goals"]
+    du plus/moins de 2,5 buts (football-data n'a aucune cote historique des 2 marquent : le poids du modèle sur ce marché n'est pas mesuré). Figé à 0 comme goal_weight."""
+    from . import ensemble
+    return 0.0 if ensemble.model_silent("btts") else C.MODEL_WEIGHT["goals"]
 
 
 def deep_assess(c, f, d):
@@ -226,10 +230,10 @@ def assess(c, f, sources):
     if m == "totals" and point is not None:
         exp = lh + la
         return {"kind": "goals", "exp": exp, "p": p_totals(lh, la, point, c["name"], goal_kappa(f)),
-                "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
+                "w": goal_weight(c) * aps_scale(f, "exp_goals_home"),
                 "tag": f"{label} : {exp:.1f} buts attendus vs ligne {point}", "flag": C.PM_FLAG * 1.25}
     if m == "btts":
-        return {"kind": "btts", "p": p_btts(lh, la, c["name"], goal_rho(f), goal_kappa(f)), "w": C.MODEL_WEIGHT["goals"] * aps_scale(f, "exp_goals_home"),
+        return {"kind": "btts", "p": p_btts(lh, la, c["name"], goal_rho(f), goal_kappa(f)), "w": btts_weight(c) * aps_scale(f, "exp_goals_home"),
                 "tag": f"{label} : {lh:.1f}-{la:.1f} buts attendus (les 2 marquent)", "flag": C.PM_FLAG * 1.25}
     if m == "h2h":
         who = "draw" if c["name"] == "Draw" else ("home" if c["name"] == c["home"] else "away")
@@ -253,7 +257,10 @@ def apply(c, a, src="sources"):
         if "heuristic" in c:
             c["heuristic"] += delta
         pm["pgap"] = round(a["p"] - old, 3)
-        if abs(a["p"] - old) > a["flag"]:
+        from . import ensemble
+        if ensemble.model_silent(c.get("market") or ""):
+            pm["silent"] = 1                                # poids figé à 0 : l'avis du modèle reste noté (fantôme) mais n'est plus un argument du pari
+        elif abs(a["p"] - old) > a["flag"]:
             c["why"] = ", ".join(filter(None, [c["why"], a["tag"]]))
     if a.get("xgd") is not None:
         pm["xgd"] = round(a["xgd"], 2)

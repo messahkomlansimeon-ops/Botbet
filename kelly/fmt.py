@@ -491,7 +491,7 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
     maybe = any(c.get("xodds") and c.get("xkind") == "probable" for c in shown)
     value = any(c.get("xodds") and c.get("xkind") != "probable" for c in shown)            # pronostics de buts sans avis d'un book de référence : « probables », pas « valeur »
     when_txt = "(relevé partiel : heure sur chaque pari)" if partial else f"de {esc(when)}" if when else "du jour"
-    note = ("🎯 = probable, mais aucun book de référence ne confirme cette cote : pas une valeur, pas de mise conseillée." if maybe else "")
+    note = ("🎯 = probable, pas une valeur (aucun book de référence ne confirme la cote, ou elle ne dépasse pas celle des books de référence) : pas de mise conseillée." if maybe else "")
     lines = [b(title or "🎲 Pronostics Kelly"),
              i(esc(intro) + esc(stamp) if intro else
                ((f"💎 = cote 1xBet {when_txt} assez haute pour jouer." if value else f"Cotes 1xBet {when_txt}.") if priced else "")
@@ -513,7 +513,8 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
                 at = f" (lue à {esc(c.get('xat') or when)})" if partial and (c.get("xat") or when) else ""
                 if c.get("xkind") == "probable":
                     lines.append(f"🎯 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
-                    lines.append(i(f"   {who} {pct(c['prob'])}{odds_vs} · probable, pas une valeur (aucun book de référence){data}"))
+                    note = ("favori des books de référence, sans valeur" if c.get("p_sharp") is not None else "probable, pas une valeur (aucun book de référence)")
+                    lines.append(i(f"   {who} {pct(c['prob'])}{odds_vs} · {note}{data}"))
                     continue
                 lines.append(f"💎 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
                 ev_txt = f" · valeur {c['xev'] * 100:+.0f} %" if c.get("xev") is not None else ""       # famille figée sans avis de marché : pas d'espérance

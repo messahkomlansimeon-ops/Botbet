@@ -28,6 +28,7 @@ from datetime import date, datetime, timedelta, timezone
 
 TMP = tempfile.mkdtemp(prefix="kelly-sources-fix-")
 os.environ["DATA_DIR"] = os.path.join(TMP, "data")
+os.environ["ENSEMBLE_FROZEN_MODEL"] = "none"       # ces tests fixent la mécanique d'avant le gel (mélange du modèle à 20 % dans prematch.apply, réglage hebdomadaire des poids de buts) : le gel est dans tests/test_frozen_model.py
 os.environ["SOURCES_CACHE_DIR"] = os.path.join(TMP, "cache")
 os.environ["STATS_CACHE_DIR"] = os.path.join(TMP, "apistats")
 os.environ["ODDS_CACHE_DIR"] = os.path.join(TMP, "odds")

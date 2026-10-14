@@ -211,7 +211,7 @@ def _ens_fields(c, v, pm, p0, odd, price_ok):
         c.pop("xev_x", None)
     else:
         c["xev_x"] = round(v["ev_x"], 4)           # espérance au prix 1xBet sans marge : combos.stake_prob n'accepte une mise que si elle est positive
-    min_odds = round(ensemble.min_price(p), 2) if v.get("kind") != "probable" else round((1 + C.ENSEMBLE_PROBABLE_MIN_EV) / p, 2)
+    min_odds = round(ensemble.min_price(p, market=c["market"]), 2) if v.get("kind") != "probable" else round((1 + C.ENSEMBLE_PROBABLE_MIN_EV) / p, 2)
     c.update(prob=round(p, 4), p_ens=round(p, 4), p_model=round(pm, 4), p0=round(p0, 4), fair=round(1 / p, 2),
              min_odds=min_odds if price_ok else max(min_odds, round(odd + 0.01, 2)), xodds=odd, xev=round(v["ev"], 4),
              xp=None if parts["p_x"] is None else round(parts["p_x"], 4), ew=round(parts["wm"], 4), esrc=parts["src"])

@@ -44,6 +44,7 @@ EDGE_MIN = 0.03                     # écart minimal pour qu'un pari simulé soi
 DEFAULT_DIVS = ("E0", "SP1", "I1", "D1", "F1")
 MIN_MATCHES = 30
 EPS = 1e-9
+LINEAR20 = "ouverture + 20 % lin. (info)"      # comme prematch.apply : (1 - w) x books + w x modèle, w = 0,20 (poids de config, avant le gel de goal_weight)
 
 
 def _isolate_env(cache_dir=None):
@@ -108,6 +109,7 @@ def predictors(r):
     out = {"modèle seul": (r["p3"], r["po"]), "ouverture Pinnacle": (r["q_o3"], r["q_oo"])}
     for wm in WEIGHTS:
         out[f"ouverture + {int(wm * 100)} % modèle"] = (pool3(r["p3"], r["q_o3"], wm), A.pool(r["po"], r["q_oo"], wm))
+    out[LINEAR20] = ([(1 - 0.20) * q + 0.20 * p for q, p in zip(r["q_o3"], r["p3"])], (1 - 0.20) * r["q_oo"] + 0.20 * r["po"])      # INFORMATION : le mélange linéaire à 20 % de prematch.apply
     return out
 
 

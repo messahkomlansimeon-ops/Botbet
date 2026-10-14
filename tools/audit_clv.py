@@ -57,6 +57,17 @@ def load(data_dir):
             row = con.execute("select body from docs where name=?", (name,)).fetchone()
             doc = json.loads(row[0]) if row else []
             out.append(doc if isinstance(doc, list) else [])
+        seen = {r.get("key") for r in out[1]}
+        try:
+            from kelly import ensemble                       # archive compacte (90 jours) : les lignes réglées que le journal a déjà oubliées
+            for nm, body in con.execute("select name, body from docs where name like 'arch/ens/%' order by name"):
+                doc = json.loads(body)
+                day = nm[len("arch/ens/"):]
+                for k, v in (doc.get("rows") or {}).items():
+                    if k not in seen:                          # le journal, plus complet, l'emporte
+                        out[1].append(ensemble.unpack_archive_row(k, day, v))
+        except Exception as e:                                 # noqa: BLE001 - l'audit marche aussi sans archive
+            print(f"[audit] archive non lue : {type(e).__name__}: {e}", file=sys.stderr)
         return out[0], out[1]
     finally:
         con.close()

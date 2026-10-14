@@ -83,7 +83,7 @@ def leg_reason(c):
     if edge is None:                                # pas de valeur calculée : pas de jambe (jamais un 0 inventé)
         return None
     floor = C.LEG_SAFE_EDGE_FLOOR if is_safe(c) else C.LEG_EDGE_FLOOR
-    if edge < floor or (c.get("pm") or {}).get("pgap", 0) <= -C.LEG_PM_GAP:
+    if edge < floor or ((c.get("pm") or {}).get("pgap", 0) <= -C.LEG_PM_GAP and not ensemble.model_silent(c["market"])):       # famille figée : le modèle ne refuse rien
         return None
     if edge >= C.LEG_MIN_EDGE * O.few_books_factor(c.get("n_books", 10)):
         return "value"

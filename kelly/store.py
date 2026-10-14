@@ -18,7 +18,7 @@ from contextlib import closing, contextmanager
 DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DB_FILE = "kelly.db"
 BACKUP_DIR = "sauvegarde"
-NO_EXPORT = ("strength_", "progress.json", "telegram_later.json", "snap/")     # caches recalculés, progression, messages en attente, instantanés : pas dans la sauvegarde
+NO_EXPORT = ("strength_", "progress.json", "telegram_later.json", "snap/", "arch/")     # caches recalculés, progression, messages en attente, instantanés : pas dans la sauvegarde
 # Documents précieux (apprentissage, tes paris, ton capital) : un instantané par jour (snapshot, SNAP_DAYS jours) ; s'il devient illisible (JSON abîmé), il
 # est remis tel qu'il était au dernier instantané (load), jamais remplacé en silence par un document vide ; chaque réparation est notée (REPAIRS).
 PROTECTED = ("calib.json", "calib_boot.json", "means.json", "ensemble.json", "live_calib.json", "tuning.json", "model.json",

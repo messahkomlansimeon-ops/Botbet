@@ -7,6 +7,7 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-")
+os.environ["ENSEMBLE_FROZEN_MODEL"] = "none"       # ces tests fixent la mécanique d'avant le gel (mélange du modèle à 20 % dans prematch.apply, réglage hebdomadaire des poids de buts) : le gel est dans tests/test_frozen_model.py
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-cache-")     # jamais le vrai cache (CSV du PC)
 os.environ["ODDS_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-stats-test-odds-")
 os.environ.pop("STATS_API_KEY", None)

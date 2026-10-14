@@ -287,7 +287,11 @@ def run(divs=None, loader=None, seconds=None, force=False, log=None):
 
 def _write(cur):
     """Recalcule les poids (global + rétrécis) d'après tous les rapports et écrit data/tuning.json (atomique)."""
-    g, per = solve_weights(cur["report"])
+    from . import ensemble
+    if ensemble.frozen("goals"):                    # poids des buts figé à 0 (audit du 14/10) : le réglage hebdomadaire ne le touche plus (la demi-vie reste réglée)
+        g, per = None, {}
+    else:
+        g, per = solve_weights(cur["report"])
     cur["goal_weight"] = ({"_global": round(g, 3), **per} if g is not None else {})
     out = {"built": _stamp(), "half_life": cur["half_life"], "goal_weight": cur["goal_weight"], "report": cur["report"]}
     try:

@@ -138,5 +138,20 @@
    }
   },
   "report_sha": "7548aeb83baef6127760030608b2ed19d7a0b86b40bfedddd32696a7a09b8e18"
- }
+ },
+ "extensions": [
+  {
+   "declared_on": "2026-10-14",
+   "declared_by": "utilisateur",
+   "kind": "extension par analogie, NON TESTÉE (ce n'est pas un résultat de la saison réservée)",
+   "decision": [
+    "poids du modèle des buts (prematch.goal_weight / btts_weight, 20 % par défaut ou réglage par championnat) figé à 0 pour les cinq familles, avec fantôme, et réglage hebdomadaire des poids de buts coupé (tune._write)",
+    "ws = 1 pour les cinq familles : le marché est le sharp seul, une seule définition de la valeur (celle de sharpgap : seuil +3 %, plafond +25 %, fraîcheur du sharp de sharpgap)",
+    "jambes « probable » 🎯 conservées pour les combinés (favori sharp >= 60 %, espérance >= -10 %), étiquetées « sans valeur », jamais comptées comme valeur",
+    "archive compacte du journal d'ensemble (90 jours, documents « arch/ens/<jour> »), lue par les outils d'audit seulement"
+   ],
+   "reasons": "même modèle, mêmes marchés, mélangé plus fort (20 %) que le 12 % qui a échoué ; attendre un réglage par championnat appris sur quelques jours serait le surajustement interdit ; un poids à 0 ne crée jamais de fausse valeur",
+   "information_only": "mélange linéaire à 20 % rejoué sur la fenêtre de développement (tools/audit_replay.py, prédicteur « 20 % lin. »), noté au rapport, sans conséquence"
+  }
+ ]
 }

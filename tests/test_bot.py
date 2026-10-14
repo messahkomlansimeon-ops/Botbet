@@ -1572,7 +1572,8 @@ def test_quality_floor():
     # buts / 1N2 : l'ensemble décide (le marché a raison quand le modèle s'écarte) : « stats » n'est plus une raison d'entrer (lot modèle, point 4)
     assert CB.leg_reason(mkleg(6, 2.30, 0.45, edge=0.0, pm={"kind": "goals", "pgap": 0.07})) is None
     assert CB.leg_reason(mkleg(7, 1.74, 0.55, edge=-0.04, pm={"kind": "goals", "pgap": -0.07})) is None   # le modèle est contre
-    assert CB.leg_reason(mkleg(8, 1.49, 0.72, edge=0.0, pm={"kind": "goals", "pgap": -0.06})) is None     # même une jambe sûre
+    assert CB.leg_reason(mkleg(8, 1.49, 0.72, edge=0.0, pm={"kind": "goals", "pgap": -0.06})) == "safe"       # poids du modèle figé à 0 (14/10) : il ne refuse plus une jambe sûre (la proba des books décide)
+    assert CB.leg_reason(mkleg(8, 1.49, 0.72, edge=0.0, pm={"kind": "corners", "pgap": -0.06}, market="alternate_totals_corners")) is None      # une famille non figée garde ce veto
     assert CB.leg_reason(mkleg(9, 1.9, 0.5, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Home")) is None        # 1N2 : famille décidée par l'ensemble
     assert CB.leg_reason(mkleg(10, 4.4, 0.23, edge=0.0, pm={"kind": "h2h", "xgd": 0.7}, name="Draw")) is None
     # peu de books : l'écart de valeur exigé est plus grand

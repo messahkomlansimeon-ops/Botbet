@@ -263,9 +263,12 @@ def sharp_for(c, name, point, now=None):
     if not hit:
         return None
     t = hit[3] if len(hit) > 3 else None
+    max_age = C.SHARPGAP_MAX_AGE_MIN if frozen(family(c["market"])) else C.ENSEMBLE_SHARP_MAX_AGE_MIN       # famille figée : même fraîcheur que sharpgap
+    if now is not None and not t and frozen(family(c["market"])):
+        return None                                  # famille figée : comme sharpgap, un relevé sharp d'âge inconnu est refusé
     if now is not None and t:
         try:
-            if (now - datetime.fromisoformat(str(t).replace("Z", "+00:00"))).total_seconds() / 60 > C.ENSEMBLE_SHARP_MAX_AGE_MIN:
+            if (now - datetime.fromisoformat(str(t).replace("Z", "+00:00"))).total_seconds() / 60 > max_age:
                 return None
         except (ValueError, TypeError):
             pass
@@ -396,7 +399,7 @@ def weights(fam, data=None, raw=False):
            "prior_wm": prior_model(fam), "prior_ws": C.ENSEMBLE_PRIOR_SHARP,
            "n_m": round((st.get("m") or {}).get("n", 0.0), 1), "n_s": round((st.get("s") or {}).get("n", 0.0), 1), "frozen": False}
     if not raw and frozen(fam):
-        out |= {"wm_raw": out["wm"], "wm": 0.0, "frozen": True}
+        out |= {"wm_raw": out["wm"], "wm": 0.0, "ws_raw": out["ws"], "ws": 1.0, "frozen": True}       # ws = 1 : le marché est le sharp seul, comme sharpgap (une seule définition de la valeur)
     if cache:
         _memo.setdefault("w", {})[fam] = out
     return out
@@ -441,11 +444,11 @@ def learn(rows):
         fam = family(r["market"])
         wt = 1.0 / per_match[(fam, str(r.get("date") or ""), r.get("id") or key.split("|")[0])]
         st = data["fam"].setdefault(fam, {})
-        if pm is not None and not frozen(fam):                     # famille figée : le poids du modèle n'est plus appris (celui du sharp, ci-dessous, continue)
+        if pm is not None and not frozen(fam):                     # famille figée : le poids du modèle n'est plus appris
             w = weights(fam, data)                                 # ws courant : l'avis du marché dont on mesure le poids du modèle
             p_mkt = pool_market(ps, px, w["ws"])[0]
             _add(st.setdefault("m", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool(pm, p_mkt, g), y) for g in GRID], wt)
-        if ps is not None and px is not None:
+        if ps is not None and px is not None and not frozen(fam):  # famille figée : ws = 1 (sharp seul), plus rien à apprendre
             _add(st.setdefault("s", {"ll": [0.0] * len(GRID), "n": 0.0}), [_loglik(pool_market(ps, px, g)[0], y) for g in GRID], wt)
         data["done"][key] = str(r.get("date") or date.today())
         r["ens"] = True
@@ -468,7 +471,7 @@ def combine(fam, p_model=None, p_x=None, p_sharp=None, data=None, raw=False):
     wm = 0.0 if silent else (w["wm"] if (p_model is not None and p_mkt is not None) else (1.0 if p_model is not None else 0.0))
     ws = w["ws"] if (p_sharp is not None and p_x is not None) else (1.0 if p_sharp is not None else 0.0)
     eff = {"model": wm, "sharp": (1 - wm) * ws, "x": (1 - wm) * (1 - ws) if p_mkt is not None else 0.0}
-    src = "+".join(n for n, v in (("sharp", p_sharp), ("x", p_x), ("model", None if silent else p_model)) if v is not None)
+    src = "+".join(n for n, v in (("sharp", p_sharp), ("x", p_x), ("model", None if silent else p_model)) if v is not None and not (silent and n == "x" and ws == 1.0))
     return p, {"family": fam, "p_model": p_model, "p_x": p_x, "p_sharp": p_sharp, "p_mkt": p_mkt, "wm": w["wm"], "ws": w["ws"],
                "w": eff, "src": src, "n": w["n_m"], "market_weight": 1 - w["wm"], "frozen": silent}
 
@@ -499,10 +502,11 @@ def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_app
     « no_prob » (aucun avis), « no_market » (aucun avis de marché pour confirmer le modèle), « veto » (écart modèle-marché
     trop grand), « price » (1xBet paie trop peu), « no_sharp » / « not_probable » (sans avis sharp : « probable » éteint, ou proba retenue trop basse). ev = p_ens x cote - 1.
     gap = |p_model - p_mkt| ou None. kind : « value » (avis sharp ou famille légère) | « probable » (sans avis sharp) | None. ev_x = proba 1xBet sans marge x cote - 1 ou None."""
-    margin = C.ENSEMBLE_MARGIN if margin is None else margin
     p, parts = combine(family(market), p_model, p_x, p_sharp, data, raw)
     parts["x_approx"] = x_approx_used
     silent = parts["frozen"]
+    if margin is None:
+        margin = C.SHARPGAP_EDGE if silent else C.ENSEMBLE_MARGIN             # famille figée : le même seuil que sharpgap (+3 %), un seul producteur de paris sur les buts
     out = {"ok": False, "why": "", "p": p, "ev": None, "gap": None, "parts": parts, "kind": None, "ev_x": None}
     if p is None:
         out["why"] = "no_prob"
@@ -525,8 +529,13 @@ def value_of(market, p_model, p_x, p_sharp, price, margin=None, data=None, x_app
             out["why"] = "price"
         else:
             out.update(ok=True, kind="probable")
+    elif silent and out["ev"] > C.SHARPGAP_MAX_EDGE:                           # comme sharpgap : un écart énorme est une donnée suspecte, pas une valeur
+        out["why"] = "suspect"
     elif p * price < 1 + margin:
-        out["why"] = "price"
+        if silent and C.ENSEMBLE_PROBABLE and p >= C.ENSEMBLE_PROBABLE_MIN_P and out["ev"] >= C.ENSEMBLE_PROBABLE_MIN_EV:
+            out.update(ok=True, kind="probable")                              # favori des books de référence, SANS valeur : jambe de combiné possible, jamais comptée comme valeur
+        else:
+            out["why"] = "price"
     else:
         out.update(ok=True, kind="value")
     return out
@@ -539,9 +548,12 @@ def value(c, price=None, margin=None, approx=False, data=None):
     return value_of(c["market"], pm, px, ps, price, margin, data, used)
 
 
-def min_price(p, margin=None):
-    """Cote 1xBet minimale pour que le pari passe la règle de valeur à la proba retenue `p` : (1 + marge) / p."""
-    return (1 + (C.ENSEMBLE_MARGIN if margin is None else margin)) / p
+def min_price(p, margin=None, market=None):
+    """Cote 1xBet minimale pour que le pari passe la règle de valeur à la proba retenue `p` : (1 + marge) / p. `market` : la marge d'une famille figée est celle de
+    sharpgap (C.SHARPGAP_EDGE), comme dans value_of."""
+    if margin is None:
+        margin = C.SHARPGAP_EDGE if market is not None and model_silent(market) else C.ENSEMBLE_MARGIN
+    return (1 + margin) / p
 
 
 # ---------- texte ----------
@@ -754,6 +766,86 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
         return 0
 
 
+ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
+ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref")
+# xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
+# règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
+
+
+def _pack(r):
+    xc = r.get("xclose") or {}
+    sh = r.get("shadow") or {}
+    return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
+            [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp")))] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
+            r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
+            r.get("strategy"), r.get("xref")]
+
+
+def unpack_archive_row(key, day, vals):
+    """Ligne d'archive -> dict de même forme que celle du journal (pm, px, ps, xodds, xclose {odds, lead_min}, xgone {lead_min}, result, shadow, date) : les outils
+    d'audit lisent l'une ou l'autre sans distinction."""
+    d = dict(zip(ARCH_COLS, list(vals) + [None] * (len(ARCH_COLS) - len(vals))))      # une ligne archivée avant l'ajout d'une colonne reste lisible
+    out = {"key": key, "date": day, "market": d["market"], "id": d["id"], "name": d["name"], "point": d["point"], "commence": d["commence"], "pm": d["pm"],
+           "px": d["px"], "ps": d["ps"], "xodds": d["xodds"], "result": d["result"], "archived": True}
+    if d["xclose"]:
+        out["xclose"] = {"odds": d["xclose"][0], "lead_min": d["xclose"][1], "susp": bool(d["xclose"][2]) if len(d["xclose"]) > 2 else False}
+    if d["xref"]:
+        out["xref"] = d["xref"]
+    if d["xgone"] is not None:
+        out["xgone"] = {"lead_min": d["xgone"]}
+    if d["shadow"]:
+        sh = d["shadow"]
+        out["shadow"] = {"ev": sh[0], "model_value": bool(sh[1]), "old_ok": bool(sh[2]), "old_kind": sh[3], "old_p": sh[4]}
+    if d["strategy"]:
+        out["strategy"] = d["strategy"]
+    return out
+
+
+def archive(log, today=None):
+    """Copie, une seule fois chacune, les lignes RÉGLÉES (win / loss) du journal dans l'archive compacte (un document par jour de la ligne), marque `arch` sur les
+    lignes copiées, et efface les jours de plus de C.ENSEMBLE_ARCHIVE_DAYS. Sans effet sur un pari, le bilan, l'apprentissage ou le règlement : rien d'autre que les
+    outils d'audit ne la lit. Ne lève jamais (une panne d'écriture laisse les lignes non marquées : elles seront copiées au prochain règlement). -> nombre de lignes copiées."""
+    if not C.ENSEMBLE_ARCHIVE:
+        return 0
+    try:
+        todo = [r for r in log if r.get("result") in ("win", "loss") and r.get("key") and r.get("date") and not r.get("arch")]
+        by_day = {}
+        for r in todo:
+            by_day.setdefault(r["date"], []).append(r)
+        docs = {}
+        for day, rows in by_day.items():
+            doc = store.load(ARCH_PREFIX + day, None)
+            doc = doc if isinstance(doc, dict) and isinstance(doc.get("rows"), dict) else {"cols": list(ARCH_COLS), "rows": {}}
+            for r in rows:
+                doc["rows"][r["key"]] = _pack(r)
+            docs[ARCH_PREFIX + day] = doc
+        if docs:
+            store.save_many(docs)
+            for r in todo:
+                r["arch"] = True
+        keep_from = str((today or date.today()) - timedelta(days=C.ENSEMBLE_ARCHIVE_DAYS))
+        for nm in store.names(ARCH_PREFIX):
+            if nm[len(ARCH_PREFIX):] < keep_from:
+                store.remove(nm)
+        return len(todo)
+    except Exception as e:                          # noqa: BLE001 - l'archive ne bloque jamais le règlement
+        print(f"[ensemble] archive ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
+
+
+def archive_rows(since=None):
+    """Lignes archivées (dicts de même forme que celles du journal, voir unpack_archive_row), des plus anciennes aux plus récentes ; `since` : jour ISO minimal."""
+    out = []
+    for nm in store.names(ARCH_PREFIX):
+        day = nm[len(ARCH_PREFIX):]
+        if since and day < since:
+            continue
+        doc = store.load(nm, None)
+        if isinstance(doc, dict) and isinstance(doc.get("rows"), dict):
+            out += [unpack_archive_row(k, day, v) for k, v in doc["rows"].items()]
+    return out
+
+
 def settle_log(settle_one, name=LOG_FILE):
     """Règle les lignes en attente du journal avec `settle_one(ligne) -> vrai si elle vient d'être réglée` (phase 2 : le règlement gratuit de
     settle.py, le même que data/fair.json), apprend des lignes réglées et enregistre. -> (lignes réglées cette fois, lignes apprises)."""
@@ -768,6 +860,7 @@ def settle_log(settle_one, name=LOG_FILE):
             return False
     settled = [r for r in log if r.get("result") is None and safe(r)]
     learned = learn(log)
+    archive(log)                                    # copie compacte des lignes réglées (90 jours) AVANT que prune_log ne les retire du journal
     dates = [r["date"] for r in log if r.get("date")]
     if dates:
         log = prune_log(log, date.fromisoformat(max(dates)))

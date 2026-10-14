@@ -685,6 +685,8 @@ ENSEMBLE_HALF_LIFE = _float("ENSEMBLE_HALF_LIFE", 2000)       # oubli exponentie
 ENSEMBLE_TEMP = _float("ENSEMBLE_TEMP", 0.5)                  # vraisemblance atténuée : lignes d'un même match corrélées, choix non aléatoire
 ENSEMBLE_LOG_DAYS = _int("ENSEMBLE_LOG_DAYS", 10)             # jours gardés dans data/ensemble_log.json (avis en attente de règlement)
 ENSEMBLE_LOG_LEARNED_DAYS = _int("ENSEMBLE_LOG_LEARNED_DAYS", 2)   # une ligne réglée ET apprise ne reste que N jours dans le journal (le cumul de data/ensemble.json la résume)
+ENSEMBLE_ARCHIVE = _bool("ENSEMBLE_ARCHIVE", True)                # archive compacte des lignes RÉGLÉES du journal (un document par jour, « arch/ens/<jour> »), pour les outils d'audit seulement
+ENSEMBLE_ARCHIVE_DAYS = _int("ENSEMBLE_ARCHIVE_DAYS", 90)         # jours gardés dans l'archive (le journal, lui, ne garde une ligne réglée et apprise que ENSEMBLE_LOG_LEARNED_DAYS jours)
 ENSEMBLE_LOG_MAX_ROWS = _int("ENSEMBLE_LOG_MAX_ROWS", 4000)    # plafond de lignes du journal : les apprises, puis les réglées, puis les plus vieilles partent d'abord
 # Écarts « sharp » (kelly/sharpgap.py) : cote 1xBet payée au-dessus de la cote juste des books de référence.
 SHARPGAP_EDGE = _float("SHARPGAP_EDGE", 0.03)                 # écart minimal : cote 1xBet x proba sharp - 1

@@ -376,7 +376,7 @@ def rise_items(pronos, got, at, targets, prices, noted=()):
     out, seen = [], set()
     for c in CB.best_per_match(pronos):
         old, new = c.get("xodds0"), c.get("xodds")
-        if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0 and c["key"] not in noted:
+        if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0 and c.get("xkind") != "probable" and c["key"] not in noted:       # 🎯 « sans valeur » : jamais annoncé comme une valeur
             seen.add(c["key"])
             out.append(_item("rise", c["key"], new, _rise_text(c, old, new, c["xev"], at), rank=new / old,
                              coupon={"xref": c["xref"], "xodds": new} if c.get("xref") else None))
