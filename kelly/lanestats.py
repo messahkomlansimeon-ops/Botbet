@@ -10,7 +10,7 @@ from collections import defaultdict
 from . import config as C, ensemble, store
 
 LEAD_OK_MIN = 90
-LANES = ("sharpgap", "stats", "fill", "live", "saison", "saison_cup")        # saison_cup : les jambes `saison` de COUPE (cup = true), séparées au bilan
+LANES = ("sharpgap", "stats", "stats_cup", "fill", "live", "saison", "saison_cup")        # saison_cup : les jambes `saison` de COUPE (cup = true), séparées au bilan
 OBJ_MIN_N = 300                                # objectif 1 : lignes réglées minimales avant de conclure
 CUT_MIN_N = 300                                # coupure de la voie stats entière
 CUT_MIN_N_LEAGUE = 200                         # coupure et retour d'une ligue
@@ -136,7 +136,7 @@ def leg_results(rows, days=None, today=None):
 
     def put(key, lane, res, day, cup=False):
         if key and res in ("win", "loss") and (day or "") >= cut and key not in out:
-            lane = "saison_cup" if lane == "saison" and cup else lane
+            lane = "saison_cup" if lane == "saison" and cup else "stats_cup" if lane == "stats" and cup else lane
             out[key] = (lane if lane in LANES else "legacy", res)
 
     for r in rows:
@@ -166,6 +166,34 @@ def combo_money(days=None, today=None):
         a = out.get(k, (0.0, 0, 0.0))
         out[k] = (a[0] + g, a[1] + 1, a[2] + float((x.get("played") or {}).get("stake") or 0))
     return out
+
+
+def cup_rows(days=None, today=None):
+    """Lignes RÉGLÉES de la voie `stats` portant le label « stats » (valeur) dans le journal des stats de coupe (data/cup_log.json + archive)."""
+    from . import cupstats
+    cut = _since(days, today)
+    return [r for r in cupstats.journal_rows() if isinstance(r, dict) and r.get("strategy") == "stats" and settled(r) and (r.get("date") or "") >= cut]
+
+
+def cup_line(days=None, today=None, plain=False):
+    """« stats (coupes) » : jambes de stats de coupe (fantôme par défaut), réalisé contre annoncé et CLV 1xBet avec son intervalle à 95 % (marges PAR MATCH) sur les lignes réglées ; la règle de
+    retour pré-déclarée (CLV >= 0 sur C.STATS_CUPS_BACK_N lignes -> « on » à la main) y est dite. '' sans rien de réglé. Ne lève jamais."""
+    try:
+        rows = cup_rows(days, today)
+        if not rows:
+            return ""
+        w = sum(1 for r in rows if r["result"] == "win")
+        ann = [r["pm"] for r in rows if r.get("pm") is not None]
+        n, m, h, _ = clv(rows)
+        txt = f"stats (coupes, {C.STATS_CUPS_MODE}) : {w} gagnée{'s' if w > 1 else ''} sur {len(rows)} ({round(w / len(rows) * 100)} %)" + (f" · annoncé {round(sum(ann) / len(ann) * 100)} %" if ann else "")
+        if n:
+            txt += f" · {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" (sur {n}/{C.STATS_CUPS_BACK_N} lignes)"
+            if n >= C.STATS_CUPS_BACK_N and m >= 0 and C.STATS_CUPS_MODE != "on":
+                txt += f" · ✅ règle de retour atteinte : à la main, STATS_CUPS_MODE=on"
+        return txt
+    except Exception as e:                      # noqa: BLE001
+        print(f"[lanes] ligne des stats de coupe illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return ""
 
 
 def season_rows(days=None, today=None):
@@ -249,7 +277,7 @@ def lane_lines(rows, days=None, today=None, plain=False):
         if not mine:
             continue
         w = sum(1 for res in mine if res == "win")
-        txt = f"{ {'legacy': 'avant les étiquettes', 'saison_cup': 'saison (coupes)'}.get(lane, lane) } : {w} gagnée{'s' if w > 1 else ''} sur {len(mine)} ({round(w / len(mine) * 100)} %)"
+        txt = f"{ {'legacy': 'avant les étiquettes', 'saison_cup': 'saison (coupes)', 'stats_cup': 'stats (coupes, combinés)'}.get(lane, lane) } : {w} gagnée{'s' if w > 1 else ''} sur {len(mine)} ({round(w / len(mine) * 100)} %)"
         if lane in ("sharpgap", "stats"):
             n, m, h, gone = clv([r for r in log if r.get("strategy") == lane and settled(r)])
             if n:
@@ -259,6 +287,9 @@ def lane_lines(rows, days=None, today=None, plain=False):
         if lane in ("saison", "saison_cup"):
             txt += season_detail(days, today, plain, cup=lane == "saison_cup")
         out.append(txt)
+    cl = cup_line(days, today, plain)
+    if cl:
+        out.append(cl)
     try:
         cm = combo_money(days, today)
     except Exception as e:                      # noqa: BLE001
@@ -447,6 +478,8 @@ def leg_clv_rows(days=None, today=None):
     from . import seasonlane
     by_key = {r.get("key"): r for r in journal_rows() if r.get("key")}
     by_key |= {r.get("key"): r for r in seasonlane.journal_rows() if r.get("key")}        # clés distinctes (« |saison ») : jamais d'écrasement d'une autre voie
+    from . import cupstats
+    by_key |= {r.get("key"): r for r in cupstats.journal_rows() if r.get("key") and r.get("key") not in by_key}      # stats de coupe : leur propre journal (ids de coupe, jamais ceux d'un championnat)
     out = []
     bets = (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])
     for combos in (fair.load_combos(), bets, fair.load_ghost()):
@@ -456,7 +489,7 @@ def leg_clv_rows(days=None, today=None):
             legs = [l for l in c.get("legs") or [] if isinstance(l, dict)]
             if not legs:                                        # combiné réel de bets.json : ses jambes n'ont que {clé, prix, référence} (xlegs) ; la voie vient du journal
                 legs = [{"key": x.get("key"), "xodds": x.get("xodds"), "id": str(x.get("key") or "").split("|")[0],
-                         "strategy": (by_key.get(x.get("key")) or {}).get("strategy")} for x in c.get("xlegs") or [] if isinstance(x, dict)]
+                         "strategy": (by_key.get(x.get("key")) or {}).get("strategy"), "cup": (by_key.get(x.get("key")) or {}).get("cup")} for x in c.get("xlegs") or [] if isinstance(x, dict)]
             for leg in legs:
                 if leg.get("key"):
                     row = by_key.get(leg["key"])
@@ -488,13 +521,14 @@ def leg_clv_lines(days=None, today=None):
     rows = [r for r in rows if (r[0].get("strategy") or None) != "live" and not is_sea(r[0])]          # les jambes live (hors voies, jamais au journal d'ensemble) et `saison` (journal à part) ne gonflent pas la couverture : elles ont leur ligne
     out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match ; "
            "une jambe sans prix pris, sans ligne au journal ou sans relevé proche n'est pas mesurée : seules les lignes restées les mêmes sont vues)"]
-    for lane in ("sharpgap", "stats", "fill", None):
-        mine = [(l, c, v) for l, c, v in rows if (l.get("strategy") or None) == lane and v is not None]
+    for lane in ("sharpgap", "stats", "stats_cup", "fill", None):
+        mine = [(l, c, v) for l, c, v in rows if (l.get("strategy") or None) == ("stats" if lane == "stats_cup" else lane) and v is not None
+                and (lane not in ("stats", "stats_cup") or bool(l.get("cup")) == (lane == "stats_cup"))]      # seule la voie stats sépare les coupes
         if not mine:
             continue
         n, m, h = stats([v for _, _, v in mine], [l.get("id") or c.get("date") for l, c, _ in mine])
         pos = sum(1 for _, _, v in mine if v > 0)
-        name = {"sharpgap": "sharpgap", "stats": "stats", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
+        name = {"sharpgap": "sharpgap", "stats": "stats", "stats_cup": "stats (coupes, à part)", "fill": "fill (à part : jambes sans valeur)", None: "avant les étiquettes"}[lane]
         out.append(f"{name} : {n} jambes · CLV {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" · {round(pos / n * 100)} % battent le dernier prix"
                    + ("" if n >= 30 else " (trop peu pour conclure)"))
     for label, grp in (("saison (à part : voie propre)", [x for x in sea if not x[0].get("cup")]), ("saison, coupes (à part)", [x for x in sea if x[0].get("cup")])):

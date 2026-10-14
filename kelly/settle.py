@@ -500,6 +500,17 @@ def settle_ensemble(now=None, stats_for=None):
     return got
 
 
+def settle_cups(now=None, stats_for=None):
+    """Règle le journal des stats de COUPE (data/cup_log.json) avec le même règlement gratuit (_settle_fair_row) ; AUCUN apprentissage (poids, moyennes, calibration) : ces lignes ne servent qu'à
+    mesurer le CLV 1xBet et le réalisé (ligne « stats (coupes) » du bilan, règle de retour). -> (lignes réglées, 0)."""
+    if not ensemble.logging_on():
+        return [], 0
+    from . import cupstats
+    now = now or datetime.now(timezone.utc)
+    fdata = FootballData()
+    return ensemble.settle_log(lambda r: _settle_fair_row(r, now, fdata, stats_for or _cached_fstats), name=cupstats.LOG, learner=lambda log: 0, arch_prefix=cupstats.ARCH)
+
+
 def settle_season(now=None, stats_for=None):
     """Règle le journal de la voie `saison` (data/season_log.json) avec le même règlement gratuit (_settle_fair_row), puis apprend de ses lignes de RÉFÉRENCE (poids du modèle et calibration de la
     voie, kelly/seasonlane.py) : jamais ensemble.learn, jamais means.learn (la voie n'alimente ni les poids ni les moyennes des autres voies). -> (lignes réglées, lignes apprises)."""
@@ -520,6 +531,8 @@ def _combo_legs(rows):
         if c.get("custom") or CB.season_no(c.get("tier")) is not None:       # la voie `saison` a sa propre mesure : ses jambes n'apprennent pas la prudence des autres combinés
             continue
         for leg in c.get("legs") or []:
+            if leg.get("cup"):                                         # stats de coupe : jamais dans la prudence par jambe des autres combinés
+                continue
             k = (str(c.get("date")), leg.get("key"))
             if k not in seen:
                 seen.add(k)

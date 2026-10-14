@@ -148,6 +148,27 @@ def test_evening_merge():
     return today
 
 
+def test_evening_keeps_cup_stats():
+    """Les stats de COUPE (kelly/cupstats.py) sont refaites au relevé du soir : fair.make ne les fait plus, sans quoi elles disparaîtraient de today.json pour chaque match relu."""
+    from kelly import cupstats
+    setup()
+    cup = prono("A", "alternate_totals_corners", "Over", 9.5, 0.66, 1.9) | {"cup": True, "key": "A|alternate_totals_corners||9.5|Over", "sport_key": "soccer_argentina_primera_division"}
+    today = store.load("today.json", {})
+    today["pronos"] = today["pronos"] + [cup]
+    store.save("today.json", today)
+    seen = {}
+    real = cupstats.make
+    cupstats.make = lambda scan, now, td=None: seen.setdefault("calls", []).append(sorted(k for k in scan["leagues"])) or [dict(cup)]
+    try:
+        with_fakes(lambda fetch: app.run_evening(NOW, fetch=fetch))
+    finally:
+        cupstats.make = real
+    assert seen["calls"], "cupstats.make est appelé au relevé du soir"
+    kept = [c for c in store.load("today.json", {})["pronos"] if c.get("cup")]
+    assert len(kept) == 1 and kept[0]["key"] == cup["key"], kept
+    print("ok  relevé du soir : les stats de coupe sont refaites (cupstats.make), jamais perdues de today.json")
+
+
 def test_evening_idempotent():
     first = store.load("today.json", {})
     snap = snapshot()
@@ -204,6 +225,7 @@ def test_bot_entry():
 if __name__ == "__main__":
     test_evening_merge()
     test_evening_idempotent()
+    test_evening_keeps_cup_stats()
     test_evening_never_raises_and_changes_nothing()
     test_bot_entry()
     print("tests relecture du soir : OK")

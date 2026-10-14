@@ -104,6 +104,8 @@ def cross_league_stat(c):
     """Pari de stats (corners, cartons, tirs, fautes, touches, hors-jeu, joueurs) d'un match de coupe d'Europe, d'Amérique, de coupe nationale ou entre sélections
     (C.CROSS_LEAGUE_PREFIXES) : les moyennes de Kelly y viennent de championnats différents, sans correction de niveau (audit du 13/10). Jamais proposé."""
     from .calib import family
+    if c.get("cup") and c.get("lane") != "saison":                                # jambe de stats de coupe de la voie `stats` (kelly/cupstats.py : profils de championnat, usable() dit si elle est jouable)
+        return False
     return family(c.get("market") or "") in STAT_FAMILIES and str(c.get("sport_key") or "").startswith(C.CROSS_LEAGUE_PREFIXES)
 
 

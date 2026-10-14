@@ -383,6 +383,8 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
         families = {prematch.CORNERS, prematch.CARDS, *TEAM_GOALS} - have.get(ev["id"], set()) if paid else set(ALL_FAMILIES)
         if paid and all_families and C.FAIR_STATS_PAID:        # relevé 1xBet : les championnats payés (grands championnats) sont ceux où 1xBet liste tirs, fautes, touches, hors-jeu
             families |= set(STAT_MARKETS) - have.get(ev["id"], set())      # (rejeu du 09/10 : 3 matchs payés sur 14 listés n'avaient aucun pronostic stats)
+        if key in C.SEASON_CUPS and C.ENSEMBLE_ENABLED and C.STATS_CUPS_MODE != "off":
+            families = families - set(STAT_MARKETS) - {prematch.CORNERS, prematch.CARDS}      # stats d'une coupe : calculées par kelly/cupstats.py (profils de championnat, journal à part), plus par les moyennes sans correction de niveau
         ref = ev.get("referee") or stats.referee_for(ev)          # arbitre désigné (liste du jour d'API-Football, en cache) : cartons, jaunes et fautes
         f = odds.match_numbers(ev["home_team"], ev["away_team"], key, **({"referee": ref} if ref else {}))
         f["sk"] = ev.get("sport_key") or key                      # championnat : correction de ses moyennes de stats (kelly/means.py)
@@ -490,6 +492,8 @@ def record(pronos, day, shown=None):
     C.FAIR_KEEP_DAYS jours. Un pronostic déjà suivi en silence (« x ») puis montré sort du silence ; une ligne qui change dans la
     journée (même match, même marché) met à jour le suivi existant au lieu d'en ajouter un second. -> nombre ajouté."""
     from datetime import date, timedelta
+    pronos = [c for c in pronos if not c.get("cup")]                      # les stats de coupe (kelly/cupstats.py) ont leur journal : jamais dans fair.json (calibration)
+    shown = None if shown is None else [c for c in shown if not c.get("cup")]
     rows = load()
     by_key = {r["key"]: r for r in rows}
     slot = {(r["date"], r["id"], r["market"]): r for r in rows}          # un suivi par match et marché (avant ce passage)

@@ -78,10 +78,18 @@ def season_mode():
     return C.STRATEGY_SEASON if C.ENSEMBLE_ENABLED else "off"
 
 
+def _cup_stat(c):
+    """Jambe de stats d'une COUPE (cup = true, kelly/cupstats.py) : son interrupteur est C.STATS_CUPS_MODE, pas ceux des ligues de la voie stats (une coupe n'est dans aucune ligue football-data)."""
+    return bool(c.get("cup")) and c.get("lane") != "saison" and lane_of_market(c.get("market")) == "stats"
+
+
 def usable(c):
     """La ligne `c` (pronostic ou pari réel) peut-elle être sélectionnée pour un pari ou une jambe de combiné ? Ensemble éteint : toujours (comportement d'avant)."""
     if not C.ENSEMBLE_ENABLED:
         return True
+    if _cup_stat(c):                                # stats de coupe : « on » seulement (ghost / off : calculées, journalisées, jamais choisies), voie stats « on » et non coupée
+        return (C.STATS_CUPS_MODE == "on" and C.STRATEGY_STATS == "on" and (state().get("stats") or {}).get("mode") != "ghost"
+                and not (c.get("strategy") == "fill" and not C.FILL_LEGS))
     if c.get("strategy") == "saison" or c.get("lane") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
         return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS)
     lane = lane_of_market(c.get("market"))
@@ -99,6 +107,8 @@ def priced(c):
     """Faut-il lire / mettre au prix 1xBet cette ligne ? Faux seulement quand sa voie est « off » (rien de calculé) ; « ghost » est calculé comme « on »."""
     if not C.ENSEMBLE_ENABLED:
         return True
+    if _cup_stat(c):
+        return C.STATS_CUPS_MODE != "off" and C.STRATEGY_STATS != "off"
     lane = lane_of_market(c.get("market"))
     return not (lane and mode(lane, c.get("sport_key")) == "off")
 
@@ -144,6 +154,7 @@ def lines():
     ghost = sorted(set(C.STATS_GHOST_LEAGUES) | set(st.get("leagues") or {}))
     out.append("Stats en fantôme : " + ("toutes les ligues hors football-data" if C.STATS_GHOST_OUTSIDE_FD else "aucune par défaut")
                + (f" + {', '.join(ghost[:6])}{'…' if len(ghost) > 6 else ''}" if ghost else ""))
+    out.append(f"Stats de coupe : {C.STATS_CUPS_MODE} (profils de championnat, journal à part ; retour à « on » à la main si le CLV 1xBet fantôme est ≥ 0 sur {C.STATS_CUPS_BACK_N} lignes)")
     return out
 
 

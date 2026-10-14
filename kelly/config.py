@@ -559,6 +559,8 @@ SEASON_CUPS = _set("SEASON_CUPS", ("soccer_uefa_champs_league", "soccer_uefa_eur
                                    "soccer_conmebol_copa_sudamericana", "soccer_fa_cup", "soccer_england_efl_cup", "soccer_spain_copa_del_rey", "soccer_germany_dfb_pokal",
                                    "soccer_italy_coppa_italia", "soccer_france_coupe_de_france"))     # coupes de clubs : l'attente vient du profil de CHAMPIONNAT de chaque équipe (season.cup_predict)
 SEASON_CUP_HOME = _float("SEASON_CUP_HOME", 1.10)                          # facteur domicile neutre d'un match de coupe (domicile / extérieur)
+STATS_CUPS_MODE = _mode("STATS_CUPS_MODE", "ghost")                      # stats de COUPE (kelly/cupstats.py) : ghost (prix lus et CLV journalisés, jamais jouées), on (jouables), off
+STATS_CUPS_BACK_N = max(1, _int("STATS_CUPS_BACK_N", 200))              # règle de retour : passage à « on » à la main si le CLV 1xBet fantôme des jambes de coupe est >= 0 sur autant de lignes réglées
 SEASON_LEAGUES = _set("SEASON_LEAGUES", ())
 SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 12.0))                    # rétrécissement vers la moyenne de la ligue : poids n / (n + k) ; 12 = le meilleur réglage mesuré au rejeu du 14/10 (season_ledger.json), 6 était la spécification de départ
 SEASON_MIN_MATCHES = max(1, _int("SEASON_MIN_MATCHES", 4))                   # matchs minimum par équipe cette saison, sinon pas de prévision

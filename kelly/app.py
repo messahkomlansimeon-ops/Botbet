@@ -11,7 +11,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
-               seasonlane, xprice, xworld)
+               cupstats, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
@@ -465,6 +465,7 @@ def morning_report(now):
         _step("sauvegarde du suivi (résultats annoncés)", lambda: track.save(rows))        # marque « gap_reported » des paris 1xBet en retard
     msgs += _step("pronostics sans cote", lambda: fair_report(now), [])
     got_ens = _step("journal des avis de l'ensemble", lambda: settle.settle_ensemble(now))      # après le règlement des pronostics : leurs stats sont en cache
+    _step("journal des stats de coupe", lambda: settle.settle_cups(now))                      # même règlement gratuit, journal à part, rien n'est appris
     got_sea = _step("journal de la voie saison", lambda: settle.settle_season(now))              # même règlement gratuit, journal et apprentissage à part
     if got_sea and (got_sea[0] or got_sea[1]):
         print(f"[saison] journal : {len(got_sea[0])} ligne(s) réglée(s), {got_sea[1]} apprise(s)", file=sys.stderr)
@@ -629,9 +630,11 @@ def world_report(scan, picks, day, now):
     try:
         xb = C.SOURCES_REFRESH and C.XBET_ENABLED
         pronos = fair.make(scan, picks, day, deadline=time.monotonic() + C.FAIR_SECONDS, africa=africa, all_families=xb)
+        pronos = pronos + cupstats.make(scan, now)         # stats des COUPES (profils de championnat) : fantôme par défaut, journal à part
         if xb:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé (les paris réels donnent l'avis sharp)
             xprice.apply(pronos, picks=picks)
-        fair.record(pronos, day, shown=CB.best_per_match(pronos))     # suivis : les montrés + d'autres en silence (fiabilité)
+        tracked = [c for c in pronos if not c.get("cup")]                # les stats de coupe ne sont jamais suivies dans fair.json (calibration, moyennes)
+        fair.record(tracked, day, shown=[c for c in CB.best_per_match(pronos) if not c.get("cup")])     # suivis : les montrés + d'autres en silence (fiabilité)
     except Exception as e:                          # noqa: BLE001
         print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)
     data = None
@@ -719,6 +722,8 @@ def log_opinions(rows, day, now=None):
     if not ensemble.logging_on():
         return 0
     try:
+        cup_rows, rows = cupstats.split(rows)                       # stats de coupe : journal à part (data/cup_log.json), jamais celui de l'ensemble
+        cupstats.record(cup_rows, day, now or now_utc())
         n = ensemble.record(rows, str(day), now or now_utc())
         print(f"[ensemble] {n} avis ajouté(s) au journal ({len(rows)} pari(s) examiné(s))", file=sys.stderr)
         return n
@@ -929,6 +934,7 @@ def keep_pronos(pronos, fair_combos=()):
     must = {c["key"] for c in CB.best_per_match(pronos)} | {l["key"] for _, combo in fair_combos if combo for l in combo[0]}
     must |= {c["key"] for c in CB.fair_legs(pronos)}        # toutes les jambes possibles d'un combiné : « combi N » et la relecture de 15:00 les rebâtissent (rejeu du 09/10 : 3 sur 26 perdues)
     must |= {c["key"] for legs in _bold_pools([], pronos, None) for c in legs}    # paris probables chiffrés, mal payés compris : « 🎲 » et « min N » s'en servent
+    must |= {c["key"] for c in pronos if c.get("cup")}       # stats de coupe (fantôme comprises) : relues à 15:00 et par la fenêtre des stats, sans quoi leur CLV serait sous-échantillonné
     first = [c for c in pronos if c["key"] in must]
     rest = [c for c in pronos if c["key"] not in must]
     n = max(0, 40 - len(first))
@@ -1152,6 +1158,7 @@ def _run_evening(now, fetch, seconds):
         scan["leagues"].setdefault(ev["sport_key"], []).append(ev)
     picks = today.get("picks") or []
     new = fair.make(scan, picks, None, deadline=time.monotonic() + C.FAIR_SECONDS, africa=(), all_families=True)      # day=None : jamais API-Football
+    new = new + cupstats.make(scan, now)                 # stats des coupes (fair.make ne les fait plus) : relues et journalisées comme le matin
     first = _priority_ids(day, [c for c in today["pronos"] if c["id"] in evs])
     limit = time.monotonic() + (seconds or C.EVENING_SECONDS)
     got = set()
@@ -1538,6 +1545,7 @@ def mark_xclose(now=None):
     relit 1xBet) ; sous le verrou des données comme eux. Ne lève jamais. -> nombre de lignes modifiées."""
     try:
         n = ensemble.mark_x_close(now)
+        n += ensemble.mark_x_close(now, name=cupstats.LOG)
         return n + ensemble.mark_x_close(now, name=seasonlane.LOG)             # le journal de la voie `saison` : même lecture du cache, aucune requête
     except Exception as e:                          # noqa: BLE001 - audit seulement
         print(f"[suivi] prix 1xBet de clôture ignoré : {type(e).__name__}: {e}", file=sys.stderr)
@@ -2855,7 +2863,7 @@ def underpaid_lines(rows, limit=4):
     best = {}
     for c in rows:
         if (underpaid(c) and c.get("prob", 0) >= C.COMBI_FILL_MIN_P and c["prob"] * c["xodds"] - 1 >= C.COMBI_FILL_MIN_EV
-                and CB.data_ok(c) and not c.get("xveto")):
+                and CB.data_ok(c) and not c.get("xveto") and lanes.usable(c)):          # une jambe de stats de coupe en fantôme ne s'affiche pas
             k = (c["id"], c["market"])
             if k not in best or c["prob"] > best[k]["prob"]:
                 best[k] = c
