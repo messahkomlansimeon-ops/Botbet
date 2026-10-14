@@ -73,10 +73,17 @@ def league_ghost(sport_key):
     return bool(C.STATS_GHOST_OUTSIDE_FD and _outside_fd(sport_key) and sport_key not in C.STATS_ON_LEAGUES)
 
 
+def season_mode():
+    """« on », « ghost » ou « off » de la voie `saison` (config.STRATEGY_SEASON). Ensemble éteint : « off » (la voie n'existe pas sans étiquettes)."""
+    return C.STRATEGY_SEASON if C.ENSEMBLE_ENABLED else "off"
+
+
 def usable(c):
     """La ligne `c` (pronostic ou pari réel) peut-elle être sélectionnée pour un pari ou une jambe de combiné ? Ensemble éteint : toujours (comportement d'avant)."""
     if not C.ENSEMBLE_ENABLED:
         return True
+    if c.get("strategy") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
+        return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS)
     lane = lane_of_market(c.get("market"))
     if lane and mode(lane, c.get("sport_key")) != "on":
         return False

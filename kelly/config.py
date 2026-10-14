@@ -551,11 +551,23 @@ STATS_GHOST_OUTSIDE_FD = _bool("STATS_GHOST_OUTSIDE_FD", True)
 # Mise : part du budget d'un pari = palier x confiance (money.allocate) ; la fraction de Kelly de la voie la module RELATIVEMENT à KELLY_FRACTION_REF (0,25 : le calibrage historique,
 # donc sharpgap ne bouge pas et stats pèse 0,15 / 0,25 = 60 %). Un combiné prend la fraction de sa voie la plus prudente parmi ses jambes à valeur. KELLY_FRACTION n'a jamais dimensionné
 # une mise réelle (seul bankroll.stake, mort, la lit) : conservé, égal à celle de sharpgap.
-# Voie `saison` (kelly/season.py) : modèle des matchs de la saison en cours seulement. Les autres réglages de la voie (interrupteur, poids du marché, marge, paliers) viennent avec ses jambes.
+# Voie `saison` (kelly/season.py, kelly/seasonlane.py) : le modèle des matchs de la saison en cours seulement, mélangé au marché avec SEASON_MODEL_WEIGHT, sa propre étiquette
+# `saison`, son propre journal, sa propre calibration. STRATEGY_SEASON : on (jambes et combinés), ghost (calculé et journalisé, jamais joué), off (rien de calculé). SEASON_LEAGUES : les
+# seules ligues (clés sport_key) de la voie ; vide = toutes celles où au moins SEASON_MIN_TEAMS équipes ont SEASON_MIN_MATCHES matchs cette saison.
+STRATEGY_SEASON = _mode("STRATEGY_SEASON", "on")
+SEASON_LEAGUES = _set("SEASON_LEAGUES", ())
 SEASON_PRIOR_K = max(0.0, _float("SEASON_PRIOR_K", 6.0))                     # rétrécissement vers la moyenne de la ligue : poids n / (n + k)
 SEASON_MIN_MATCHES = max(1, _int("SEASON_MIN_MATCHES", 4))                   # matchs minimum par équipe cette saison, sinon pas de prévision
 SEASON_ALPHA_MIN_MATCHES = max(1, _int("SEASON_ALPHA_MIN_MATCHES", 30))      # matchs de ligue minimum pour mesurer la dispersion (sinon repli du rejeu)
 SEASON_MIN_TEAMS = max(2, _int("SEASON_MIN_TEAMS", 8))                       # une ligue est couverte si au moins 8 équipes ont SEASON_MIN_MATCHES matchs cette saison
+SEASON_MODEL_WEIGHT = min(1.0, max(0.0, _float("SEASON_MODEL_WEIGHT", 0.35)))  # poids du modèle de saison face au marché (log-cotes) ; appris par famille ensuite (SEASON_PRIOR_SD, SEASON_MIN_N)
+SEASON_PRIOR_SD = max(0.01, _float("SEASON_PRIOR_SD", 0.20))                 # écart-type a priori du poids appris
+SEASON_MIN_N = max(1, _int("SEASON_MIN_N", 100))                             # matchs d'une famille avant que son poids appris bouge
+SEASON_MARGIN = _float("SEASON_MARGIN", 0.02)                                # valeur : proba retenue x cote 1xBet >= 1 + marge
+SEASON_FILL_MIN_P = _float("SEASON_FILL_MIN_P", 0.60)                        # jambe de remplissage : proba retenue minimale ...
+SEASON_FILL_MIN_EV = _float("SEASON_FILL_MIN_EV", -0.08)                     # ... et espérance au prix du marché (proba du marché x cote - 1) d'au moins -8 %
+SEASON_SECONDS = max(30, _int("SEASON_SECONDS", 600))                      # temps maximal du relevé 1xBet de la voie (en plus de celui du relevé principal)
+SEASON_MAX_MATCHES = max(1, _int("SEASON_MAX_MATCHES", 60))                  # matchs relevés chez 1xBet au plus pour la voie (le cache du relevé principal sert d'abord)
 KELLY_FRACTION_REF = 0.25
 KELLY_FRACTION_SHARPGAP = _float("KELLY_FRACTION_SHARPGAP", 0.25)
 KELLY_FRACTION_STATS = _float("KELLY_FRACTION_STATS", 0.15)

@@ -500,6 +500,17 @@ def settle_ensemble(now=None, stats_for=None):
     return got
 
 
+def settle_season(now=None, stats_for=None):
+    """Règle le journal de la voie `saison` (data/season_log.json) avec le même règlement gratuit (_settle_fair_row), puis apprend de ses lignes de RÉFÉRENCE (poids du modèle et calibration de la
+    voie, kelly/seasonlane.py) : jamais ensemble.learn, jamais means.learn (la voie n'alimente ni les poids ni les moyennes des autres voies). -> (lignes réglées, lignes apprises)."""
+    if not ensemble.logging_on():
+        return [], 0
+    from . import seasonlane
+    now = now or datetime.now(timezone.utc)
+    fdata = FootballData()
+    return ensemble.settle_log(lambda r: _settle_fair_row(r, now, fdata, stats_for or _cached_fstats), name=seasonlane.LOG, learner=seasonlane.learn, arch_prefix=seasonlane.ARCH)
+
+
 def _combo_legs(rows):
     """Jambes qui apprennent la prudence par jambe : celles des combinés de Kelly (pas les combinés sur mesure : « custom »), chaque jambe une seule
     fois par jour même reprise dans plusieurs tickets (la première rencontrée, toujours la même d'un passage à l'autre)."""

@@ -109,7 +109,7 @@ def frozen(fam):
 
 SHARPGAP_FAMILIES = frozenset(("goals", "btts", "dc", "h2h", "team_goals"))      # voie « sharpgap » : les cinq familles dont le poids du modèle est figé à 0
 STATS_LANE = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))     # voie « stats » : le modèle binomial négatif mélangé au marché
-STRATEGIES = ("sharpgap", "stats", "fill", "live")                # « live » : jambes des combinés LIVE, hors voies (ni retard 1xBet ni modèle de stats) ; dimensionnement d'avant
+STRATEGIES = ("sharpgap", "stats", "fill", "live", "saison")                # « live » : jambes des combinés LIVE, hors voies (ni retard 1xBet ni modèle de stats) ; dimensionnement d'avant
 
 
 def strategy_of(c):
@@ -142,10 +142,11 @@ def strategy_label(row):
 def has_value(legs):
     """Un combiné n'a pas de voie propre : il porte celles de ses jambes. True = au moins une jambe à valeur (sharpgap / stats), False = toutes les jambes sont
     « fill » (combiné SANS valeur), None = voies inconnues (jambes d'avant les étiquettes)."""
-    labels = [(l or {}).get("strategy") for l in legs or []]
-    if any(x in ("sharpgap", "stats") for x in labels):
-        return True
-    if labels and all(x == "fill" for x in labels):
+    legs = list(legs or [])
+    labels = [(l or {}).get("strategy") for l in legs]
+    if any(x in ("sharpgap", "stats") for x in labels) or any(x == "saison" and (l or {}).get("sval") for x, l in zip(labels, legs)):
+        return True                                 # une jambe `saison` est « à valeur » (sval) ou sans valeur (jambe de remplissage de la voie)
+    if labels and all(x == "fill" or (x == "saison" and not (l or {}).get("sval")) for x, l in zip(labels, legs)):
         return False
     return None
 
@@ -702,7 +703,7 @@ def prune_log(log, ref_day):
     return log
 
 
-def record(rows, day, now=None, name=LOG_FILE):
+def record(rows, day, now=None, name=LOG_FILE, shadow=True):
     """Garde dans data/ensemble_log.json les avis de chaque pronostic ou pari de `rows` (montré ou non) pour apprendre quand il sera réglé :
     ses champs ROW (réglable par settle._settle_fair_row comme data/fair.json) + « pm » (modèle), « px » (1xBet sans marge), « ps » (sharp),
     « date », « at » (heure de la lecture). Les trois avis sont ceux de la lecture qui a servi la DÉCISION : un pronostic déjà gardé n'est plus
@@ -737,7 +738,10 @@ def record(rows, day, now=None, name=LOG_FILE):
             row["xref"] = c["xref"]                        # audit : [GameId, Type, Param] 1xBet de la prise (hors ROW)
         if c.get("strategy"):
             row["strategy"] = c["strategy"]                # voie posée à la construction du pronostic (jamais recalculée ici)
-        if frozen(family(c["market"])):
+        for k in ("sval", "ref"):
+            if c.get(k) is not None:
+                row[k] = c[k]                              # voie `saison` : jambe à valeur (1) ou de remplissage (0) ; ligne de référence indépendante du prix (1)
+        if shadow and frozen(family(c["market"])):
             row["shadow"] = shadow_of(c, pm, px, ps)       # le modèle, en fantôme : ce qu'il aurait décidé (jamais joué, jamais appris)
         log.append(row)
         by_key[row["key"]] = row
@@ -817,7 +821,7 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
 
 
 ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
-ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key")
+ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref")
 # xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
 # règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
 
@@ -828,7 +832,7 @@ def _pack(r):
     return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
             [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp")))] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
             r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
-            r.get("strategy"), r.get("xref"), r.get("sport_key")]
+            r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref")]
 
 
 def unpack_archive_row(key, day, vals):
@@ -850,10 +854,13 @@ def unpack_archive_row(key, day, vals):
         out["strategy"] = d["strategy"]
     if d["sport_key"]:                                  # la ligue : la coupure automatique de la voie stats se juge par ligue
         out["sport_key"] = d["sport_key"]
+    for k in ("sval", "ref"):                           # voie `saison` : jambe à valeur / de remplissage, ligne de référence
+        if d.get(k) is not None:
+            out[k] = d[k]
     return out
 
 
-def archive(log, today=None):
+def archive(log, today=None, prefix=ARCH_PREFIX):
     """Copie, une seule fois chacune, les lignes RÉGLÉES (win / loss) du journal dans l'archive compacte (un document par jour de la ligne), marque `arch` sur les
     lignes copiées, et efface les jours de plus de C.ENSEMBLE_ARCHIVE_DAYS. Sans effet sur un pari, le bilan, l'apprentissage ou le règlement : rien d'autre que les
     outils d'audit ne la lit. Ne lève jamais (une panne d'écriture laisse les lignes non marquées : elles seront copiées au prochain règlement). -> nombre de lignes copiées."""
@@ -866,18 +873,18 @@ def archive(log, today=None):
             by_day.setdefault(r["date"], []).append(r)
         docs = {}
         for day, rows in by_day.items():
-            doc = store.load(ARCH_PREFIX + day, None)
+            doc = store.load(prefix + day, None)
             doc = doc if isinstance(doc, dict) and isinstance(doc.get("rows"), dict) else {"cols": list(ARCH_COLS), "rows": {}}
             for r in rows:
                 doc["rows"][r["key"]] = _pack(r)
-            docs[ARCH_PREFIX + day] = doc
+            docs[prefix + day] = doc
         if docs:
             store.save_many(docs)
             for r in todo:
                 r["arch"] = True
         keep_from = str((today or date.today()) - timedelta(days=C.ENSEMBLE_ARCHIVE_DAYS))
-        for nm in store.names(ARCH_PREFIX):
-            if nm[len(ARCH_PREFIX):] < keep_from:
+        for nm in store.names(prefix):
+            if nm[len(prefix):] < keep_from:
                 store.remove(nm)
         return len(todo)
     except Exception as e:                          # noqa: BLE001 - l'archive ne bloque jamais le règlement
@@ -885,11 +892,11 @@ def archive(log, today=None):
         return 0
 
 
-def archive_rows(since=None):
+def archive_rows(since=None, prefix=ARCH_PREFIX):
     """Lignes archivées (dicts de même forme que celles du journal, voir unpack_archive_row), des plus anciennes aux plus récentes ; `since` : jour ISO minimal."""
     out = []
-    for nm in store.names(ARCH_PREFIX):
-        day = nm[len(ARCH_PREFIX):]
+    for nm in store.names(prefix):
+        day = nm[len(prefix):]
         if since and day < since:
             continue
         doc = store.load(nm, None)
@@ -898,7 +905,7 @@ def archive_rows(since=None):
     return out
 
 
-def settle_log(settle_one, name=LOG_FILE):
+def settle_log(settle_one, name=LOG_FILE, learner=None, arch_prefix=ARCH_PREFIX):
     """Règle les lignes en attente du journal avec `settle_one(ligne) -> vrai si elle vient d'être réglée` (phase 2 : le règlement gratuit de
     settle.py, le même que data/fair.json), apprend des lignes réglées et enregistre. -> (lignes réglées cette fois, lignes apprises)."""
     log = store.load(name, [])
@@ -911,8 +918,8 @@ def settle_log(settle_one, name=LOG_FILE):
             print(f"[ensemble] ligne {r.get('key')} non réglée : {type(e).__name__}: {e}", file=sys.stderr)
             return False
     settled = [r for r in log if r.get("result") is None and safe(r)]
-    learned = learn(log)
-    archive(log)                                    # copie compacte des lignes réglées (90 jours) AVANT que prune_log ne les retire du journal
+    learned = (learner or learn)(log)
+    archive(log, prefix=arch_prefix)                                    # copie compacte des lignes réglées (90 jours) AVANT que prune_log ne les retire du journal
     dates = [r["date"] for r in log if r.get("date")]
     if dates:
         log = prune_log(log, date.fromisoformat(max(dates)))

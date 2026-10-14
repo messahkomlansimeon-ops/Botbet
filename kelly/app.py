@@ -11,7 +11,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
-               xprice, xworld)
+               seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
@@ -438,6 +438,9 @@ def morning_report(now):
         _step("sauvegarde du suivi (résultats annoncés)", lambda: track.save(rows))        # marque « gap_reported » des paris 1xBet en retard
     msgs += _step("pronostics sans cote", lambda: fair_report(now), [])
     got_ens = _step("journal des avis de l'ensemble", lambda: settle.settle_ensemble(now))      # après le règlement des pronostics : leurs stats sont en cache
+    got_sea = _step("journal de la voie saison", lambda: settle.settle_season(now))              # même règlement gratuit, journal et apprentissage à part
+    if got_sea and (got_sea[0] or got_sea[1]):
+        print(f"[saison] journal : {len(got_sea[0])} ligne(s) réglée(s), {got_sea[1]} apprise(s)", file=sys.stderr)
     cut = _step("coupure automatique de la voie stats", lambda: lanestats.apply(now.date()), [])      # après le règlement : juge les lignes réglées ; le message passe en PREMIER
     cut_msgs = _step("état des voies", lanestats.cut_lines, [])
     if cut_msgs:
@@ -714,7 +717,7 @@ def morning_gaps(picks, pronos, day, odds_at):
         return []
 
 
-REPAIR_LABELS = {"strategy_state.json": "la coupure automatique des voies", "calib.json": "la fiabilité par marché", "calib_boot.json": "le rejeu de la saison passée", "means.json": "les moyennes des stats",
+REPAIR_LABELS = {"season_weights.json": "les poids de la voie saison", "season_calib.json": "la fiabilité de la voie saison", "strategy_state.json": "la coupure automatique des voies", "calib.json": "la fiabilité par marché", "calib_boot.json": "le rejeu de la saison passée", "means.json": "les moyennes des stats",
                  "ensemble.json": "les poids modèle / marché", "live_calib.json": "la correction du direct", "tuning.json": "le réglage des championnats",
                  "model.json": "le modèle de classement", "bets.json": "tes paris et combinés", "tracked.json": "les paris suivis",
                  "fair.json": "les pronostics suivis", "fair_combos.json": "les combinés à cote juste", "mybudget.json": "ton capital"}
@@ -797,7 +800,7 @@ def run_daily(sample=False, retry=False):
         print(f"[budget] {budget.line()}", file=sys.stderr)
         progress.step("stats")
     picks = odds.build_picks(events, day, after, history=store.load("odds_history.json", {}), model=model)
-    world, pronos, why, fair_combos, odds_at, gaps = None, [], None, [], None, []
+    world, pronos, why, fair_combos, odds_at, gaps, season_legs = None, [], None, [], None, [], []
     if not sample:
         try:
             picks = odds.rescore(stats.enrich(picks, day), model)       # modèle appris : après les stats d'avant-match
@@ -821,6 +824,7 @@ def run_daily(sample=False, retry=False):
                 xprice.price_picks(picks, pronos=pronos, model=model)
             except Exception as e:                  # noqa: BLE001 - facultatif : sans cote 1xBet, les cotes typiques restent
                 print(f"[1xbet] paris réels ignorés : {type(e).__name__}: {e}", file=sys.stderr)
+        season_legs = _step("voie saison", lambda: seasonlane.run(scan, picks, day, now_utc())[0], [])      # jambes de la voie `saison` (journal à part) : après les paris réels, leur avis sharp
         progress.step("combis")
         odds_at = now_utc().strftime("%H:%M")       # fin du relevé 1xBet : l'heure des cotes des combinés
         log_opinions(list(pronos) + list(picks), day)          # avis de l'ensemble (journal « fantôme » de toutes les familles)
@@ -852,7 +856,8 @@ def run_daily(sample=False, retry=False):
     # xbet_at : heure du dernier relevé 1xBet des pronostics (relevés de l'après-midi compris), picks_at : celle des paris réels (le matin) ;
     # affichées avec les cotes 1xBet (/top, /match, /analyse)
     store.save("today.json", {"day": str(day), "picks": picks,
-                              "pronos": [{k: c[k] for k in c if k != "score"} | ({"xat": odds_at} if odds_at and c.get("xodds") else {}) for c in keep]}
+                              "pronos": [{k: c[k] for k in c if k != "score"} | ({"xat": odds_at} if odds_at and c.get("xodds") else {}) for c in keep],
+                              "season": [{k: c[k] for k in c if k != "score"} | ({"xat": odds_at} if odds_at else {}) for c in season_legs]}
                | ({"xbet_at": odds_at} if odds_at and any(c.get("xodds") for c in keep) else {})
                | ({"picks_at": odds_at} if odds_at and any(c.get("xodds") for c in picks) else {}))
     progress.step("envoi")
@@ -1501,7 +1506,8 @@ def mark_xclose(now=None):
     ensemble.mark_x_close) : la clôture 1xBet des marchés de stats, qui n'ont pas de prix sharp. Appelé après run_track et après run_stats_window (qui
     relit 1xBet) ; sous le verrou des données comme eux. Ne lève jamais. -> nombre de lignes modifiées."""
     try:
-        return ensemble.mark_x_close(now)
+        n = ensemble.mark_x_close(now)
+        return n + ensemble.mark_x_close(now, name=seasonlane.LOG)             # le journal de la voie `saison` : même lecture du cache, aucune requête
     except Exception as e:                          # noqa: BLE001 - audit seulement
         print(f"[suivi] prix 1xBet de clôture ignoré : {type(e).__name__}: {e}", file=sys.stderr)
         return 0

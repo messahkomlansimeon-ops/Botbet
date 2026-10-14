@@ -629,7 +629,7 @@ def prioritise_stats(events, wanted):
     return sorted(events, key=lambda e: not stat(e))                                                          # tri stable
 
 
-def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, fresh_min=None):
+def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, fresh_min=None, record=True):
     """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
     événement qui porte "xgid" (id 1xBet déjà connu : relevé du matin, championnat vu par 1xBet) est lu directement, sans menu ni
     liste du championnat. `wanted` : {id Kelly: marchés à couvrir} (sous-matchs statistiques demandés seulement pour ceux-là).
@@ -637,14 +637,15 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
     relues à l'instant (live_mode). Ne lève pas : erreurs dans state (rapport des sources)."""
     if live:
         with live_mode(fresh_min):
-            return fetch_day(events, deadline, max_matches, wanted)
+            return fetch_day(events, deadline, max_matches, wanted, record=record)
     out, errors, leagues, cat, menu_down = {}, [], {}, None, False
     max_matches = C.XBET_MAX_MATCHES if max_matches is None else max_matches
     events = list(events)
     ses = _Session()
     if ses.why:
-        state.record_run(SOURCE, 0, [ses.why])
-        _note_run(0, len(events), (0, ses.why.split(" : ")[0][:80]), [])
+        if record:
+            state.record_run(SOURCE, 0, [ses.why])
+            _note_run(0, len(events), (0, ses.why.split(" : ")[0][:80]), [])
         return out
     fails, cut = 0, None
     try:                                            # la session est TOUJOURS fermée : les données du proxy sont comptées même si un match fait lever
@@ -690,8 +691,9 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
         empty = sum(1 for v in out.values() if not v["px"])
         if len(out) >= EMPTY_MIN and empty >= EMPTY_SHARE * len(out):
             errors.insert(0, f"{FORMAT} (cotes vides pour {empty}/{len(out)} matchs)")
-        state.record_run(SOURCE, len(out), errors)
-        _note_run(len(out), len(events), cut, errors)
+        if record:                                  # un relevé annexe (voie `saison`) ne remplace pas le compte rendu du relevé principal
+            state.record_run(SOURCE, len(out), errors)
+            _note_run(len(out), len(events), cut, errors)
     return out
 
 
