@@ -3362,6 +3362,8 @@ def run_check():
     """Vérifie chaque service configuré et affiche un rapport. Ne dépense aucun crédit
     The Odds API (seuls /sports et /events, gratuits). Renvoie True si tout ce qui est configuré marche."""
     print("🔎 KELLY — DIAGNOSTIC")
+    from . import configactive
+    configactive.refresh()                           # CONFIG_ACTIVE.md : les réglages actifs de cette machine (jamais un secret)
     ok_odds, l_odds = _check_odds()
     ok_stats, l_stats = _check_stats()
     l_src = sources.report().splitlines()           # facultatif : n'influe pas sur le verdict

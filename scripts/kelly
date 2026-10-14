@@ -169,6 +169,7 @@ case "$1" in
         else
             echo "✅ Déjà à jour."
         fi
+        ( cd "$DIR" && python tools/config_active.py ) > /dev/null 2>&1      # CONFIG_ACTIVE.md : réglages actifs de cette machine (à chaque mise à jour)
         cp "$DIR/scripts/kelly" "$PREFIX/bin/kelly" && chmod +x "$PREFIX/bin/kelly"
         exec "$PREFIX/bin/kelly" restart
         ;;

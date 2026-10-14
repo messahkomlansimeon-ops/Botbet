@@ -438,6 +438,8 @@ def report(now=None):
         from . import lanes
         from . import lanestats
         blocks.append([fmt.b("🎛️ Voies")] + [fmt.esc(x) for x in lanes.lines()])
+        from . import configactive
+        blocks[-1].append(fmt.esc(configactive.stamp()))                 # « réglages : CONFIG_ACTIVE.md du 14/10 »
         from . import gapdist
         ul = lanestats.unlabeled_line()
         if ul:
