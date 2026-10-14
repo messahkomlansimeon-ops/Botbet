@@ -82,7 +82,7 @@ def usable(c):
     """La ligne `c` (pronostic ou pari réel) peut-elle être sélectionnée pour un pari ou une jambe de combiné ? Ensemble éteint : toujours (comportement d'avant)."""
     if not C.ENSEMBLE_ENABLED:
         return True
-    if c.get("strategy") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
+    if c.get("strategy") == "saison" or c.get("lane") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
         return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS)
     lane = lane_of_market(c.get("market"))
     if lane and mode(lane, c.get("sport_key")) != "on":
@@ -115,10 +115,14 @@ def item_fields(legs, single=False):
     labels = [(l or {}).get("strategy") for l in legs]
     if not legs or any(x is None for x in labels) or "live" in labels or not C.ENSEMBLE_ENABLED:
         return {}                                   # jambe live : hors voies, le dimensionnement live reste celui d'avant
-    if "saison" in labels:                         # combiné de la voie `saison` : à valeur s'il a une jambe à valeur (sval), part de mise propre à la voie, plafond propre éventuel
-        if any((l or {}).get("sval") for l, x in zip(legs, labels) if x == "saison"):
-            return {"frac": C.KELLY_FRACTION_SEASON} | ({"cap": C.SEASON_TICKET_MAX} if C.SEASON_TICKET_MAX > 0 else {})
-        return {} if single else {"novalue": True}
+    if all((l or {}).get("lane") == "saison" or x == "saison" for l, x in zip(legs, labels)):      # combiné de la voie `saison` : part de mise propre à la voie, plafond propre éventuel
+        cap = {"cap": C.SEASON_TICKET_MAX} if C.SEASON_TICKET_MAX > 0 else {}
+        if any((l or {}).get("sval") for l in legs):
+            return {"frac": C.KELLY_FRACTION_SEASON} | cap
+        if single:
+            return {}
+        # remplissage seul : envoyé « sans valeur », mise = part de la voie (plancher de confiance : sans espérance positive Kelly ne mise pas, ici la voie le fait par décision), plafonds ordinaires
+        return {"frac": C.KELLY_FRACTION_SEASON, "flat": True} | cap if C.SEASON_SEND_FILL else {"novalue": True}
     value = [x for x in labels if x in ("sharpgap", "stats")]
     if value:
         return {"frac": min(frac(x) for x in value)}
@@ -133,7 +137,7 @@ def lines():
            f"Part de mise : sharpgap {C.KELLY_FRACTION_SHARPGAP:g} · stats {C.KELLY_FRACTION_STATS:g} (part de ta limite du jour, pas du Kelly) · combiné sans valeur : mise "
            + (f"fixe {C.NOVALUE_STAKE:g} (« sans valeur »)" if C.NOVALUE_STAKE > 0 else "aucune (suivi en fantôme)")]
     out.append(f"saison : {season_mode()} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} % · marge {C.SEASON_MARGIN * 100:g} % · garde-fous : valeur ≤ +{C.SEASON_MAX_EDGE * 100:g} %, désaccord ≤ {C.SEASON_MAX_DISAGREE * 100:g} points · paliers {', '.join(f'{t:g}' for t in C.SEASON_TIERS)} · part de mise "
-               f"{C.KELLY_FRACTION_SEASON:g}" + (f" · plafond ticket {C.SEASON_TICKET_MAX:g}" if C.SEASON_TICKET_MAX > 0 else "")
+               f"{C.KELLY_FRACTION_SEASON:g}" + (f" · plafond ticket {C.SEASON_TICKET_MAX:g}" if C.SEASON_TICKET_MAX > 0 else "") + f" · combinés de remplissage : {'envoyés (sans valeur)' if C.SEASON_SEND_FILL else 'en fantôme'}"
                + (" · ligues : " + ", ".join(sorted(C.SEASON_LEAGUES)[:4]) if C.SEASON_LEAGUES else " · toutes les ligues couvertes"))
     from . import seasonlane
     out[-1] += " · " + seasonlane.state_text()      # la même ligne « saison » : ce qui est suivi exactement (ligues, équipes, équipes avec l'adversaire enregistré)

@@ -204,7 +204,10 @@ def _raw(it, with_frac=True):
     try:
         if it.get("novalue"):
             return 0.0                              # combiné sans aucune jambe à valeur : hors Kelly, hors de la somme des parts (mise fixe, voir allocate)
-        r = _share(it["kind"], it["tier"]) * _confidence(float(it["prob"]), float(it["odds"]))
+        conf = _confidence(float(it["prob"]), float(it["odds"]))
+        if it.get("flat"):
+            conf = max(CONF_MIN, conf)                  # voie `saison`, combiné de remplissage envoyé : sans espérance positive, la confiance plancher (30 % de la part) au lieu de 0
+        r = _share(it["kind"], it["tier"]) * conf
         if with_frac and it.get("frac") is not None:
             r *= max(0.0, float(it["frac"])) / C.KELLY_FRACTION_REF       # fraction de Kelly de la voie, relative au calibrage historique (0,25 : sharpgap inchangé, stats 0,15 = 60 %)
     except (KeyError, TypeError, ValueError, AttributeError):
@@ -333,10 +336,20 @@ def no_stake_txt(prob=None, odds=None):
 NOVALUE_TXT = "👻 sans valeur : suivi en fantôme, pas de mise"
 
 
-def stake_words(st, prob=None, odds=None, suffix="", p_mkt=None, novalue=False):
+NOFILL_TXT = "sans valeur · pas de mise (budget du jour épuisé ou mise sous le pas d'arrondi)"      # combiné de remplissage ENVOYÉ de la voie `saison` sans mise ce jour-là
+
+
+def stake_words(st, prob=None, odds=None, suffix="", p_mkt=None, novalue=False, flat=False):
     """Mise `st` (allocate) en mots ; sans budget ni capital (None) : NO_EDGE si le pari perd en moyenne (`prob`, `odds`), None sinon. 0 : voir
     no_stake_txt. `suffix` : « (sur ton budget du jour) » après un montant (pas en mode capital, où la ligne dit ce que rapporte la mise). `p_mkt` :
-    chances selon 1xBet (ticket « loterie », is_lottery)."""
+    chances selon 1xBet (ticket « loterie », is_lottery). `flat` : combiné de remplissage ENVOYÉ de la voie `saison` (jamais un fantôme) : « sans valeur » est toujours dit, sans « Kelly
+    ne conseille pas » ni « suivi en fantôme »."""
+    if flat:
+        if st is None:
+            return "sans valeur · écris un budget du jour pour avoir une mise"
+        if not st:
+            return NOFILL_TXT
+        novalue = True
     if st is None:
         return NO_EDGE if prob is not None and odds is not None and not has_edge(prob, odds) else None
     if not st:

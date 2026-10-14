@@ -146,20 +146,22 @@ def leg_results(rows, days=None, today=None):
     for combos in docs:
         for c in combos if isinstance(combos, list) else []:
             for leg in c.get("legs") or []:
-                put(leg.get("key"), leg.get("strategy"), leg.get("result"), c.get("date"), bool(leg.get("cup")))
+                put(leg.get("key"), "saison" if leg.get("lane") == "saison" else leg.get("strategy"), leg.get("result"), c.get("date"), bool(leg.get("cup")))      # un remplissage `saison` (strategy « fill ») reste dans la voie saison
     return out
 
 
 def combo_money(days=None, today=None):
     """{"avec valeur": (gain, nombre, mise), "sans valeur": ..., "avant étiquettes": ...} des combinés NOTÉS et réglés : l'argent d'un combiné n'est jamais réparti
     entre voies (il mélange leurs jambes), il est ventilé par `has_value`."""
-    from . import fair, money
+    from . import combos as CB, fair, money
     bets = store.load_doc("bets.json", {"combos": []})
     rows = store.load_doc("tracked.json", [])
     out = {}
     for x, g in money._counted(bets, rows if isinstance(rows, list) else [], fair.load_combos(), days, today):
         if not (x.get("legs") is not None or x.get("keys") is not None):
             continue                                    # un pari simple n'est pas un combiné
+        if x.get("legs") and (CB.season_no(x.get("tier")) is not None or all(l.get("lane") == "saison" for l in x["legs"])):
+            continue                                    # l'argent de la voie `saison` est sur SA ligne (season_detail), jamais dans « avec / sans valeur » des autres voies
         k = "avec valeur" if x.get("has_value") is True else "sans valeur" if x.get("has_value") is False else "avant étiquettes"
         a = out.get(k, (0.0, 0, 0.0))
         out[k] = (a[0] + g, a[1] + 1, a[2] + float((x.get("played") or {}).get("stake") or 0))
@@ -215,7 +217,7 @@ def season_detail(days=None, today=None, plain=False, cup=False):
             if sn is not None:
                 a = tiers.get(sn, (0.0, 0))
                 tiers[sn] = (a[0] + g, a[1] + 1)
-            elif x["legs"] and all(l.get("strategy") == "saison" for l in x["legs"]):       # « saison N » : combiné sur mesure bâti sur les seules jambes de la voie
+            elif x["legs"] and all(l.get("lane") == "saison" or l.get("strategy") == "saison" for l in x["legs"]):       # « saison N » : combiné sur mesure bâti sur les seules jambes de la voie
                 custom = (custom[0] + g, custom[1] + 1)
         notes = [f"cote {fmt_odds(k)} : {money.signed(round(v[0]))} sur {v[1]}" for k, v in sorted(tiers.items())] + ([f"sur mesure : {money.signed(round(custom[0]))} sur {custom[1]}"] if custom[1] else [])
         if notes:
@@ -481,8 +483,9 @@ def leg_clv_lines(days=None, today=None):
     if not rows:
         return []
     live = [r for r in rows if (r[0].get("strategy") or None) == "live"]
-    sea = [r for r in rows if (r[0].get("strategy") or None) == "saison"]
-    rows = [r for r in rows if (r[0].get("strategy") or None) not in ("live", "saison")]          # les jambes live (hors voies, jamais au journal d'ensemble) et `saison` (journal à part) ne gonflent pas la couverture : elles ont leur ligne
+    is_sea = lambda l: l.get("lane") == "saison" or l.get("strategy") == "saison"      # noqa: E731 - les remplissages de la voie portent strategy « fill » et lane « saison »
+    sea = [r for r in rows if is_sea(r[0])]
+    rows = [r for r in rows if (r[0].get("strategy") or None) != "live" and not is_sea(r[0])]          # les jambes live (hors voies, jamais au journal d'ensemble) et `saison` (journal à part) ne gonflent pas la couverture : elles ont leur ligne
     out = [f"jambes mesurées : {sum(1 for _, _, v in rows if v is not None)} / {len(rows)} (prix 1xBet pris contre dernier prix connu, relevé ≤ {LEAD_OK_MIN} min avant le match ; "
            "une jambe sans prix pris, sans ligne au journal ou sans relevé proche n'est pas mesurée : seules les lignes restées les mêmes sont vues)"]
     for lane in ("sharpgap", "stats", "fill", None):
@@ -517,7 +520,7 @@ def leg_clv_lines(days=None, today=None):
         pass
     tiers = {}
     for l, c, v in rows:
-        if v is not None and (l.get("strategy") or None) not in ("fill", "live", "saison"):
+        if v is not None and (l.get("strategy") or None) not in ("fill", "live", "saison") and l.get("lane") != "saison":
             tiers.setdefault(_tier_name(c), []).append(v)
     for t, vs in tiers.items():
         neg = sum(1 for v in vs if v < 0)

@@ -204,7 +204,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
     if fair_stakes is not None:
         fair_stakes.update({t: st for (kind, t), st in ((k, v) for k, v in stakes.items() if isinstance(k, tuple) and k[0] == "fair")})   # 0 compris
     # sans budget ni capital : pas de montant, mais « Kelly ne conseille pas de miser dessus » reste dit quand le pari perd en moyenne
-    mise = lambda st, prob=None, odds=None, nov=False: money.stake_words(st if money.active() else None, prob, odds, novalue=nov)    # noqa: E731
+    mise = lambda st, prob=None, odds=None, nov=False, flat=False: money.stake_words(st if money.active() else None, prob, odds, novalue=nov, flat=flat)    # noqa: E731
     if picks:
         n_world = monde.total(world) if world else 0
         seen = (f"{n_world} matchs analysés dans le monde, {n_events} avec des cotes réelles" if n_world
@@ -295,9 +295,10 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         coupon = (old.get("coupon") if old.get("coupon") else xbet.save_coupon(legs)) if xfair else None
         if fair_coupons is not None and coupon:
             fair_coupons[target] = coupon
-        nov = bool(C.ENSEMBLE_ENABLED and ensemble.has_value(legs) is False)         # sans valeur et envoyé (NOVALUE_SEND) : toujours dit, jamais de mise conseillée
+        flat = bool(lanes.item_fields(legs).get("flat"))                              # voie `saison`, remplissage seul ENVOYÉ : « sans valeur », avec sa mise plancher
+        nov = bool(C.ENSEMBLE_ENABLED and ensemble.has_value(legs) is False) and not flat       # sans valeur et envoyé (NOVALUE_SEND) : toujours dit, jamais de mise conseillée
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
-                                                               stake_txt=mise(stakes.get(("fair", target)), CB.stake_prob(legs, prob), min_total, nov),
+                                                               stake_txt=mise(stakes.get(("fair", target)), CB.stake_prob(legs, prob), min_total, nov, flat),
                                                                title=CB.shots_title(target), coupon=coupon, when=when,
                                                                retry=RETRY_BUTTON if xfair and not coupon else None),
                                                 f"v{target}", day, stake=stakes.get(("fair", target)),
@@ -1248,7 +1249,7 @@ def _stake_txt(row):
     if st:
         return money.money(st)
     it = money.row_item(row) or {}
-    return money.NOVALUE_TXT if it.get("novalue") else money.no_stake_txt(it.get("prob"), it.get("odds"))
+    return money.NOVALUE_TXT if it.get("novalue") else money.NOFILL_TXT if it.get("flat") else money.no_stake_txt(it.get("prob"), it.get("odds"))
 
 
 def _record_version(sent, row, rows, combo, hhmm, coupon=None):
@@ -2275,8 +2276,9 @@ def _stake_words(st, prob=None, odds=None, legs=None):
     """La mise `st` (_budget_stake) en mots pour le message : « 1 500 FCFA (sur ton budget du jour) » ; None sans budget. Mise 0 : « pas de mise (trop
     petite pour ton budget) », ou, si `prob` et `odds` montrent une espérance négative, « Kelly ne conseille pas de miser dessus » (money.no_stake_txt).
     `legs` : voir _budget_stake."""
+    fields = lanes.item_fields(legs) if legs else {}
     return money.stake_words(st, prob, odds, " (sur ton budget du jour)", p_mkt=CB.market_prob(legs) if legs else None,
-                             novalue=bool(legs) and bool(lanes.item_fields(legs).get("novalue")))
+                             novalue=bool(fields.get("novalue")), flat=bool(fields.get("flat")))
 
 
 def _budget_stake_txt(prob, odds):
@@ -2419,7 +2421,7 @@ def _check_ticket(row, legs, day, tier, now, check=None):
     est plus ou paie moins ; la ligne de suivi (paris, note, règlement) ne change JAMAIS. Pour une version à jour : « ↩️ Annuler » la note, puis
     « 🎟️ Vérifier ce combiné ». -> la réponse."""
     telegram.send("⏳ Je vérifie ton ticket chez 1xBet…", queue=False)
-    season = CB.season_no(tier) is not None or any(l.get("strategy") == "saison" for l in legs)
+    season = CB.season_no(tier) is not None or any(l.get("strategy") == "saison" or l.get("lane") == "saison" for l in legs)
     pool, got, hhmm = (check or (seasonlane.live_check if season else xprice.live_check))({l["id"] for l in legs}, now, fresh_min=None)
     if not got:
         return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné commencent) : réessaie dans quelques minutes."

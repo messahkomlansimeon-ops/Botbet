@@ -654,9 +654,9 @@ def season_plan(legs, tiers=None, usage=None):
     """Combinés de la voie `saison`, un par palier de C.SEASON_TIERS, cote totale dans [cote x (1 - C.SEASON_SPREAD), cote x (1 + C.SEASON_SPREAD)] : [(palier « ss10 », (jambes,
     cote, proba) | None)]. Les jambes de VALEUR d'abord (sval), puis, si la fourchette n'est pas atteinte et si C.FILL_LEGS, avec le remplissage. Un seul pari par match, la proba du
     combiné maximale (_best_combo : l'essai des tirs de best_combo ne concerne pas cette voie). `usage` : celui de toute la journée (mêmes règles de réutilisation que les autres tickets) ;
-    un combiné SANS valeur (que du remplissage) est construit mais ne consomme aucune réutilisation (il reste en fantôme, voir ensemble.unsent)."""
+    un combiné de REMPLISSAGE est envoyé (C.SEASON_SEND_FILL, « sans valeur ») et consomme comme les autres ; avec l'interrupteur éteint il reste en fantôme et ne consomme rien (ensemble.unsent)."""
     usage = usage if usage is not None else Usage()
-    pool = [c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds")]
+    pool = sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds")), key=lambda c: -c["prob"])      # par proba retenue (p_ens) décroissante : jamais par écart au marché
     out = []
     for target in (tiers if tiers is not None else C.SEASON_TIERS):
         lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)

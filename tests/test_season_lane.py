@@ -85,6 +85,7 @@ def test_price_value_fill_and_none():
     chosen, ref, extra = SL.price(c, px, {k: [1, 2, 3] for k in px}, NOW)
     assert chosen is not None and chosen["strategy"] == "saison" and chosen["key"].endswith("|saison") and chosen["xref"] == [1, 2, 3]
     assert "alts" not in chosen and chosen["sval"] in (0, 1) and chosen["ew"] == C.SEASON_MODEL_WEIGHT, chosen
+    assert chosen["lane"] == "saison" and chosen["strategy"] == ("saison" if chosen["sval"] == 1 else "fill"), chosen      # valeur = « saison », remplissage = « fill » (lane reste « saison »)
     # proba retenue = log-cotes du modèle (poids wm) et du marché (1xBet sans marge)
     pm, px_ = chosen["p_model"], chosen["p_x"]
     want = ensemble.pool(pm, px_, C.SEASON_MODEL_WEIGHT)

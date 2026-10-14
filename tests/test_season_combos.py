@@ -22,6 +22,7 @@ def make_legs(n=12, over_odds=2.4, under_odds=1.62):
 def setup():
     N.reset()
     C.NOVALUE_SEND = False
+    C.SEASON_SEND_FILL = True
     C.STRATEGY_SEASON = "on"
     store.save(fair.GHOST_COMBOS_FILE, [])
     store.save("fair_combos.json", [])
@@ -69,18 +70,34 @@ def test_usage_rules():
     assert plan[0][1] and u.by_event, "un combiné avec valeur consomme la réutilisation"
     used = {c["id"]: v for c, v in ((c, u.by_event[c["id"]]) for c in plan[0][1][0])}
     assert all(v["n"] == 1 for v in used.values())
-    fills = [dict(c, sval=0) for c in legs]
+    fills = [dict(c, sval=0, strategy="fill") for c in legs]
     u2 = CB.Usage()
     p2 = CB.season_plan(fills, [3], usage=u2)
-    assert p2[0][1] and E.unsent(p2[0][1][0]) and not u2.by_event, "un combiné de remplissage (fantôme) ne consomme rien"
-    print("ok  réutilisation des matchs : le combiné à valeur consomme (Usage de la journée), le combiné de remplissage non")
+    assert p2[0][1] and not E.unsent(p2[0][1][0]) and u2.by_event, "un combiné de remplissage de la voie saison est ENVOYÉ : il consomme la réutilisation"
+    C.SEASON_SEND_FILL = False
+    try:
+        u3 = CB.Usage()
+        p3 = CB.season_plan(fills, [3], usage=u3)
+        assert p3[0][1] and E.unsent(p3[0][1][0]) and not u3.by_event, "SEASON_SEND_FILL éteint : fantôme, ne consomme rien"
+    finally:
+        C.SEASON_SEND_FILL = True
+    print("ok  réutilisation des matchs : un combiné à valeur ou de remplissage envoyé consomme (Usage de la journée), le fantôme (SEASON_SEND_FILL éteint) non")
 
 
 def test_item_fields_and_cap():
     legs = setup()
-    v, f = legs[0] | {"sval": 1}, legs[1] | {"sval": 0}
+    v, f = legs[0] | {"sval": 1}, legs[1] | {"sval": 0, "strategy": "fill"}
     assert lanes.item_fields([v, f]) == {"frac": C.KELLY_FRACTION_SEASON}
-    assert lanes.item_fields([f, f]) == {"novalue": True} and lanes.item_fields([f], single=True) == {}
+    assert lanes.item_fields([f, f]) == {"frac": C.KELLY_FRACTION_SEASON, "flat": True} and lanes.item_fields([f], single=True) == {}, "remplissage seul envoyé : part de la voie, confiance plancher"
+    C.SEASON_SEND_FILL = False
+    try:
+        assert lanes.item_fields([f, f]) == {"novalue": True}
+    finally:
+        C.SEASON_SEND_FILL = True
+    fl = money.allocate([{"kind": "fair", "tier": 3.0, "prob": 0.3, "odds": 3.0, "p_mkt": 0.3} | lanes.item_fields([f, f])], budget=5000)[0][0]
+    assert fl > 0, "même sans espérance positive, le combiné de remplissage de la voie reçoit sa mise plancher"
+    lot = money.allocate([{"kind": "fair", "tier": 100.0, "prob": 0.02, "odds": 100.0, "p_mkt": 0.02} | lanes.item_fields([f, f])], budget=50000)[0][0]
+    assert lot <= money.LOTTERY_STAKE, "au-delà de la cote 50 : le plafond loterie existant"
     C.SEASON_TICKET_MAX = 300
     try:
         assert lanes.item_fields([v, f]) == {"frac": C.KELLY_FRACTION_SEASON, "cap": 300}
@@ -118,7 +135,8 @@ def test_morning_section_and_record():
 
 def test_fill_only_is_ghost():
     legs = setup()
-    fills = [dict(c, sval=0) for c in legs]
+    C.SEASON_SEND_FILL = False
+    fills = [dict(c, sval=0, strategy="fill") for c in legs]
     plan = [(t, c) for t, c in CB.season_plan(fills, [3, 10]) if c]
     assert plan
     ghost_out = set()
@@ -128,7 +146,45 @@ def test_fill_only_is_ghost():
     assert ghost_out == {t for t, _ in plan} and len(fair.load_ghost()) == len(plan) and all(g["kind"] == "saison" for g in fair.load_ghost())
     app.record_fair_morning(plan, DAY, {}, {}, "09:30", ghost_out)
     assert not [r for r in fair.load_combos() if CB.season_no(r["tier"]) is not None], "rien dans fair_combos.json"
-    print("ok  combiné de remplissage seul : suivi en fantôme (« saison »), jamais envoyé ni enregistré comme ticket")
+    C.SEASON_SEND_FILL = True
+    print("ok  SEASON_SEND_FILL éteint : le combiné de remplissage seul est suivi en fantôme (« saison »), jamais envoyé ni enregistré comme ticket")
+
+
+def test_fill_only_is_sent():
+    legs = setup()
+    fills = [dict(c, sval=0, strategy="fill") for c in legs]
+    assert all(c["lane"] == "saison" and c["strategy"] == "fill" for c in fills)
+    plan = [(t, c) for t, c in CB.season_plan(fills, [3, 10]) if c]
+    assert plan and all(E.has_value(c[0]) is False and not E.unsent(c[0]) for _, c in plan)
+    # tri par proba retenue décroissante : le combiné à cote 3 est fait des favoris les plus sûrs
+    best = sorted((c for c in fills), key=lambda c: -c["prob"])[:2]
+    assert {l["id"] for l in plan[0][1][0]} <= {c["id"] for c in sorted(fills, key=lambda c: -c["prob"])[:6]}, "jambes parmi les plus probables"
+    stakes, fc, ghost = {}, {}, set()
+    msgs, _, sent = app.build_day([], DAY, pronos=[], fair_combos=plan, fair_stakes=stakes, fair_coupons=fc, odds_time="09:30", ghost_out=ghost)
+    txt = "\n".join(str(m) for m in msgs)
+    assert "SAISON EN COURS · cote 3" in txt and "sans valeur" in txt and not ghost and "👻" not in txt, txt[:600]
+    assert all(stakes[t] > 0 for t, _ in plan), stakes                      # mise = part de la voie, confiance plancher
+    app.record_fair_morning(plan, DAY, stakes, fc, "09:30")
+    rows = [r for r in fair.load_combos() if CB.season_no(r["tier"]) is not None]
+    assert len(rows) == len(plan) and all(r.get("has_value") is False and all(l["strategy"] == "fill" and l["lane"] == "saison" for l in r["legs"]) for r in rows), rows
+    # textes : « sans valeur » toujours dit pour un combiné ENVOYÉ, jamais « suivi en fantôme » ni « Kelly ne conseille pas »
+    assert money.stake_words(200, 0.1, 3.0, " (sur ton budget du jour)", flat=True) == "200 FCFA · sans valeur (sur ton budget du jour)"
+    assert money.stake_words(0, 0.1, 3.0, flat=True) == money.NOFILL_TXT and "fantôme" not in money.NOFILL_TXT
+    assert money.stake_words(None, 0.1, 3.0, flat=True).startswith("sans valeur") and "Kelly ne conseille" not in money.stake_words(None, 0.1, 3.0, flat=True)
+    assert money.stake_words(0, 0.1, 3.0, novalue=True) == money.NOVALUE_TXT, "un vrai fantôme garde son texte"
+    assert app._stake_words(0, 0.1, 3.0, plan[0][1][0]) == money.NOFILL_TXT
+    # l'argent de la voie n'entre pas dans « avec / sans valeur » des autres voies
+    row = {"date": str(DAY), "tier": "ss3", "min_odds": 3.0, "prob": 0.3, "result": "win", "has_value": False, "legs": plan[0][1][0],
+           "played": {"odds": 3.0, "stake": 100, "at": "x"}, "stake": 100, "cur": "FCFA"}
+    store.save("fair_combos.json", [row])
+    from kelly import lanestats
+    assert lanestats.combo_money() == {}, lanestats.combo_money()
+    slim = fair._keep([dict(row, date="2020-01-01")], "2021-01-01")
+    assert slim[0].get("slim") and all(l.get("lane") == "saison" and l.get("strategy") == "fill" for l in slim[0]["legs"]), "les jambes allégées gardent leur voie"
+    # tout-fill des AUTRES voies : toujours fantôme
+    other = [{"key": f"o{i}|totals||2.5|Over", "id": f"o{i}", "strategy": "fill", "market": "totals", "prob": 0.7, "xodds": 1.4} for i in range(3)]
+    assert fair.unsent(other), "sharpgap / stats : tout-fill = fantôme"
+    print("ok  combiné de remplissage de la voie saison : ENVOYÉ « sans valeur », jambes `fill` (lane saison), mise plancher de la voie, suivi ; les autres voies gardent « tout-fill = fantôme »")
 
 
 def test_no_automatic_changes_and_no_leak():
@@ -258,7 +314,7 @@ def test_live_recheck_helpers():
 
 
 def main():
-    for t in (test_plan_tiers_and_ranges, test_value_first_then_fill, test_usage_rules, test_item_fields_and_cap, test_morning_section_and_record, test_fill_only_is_ghost,
+    for t in (test_plan_tiers_and_ranges, test_value_first_then_fill, test_usage_rules, test_item_fields_and_cap, test_morning_section_and_record, test_fill_only_is_ghost, test_fill_only_is_sent,
               test_no_automatic_changes_and_no_leak, test_sval_persisted_and_stake_isolation, test_live_recheck_helpers, test_commands):
         t()
     print("tests voie saison (combinés) : OK")

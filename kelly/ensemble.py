@@ -153,6 +153,8 @@ def has_value(legs):
 
 def unsent(legs):
     """Un combiné construit automatiquement reste-t-il fantôme (toutes ses jambes `fill`, voies connues) ? Faux si NOVALUE_SEND ou ensemble éteint."""
+    if legs and C.SEASON_SEND_FILL and all((l or {}).get("lane") == "saison" for l in legs):
+        return False                                # voie `saison` : un combiné de remplissage est envoyé (« sans valeur »), jamais fantôme (SEASON_SEND_FILL)
     return bool(C.ENSEMBLE_ENABLED and not C.NOVALUE_SEND and legs and has_value(legs) is False)
 
 
@@ -748,7 +750,7 @@ def record(rows, day, now=None, name=LOG_FILE, shadow=True):
         for k in ("swhy", "refused", "cup"):
             if c.get(k):
                 row[k] = c[k]                              # voie `saison` : raison du refus (veto / suspect) et ligne refusée, journalisées pour être comptées
-        if c.get("strategy") == "saison" and c.get("p_ens") is not None:
+        if c.get("lane") == "saison" and c.get("p_ens") is not None:
             row["pe"] = round(c["p_ens"], 4)               # voie `saison` : la proba RETENUE annoncée (réalisé / annoncé du bilan) ; « prob » reste celle du modèle
         if shadow and frozen(family(c["market"])):
             row["shadow"] = shadow_of(c, pm, px, ps)       # le modèle, en fantôme : ce qu'il aurait décidé (jamais joué, jamais appris)

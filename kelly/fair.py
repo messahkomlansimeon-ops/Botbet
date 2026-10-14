@@ -599,7 +599,7 @@ def summary(rows, days=None, today=None):
 
 COMBOS_FILE = "fair_combos.json"
 LEG_FIELDS = ROW + ("pick", "min_odds", "start", "league")        # une jambe de combiné garde de quoi être réglée seule
-SENT_FIELDS = LEG_FIELDS + ("odds", "xref", "xgid", "p_x", "strategy", "sval", "cup")  # + de quoi refaire le combiné, son code coupon et relire le match chez 1xBet ; chance selon 1xBet
+SENT_FIELDS = LEG_FIELDS + ("odds", "xref", "xgid", "p_x", "strategy", "sval", "cup", "lane")  # + de quoi refaire le combiné, son code coupon et relire le match chez 1xBet ; chance selon 1xBet
 
 
 def load_combos():
@@ -686,7 +686,7 @@ def kill_combo(row):
     return row
 
 
-SLIM_LEG = ("key", "result", "xodds", "odds", "min_odds", "strategy")        # ce que l'argent relit d'une jambe (bankroll.won_odds, real_legs)
+SLIM_LEG = ("key", "result", "xodds", "odds", "min_odds", "strategy", "lane", "cup")        # ce que l'argent relit d'une jambe (bankroll.won_odds, real_legs)
 
 
 def _keep(rows, cut):

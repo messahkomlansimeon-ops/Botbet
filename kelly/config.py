@@ -588,6 +588,7 @@ SEASON_TITLE = "🧮 SAISON EN COURS"
 KELLY_FRACTION_SEASON = _float("KELLY_FRACTION_SEASON", 0.15)                # part de mise de la voie (relative à KELLY_FRACTION_REF, comme les autres voies)
 SEASON_TICKET_MAX = max(0.0, _float("SEASON_TICKET_MAX", 0))                 # mise maximale d'un combiné de la voie (FCFA) ; 0 = le plafond de ticket existant (mode capital) et le plafond loterie
 SEASON_SECONDS = max(30, _int("SEASON_SECONDS", 600))                      # temps maximal du relevé 1xBet de la voie (en plus de celui du relevé principal)
+SEASON_SEND_FILL = _bool("SEASON_SEND_FILL", True)                         # voie `saison` SEULEMENT : un combiné fait de jambes de remplissage est ENVOYÉ (« sans valeur », jambes `fill`, mise = part de mise de la voie, plafonds) ; faux : fantôme comme les autres voies
 SEASON_MAX_MATCHES = max(1, _int("SEASON_MAX_MATCHES", 60))                  # matchs relevés chez 1xBet au plus pour la voie (le cache du relevé principal sert d'abord)
 KELLY_FRACTION_REF = 0.25
 KELLY_FRACTION_SHARPGAP = _float("KELLY_FRACTION_SHARPGAP", 0.25)

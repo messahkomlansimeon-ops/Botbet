@@ -43,6 +43,12 @@ def test_lines():
     assert "CLV 1xBet" in sl and "cote 3 : +1 000 FCFA sur 1" in sl and "cote 10 : −200 FCFA sur 1" in sl, sl
     assert sl.startswith("saison : 0 gagnée") or "gagnée" in sl.split(" · ")[0] or sl.startswith("saison : aucune jambe réglée dans un combiné"), sl
     assert "valeur : 1/2" in sl and "remplissage : 1/2" in sl, "la référence sans sval (5e ligne) n'est pas une jambe"
+    # une jambe de remplissage de la voie (strategy « fill », lane « saison ») reste dans la ligne « saison », jamais dans « fill »
+    store.save("fair_combos.json", store.load("fair_combos.json", []) + [{"date": TODAY, "tier": "ss30", "min_odds": 30.0, "prob": 0.03, "result": "loss", "has_value": False,
+                                                                           "legs": [{"key": "f1|totals||2.5|Over|saison", "id": "f1", "strategy": "fill", "lane": "saison", "sval": 0, "result": "loss", "xodds": 1.5, "prob": 0.7}]}])
+    lines_f = L.lane_lines([], None)
+    assert not any(x.startswith("fill") for x in lines_f), lines_f
+    assert any(x.startswith("saison :") and "gagnée" in x for x in lines_f)
     # un combiné « saison N » (palier m<n>, jambes saison) noté et réglé : ligne « sur mesure » ; une ligne sans `pe` n'entre pas dans l'annoncé
     store.save("fair_combos.json", store.load("fair_combos.json", []) + [{"date": TODAY, "tier": "m1", "custom": True, "min_odds": 5.0, "prob": 0.2, "legs": legs("saison"),
                                                                            "result": "win", "has_value": True, "played": {"odds": 5.0, "stake": 100, "at": "x"}, "stake": 100, "cur": "FCFA"}])

@@ -271,9 +271,9 @@ def _apply(c, v, refs, ref_line=False, leg=True):
     d.update(name=name, point=point, key=_key(c["id"], c["market"], name, point), pick=odds.label(c["market"], name, point, c.get("who"), "soccer"))
     p = v["p"]
     d.update(prob=round(p, 4), p_ens=round(p, 4), p_model=round(v["pm"], 4), p0=round(v["p0"], 4), base=round(v["base"], 4), fair=round(1 / p, 2), xodds=v["odd"], xev=round(v["ev"], 4),
-             ew=round(v["wm"], 4), esrc="saison", strategy="saison", lane="saison")
+             ew=round(v["wm"], 4), esrc="saison", strategy="saison", lane="saison")      # la jambe de remplissage (sval 0) devient strategy « fill » plus bas ; lane reste « saison »
     if v["kind"] and leg:
-        d.update(sval=1 if v["kind"] == "value" else 0, min_odds=round((1 + (C.SEASON_MARGIN if v["kind"] == "value" else C.SEASON_FILL_MIN_EV)) / p, 2))
+        d.update(sval=1 if v["kind"] == "value" else 0, strategy="saison" if v["kind"] == "value" else "fill", min_odds=round((1 + (C.SEASON_MARGIN if v["kind"] == "value" else C.SEASON_FILL_MIN_EV)) / p, 2))
     else:
         d.update(ref_only=1, min_odds=round(1 / p, 2))
     for k, val in (("p_x", v["p_x"]), ("p_sharp", v["p_s"])):
@@ -370,6 +370,8 @@ def reprice(c, px, refs):
         p = ensemble.pool(c["p_model"], p_mkt, c.get("ew", C.SEASON_MODEL_WEIGHT))
         kind, why = verdict(p, odd, p_mkt, c["p_model"])
         out.update(prob=round(p, 4), p_ens=round(p, 4), xev=round(p * odd - 1, 4), sval=None if kind is None else 1 if kind == "value" else 0)
+        if kind is not None:
+            out["strategy"] = "saison" if kind == "value" else "fill"          # voie `saison` : valeur = « saison », remplissage = « fill » (lane reste « saison »)
         if p_x is not None:
             out.update(p_x=round(p_x, 4), xp=round(p_x, 4))
     else:
