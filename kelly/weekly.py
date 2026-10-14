@@ -87,6 +87,13 @@ def message(now=None):
     gl = sharpgap.summary_line(rows, 7, now.date())
     if gl:
         blocks.append([f"💰 {fmt.esc(gl)}"])
+    try:
+        from . import lanestats
+        ll = lanestats.lane_lines(rows, 7, now.date())
+        if ll:
+            blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées)")] + [f"• {fmt.esc(x)}" for x in ll])
+    except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
+        print(f"[weekly] voies illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     data = calib.load()
     fam = _family_lines(data)
     if fam:

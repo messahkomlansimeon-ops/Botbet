@@ -112,7 +112,7 @@ def test_won_festive_and_card():
         assert "🔥 dernier match du coupon" in main, main                        # la ligne du dernier match le dit
         assert str(won).startswith("🎉🏆 <b>COUPON GAGNÉ !</b> 🏆🎉\n🎫 <b>Combi vm1</b> · 🎟️ AB12\n✅ H0 – A0 · Plus de 0,5 buts (1-0)\n"
                                    "✅ H1 – A1 · Plus de 0,5 buts (0-1)\n💰 1 000 FCFA × 4,00 = <b>4 000 FCFA</b> encaissés (+3 000 FCFA)"), str(won)
-        assert "💼 Capital après le règlement de demain matin : 53 000 FCFA · objectif du mois ▰▰▰▱▱▱▱▱▱▱ 30 %" in str(won), str(won)
+        assert "💼 Capital après le règlement de demain matin : 53 000 FCFA" in str(won) and "objectif du mois" not in str(won), str(won)
         assert "mets-en une partie de côté" in str(won) and won.reply_to == 55       # +3 000 = 6 % du capital : conseil de discipline
         assert "COUPON GAGNÉ" not in watch.all_text(run(60, {0: live((1, 0), 60), 1: live((0, 1), 60)})), "fêté une fois"
     assert chat.on_callback("tk|0000000000") == "Ce coupon n'est plus suivi (il date de plus de 2 jours)."

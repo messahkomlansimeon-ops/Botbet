@@ -545,6 +545,7 @@ STRATEGY_SHARPGAP = _mode("STRATEGY_SHARPGAP", "on")
 STRATEGY_STATS = _mode("STRATEGY_STATS", "on")
 FILL_LEGS = _bool("FILL_LEGS", True)                  # jambes sans valeur (favoris sharp 🎯, stats sous le seuil...) autorisées dans les combinés (choix de l'utilisateur sur leur longueur)
 STATS_GHOST_LEAGUES = _set("STATS_GHOST_LEAGUES", ())
+STATS_ON_LEAGUES = _set("STATS_ON_LEAGUES", ())        # ligues hors football-data que la voie stats joue quand même (retour décidé à la main : le bilan le propose, jamais automatique)
 STATS_GHOST_OUTSIDE_FD = _bool("STATS_GHOST_OUTSIDE_FD", True)
 # Mise : part du budget d'un pari = palier x confiance (money.allocate) ; la fraction de Kelly de la voie la module RELATIVEMENT à KELLY_FRACTION_REF (0,25 : le calibrage historique,
 # donc sharpgap ne bouge pas et stats pèse 0,15 / 0,25 = 60 %). Un combiné prend la fraction de sa voie la plus prudente parmi ses jambes à valeur. KELLY_FRACTION n'a jamais dimensionné

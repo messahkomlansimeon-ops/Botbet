@@ -469,8 +469,6 @@ def _won_text(t, d):
     st = money.capital_state()
     if st:
         line = f"💼 Capital après le règlement de demain matin : {money.money(round(st['capital'] + profit))}"
-        if st.get("goal"):
-            line += f" · objectif du mois {money._bar(((st.get('month') or 0) + profit) / st['goal'])}"
         lines.append(fmt.esc(line))
         if st["capital"] > 0 and profit >= 0.05 * st["capital"]:
             lines.append(fmt.i("💡 Beau gain : mets-en une partie de côté (la moitié par exemple). Ta limite du jour reste à 3 % du capital."))

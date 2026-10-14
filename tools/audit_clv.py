@@ -221,7 +221,7 @@ def section_c(rows):
         out.append(f"     - {r.get('event')} / {r.get('pick')} : prix marché {r.get('odds')}, 1xBet {r.get('xodds')}, edge à la prise {g.get('edge')}, "
                    f"edge contre la clôture {r.get('gap_edge_close')} ({r.get('gap_close_src')}), résultat {r.get('result')}")
     xc = [r for r in rows if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r.get("xodds")]
-    fresh = [r for r in xc if (r["xclose"].get("age_min") is not None and r["xclose"]["age_min"] <= 90)]
+    fresh = [r for r in xc if (r["xclose"].get("lead_min") is not None and r["xclose"]["lead_min"] <= LEAD_OK_MIN and not r.get("xgone"))]    # ≤ 90 min AVANT LE MATCH (comme la section G), pas l'âge du relevé
     out.append(f"   Prix 1xBet de clôture (champ xclose, lu dans le cache, collecté seulement depuis l'Étape 0b) : {len(xc)} lignes, dont {len(fresh)} avec un relevé "
                "de moins de 90 min avant la clôture.")
     if xc:
@@ -372,6 +372,10 @@ def section_g(log, lk=None):
     for kind in ("joué", "dans un combiné envoyé (non joué)", "fantôme"):
         g = [r for r in good if _kind(r, lk) == kind and r.get("xodds")]
         out.append(f"     {kind:<36} {fmt_stats([math.log(r['xodds'] / r['xclose']['odds']) for r in g], [r.get('id') for r in g])}")
+    for lane in ("stats", "fill", "sharpgap", None):                                  # par voie (étiquette posée à la construction ; None = lignes d'avant les étiquettes)
+        g = [r for r in good if r.get("xodds") and r.get("strategy") == lane]
+        if g:
+            out.append(f"     voie {lane or 'avant étiquettes':<31} {fmt_stats([math.log(r['xodds'] / r['xclose']['odds']) for r in g], [r.get('id') for r in g])}")
     for k, g in sorted(_group([r for r in good if r.get("xodds")], lambda r: family_of(r.get("market"))).items(), key=lambda kv: -len(kv[1])):
         out.append(f"     famille {k:<28} {fmt_stats([math.log(r['xodds'] / r['xclose']['odds']) for r in g], [r.get('id') for r in g])}")
     if not good:

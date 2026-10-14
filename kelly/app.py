@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, lanes,
+from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                xprice, xworld)
 from .sources import fmmatch, http, state, xbet
@@ -419,6 +419,10 @@ def morning_report(now):
         _step("sauvegarde du suivi (résultats annoncés)", lambda: track.save(rows))        # marque « gap_reported » des paris 1xBet en retard
     msgs += _step("pronostics sans cote", lambda: fair_report(now), [])
     got_ens = _step("journal des avis de l'ensemble", lambda: settle.settle_ensemble(now))      # après le règlement des pronostics : leurs stats sont en cache
+    cut = _step("coupure automatique de la voie stats", lambda: lanestats.apply(now.date()), [])      # après le règlement : juge les lignes réglées ; le message passe en PREMIER
+    cut_msgs = _step("état des voies", lanestats.cut_lines, [])
+    if cut_msgs:
+        msgs.insert(0, Html("\n".join(fmt.esc(x) for x in cut_msgs)))        # coupure décidée ce matin ou en cours : même ligne 🛑, une seule fois
     got_live = _step("journal live", lambda: LV.settle(now))                  # apprentissage live, à part de l'avant-match
     if got_live and (got_live[0] or got_live[1]):
         print(f"[live] journal : {got_live[0]} pari(s) réglé(s), {got_live[1]} appris par tranche", file=sys.stderr)
@@ -687,7 +691,7 @@ def morning_gaps(picks, pronos, day, odds_at):
         return []
 
 
-REPAIR_LABELS = {"calib.json": "la fiabilité par marché", "calib_boot.json": "le rejeu de la saison passée", "means.json": "les moyennes des stats",
+REPAIR_LABELS = {"strategy_state.json": "la coupure automatique des voies", "calib.json": "la fiabilité par marché", "calib_boot.json": "le rejeu de la saison passée", "means.json": "les moyennes des stats",
                  "ensemble.json": "les poids modèle / marché", "live_calib.json": "la correction du direct", "tuning.json": "le réglage des championnats",
                  "model.json": "le modèle de classement", "bets.json": "tes paris et combinés", "tracked.json": "les paris suivis",
                  "fair.json": "les pronostics suivis", "fair_combos.json": "les combinés à cote juste", "mybudget.json": "ton capital"}
@@ -1565,12 +1569,12 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 📊 <b>Mes résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
 🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage)
 📊 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
-💼 <b>Mon capital</b> : ton capital, ta limite du jour, ce que tu as déjà misé et ton objectif
+💼 <b>Mon capital</b> : ton capital, ta limite du jour, ce que tu as déjà misé et tes deux objectifs mesurés (CLV 1xBet, capital)
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
 <b>Ton capital</b>
-Écris une fois <i>capital 50000</i> (la somme que tu confies à Kelly), <i>perte max 5000</i> (le plus que tu acceptes de perdre en un jour) et, si tu veux, <i>objectif 5000</i> (ce que tu aimerais gagner par mois). Le capital suit les paris que tu notes. Chaque jour, Kelly répartit au plus ta limite : 3 % du capital (jamais plus que ta perte max), 1 % au plus par ticket, 100 FCFA au plus sur un ticket loterie (cote de 50 et plus, ou trop peu de chances). Elle s'arrête quand tu as misé ta limite du jour et n'augmente jamais une mise pour atteindre l'objectif. Sous chaque combiné : ses chances selon Kelly ET selon 1xBet.
+Écris une fois <i>capital 50000</i> (la somme que tu confies à Kelly), <i>perte max 5000</i> (le plus que tu acceptes de perdre en un jour) (plus d'objectif en FCFA : la carte affiche deux objectifs mesurés). Le capital suit les paris que tu notes. Chaque jour, Kelly répartit au plus ta limite : 3 % du capital (jamais plus que ta perte max), 1 % au plus par ticket, 100 FCFA au plus sur un ticket loterie (cote de 50 et plus, ou trop peu de chances). Elle s'arrête quand tu as misé ta limite du jour et n'augmente jamais une mise pour atteindre l'objectif. Sous chaque combiné : ses chances selon Kelly ET selon 1xBet.
 
 <b>Ou un budget du jour</b>
 Écris une fois <i>budget 5000</i> (ou <i>5 000</i>, <i>5.000</i>, <i>5k</i>) : c'est ce que tu es prêt à miser aujourd'hui. Chaque matin, Kelly le répartit entre ses paris selon sa confiance et affiche la <b>mise conseillée</b> de chacun, en FCFA. Les jours pauvres, elle en garde une partie. Change-le n'importe quel jour : il reste tel quel jusqu'à ce que tu le changes. Sans budget, pas de mise conseillée.
@@ -2024,6 +2028,8 @@ def _handle_command(text):
         return markets.by_league(args) if args else markets.card()      # « marchés détail [tirs | ldc…] » : par championnat et par sens
     if cmd == "/perte":
         return money.max_loss_command(args)
+    if cmd == "/voies":
+        return lanes.command(args)
     if cmd == "/objectif":
         return money.goal_command(args)
     if cmd in ("/regle", "/reglé", "/régler", "/regler"):     # « réglé vm3 gagné 12/10 » : un ticket noté que le règlement gratuit ne trouve pas

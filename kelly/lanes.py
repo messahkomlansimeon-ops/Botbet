@@ -28,6 +28,10 @@ def state():
             d = {k: v for k, v in d.items() if k != "stats"}
         elif not isinstance(st.get("leagues") or {}, dict):
             d = d | {"stats": {k: v for k, v in st.items() if k != "leagues"}}
+        else:                                         # une ligue dont la valeur n'est pas un dict ({"x": "oops"}) reste une ligue coupée, sans date
+            lg = st.get("leagues") or {}
+            if any(not isinstance(v, dict) for v in lg.values()):
+                d = d | {"stats": st | {"leagues": {k: (v if isinstance(v, dict) else {}) for k, v in lg.items()}}}
         _memo.update(t=now, v=d)
     return _memo["v"]
 
@@ -55,9 +59,18 @@ def mode(lane, sport_key=None):
     st = state().get("stats") or {}
     if st.get("mode") == "ghost":
         return "ghost"
-    if sport_key and (sport_key in C.STATS_GHOST_LEAGUES or sport_key in (st.get("leagues") or {}) or (C.STATS_GHOST_OUTSIDE_FD and _outside_fd(sport_key))):
-        return "ghost"
-    return "on"
+    return "ghost" if league_ghost(sport_key) else "on"
+
+
+def league_ghost(sport_key):
+    """La ligue est-elle en fantôme pour la voie stats (liste de config, coupure automatique de la ligue, ou hors football-data sans retour décidé à la main) ? Ne regarde pas
+    l'interrupteur global : sert aussi à dire quelles lignes comptent pour la coupure de la voie entière."""
+    if not sport_key:
+        return False
+    st = state().get("stats") or {}
+    if sport_key in C.STATS_GHOST_LEAGUES or sport_key in (st.get("leagues") or {}):
+        return True
+    return bool(C.STATS_GHOST_OUTSIDE_FD and _outside_fd(sport_key) and sport_key not in C.STATS_ON_LEAGUES)
 
 
 def usable(c):
@@ -112,3 +125,42 @@ def lines():
     out.append("Stats en fantôme : " + ("toutes les ligues hors football-data" if C.STATS_GHOST_OUTSIDE_FD else "aucune par défaut")
                + (f" + {', '.join(ghost[:6])}{'…' if len(ghost) > 6 else ''}" if ghost else ""))
     return out
+
+
+def write_state(doc):
+    store.save(STATE_FILE, doc)
+    reset()
+
+
+def resume(arg):
+    """Remise à la main : « stats » (voie entière, redevient « on » ; la mesure repart de ce jour) ou une clé de ligue (sort de la liste de coupure automatique). -> message."""
+    from datetime import date
+    doc = dict(state())
+    st = dict(doc.get("stats") or {})
+    if arg == "stats":
+        if st.get("mode") != "ghost":
+            return "La voie stats n'est pas coupée automatiquement."
+        st.pop("mode", None)
+        st.pop("reason", None)
+        st["since_ok"] = str(date.today())          # la coupure ne regarde plus que les lignes réglées à partir d'aujourd'hui
+        write_state(doc | {"stats": st})
+        return "✅ Voie stats remise à « on ». La coupure automatique repart de zéro à partir d'aujourd'hui."
+    leagues = dict(st.get("leagues") or {})
+    if arg in leagues:
+        leagues.pop(arg)
+        st["leagues"] = leagues
+        st["returned"] = dict(st.get("returned") or {}) | {arg: str(date.today())}       # la ligue repart de zéro : ni son passé ni sa période fantôme ne comptent
+        write_state(doc | {"stats": st})
+        return f"✅ {arg} sort des ligues en fantôme (coupure automatique)."
+    if arg and (arg in C.STATS_GHOST_LEAGUES or (_outside_fd(arg) and C.STATS_GHOST_OUTSIDE_FD and arg not in C.STATS_ON_LEAGUES)):
+        return (f"{arg} est en fantôme par la configuration : retire-la de STATS_GHOST_LEAGUES, ou ajoute-la à STATS_ON_LEAGUES, puis « kelly restart ».")
+    return f"{arg or '?'} : rien à remettre."
+
+
+def command(args):
+    """« voies » : l'état ; « voies stats on » : remet la voie stats ; « voies <ligue> on » : sort une ligue de la coupure automatique."""
+    words = (" ".join(map(str, args)) if isinstance(args, (list, tuple)) else str(args or "")).lower().split()      # Telegram passe une LISTE de mots
+    if len(words) >= 2 and words[-1] == "on":
+        return resume(words[0] if words[0] != "ligue" or len(words) < 3 else words[1])
+    from . import lanestats
+    return "\n".join(["🎛️ Voies"] + lines() + lanestats.cut_lines())

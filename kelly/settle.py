@@ -697,6 +697,11 @@ def _bilan_simple(days, rows, picks, combos):
     ml = money.summary_lines(bets_, rows, fair.load_combos())
     if ml:
         blocks.append(["💰 <b>Ton argent</b> " + fmt.i("(paris notés)")] + [fmt.esc(x) for x in ml])
+    try:
+        from . import lanestats
+        blocks.append(["🏁 <b>Objectifs</b>"] + [fmt.esc(x) for x in lanestats.objective_lines(plain=True)])
+    except Exception as e:                          # noqa: BLE001
+        print(f"[bilan] objectifs illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     if combos:
         w = sum(1 for c in combos if c["result"] == "win")
         b = [f"🎯 <b>Combinés du matin</b> : {w} gagné{'s' if w > 1 else ''} sur {len(combos)}"]
@@ -717,6 +722,13 @@ def _bilan_simple(days, rows, picks, combos):
         counts.append(f"💰 {fmt.esc(gl)}")
     if counts:
         blocks.append(counts)
+    try:
+        from . import lanestats
+        ll = lanestats.lane_lines(rows, days, plain=True)
+        if ll:
+            blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées ; l'argent d'un combiné n'est jamais réparti entre voies)")] + [fmt.esc("• " + x) for x in ll])
+    except Exception as e:                          # noqa: BLE001 - le bilan ne dépend jamais de ce bloc
+        print(f"[bilan] voies illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     pl = played.summary_lines(bets_, rows, fair.load_combos(), days)
     if ml:                                          # le résultat en argent est au-dessus : ne garder que l'écart de cote 1xBet
         pl = [x for x in pl if not x.startswith("Joués chez 1xBet")]
@@ -745,6 +757,14 @@ def _bilan_detail(bets, days, rows, picks, combos):
     pl = played.summary_lines(bets, rows, fair.load_combos(), days, detail=True)
     if pl:
         blocks.append(["💰 <b>Ton argent</b> " + fmt.i("(paris notés)")] + [e(x) for x in pl])
+    try:
+        from . import lanestats
+        ll = lanestats.lane_lines(rows, days)
+        blocks.append(["🏁 <b>Objectifs</b>"] + [e(x) for x in lanestats.objective_lines()])
+        if ll:
+            blocks.append(["🎛️ <b>Par voie</b> " + fmt.i("(jambes réglées ; l'argent d'un combiné n'est jamais réparti entre voies)")] + [e("• " + x) for x in ll])
+    except Exception as ex:                         # noqa: BLE001
+        print(f"[bilan] voies illisibles : {type(ex).__name__}: {ex}", file=sys.stderr)
     q = [e("✅ " + _block("Envoyés", sent)), e("👻 " + _block("Suivis en silence", ghost))]
     if picks:
         brier = sum((r["prob"] - (1.0 if r["result"] == "win" else 0.0)) ** 2 for r in picks) / len(picks)

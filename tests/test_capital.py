@@ -37,7 +37,7 @@ def test_commands_and_limit():
     out = app.handle_command("capital 50000")
     txt = telegram.plain(out)
     assert txt.startswith("✅ 💼 Mon capital\n\n💰 Capital : 50 000 FCFA\n📅 Depuis le ") and "Limite : 1 500 FCFA" in txt and "perte max 5000" in txt, txt
-    assert "<b>50 000 FCFA</b>" in out and "🏁 Ajoute un objectif du mois : <i>objectif 5000</i>" in out and "📈 Hier" not in out, out    # pas de pari hier
+    assert "<b>50 000 FCFA</b>" in out and "🏁 Capital 50 000 FCFA ≥ départ 50 000 FCFA ✅" in out and "🎯 CLV 1xBet : pas encore de mesure (0/300 lignes)" in out and "objectif du mois" not in out and "📈 Hier" not in out, out    # pas de pari hier
     assert "Limite = 3 % du capital (jamais plus que ta perte max), 1 % au plus par ticket, 100 FCFA au plus sur un ticket loterie" in txt, txt
     st = money.capital_state()
     assert st["capital"] == 50000 and st["limit"] == 1500 and st["left"] == 1500 and money.daily() == 1500 and money.active()
@@ -47,14 +47,13 @@ def test_commands_and_limit():
     app.handle_command("perte max 5 000")
     assert money.daily() == 1500                                                   # 3 % du capital, sous la perte max
     out = telegram.plain(app.handle_command("objectif 18000"))
-    assert "🏁 Objectif du mois : +18 000 FCFA · fait : +0 FCFA" in out and "n'augmentera jamais une mise" in out, out
-    assert "Repère réaliste : +5 à +10 % du capital par mois (2 500 FCFA à 5 000 FCFA)" in out, out
+    assert "L'objectif en FCFA est remplacé" in out and "objectif du mois" not in out and "Objectif du mois" not in out, out      # décision du 14/10 : plus d'objectif en FCFA
+    assert "🏁 Capital 50 000 FCFA ≥ départ 50 000 FCFA ✅" in telegram.plain(app.handle_command("capital")), "les deux objectifs mesurés sont sur la carte"
     assert chat.route("💼 Mon capital")[0] == "/capital" and chat.route("💰 Mon budget")[0] == "/budget"       # ancien bouton : toujours compris
     assert "mode capital" in app.handle_command("budget 5000")                     # pas de mélange des deux modes
     assert "💰 Capital : 2 000 FCFA" in telegram.plain(app.handle_command("capital 2k")) and money.capital_state()["limit"] == 60
-    assert "Montant invalide" in app.handle_command("objectif abc") and "FCFA" in app.handle_command("capital 50 €")
+    assert "FCFA" in app.handle_command("capital 50 €")
     assert app.handle_command("capital 0").startswith("💼 Mode capital arrêté") and not money.active()
-    assert "Fixe d'abord ton capital" in app.handle_command("objectif 18000")
     print("ok  commandes capital / perte max / objectif du mois ; limite du jour = min(perte max, 3 % du capital)")
 
 
@@ -110,8 +109,8 @@ def test_display_and_goal():
     assert ("🎯 2 paris · 25 % selon Kelly · 20 % selon 1xBet\n📊 Espérance : +56,2 % selon Kelly · +26,6 % selon 1xBet\n"
             "💰 Mise : <b>1 500 FCFA → si ça passe : +7 875 FCFA</b>") in msg, msg
     assert "🎯 Pour" not in msg and "d'un coup" not in msg                         # plus de « ce qu'il faudrait miser pour l'objectif » : jamais de course à l'objectif
-    assert app.money_line([]).startswith("💼 Capital 50 000 FCFA · reste aujourd'hui 1 500 / 1 500 FCFA · objectif du mois +18 000 FCFA (fait +0 FCFA) "
-                                         "(écris « capital »"), app.money_line([])
+    assert app.money_line([]).startswith("💼 Capital 50 000 FCFA · reste aujourd'hui 1 500 / 1 500 FCFA "
+                                         "(écris « capital »") and "objectif du mois" not in app.money_line([]), app.money_line([])
     # sans capital ni budget : pas de montant, mais l'espérance négative reste dite
     reset()
     assert money.stake_words(None, 0.4, 2.0) == money.NO_EDGE and money.stake_words(None, 0.6, 2.0) is None

@@ -812,7 +812,7 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
 
 
 ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
-ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref")
+ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key")
 # xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
 # règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
 
@@ -823,7 +823,7 @@ def _pack(r):
     return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
             [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp")))] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
             r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
-            r.get("strategy"), r.get("xref")]
+            r.get("strategy"), r.get("xref"), r.get("sport_key")]
 
 
 def unpack_archive_row(key, day, vals):
@@ -843,6 +843,8 @@ def unpack_archive_row(key, day, vals):
         out["shadow"] = {"ev": sh[0], "model_value": bool(sh[1]), "old_ok": bool(sh[2]), "old_kind": sh[3], "old_p": sh[4]}
     if d["strategy"]:
         out["strategy"] = d["strategy"]
+    if d["sport_key"]:                                  # la ligue : la coupure automatique de la voie stats se juge par ligue
+        out["sport_key"] = d["sport_key"]
     return out
 
 

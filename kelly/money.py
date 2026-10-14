@@ -354,15 +354,14 @@ def _n(x):
 
 
 def capital_line(html=True):
-    """Une ligne : « 💼 Capital 50 000 FCFA · reste aujourd'hui 200 / 1 500 FCFA · objectif du mois +18 000 FCFA (fait +2 300 FCFA) » (HTML si `html`) ;
+    """Une ligne : « 💼 Capital 50 000 FCFA · reste aujourd'hui 200 / 1 500 FCFA » (HTML si `html`) ;
     '' hors mode capital."""
     st = capital_state()
     if not st:
         return ""
     b = fmt.b if html else (lambda x: x)
     e = fmt.esc if html else (lambda x: x)
-    return (f"💼 Capital {b(e(money(_r(st['capital']))))} · reste aujourd'hui {e(_n(st['left']))} / {e(money(_r(st['limit'])))}"
-            + (f" · objectif du mois {e(signed(_r(st['goal'])))} (fait {e(signed(_r(st.get('month') or 0)))})" if st["goal"] else ""))
+    return f"💼 Capital {b(e(money(_r(st['capital']))))} · reste aujourd'hui {e(_n(st['left']))} / {e(money(_r(st['limit'])))}"
 
 
 def _bar(part, cells=10):
@@ -391,11 +390,8 @@ def capital_card(st=None):
         if not st["max_day"]:
             lines.append("💡 Fixe ta perte max : " + i("perte max 5000"))
     lines.append("")
-    if st["goal"]:
-        done = st.get("month") or 0
-        lines.append(f"🏁 Objectif du mois : {e(signed(_r(st['goal'])))} · fait : {e(signed(_r(done)))}" + (" ✅" if done >= st["goal"] else ""))
-    else:
-        lines.append("🏁 Ajoute un objectif du mois : " + i("objectif 5000"))
+    from . import lanestats                             # plus d'objectif en FCFA (décision du 14/10) : deux objectifs mesurés
+    lines += [e(x) for x in lanestats.objective_lines()]
     if st["yesterday"] is not None:
         lines.append(f"📈 Hier : {e(signed(_r(st['yesterday'])))}")
     lines += ["", i(f"ℹ️ Limite = {round(CAPITAL_DAY_SHARE * 100)} % du capital (jamais plus que ta perte max), {round(TICKET_SHARE * 100)} % au plus par "
@@ -533,7 +529,7 @@ def command(args):
 # ---------- commandes « capital », « perte max », « objectif » ----------
 
 CAPITAL_HELP = ("Écris « capital 50000 » (la somme que tu confies à Kelly, que tu acceptes de perdre), « perte max 5000 » (le plus que tu acceptes de "
-                "perdre en un jour) et « objectif 5000 » (ce que tu aimerais gagner par mois : affiché, jamais utilisé pour grossir une mise).")
+                "perdre en un jour). Plus d'objectif en FCFA : « 💼 Mon capital » affiche deux objectifs mesurés.")
 
 
 def _amount_arg(args, name):
@@ -590,20 +586,10 @@ def max_loss_command(args):
 
 
 def goal_command(args):
-    """« objectif 5000 » : objectif du MOIS, affiché avec ce qui est déjà fait ce mois-ci (carte du capital, ligne du matin), jamais utilisé pour grossir
-    une mise ; « objectif 0 » : retiré."""
-    if not args:
-        return capital_status()
-    amount, err = _amount_arg(args, "objectif")
-    if err:
-        return err
-    if not capital_mode():
-        return "💼 Fixe d'abord ton capital : « capital 50000 »."
-    _save_capital(goal=amount if amount > 0 else None)
-    if amount <= 0:
-        return _done(fmt.i("Objectif retiré."))
-    return _done(fmt.i(f"Objectif du mois. Kelly n'augmentera jamais une mise pour l'atteindre. Repère réaliste : +5 à +10 % du capital par mois "
-                       f"({money(_r(capital_state()['capital'] * 0.05))} à {money(_r(capital_state()['capital'] * 0.10))})."))
+    """« objectif » : l'objectif en FCFA n'existe plus (décision du 14/10) ; la carte du capital affiche deux objectifs mesurés (CLV 1xBet positif sur au moins 300
+    lignes de valeur réglées ; capital au moins égal au capital de départ). Ne change rien."""
+    return _done(fmt.i("L'objectif en FCFA est remplacé par deux objectifs affichés dans « 💼 Mon capital » : un CLV contre le dernier prix 1xBet positif "
+                       "(intervalle à 95 % au-dessus de zéro, 300 lignes réglées au moins) et un capital au moins égal à celui de départ."))
 
 
 def played_norm(w):

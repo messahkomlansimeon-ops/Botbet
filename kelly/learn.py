@@ -438,6 +438,7 @@ def book_stats(rows):
 
 
 def update(rows, combos=None):
+    rows = [r for r in rows if r.get("strategy") != "sharpgap"]     # la voie sharpgap n'apprend rien (seuil fixe) ; les familles de stats apprennent de TOUTES leurs lignes (stats + fill + anciennes)
     previous = load()
     model = train_clv(rows, previous, load_boot())
     model["calibration"] = calibrate(rows)
