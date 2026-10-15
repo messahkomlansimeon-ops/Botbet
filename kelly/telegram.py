@@ -35,10 +35,23 @@ class Text(str):
     """Message en texte brut qui porte des boutons (attribut `markup`, voir with_buttons)."""
 
 
+def silent(msg):
+    """Le message `msg` (et ses pages suivantes, attribut `more`) arrive SANS sonnerie (disable_notification) : il reste dans la conversation, visible, sans réveiller. Un `str` ordinaire
+    devient un Text. C.NOTIFY_LEVELS éteint : le marquage reste mais n'est plus lu à l'envoi. -> le message (Html / Text), pas toujours l'objet reçu."""
+    if not isinstance(msg, (Html, Text)):
+        msg = Text(msg)
+    msg.silent = True
+    for m in getattr(msg, "more", ()) or ():
+        silent(m)
+    return msg
+
+
 def with_buttons(text, markup):
     """Le même message (HTML ou texte brut) avec des boutons : `markup` = inline(...) ou menu_keyboard(...)."""
     out = (Html if isinstance(text, Html) else Text)(text)
     out.markup = markup
+    if getattr(text, "silent", False):               # le niveau de bruit suit le message
+        out.silent = True
     return out
 
 
@@ -161,10 +174,12 @@ def _transient(e):
     return e.code is None or e.code == 429 or e.code >= 500
 
 
-def _deliver(part, is_html, markup, chat_id, reply_to=None):
+def _deliver(part, is_html, markup, chat_id, reply_to=None, quiet=False):
     """Un morceau de message -> réponse de l'API ; lève TelegramError. HTML refusé par Telegram : repli en texte brut. `reply_to` : id d'un message
     auquel celui-ci répond (toucher la citation y ramène) ; message disparu : envoyé quand même, sans citation."""
     extra = {"reply_markup": markup} if markup else {}
+    if quiet:
+        extra["disable_notification"] = True
     if reply_to:
         extra |= {"reply_to_message_id": reply_to, "allow_sending_without_reply": True}
     if is_html:
@@ -178,14 +193,15 @@ def _deliver(part, is_html, markup, chat_id, reply_to=None):
     return api("sendMessage", chat_id=chat_id, text=part, **extra)
 
 
-def _enqueue(parts, is_html, markup, chat_id, reply_to=None, ttl=None):
+def _enqueue(parts, is_html, markup, chat_id, reply_to=None, ttl=None, quiet=False):
     """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier, la citation `reply_to` sur le premier). Ajout ATOMIQUE
     (store.update) : le bot Telegram et le suivi des matchs peuvent ajouter en même temps sans s'écraser. LAST_QUEUED passe à vrai (le message n'est
     pas perdu : il partira plus tard)."""
     global LAST_QUEUED
     now = time.time()
     new = [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
-           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) | ({"ttl": ttl} if ttl else {}) for i, p in enumerate(parts)]
+           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) | ({"ttl": ttl} if ttl else {}) | ({"silent": True} if quiet else {})
+           for i, p in enumerate(parts)]
 
     def add(box):
         box = (box if isinstance(box, list) else []) + new
@@ -215,16 +231,17 @@ def _send_one(text, chat_id=None, queue=True):
     is_html = isinstance(text, Html)
     parts, markup, sent = _chunks(str(text)), getattr(text, "markup", None), True
     reply_to, ttl = getattr(text, "reply_to", None), getattr(text, "ttl", None)
+    quiet = bool(C.NOTIFY_LEVELS and getattr(text, "silent", False))
     explicit = chat_id if chat_id != chat else None
     if queue and store.load(OUTBOX, []):                        # des messages plus anciens attendent : d'abord eux
         if time.monotonic() - _last_fail[0] > 60:
             flush_outbox()
         if store.load(OUTBOX, []):
-            _enqueue(parts, is_html, markup, explicit, reply_to, ttl)
+            _enqueue(parts, is_html, markup, explicit, reply_to, ttl, **({"quiet": True} if quiet else {}))
             return False
     for i, part in enumerate(parts):
         try:
-            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id, reply_to if i == 0 else None)
+            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id, reply_to if i == 0 else None, **({"quiet": True} if quiet else {}))
         except TelegramError as e:
             LAST_ERROR = f"{e} (code {e.code})" if e.code else str(e)
             print(f"[telegram] envoi échoué : {LAST_ERROR}", file=sys.stderr)
@@ -232,18 +249,20 @@ def _send_one(text, chat_id=None, queue=True):
                 print("[telegram] délai sans réponse : le message a peut-être été livré, il n'est pas renvoyé", file=sys.stderr)
                 if queue and parts[i + 1:]:
                     _last_fail[0] = time.monotonic()
-                    _enqueue(parts[i + 1:], is_html, markup, explicit, ttl=ttl)
+                    _enqueue(parts[i + 1:], is_html, markup, explicit, ttl=ttl, **({"quiet": True} if quiet else {}))
             elif queue and _transient(e):
                 _last_fail[0] = time.monotonic()
-                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None, ttl)
+                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None, ttl, **({"quiet": True} if quiet else {}))
             return False
     return (sent or {}).get("message_id", True) if isinstance(sent, dict) else True
 
 
-def send(text, chat_id=None, queue=True):
+def send(text, chat_id=None, queue=True, silent=None):
     """Envoie `text` (voir _send_one) puis, dans l'ordre, ses pages suivantes (attribut `more` : une longue liste « Mes paris » a une page par message,
     chacune avec ses boutons). -> l'id du dernier message envoyé, ou False si l'un d'eux n'est pas parti (il est alors en attente, comme les suivants :
     l'ordre est gardé)."""
+    if silent:                                       # sans sonnerie (voir silent()) : le message ET ses pages suivantes
+        text = globals()["silent"](text)
     results = [_send_one(m, chat_id, queue) for m in [text, *getattr(text, "more", ())]]
     return results[-1] if all(results) else False
 
@@ -300,7 +319,7 @@ def _flush(box, chat):
         try:
             if not target:
                 raise TelegramError("TELEGRAM_CHAT_ID absent")
-            _deliver(text, e.get("html"), e.get("markup"), target, e.get("reply_to"))
+            _deliver(text, e.get("html"), e.get("markup"), target, e.get("reply_to"), **({"quiet": True} if C.NOTIFY_LEVELS and e.get("silent") else {}))
         except TelegramError as err:
             if err.maybe_sent:                       # issue inconnue : abandonné plutôt que doublé (note sur stderr), la suite continue
                 print(f"[telegram] message en attente sans réponse (peut-être livré), abandonné : {err}", file=sys.stderr)
@@ -449,7 +468,7 @@ def _run(fn, *args):
     except Exception as e:                          # noqa: BLE001 - on répond l'erreur
         reply = f"Erreur : {e}"
     if reply:
-        send(reply)
+        send(reply, silent=True)                    # la réponse à ce que tu viens de demander : visible, sans sonnerie
 
 
 def _handle(lock, fn, *args):
@@ -459,10 +478,10 @@ def _handle(lock, fn, *args):
     if lock is None:
         return _run(fn, *args)
     try:
-        with lock(lambda: send(_busy(), queue=False)):
+        with lock(lambda: send(_busy(), queue=False, silent=True)):
             _run(fn, *args)
     except store.LockTimeout:
-        send(TIMEOUT, queue=False)
+        send(TIMEOUT, queue=False, silent=True)
 
 
 LATER = "telegram_later.json"       # serveur (poll defer=True) : messages et boutons reçus pendant un passage, traités dès que le verrou est libre
@@ -480,7 +499,7 @@ def _run_later(handler, on_callback):
             store.save(LATER, later)
             what = f"ton message « {item['args'][0]} »" if not item.get("cb") else "ton appui sur un bouton"
             send(f"⚠️ Kelly était occupée trop longtemps : {what} (à {str(item.get('at') or '')[11:16]}) n'a pas été fait. Renvoie-le si tu le veux "
-                 "encore.", queue=False)
+                 "encore.", queue=False)                # une action attendue qui n'a pas eu lieu : sonne
             continue
         fn = on_callback if item.get("cb") else handler
         try:
@@ -516,7 +535,7 @@ def _later(fn, args, cb):
             pass
     later.append({"cb": cb, "args": list(args), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
     store.save(LATER, later)
-    send(_busy(), queue=False)
+    send(_busy(), queue=False, silent=True)
 
 
 def _busy():
@@ -589,7 +608,7 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
                     print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
                     fast = None
                 if fast:
-                    send(fast)
+                    send(fast, silent=True)
                     _save_offset(state)
                     continue
             if on_callback and str(cmsg.get("chat", {}).get("id")) == str(chat):
@@ -610,7 +629,7 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
             except Exception as e:                  # noqa: BLE001 - traitement normal à la place
                 print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
         if fast:
-            send(fast)
+            send(fast, silent=True)
         elif defer:
             _later(handler, [text], False)
         else:

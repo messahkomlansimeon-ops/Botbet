@@ -427,6 +427,7 @@ QUIET_HOURS = os.environ.get("QUIET_HOURS", "23-7")   # heures calmes des alerte
 # Suivi des tickets et opportunités live (kelly/watch.py, `bot.py --watch`, kelly-watch.timer toutes les 10 min)
 LIVE_OPP = _bool("LIVE_OPP", True)                  # 0 : plus d'« 🔴 Opportunité live »
 LIVE_OPP_HOURS = os.environ.get("LIVE_OPP_HOURS", "12-23")   # heures (Abidjan) où Kelly cherche des opportunités live
+NOTIFY_LEVELS = _bool("NOTIFY_LEVELS", True)            # niveaux de bruit (14/10) : les messages marqués silencieux (réponses aux boutons, ⏳, bilans, status, annonces) arrivent sans sonnerie ; 0 : tout sonne comme avant
 WATCH_AFTER_LOSS = _bool("WATCH_AFTER_LOSS", False)   # suivi des matchs (kelly/watch.py) : faux (défaut, demande du 14/10) = plus aucune alerte sur les matchs d'un coupon déjà perdu, sauf si un autre coupon encore en jeu les contient ; vrai = on continue aussi les matchs d'un ticket perdu (réglage du 11/10)
 WATCH_DEADLINE_S = _int("WATCH_DEADLINE_S", 400)   # suivi des matchs : le passage arrête ses téléchargements après N s (le runner le coupe à 540 s) ; le reste au passage suivant
 WATCH_FAIL_PASSES = _int("WATCH_FAIL_PASSES", 2)   # panne « douce » du suivi (pas de réponse, délai, erreur) dite sur Telegram après N passages de suite (panne dure : tout de suite)

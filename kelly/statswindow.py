@@ -316,9 +316,9 @@ def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep, before=None):
         app.log_opinions(changed, day, now)         # derniers avis de l'ensemble avant le match (journal d'apprentissage)
     if new:
         rep["announced"] = len(new)
-        quiet.send(fmt.pronos(new, limit=C.STATS_WINDOW_ANNOUNCE, title="🧮 Stats ouvertes chez 1xBet", when=hhmm,
+        quiet.send(telegram.silent(fmt.pronos(new, limit=C.STATS_WINDOW_ANNOUNCE, title="🧮 Stats ouvertes chez 1xBet", when=hhmm,
                                  intro="Paris tirs / fautes / touches / hors-jeu devenus jouables avec les cotes 1xBet du moment (1xBet les ouvre quelques heures "
-                                       "avant le match et les ferme ~30 min avant). Vérifie la cote avant de valider."))
+                                       "avant le match et les ferme ~30 min avant). Vérifie la cote avant de valider.")))        # annonce : sans sonnerie
     return plan_combo(app, today, doc, fair.load_combos(), now)
 
 

@@ -538,7 +538,7 @@ def quick(text):
 
 def more_menu():
     """Le sous-menu « ➕ Plus » : les outils moins fréquents, en boutons sous le message."""
-    return telegram.with_buttons("➕ Plus d'options", telegram.inline(MORE))
+    return telegram.with_buttons(telegram.Html("➕ <b>Plus d'options</b>\n<i>Touche un bouton :</i>"), telegram.inline(MORE))
 
 
 def route(text):

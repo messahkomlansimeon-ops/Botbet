@@ -408,6 +408,7 @@ def _fresh(sent, it):
     return last is None or (abs(it["odds"] / last - 1) >= thr if last else bool(it["odds"]))
 
 
+RING = ("lag", "gap", "danger")                # les alertes qui sonnent (niveaux de bruit) ; « rise » et « good » arrivent en silence
 PERISHABLE = ("lag", "rise")      # « joue maintenant » et « c'est le moment » : périmées au réveil, jamais gardées pour la fin des heures calmes
 
 
@@ -453,6 +454,8 @@ def send(items, day, now):
     blocks.append(fmt.i("Vérifie la cote dans l'appli avant de valider : 1xBet a pu bouger depuis sa lecture."
                         + (f" + {more} autre{'s' if more > 1 else ''} alerte{'s' if more > 1 else ''} au prochain passage." if more > 0 else "")))
     msg = Html("\n\n".join(blocks))
+    if not any(it["type"] in RING for it in shown):       # seulement 📈 / ✅ : visibles, sans sonnerie
+        telegram.silent(msg)
     rows = telegram.inline([[b] for b in buttons])["inline_keyboard"] + (telegram.copy_row(codes[0]) if len(codes) == 1 else [])   # « 📋 Copier » : un seul code
     if rows:
         msg = telegram.with_buttons(msg, {"inline_keyboard": rows})

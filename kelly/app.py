@@ -472,7 +472,9 @@ def morning_report(now):
     cut = _step("coupure automatique de la voie stats", lambda: lanestats.apply(now.date()), [])      # après le règlement : juge les lignes réglées ; le message passe en PREMIER
     cut_msgs = _step("état des voies", lanestats.cut_lines, [])
     if cut_msgs:
-        msgs.insert(0, Html("\n".join(fmt.esc(x) for x in cut_msgs)))        # coupure décidée ce matin ou en cours : même ligne 🛑, une seule fois
+        cut_msg = Html("\n".join(fmt.esc(x) for x in cut_msgs))
+        cut_msg.loud = True                                                   # 🛑 voie coupée : sonne, même au milieu du bilan silencieux
+        msgs.insert(0, cut_msg)        # coupure décidée ce matin ou en cours : même ligne 🛑, une seule fois
     got_live = _step("journal live", lambda: LV.settle(now))                  # apprentissage live, à part de l'avant-match
     if got_live and (got_live[0] or got_live[1]):
         print(f"[live] journal : {got_live[0]} pari(s) réglé(s), {got_live[1]} appris par tranche", file=sys.stderr)
@@ -896,7 +898,7 @@ def run_daily(sample=False, retry=False):
                | ({"xbet_at": odds_at} if odds_at and any(c.get("xodds") for c in keep) else {})
                | ({"picks_at": odds_at} if odds_at and any(c.get("xodds") for c in picks) else {}))
     progress.step("envoi")
-    deliver_morning(report + messages, day, now, sample)          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
+    deliver_morning([m if getattr(m, "loud", False) else telegram.silent(m) for m in report] + messages, day, now, sample)       # bilan, apprentissage, questions : sans sonnerie ; les combinés du matin sonnent          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
     if not sample:                                  # APRÈS l'envoi : jamais un retard du matin ; pool du jour gardé, quatre variantes en fantôme (jamais envoyées, hors Usage)
         _step("variantes du constructeur", lambda: combovariants.run(day, picks, pronos, season_legs))
     print(cache.line(), file=sys.stderr)
@@ -1090,7 +1092,7 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
         fair.record(new, today["day"], shown=new)
         telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet", when=now.strftime("%H:%M"),
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
-                                       "depuis ce matin). Vérifie la cote avant de valider."))
+                                       "depuis ce matin). Vérifie la cote avant de valider."), silent=True)       # annonce : visible, sans sonnerie (niveaux de bruit)
     n_upd = _update_combos(today["day"], pronos, now, got)
     n_single = _upgrade_single(today, now, got, fetch)          # pari du jour sans cote 1xBet au matin : s'il y est maintenant, avec son code
     xalerts.LAST["gap"] = 0
@@ -1203,7 +1205,7 @@ def _run_evening(now, fetch, seconds):
         telegram.send(fmt.pronos(announce, limit=C.EVENING_LIMIT,
                                  title=f"{'🌙 Pronostics de ce soir' if late else '🔄 Pronostics de la journée'} mis à jour : {len(announce)} 💎",
                                  when=stamp, intro=f"Matchs {'de ce soir' if late else 'à venir'} réanalysés avec les statistiques du moment et remis aux cotes 1xBet. "
-                                                   "Vérifie la cote avant de valider ; « combi N » bâtit un combiné avec ces paris."))
+                                                   "Vérifie la cote avant de valider ; « combi N » bâtit un combiné avec ces paris."), silent=True)
     print(f"[soir] {len(redo)}/{len(evs)} match(s) à venir relus chez 1xBet, {len(announce)} 💎 annoncé(s)", file=sys.stderr)
     return len(announce)
 
@@ -1225,7 +1227,7 @@ def manual_refresh(now=None, fetch=None):
         return (f"Tous les matchs du jour ont commencé (ou vont commencer dans moins de {C.XBET_SOON_MIN} minutes) : rien à actualiser. "
                 f"Rendez-vous demain à {C.DAY_END_HOUR:02d}h00.")
     telegram.send(f"⏳ J'actualise les cotes 1xBet des paris du jour (jusqu'à {math.ceil(C.XBET_MANUAL_SECONDS / 60)} minutes) : "
-                  "tes combinés et les paris 💎 d'abord…", queue=False)
+                  "tes combinés et les paris 💎 d'abord…", queue=False, silent=True)
     LAST_REFRESH.update(matches=0, new=0, updated=0, single=0, gap=0)
     run_xbet_refresh(now, fetch, announce=True, live=True, seconds=C.XBET_MANUAL_SECONDS)
     st = LAST_REFRESH
@@ -1984,7 +1986,7 @@ def reread_match(pronos, query, now=None):
     try:
         if not statswindow.month_ok():
             return pronos
-        telegram.send("⏳ Je regarde chez 1xBet si les paris tirs / fautes de ce match viennent d'ouvrir…", queue=False)
+        telegram.send("⏳ Je regarde chez 1xBet si les paris tirs / fautes de ce match viennent d'ouvrir…", queue=False, silent=True)
         return xprice.live_check(set(ids), now, fresh_min=C.STATS_WINDOW_FRESH_MIN)[0]
     except Exception as e:                          # noqa: BLE001 - la réponse part quand même, avec les cotes déjà connues
         print(f"[1xbet] relecture du match impossible : {type(e).__name__}: {e}", file=sys.stderr)
@@ -2303,7 +2305,7 @@ def season_command(args, today, now=None, fetch=None):
         return "Exemple : saison 10 (un combiné « saison en cours » à la cote 10), ou saison seul pour l'état de la voie."
     if mode != "on":
         return f"La voie « saison » est {'en fantôme (calculée, jamais jouée)' if mode == 'ghost' else 'éteinte'} : aucun combiné proposé."
-    telegram.send("⏳ Je relis les matchs du jour chez 1xBet…", queue=False)
+    telegram.send("⏳ Je relis les matchs du jour chez 1xBet…", queue=False, silent=True)
     rebuilt, info = seasonlane.rebuild(now, fetch)
     line = seasonlane.summary_line(info) + (f" · ⚠️ plafond mensuel de données 1xBet atteint à {C.SEASON_MONTH_PCT:g} % : pas de relecture" if info.get("capped") else "")
     legs, stale, when = [c for c in rebuilt if lanes.usable(c)], False, now.strftime("%H:%M")
@@ -2439,7 +2441,7 @@ def _live_reply(fc, lo, hi, now=None, check=None, keep=None, usage=None, avoid=N
     """combi N aux cotes 1xBet : « ⏳ » tout de suite, puis le combiné vérifié en direct (paris retirés ou mal payés remplacés) et son
     code coupon aux cotes de l'instant. 1xBet injoignable : le combiné aux cotes du dernier relevé, sans code, en le disant. `keep` : voir
     _fair_reply (« ✅ Je le joue » sous le combiné, pas sous les réponses « impossible »)."""
-    telegram.send("⏳ Je vérifie les cotes 1xBet en direct…", queue=False)
+    telegram.send("⏳ Je vérifie les cotes 1xBet en direct…", queue=False, silent=True)
     try:
         res, hhmm, ok = _live_fair(fc[0], lo, hi, prefix=CB.kinds_prefix((keep or {}).get("kinds")), now=now, check=check,
                                    fresh_min=C.XBET_COMBI_FRESH_MIN, usage=usage, avoid=avoid)
@@ -2493,7 +2495,7 @@ def _check_ticket(row, legs, day, tier, now, check=None):
     """« 🎟️ Vérifier ce combiné » sous un combiné du matin NOTÉ joué : ses matchs sont relus EN DIRECT chez 1xBet et Kelly dit si un pari du ticket n'y
     est plus ou paie moins ; la ligne de suivi (paris, note, règlement) ne change JAMAIS. Pour une version à jour : « ↩️ Annuler » la note, puis
     « 🎟️ Vérifier ce combiné ». -> la réponse."""
-    telegram.send("⏳ Je vérifie ton ticket chez 1xBet…", queue=False)
+    telegram.send("⏳ Je vérifie ton ticket chez 1xBet…", queue=False, silent=True)
     season = CB.season_no(tier) is not None or any(l.get("strategy") == "saison" or l.get("lane") == "saison" for l in legs)
     pool, got, hhmm = (check or (seasonlane.live_check if season else xprice.live_check))({l["id"] for l in legs}, now, fresh_min=None)
     if not got:
@@ -2537,7 +2539,7 @@ def refresh_combo(tier, day, now=None, check=None, fetch=None):
         return _refresh_picks(row, rows, sent, str(day), now, fetch)        # noté : relu et affiché, jamais remplacé (fair.is_noted)
     if fair.is_ticket(row) or fair.is_noted(row):   # noté joué (combiné du matin ou sur mesure) : le ticket est placé, on le relit et on le dit, sans jamais le remplacer
         return _check_ticket(row, base, str(day), str(tier), now, check)
-    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False)
+    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False, silent=True)
     if CB.season_no(tier) is not None or (mine and row.get("src") == "saison"):      # voie `saison` : relue sur SES jambes, jamais remplacée par celles des autres voies
         res, hhmm, ok = _live_season(base, lo, hi, now, check, usage=None if mine else _others_usage(rows, row, str(day), sent))
     else:
@@ -2592,7 +2594,7 @@ def _refresh_picks(row, rows, sent, day, now, fetch=None):
     if _all_soon(legs, now):
         return (f"Les matchs de ce combiné commencent dans moins de {C.XBET_SOON_MIN} minutes : 1xBet les retire de l'avant-match, "
                 "Kelly ne peut plus vérifier leurs cotes.")
-    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False)
+    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False, silent=True)
     res, hhmm = xprice.live_picks(legs, now, fetch)
     if all(st == "stale" for _, st, _ in res):
         return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné commencent) : réessaie dans quelques minutes."
@@ -2639,7 +2641,7 @@ def refresh_real(what, day, now=None, fetch=None):
     if _all_soon(legs, now):
         return (f"Les matchs de ce combiné commencent dans moins de {C.XBET_SOON_MIN} minutes : 1xBet les retire de l'avant-match, "
                 "Kelly ne peut plus vérifier leurs cotes.")
-    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False)
+    telegram.send("⏳ Je vérifie ce combiné chez 1xBet…", queue=False, silent=True)
     res, hhmm = xprice.live_picks(legs, now, fetch)
     if all(st == "stale" for _, st, _ in res):
         return "1xBet ne répond pas en ce moment (ou tous les matchs de ce combiné commencent) : réessaie dans quelques minutes."
@@ -2845,7 +2847,7 @@ def _open_stats(pronos, prefix, now):
         if not statswindow.month_ok():
             return pronos
         label = CB.kinds_label([CB.kind_of(p) for p in pre]) or "stats"
-        telegram.send(f"⏳ Je regarde chez 1xBet si les paris {label} de {len(ids)} match{'s' if len(ids) > 1 else ''} viennent d'ouvrir…", queue=False)
+        telegram.send(f"⏳ Je regarde chez 1xBet si les paris {label} de {len(ids)} match{'s' if len(ids) > 1 else ''} viennent d'ouvrir…", queue=False, silent=True)
         fresh, got, _ = xprice.live_check(set(ids), now, fresh_min=C.STATS_WINDOW_FRESH_MIN)
         _OPEN_READ.update({i: clock for i in got})      # horodatés APRÈS la lecture (matchs réellement relus) : un échec laisse retenter plus tôt
         return upcoming(fresh, now)
@@ -2989,7 +2991,7 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
     old = [c for c in (first[0] if first else []) if (_leg_time(c) or 0) < time.time() - C.COMBI_BOLD_FRESH_MIN * 60]
     if old:                                         # cotes de plus de C.COMBI_BOLD_FRESH_MIN min : relues en direct avant de répondre
         try:
-            telegram.send(f"⏳ Je revérifie {len(old)} cote{'s' if len(old) > 1 else ''} chez 1xBet…", queue=False)
+            telegram.send(f"⏳ Je revérifie {len(old)} cote{'s' if len(old) > 1 else ''} chez 1xBet…", queue=False, silent=True)
             pronos = upcoming(xprice.live_check({c["id"] for c in old}, now, fresh_min=C.COMBI_BOLD_FRESH_MIN)[0], now)
             mine, _ = _bold_pools(picks, pronos, prefix, **thr)
             mine = usage.filter(mine) if usage is not None else mine
@@ -3214,7 +3216,7 @@ def _waiting(fn):
     """`fn` (commande ou bouton Telegram) pendant laquelle l'utilisateur attend : un code coupon refusé par 1xBet puis réessayé lui est
     annoncé (xbet.coupon_notice)."""
     def run(*args):
-        with xbet.coupon_notice(lambda text: telegram.send(text, queue=False)):
+        with xbet.coupon_notice(lambda text: telegram.send(text, queue=False, silent=True)):
             return fn(*args)
     return run
 
@@ -3381,7 +3383,7 @@ def run_check():
     ok_send = False
     if chat_ok:
         summary = "\n".join(lines)
-        if telegram.send("✅ Kelly est en ligne\n\n" + summary):
+        if telegram.send("✅ Kelly est en ligne\n\n" + summary, silent=True):
             ok_send = True
             lines.append("✅ Telegram : message de test envoyé à ton chat")
         else:

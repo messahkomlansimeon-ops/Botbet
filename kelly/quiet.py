@@ -44,7 +44,7 @@ def send(msg, now=None, kind="autre"):
     -> True si envoyée ou gardée (ou mise en attente par Telegram)."""
     if not is_quiet(now):
         return telegram.send(msg)
-    entry = {"text": str(msg), "html": isinstance(msg, telegram.Html), "markup": getattr(msg, "markup", None), "kind": kind,
+    entry = {"text": str(msg), "html": isinstance(msg, telegram.Html), "markup": getattr(msg, "markup", None), "kind": kind, "silent": bool(getattr(msg, "silent", False)),
              "at": (now or _now()).isoformat(timespec="minutes")}
 
     def add(held):
@@ -97,8 +97,8 @@ def flush(now=None, follow_only=False):
         telegram.send(telegram.Html("🌙 <b>Tes matchs pendant la nuit</b>\n\n" + "\n\n".join(parts)))
     if others:
         telegram.send(f"🌙 {len(others)} alerte{'s' if len(others) > 1 else ''} de la nuit, gardée{'s' if len(others) > 1 else ''} pendant les heures "
-                      "calmes :")
+                      "calmes :", silent=all(h.get("silent") for h in others))      # l'en-tête sonne si une des alertes sonne
         for h in others:
             text = telegram.Html(h["text"]) if h.get("html") else h["text"]
-            telegram.send(telegram.with_buttons(text, h["markup"]) if h.get("markup") else text)
+            telegram.send(telegram.with_buttons(text, h["markup"]) if h.get("markup") else text, silent=bool(h.get("silent")))
     return len(held)
