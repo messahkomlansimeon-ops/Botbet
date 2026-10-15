@@ -259,7 +259,7 @@ XG_MIN_MATCHES = _int("XG_MIN_MATCHES", 4)        # matchs portant un xG, par é
 XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir de là ; en dessous, régression vers les buts : n/XG_FULL_N xG + le reste en buts
 # ---- Stats de match 365scores (kelly/sources/s365.py) : corners, tirs, tirs cadrés, fautes, touches, hors-jeu, cartons par équipe ----
 # Complète FotMob / API-Football là où Kelly n'a pas (assez) de matchs : championnats 1xBet, Amérique du Sud, Mexique, USL... Accès poli
-# seulement (robots.txt, User-Agent de navigateur de téléphone, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
+# seulement (robots.txt, identité KellyBot déclarée, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
 # Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
 S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
 S365_PROXY = _bool("S365_PROXY", True) if SANDBOX else True     # toujours par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct (0 : tests seulement)
@@ -429,7 +429,6 @@ LIVE_OPP = _bool("LIVE_OPP", True)                  # 0 : plus d'« 🔴 Opportu
 LIVE_OPP_HOURS = os.environ.get("LIVE_OPP_HOURS", "12-23")   # heures (Abidjan) où Kelly cherche des opportunités live
 CONFIRM_MIN = max(1, _int("CONFIRM_MIN", 15))                     # minutes de validité d'une demande « ⚠️ Confirmer ? » (annuler une note, changer le capital, régler à la main…)
 NOTIFY_LEVELS = _bool("NOTIFY_LEVELS", True)            # niveaux de bruit (14/10) : les messages marqués silencieux (réponses aux boutons, ⏳, bilans, status, annonces) arrivent sans sonnerie ; 0 : tout sonne comme avant
-STAKE_STEP = _int("STAKE_STEP", 0 if SANDBOX else 100)                  # mises rondes (15/10) : jamais plus fines que N FCFA dès que le budget du jour vaut au moins 10 pas (un joueur normal ne mise pas 1 450) ; 0 : pas de plancher
 MAX_TICKETS_DAY = _int("MAX_TICKETS_DAY", 0)           # nombre de tickets misés au plus par jour (les plus petites mises sont laissées de côté) ; 0 (défaut) : pas de plafond
 TOPICS = _bool("TELEGRAM_TOPICS", False)            # fils de discussion (15/10) : Kelly parle dans un groupe privé à sujets (combinés, alertes, suivi des matchs, bilan, technique) ; faux (défaut) = chat privé inchangé. Mise en place : kelly fils
 WATCH_AFTER_LOSS = _bool("WATCH_AFTER_LOSS", False)   # suivi des matchs (kelly/watch.py) : faux (défaut, demande du 14/10) = plus aucune alerte sur les matchs d'un coupon déjà perdu, sauf si un autre coupon encore en jeu les contient ; vrai = on continue aussi les matchs d'un ticket perdu (réglage du 11/10)

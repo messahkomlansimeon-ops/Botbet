@@ -150,8 +150,7 @@ def set_daily(amount, currency=None):
 def round_step(budget):
     """Arrondi des mises : 50 pour un budget de 5 000, 500 pour 50 000, 0,5 pour 10."""
     budget = _amount(budget)
-    step = 10 ** max(0, len(str(int(budget))) - 2) / 2 if budget >= 1 else 0.01
-    return max(step, C.STAKE_STEP) if C.STAKE_STEP and budget >= 10 * C.STAKE_STEP else step      # mises rondes (STAKE_STEP) : 1 400 plutôt que 1 450
+    return 10 ** max(0, len(str(int(budget))) - 2) / 2 if budget >= 1 else 0.01
 
 
 def money(x, currency=None):

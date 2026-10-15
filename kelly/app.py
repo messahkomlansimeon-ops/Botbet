@@ -16,7 +16,7 @@ from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
 DISCLAIMER = Html("<i>Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
-                  "mise petit. 18+ Joue plutôt un peu plus tard dans la journée, par mises rondes, sans suivre chaque ligne.</i>")
+                  "mise petit. 18+</i>")
 
 
 def now_utc():
