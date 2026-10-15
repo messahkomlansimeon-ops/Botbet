@@ -312,9 +312,9 @@ def test_buttons_keep_verify_row():
         assert flat(edits[-1][1]) == ["noop", f"joue|v5|{DAY}", f"annule|v5|{DAY}", verify]
         assert edits[-1][1]["inline_keyboard"][0][0]["text"].startswith("✅ Joué à 5,40")
         # « ↩️ Annuler » retire la note et remet « ✅ Je l'ai joué », la ligne « Vérifier » reste
-        assert "Note annulée" in chat.on_callback(f"annule|v5|{DAY}", 42)
+        assert "Note annulée" in chat.on_callback(f"annule|v5|{DAY}", 42, confirmed=True)
         assert flat(edits[-1][1]) == [f"joue|v5|{DAY}", verify] and "played" not in fair.load_combos()[0]
-        assert chat.on_callback(f"annule|v5|{DAY}", 42).endswith("n'était pas noté.")
+        assert chat.on_callback(f"annule|v5|{DAY}", 42, confirmed=True).endswith("n'était pas noté.")
         # combiné pas réel (cote mini) : pas de ligne « Vérifier »
         rows = fair.load_combos()
         rows[0]["legs"][0]["xodds"] = None

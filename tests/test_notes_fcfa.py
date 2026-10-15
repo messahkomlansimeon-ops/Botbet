@@ -357,9 +357,9 @@ def test_buttons():
     assert f.edits[-1][0] == 31 and f.last_texts() == ["✅ Joué à 5,40 · 1 000 FCFA", "✏️ Autre cote", "↩️ Annuler"]
     # ↩️ Annuler = /joue <quoi> 0 : la note tombe, « ✅ Je l'ai joué — 1 000 FCFA » revient (la mise conseillée reste)
     with Fakes() as f:
-        assert chat.on_callback(f"annule|sur|{DAY}", 31).startswith("Note annulée")
+        assert chat.on_callback(f"annule|sur|{DAY}", 31, confirmed=True).startswith("Note annulée")
         assert f.last_texts() == ["✅ Je l'ai joué — 1 000 FCFA"] and f.last_buttons() == [f"joue|sur|{DAY}"]
-        assert chat.on_callback(f"annule|sur|{DAY}", 31).endswith("n'était pas noté.")
+        assert chat.on_callback(f"annule|sur|{DAY}", 31, confirmed=True).endswith("n'était pas noté.")
     c = store.load("bets.json", {})["combos"][0]
     assert "played" not in c and c["stake"] == 1000 and c["cur"] == FCFA
     assert played.command(["sur", "0"], DAY).endswith("n'était pas noté.")
@@ -934,7 +934,7 @@ def test_known_odds_never_asked():
         assert chat.get_pending() is None and t.item["played"]["odds"] == float(odds_txt.replace(",", ".")) and t.item["cur"] == FCFA
         assert t.item["played"]["stake"] == (stake or t.stake) > 0
         assert f.edits[-1][0] == 90 and f.last_texts()[0].startswith("✅ Joué à") and f.last_texts()[1:3] == ["✏️ Autre cote", "↩️ Annuler"]
-        assert "Note annulée" in chat.on_callback(f"annule|{what}|{DAY}", 90)
+        assert "Note annulée" in chat.on_callback(f"annule|{what}|{DAY}", 90, confirmed=True)
     # 2. cote connue, pas de mise conseillée (pas de budget) : seule la mise est demandée
     store.save(money.FILE, {})
     rows = store.load("bets.json", {})
@@ -951,12 +951,12 @@ def test_known_odds_never_asked():
             out = chat.route(txt)[1]
         p = played.find("sur", DAY).item["played"]
         assert out.startswith("✅ Noté") and f" à {odds_} → si ça passe" in out and p["stake"] == stake and p["odds"] == 5.06, (txt, out, p)
-        chat.on_callback(f"annule|sur|{DAY}", 91)
+        chat.on_callback(f"annule|sur|{DAY}", 91, confirmed=True)
     chat.set_pending("sur", DAY, 91, odds=5.06)                    # « cote mise » corrige la cote ; la garde « 2 000 = cote ou mise ? » ne joue pas ici
     with Fakes():
         out = chat.route("5,10 1 000")[1]
     assert "💰 1 000 FCFA à 5,10 →" in out, out
-    chat.on_callback(f"annule|sur|{DAY}", 91)
+    chat.on_callback(f"annule|sur|{DAY}", 91, confirmed=True)
     # 3. le pari du jour typé avec /joue : la cote tapée est retenue, seule la mise manque
     reply = app.handle_command("/joue pari 1,45")
     assert reply == "Avec quelle mise en FCFA ? Réponds ta mise, par exemple 1 000 (cote 1,45 retenue).", reply
@@ -1038,7 +1038,7 @@ def test_coupon_code_and_copy_button():
             chat.on_callback(f"joue|{what}|{DAY}", 70)                       # « Autre cote » : la question
             chat.route("5,40")
             assert len(copies(f.edits[-1][1])) == 1 and f.edits[-1][1]["inline_keyboard"][-1][0]["copy_text"]["text"] == code
-            chat.on_callback(f"annule|{what}|{DAY}", 70)
+            chat.on_callback(f"annule|{what}|{DAY}", 70, confirmed=True)
             assert len(copies(f.edits[-1][1])) == 1 and f.last_texts()[0].startswith("✅ Je l'ai joué")
             chat.on_callback(f"skip|{what}|{DAY}", 70)
             assert len(copies(f.edits[-1][1])) == 1, f.edits[-1][1]

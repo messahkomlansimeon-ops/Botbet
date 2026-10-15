@@ -43,17 +43,17 @@ def test_commands_and_limit():
     assert st["capital"] == 50000 and st["limit"] == 1500 and st["left"] == 1500 and money.daily() == 1500 and money.active()
     out = telegram.plain(app.handle_command("perte max 5000"))
     assert "Reste : 1 500 FCFA\n▱▱▱▱▱▱▱▱▱▱ 0 %" in out and "Fixe ta perte max" not in out, out
-    assert "Limite : 1 000 FCFA" in telegram.plain(app.handle_command("limite 1000")) and money.daily() == 1000      # la perte max plafonne
-    app.handle_command("perte max 5 000")
+    assert "Limite : 1 000 FCFA" in telegram.plain(app.handle_command("limite 1000", confirmed=True)) and money.daily() == 1000      # la perte max plafonne
+    app.handle_command("perte max 5 000", confirmed=True)
     assert money.daily() == 1500                                                   # 3 % du capital, sous la perte max
     out = telegram.plain(app.handle_command("objectif 18000"))
     assert "L'objectif en FCFA est remplacé" in out and "objectif du mois" not in out and "Objectif du mois" not in out, out      # décision du 14/10 : plus d'objectif en FCFA
     assert "🏁 Capital 50 000 FCFA ≥ départ 50 000 FCFA ✅" in telegram.plain(app.handle_command("capital")), "les deux objectifs mesurés sont sur la carte"
     assert chat.route("💼 Mon capital")[0] == "/capital" and chat.route("💰 Mon budget")[0] == "/budget"       # ancien bouton : toujours compris
     assert "mode capital" in app.handle_command("budget 5000")                     # pas de mélange des deux modes
-    assert "💰 Capital : 2 000 FCFA" in telegram.plain(app.handle_command("capital 2k")) and money.capital_state()["limit"] == 60
+    assert "💰 Capital : 2 000 FCFA" in telegram.plain(app.handle_command("capital 2k", confirmed=True)) and money.capital_state()["limit"] == 60
     assert "FCFA" in app.handle_command("capital 50 €")
-    assert app.handle_command("capital 0").startswith("💼 Mode capital arrêté") and not money.active()
+    assert app.handle_command("capital 0", confirmed=True).startswith("💼 Mode capital arrêté") and not money.active()
     print("ok  commandes capital / perte max / objectif du mois ; limite du jour = min(perte max, 3 % du capital)")
 
 

@@ -633,7 +633,7 @@ def test_list_keeps_whole_keyboard():
     assert f"annule|sur|{DAY}|l0" in d and f"joue|sur|{DAY}|l0" in d and f"joue|pari|{DAY}|l0" in d and f"joue|v5|{DAY}|l0" in d, d
     assert f"xmajr|pari|{DAY}" in d and f"xmaj|5|{DAY}" in d and not f.edits, (d, f.edits)
     with Fakes() as f:                                          # ↩️ Annuler depuis la liste
-        chat.on_callback(f"annule|sur|{DAY}|l0", 500)
+        chat.on_callback(f"annule|sur|{DAY}|l0", 500, confirmed=True)
     mid, text, markup = f.rewrites[-1]
     d = datas(markup)
     assert "joué à" not in text and f"annule|sur|{DAY}|l0" not in d and f"joue|sur|{DAY}|l0" in d and f"joue|pari|{DAY}|l0" in d, (text, d)
@@ -670,7 +670,7 @@ def test_pending_cleared_and_double_tap():
         chat.forget_taps()                                      # l'utilisateur attend avant de toucher « ✏️ Autre cote »
         assert "À quelle cote as-tu finalement joué" in chat.on_callback(f"joue|sur|{DAY}", 10)
         assert chat.get_pending()["what"] == "sur"
-        assert "Note annulée" in chat.on_callback(f"annule|sur|{DAY}", 10)
+        assert "Note annulée" in chat.on_callback(f"annule|sur|{DAY}", 10, confirmed=True)
         assert chat.get_pending() is None, chat.get_pending()
         r = chat.route("5,40")[1]
     assert r.startswith("Appuie d'abord") and played.find("sur", DAY).item.get("played") is None, r

@@ -64,7 +64,7 @@ def test_amount_parsing():
     for bad in ("budget inf", "budget nan", "budget -5", "budget 1e300", "budget 99999999999", "budget abc"):
         assert "invalide" in app.handle_command(bad), bad
         assert money.daily() == 5000, bad                       # un montant refusé ne touche pas au budget
-    assert "supprimé" in app.handle_command("budget 0") and not money.active()
+    assert "supprimé" in app.handle_command("budget 0", confirmed=True) and not money.active()
     # /joue : mise avec milliers, cote avec virgule ou point
     wipe()
     store.save("bets.json", {"picks": [], "combos": [combo(SUR, cur=None, stake=10)]})

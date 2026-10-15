@@ -254,7 +254,7 @@ def test_tap_with_budget():
     # le sélecteur « Autre cote » connaît le combi sur mesure (et garde la mise notée si seule la cote change) ; touché après lecture (pas un double appui)
     chat.forget_taps()
     assert "À quelle cote as-tu finalement joué le combi sur mesure (cote 20)" in chat.on_callback(f"joue|vm1|{DAY}", 77)
-    assert "Note annulée" in chat.on_callback(f"annule|vm1|{DAY}", 77) and "played" not in fair.load_combos()[0]
+    assert "Note annulée" in chat.on_callback(f"annule|vm1|{DAY}", 77, confirmed=True) and "played" not in fair.load_combos()[0]
     print("ok  2 appui avec budget : noté tout de suite (cote du combiné, mise conseillée), ligne de suivi (devise, code, heure), « Autre cote » / « Annuler » + vérifier, « Mes paris », pas de doublon")
 
 
@@ -326,7 +326,7 @@ def test_tap_without_budget():
         assert "Avec quelle mise en FCFA ?" in reply and "À quelle cote" not in reply and "cote 1xBet 11061,9" in reply, reply
         out = chat.route("1000")[1]
         assert out.startswith("✅ Noté · combi sur mesure (cote 10000)") and "💰 1 000 FCFA à 11061,9 → si ça passe" in out, out
-        assert "Note annulée" in chat.on_callback(f"annule|v{cid}|{DAY}", 79)
+        assert "Note annulée" in chat.on_callback(f"annule|v{cid}|{DAY}", 79, confirmed=True)
         chat.on_callback(f"joue|v{cid}|{DAY}", 79)
         out = chat.route("11000 1000")[1]
         assert "💰 1 000 FCFA à 11000,0 →" in out, out

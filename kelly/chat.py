@@ -627,10 +627,21 @@ def _ask(t):
             f"Réponds la cote et la mise, par exemple {ex} 1 000.")
 
 
-def on_callback(data, message_id=None):
-    """Réponse à un appui sur un bouton sous un message (voir les callback_data de ce module)."""
-    from . import app
+def on_callback(data, message_id=None, confirmed=False):
+    """Réponse à un appui sur un bouton sous un message (voir les callback_data de ce module). `confirmed` : le bouton revient d'un « ⚠️ Confirmer ? » (confirm.py) qui a reçu ✅."""
+    from . import app, confirm
     parts = (data or "").split("|")
+    if parts[0] in ("cf", "cn") and len(parts) == 2:        # ✅ Oui, confirmer / ❌ Non, sous « ⚠️ Confirmer ? »
+        todo, extra = confirm.answer(parts, message_id)
+        if todo is None:
+            return extra
+        if todo[0] == "cmd":
+            return app.handle_command(todo[1], confirmed=True)
+        return on_callback(todo[1], extra, confirmed=True)     # le bouton d'origine (« ↩️ Annuler »), son message d'origine pour le rafraîchir
+    if parts[0] == "annule" and len(parts) in (3, 4) and not confirmed:       # « ↩️ Annuler » une note : d'abord ✅ / ❌
+        t = played.find(parts[1], parts[2])
+        if t is not None and not isinstance(t, str) and t.item.get("played"):
+            return confirm.ask(f"annuler la note du {t.label}", cb=data, msg=message_id)
     if parts[0] == "q" and len(parts) == 2:               # réponse rapide (« q|status ») arrivée jusqu'ici (poll sans `quick`) : même réponse, sous le verrou
         return quick(parts[1])
     if parts[0] == "m" and len(parts) == 2:               # un bouton de « ➕ Plus »

@@ -821,7 +821,7 @@ def test_notes_money_and_lists():
         ask = chat.on_callback(f"joue|g1|{DAY}", 77)
         assert "À quelle cote as-tu finalement joué" in ask and chat.get_pending()["what"] == "g1"
         assert chat.route("2,30")[1].startswith("✅ Noté") and row(1)["played"]["odds"] == 2.3 and row(1)["played"]["stake"] == p["stake"]
-        assert chat.on_callback(f"annule|g1|{DAY}", 77).startswith("Note annulée") and "played" not in row(1)
+        assert chat.on_callback(f"annule|g1|{DAY}", 77, confirmed=True).startswith("Note annulée") and "played" not in row(1)
         assert sum(l.startswith("✅ Je l'ai joué") for l in labels(f.edits[-1][1])) == 3
         # /joue g2 2,10 1000 : la commande écrite marche aussi
         assert played.command(["g2", "2,10", "1000"], DAY).startswith("✅ Noté") and row(2)["played"] == {"odds": 2.1, "stake": 1000, "at": row(2)["played"]["at"]}

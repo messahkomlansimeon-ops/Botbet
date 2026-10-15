@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
+from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, confirm, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
                cupstats, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
@@ -1655,6 +1655,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
    🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
    🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage) · ❓ <b>Aide</b> · 🔄 <b>Actualiser les cotes</b>
 Le bouton <b>/</b> à gauche de la zone de saisie liste aussi les commandes principales.
+⚠️ Avant ce qui ne se défait pas d'un geste (annuler une note, changer ou arrêter ton capital, retirer ta perte max ou ton budget, régler un ticket à la main), Kelly te demande de <b>confirmer</b> : ✅ Oui ou ❌ Non.
 🎟️ <b>Vérifier ce combiné</b> (sous un combiné du matin) : juste avant de jouer, Kelly revérifie ce combiné chez 1xBet, remplace les paris retirés et te donne un nouveau code
 🔔 <b>Alertes</b> (envoyées toutes seules, en un message) : 💰 1xBet est en retard sur le marché, joue maintenant · ⚠️ un de tes paris n'est plus jouable · 📈 une cote 1xBet a monté depuis ce matin · ✅ tu as pris mieux que le marché
 
@@ -2054,13 +2055,17 @@ def send_backup():
     return backup.send()
 
 
-def handle_command(text):
+def handle_command(text, confirmed=False):
     """Répond à une commande Telegram. Hors ligne par construction : aucune requête réseau (cotes payantes ou non,
-    API-Football, sources), seulement les données du matin dans data/."""
+    API-Football, sources), seulement les données du matin dans data/. `confirmed` : la demande « ⚠️ Confirmer ? » a reçu ✅ (voir confirm.py)."""
     with cache.offline():
         cmd, reply = chat.route(text)
         if reply is not None or not cmd:
             return reply
+        if not confirmed:
+            ask = confirm.check(cmd)                # annuler une note, changer le capital, régler à la main… : d'abord ✅ / ❌
+            if ask is not None:
+                return ask
         return _handle_command(cmd)
 
 
