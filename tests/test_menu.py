@@ -31,7 +31,7 @@ def test_more():
     rows = reply.markup["inline_keyboard"]
     assert [b["text"] for r in rows for b in r] == [t for r in chat.MORE for t, _ in r] and all(len(r) <= 2 for r in rows)
     datas = [d for r in chat.MORE for _, d in r]
-    assert len(set(datas)) == len(datas) == 7
+    assert len(set(datas)) == len(datas) == 8
     for d in datas:
         kind, key = d.split("|")
         assert (kind == "m" and key in chat.MORE_CMD) or (kind == "q" and key == "status"), d
@@ -39,7 +39,7 @@ def test_more():
         out = chat.on_callback(f"m|{key}")
         assert out, key
     assert chat.on_callback("m|zzz") is None
-    print("ok  « ➕ Plus » : 7 boutons, chaque appui lance sa commande")
+    print("ok  « ➕ Plus » : 8 boutons, chaque appui lance sa commande")
 
 
 def test_status_without_lock():
@@ -83,12 +83,12 @@ def test_native_commands():
     names = [c["command"] for c in kw["commands"]]
     assert method == "setMyCommands" and len(names) == len(set(names)) <= 100 and all(n.isascii() and n == n.lower() and n.replace("_", "").isalnum() and len(n) <= 32 for n in names)
     assert all(1 <= len(c["description"]) <= 256 for c in kw["commands"])
-    assert {"combi", "top", "joue", "live", "bilan", "capital", "saison", "tendances", "marches", "status", "aide"} == set(names)
+    assert {"combi", "top", "joue", "live", "bilan", "capital", "saison", "tendances", "marches", "courbes", "status", "aide"} == set(names)
     for n in names:                                # chaque commande du menu « / » est comprise par le bot
         assert chat.route("/" + n)[0] == "/" + n
     assert telegram.set_commands() is False        # sans jeton : pas d'exception
     assert "➕ <b>Plus</b>" in str(app.HELP) and "Le bouton <b>/</b>" in str(app.HELP)
-    print("ok  menu natif « / » : 11 commandes valides, sans jeton rien ne plante, l'aide décrit les boutons")
+    print("ok  menu natif « / » : 12 commandes valides, sans jeton rien ne plante, l'aide décrit les boutons")
 
 
 def main():

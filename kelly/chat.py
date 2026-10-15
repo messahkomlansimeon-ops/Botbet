@@ -27,8 +27,8 @@ PENDING_MINUTES = 30
 MENU = [["🎯 Combiné", "🔝 Du jour"], ["🧾 Mes paris", "🔴 Live"], ["📊 Résultats", "➕ Plus"]]      # le quotidien en 3 rangées de 2 ; le reste est sous « ➕ Plus » (boutons sous le message, MORE)
 MORE_BUTTON = "➕ Plus"
 MORE = [[("💼 Capital", "m|cap"), ("🌱 Saison", "m|sai")], [("📈 Tendances", "m|ten"), ("🧮 Marchés", "m|mar")],
-        [("🩺 Status", "q|status"), ("❓ Aide", "m|aid")], [("🔄 Actualiser les cotes", "m|maj")]]      # la sauvegarde reste « sauvegarde » écrit : elle tient le verrou jusqu'à 300 s
-MORE_CMD = {"cap": "/capital", "sai": "/saison", "ten": "/tendances", "mar": "/marches", "maj": "/cotes", "aid": "/aide"}      # « m|<clé> » : la commande ; « q|<mot> » : réponse rapide sans verrou (telegram.poll, comme le texte écrit)
+        [("📉 Courbes", "m|cou"), ("🔄 Actualiser les cotes", "m|maj")], [("🩺 Status", "q|status"), ("❓ Aide", "m|aid")]]      # la sauvegarde reste « sauvegarde » écrit : elle tient le verrou jusqu'à 300 s
+MORE_CMD = {"cap": "/capital", "sai": "/saison", "ten": "/tendances", "mar": "/marches", "maj": "/cotes", "aid": "/aide", "cou": "/courbes"}      # « m|<clé> » : la commande ; « q|<mot> » : réponse rapide sans verrou (telegram.poll, comme le texte écrit)
 # « 🔄 Mettre à jour tous les paris » n'est plus dans le menu (action rare) : bouton sous « 🔝 Du jour » (callback « maj »), et « maj » / ancien bouton marchent
 # Anciens libellés (claviers déjà affichés sur le téléphone avant la mise à jour) : ils répondent toujours.
 BUTTONS = {"🔝 Du jour": "/top", "🎯 Combiné": None, "📊 Résultats": "/bilan", "🧾 Mes paris": "/joue",
@@ -46,7 +46,7 @@ LIST_TEXTS = ("mes paris", "mes paris du jour")                                 
 WORDS_ARGS = {"live": "/live", "bilan": "/bilan", "resultats": "/bilan", "resultat": "/bilan", "joue": "/joue", "jouer": "/joue", "noter": "/joue",
               "stats": "/stats", "analyse": "/analyse", "match": "/match", "combi": "/combi", "combine": "/combi", "budget": "/budget",
               "monde": "/monde", "capital": "/capital", "objectif": "/objectif", "voies": "/voies", "voie": "/voies", "saison": "/saison", "perte": "/perte", "limite": "/perte", "regle": "/regle",
-              "tendances": "/tendances", "tendance": "/tendances", "erreurs": "/erreurs", "journal": "/erreurs"}
+              "tendances": "/tendances", "tendance": "/tendances", "courbes": "/courbes", "courbe": "/courbes", "graphique": "/courbes", "graphiques": "/courbes", "erreurs": "/erreurs", "journal": "/erreurs"}
 WORDS_ALONE = {"top": "/top", "meilleurs": "/top", "aide": "/aide", "help": "/aide", "menu": "/aide", "?": "/aide", "start": "/aide",
                "bonjour": "/aide", "salut": "/aide", "bank": "/bank", "bankroll": "/bank", "ligues": "/ligues", "actualiser": "/cotes",
                "actualise": "/cotes", "cotes": "/cotes", "rafraichir": "/cotes", "maj": "/cotes", "etat": "/etat",

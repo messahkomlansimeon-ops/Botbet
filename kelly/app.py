@@ -1653,6 +1653,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
    💼 <b>Mon capital</b> (bouton « Capital ») : ton capital, ta limite du jour, ce que tu as déjà misé et tes deux objectifs mesurés (CLV 1xBet, capital)
    🌱 <b>Saison</b> (ou écris <i>saison</i>, <i>saison 10</i>) : la voie « saison en cours », qui juge les équipes sur les seuls matchs de cette saison ; son état, ou un combiné à la cote voulue
    📈 <b>Tendances</b> : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
+   📉 <b>Courbes</b> (ou écris <i>courbes</i>) : deux images, ton capital jour après jour et ton CLV 1xBet cumulé avec son intervalle
    🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
    🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage) · ❓ <b>Aide</b> · 🔄 <b>Actualiser les cotes</b>
 Le bouton <b>/</b> à gauche de la zone de saisie liste aussi les commandes principales.
@@ -2056,6 +2057,29 @@ def send_backup():
     return backup.send()
 
 
+def courbes_command():
+    """« courbes » : envoie les images du capital et du CLV 1xBet (sans sonnerie) ; réponse vide quand elles sont parties, sinon pourquoi il n'y en a pas."""
+    import shutil
+    import tempfile
+    from . import charts
+    tmp = tempfile.mkdtemp(prefix="kelly-courbes-")
+    try:
+        return _courbes_send(charts.courbes(tmp))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)                  # les images sont parties (ou n'ont pas pu) : rien ne reste sur le téléphone
+
+
+def _courbes_send(res):
+    if not res:
+        return Html("📈 <b>Pas encore de courbe</b>\n" + fmt.esc(f"Il faut au moins 2 jours de paris notés et réglés (capital), ou 2 jours et {C.CHART_MIN_CLV} paris de valeur réglés avec un prix de clôture (CLV)."))
+    for path, caption in res:
+        try:
+            telegram.send_photo(path, caption)
+        except (telegram.TelegramError, OSError) as e:
+            return f"Courbe non envoyée : {e}"
+    return ""
+
+
 def handle_command(text, confirmed=False):
     """Répond à une commande Telegram. Hors ligne par construction : aucune requête réseau (cotes payantes ou non,
     API-Football, sources), seulement les données du matin dans data/. `confirmed` : la demande « ⚠️ Confirmer ? » a reçu ✅ (voir confirm.py)."""
@@ -2108,6 +2132,8 @@ def _handle_command(text):
         return money.command(args)
     if cmd == "/capital":
         return money.capital_command(args)
+    if cmd == "/courbes":                           # les courbes du capital et du CLV 1xBet, en images (kelly/charts.py, aucune bibliothèque)
+        return courbes_command()
     if cmd == "/erreurs":                           # « erreurs » / « erreurs 48 » : résumé du journal du téléphone, à coller pour un contrôle
         from . import logdigest
         return logdigest.command(args)

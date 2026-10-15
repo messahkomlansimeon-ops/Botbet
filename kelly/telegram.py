@@ -357,7 +357,7 @@ def _flush(box, chat):
 
 COMMANDS = [("combi", "Un combiné à la cote voulue"), ("top", "Les meilleurs paris du jour"), ("joue", "Mes paris du jour, à noter"), ("live", "Un combiné sur les matchs en cours"),
             ("bilan", "Mes résultats"), ("capital", "Mon capital et ma limite du jour"), ("saison", "La voie « saison en cours »"), ("tendances", "Corners, cartons, tirs par équipe"),
-            ("marches", "Marché par marché : Kelly est-elle fiable ?"), ("status", "L'état de Kelly"), ("aide", "Mode d'emploi et boutons")]      # le menu « / » de Telegram
+            ("marches", "Marché par marché : Kelly est-elle fiable ?"), ("courbes", "Courbes du capital et du CLV 1xBet"), ("status", "L'état de Kelly"), ("aide", "Mode d'emploi et boutons")]      # le menu « / » de Telegram
 
 
 def set_commands(commands=None):
@@ -649,6 +649,28 @@ def _save_offset(state):
         store.save("telegram.json", state)
     except OSError as e:                            # gardé en mémoire (_OFFSET) : la commande n'est pas retraitée au passage suivant
         print(f"[telegram] décalage non enregistré ({e}) : gardé en mémoire", file=sys.stderr)
+
+
+def send_photo(filepath, caption=None, chat_id=None, silent=True):
+    """Envoie une image (PNG) avec une légende HTML ; sans sonnerie par défaut (réponse à une demande). Lève TelegramError en cas d'échec."""
+    token, chat = creds()
+    chat_id = chat_id or chat
+    if not (token and chat_id):
+        raise TelegramError("TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID manquant")
+    with open(filepath, "rb") as f:
+        try:
+            r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
+                              data={"chat_id": chat_id, "caption": caption or "", "parse_mode": "HTML"} | ({"disable_notification": "true"} if silent else {}),
+                              files={"photo": (os.path.basename(filepath), f, "image/png")}, timeout=(30, 120))
+        except requests.RequestException as e:
+            raise TelegramError(f"réseau : {_scrub(e)}") from None
+    try:
+        body = r.json()
+    except ValueError:
+        body = {}
+    if not body.get("ok"):
+        raise TelegramError(body.get("description") or f"erreur HTTP {r.status_code}", body.get("error_code"))
+    return body.get("result")
 
 
 def send_document(filepath, caption=None, chat_id=None, silent=False):
