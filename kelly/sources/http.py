@@ -17,6 +17,7 @@ from .. import cache as kcache, config as C
 from . import state
 
 UA = "KellyBot/1.0 (usage personnel)"
+UA_BY_DOMAIN = {}         # domaine -> User-Agent à la place de UA (1xBet : celui d'un navigateur de téléphone, voir sources/xbet.py)
 ROBOTS_TOKEN = "KellyBot"
 DEFAULT_DELAY = 3.0
 MIN_DELAY = {"fbref.com": 6.0, "fotmob.com": 6.0, "betexplorer.com": 5.0}     # sites les plus sollicités : plus lents
@@ -431,7 +432,7 @@ def _wait(domain):
 
 def _request(url, headers=None):
     domain = urlparse(url).netloc.lower()
-    h = {"User-Agent": UA, "Accept": "*/*"} | (headers or {})
+    h = {"User-Agent": UA_BY_DOMAIN.get(domain, UA), "Accept": "*/*"} | (headers or {})
     r, err, counted = None, None, False
     for attempt in (0, 1):
         proxy = PROXIES.get(domain)
@@ -496,7 +497,7 @@ def post(url, body, headers=None, timeout=TIMEOUT):
     source = SOURCES.get(domain)
     if source and state.is_blocked(source):
         return Result(url, None, error=state.health(source)["last_error"] or "source bloquée", blocked=True)
-    h = {"User-Agent": UA, "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
+    h = {"User-Agent": UA_BY_DOMAIN.get(domain, UA), "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
     r, err = None, None
     for attempt in (0, 1):
         proxy = PROXIES.get(domain)

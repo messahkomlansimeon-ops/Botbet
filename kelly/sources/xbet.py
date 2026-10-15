@@ -35,6 +35,10 @@ COUPON_BACKOFF = (2.0, 5.0, 10.0)   # attentes (s) avant chaque nouvel essai qua
 DOMAIN = "1xbet.ci"
 BASE = "https://" + DOMAIN
 http.register_source(DOMAIN, SOURCE)    # un POST (SaveCoupon) obéit aux mêmes blocages que les lectures : 403 / 429 / Cloudflare / vérification = source coupée 24 h
+BROWSER_UA = os.environ.get("XBET_UA") or ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+                                           "Chrome/124.0.0.0 Mobile Safari/537.36")      # 1xBet ne voit pas un robot déclaré (15/10, demande de l'utilisateur) ; XBET_UA=KellyBot rétablit l'ancienne identité
+if BROWSER_UA != "KellyBot":
+    http.UA_BY_DOMAIN[DOMAIN] = BROWSER_UA
 http.require_proxy(DOMAIN)              # jamais en direct : sans proxy, aucune requête vers 1xBet (ton IP n'est jamais montrée)
 FEED = BASE + "/service-api/main-line-feed/v3/"
 COMMON = {"fcountry": 96, "gr": 673, "lng": "fr", "ref": 286}
