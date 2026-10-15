@@ -344,6 +344,12 @@ def note(t, odds, stake, now=None, ref_at=None):
     x = t.item
     x["played"] = {"odds": round(odds, 2), "stake": round(stake, 2), "at": (now or datetime.now(timezone.utc)).isoformat(timespec="minutes")}
     x.pop("skipped", None)
+    reopened = bool(x.get("closed"))
+    if reopened:                                    # combiné `saison` REMPLACÉ par une reconstruction mais joué quand même chez 1xBet : la note est la vérité, il est rouvert
+        for k in ("dead", "closed", "closed_at"):
+            x.pop(k, None)
+        x["result"] = None
+        x["reopened"] = True
     if x.get("cur") != M.cur():                     # ligne sans devise (ancienne mise en unités) ou d'une autre devise : elle passe en FCFA
         x["cur"] = M.cur()
         if t.stake > 0:
@@ -354,6 +360,8 @@ def note(t, odds, stake, now=None, ref_at=None):
     gap = _gap(odds, t.ref)
     lines = [f"✅ Noté · {t.label}",
              f"💰 {M.money(stake, x['cur'])} à {fmt.odds_txt(odds)} → si ça passe : {M.signed(round(stake * (odds - 1)), x['cur'])}"]
+    if reopened:
+        lines.append("↩️ Ce combiné avait été remplacé par une reconstruction de la voie saison : tu l'as joué, il est rouvert et suivi.")
     if abs(gap) >= 0.01:                            # écart avec la cote de référence : dit seulement s'il compte (plus de « +0 % »)
         lines.append(f"{'📈' if gap > 0 else '📉'} {round(abs(gap) * 100)} % de {'mieux' if gap > 0 else 'moins'} que la {t.ref_word} "
                      f"({fmt.odds_txt(t.ref)})")
@@ -541,7 +549,7 @@ def todo(day, page=None):
     items_ += [("Pari du jour", r, r["odds"], "pari") for r in single_rows(rows_, bets["combos"]) if r["date"] == day]
     items_ += [(gap_name(r), r, r["odds"], gap_what(r)) for r in gap_rows(rows_) if r["date"] == day]
     items_ += [(custom_name(c) if is_custom(c) else _fair_name(c["tier"], is_real(c), c), c, c["min_odds"], f"v{c['tier']}")
-               for c in fair.load_combos() if c["date"] == day]
+               for c in fair.load_combos() if c["date"] == day and not c.get("closed")]        # un combiné `saison` REMPLACÉ par une reconstruction n'est plus à noter
     if not items_:
         return f"Rien à noter aujourd'hui : les paris du jour arrivent à {C.DAY_END_HOUR:02d}h00."
     pages = [items_[i:i + PAGE] for i in range(0, len(items_), PAGE)]

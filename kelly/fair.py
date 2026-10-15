@@ -626,14 +626,26 @@ def _has_value(legs):
 def combo_row(target, combo, day, stake=None, cur=None, coupon=None, at=None):
     """Ligne de suivi d'un combiné à cote juste (jambes, cote mini, proba ; mise sur le budget du jour et devise si elle existe ; code
     coupon 1xBet de la version envoyée, `coupon`, et heure « HH:MM » de ses cotes, `at`) ; le résultat vient plus tard (settle_fair_combos)."""
+    from . import combos as CB
     legs, min_total, prob = combo
     return {"date": str(day), "tier": target, "min_odds": round(min_total, 2), "prob": round(prob, 5),
             "keys": [c["key"] for c in legs], "legs": [combo_leg(c) | {"result": None} for c in legs],
             "result": None} | ({} if stake is None else {"stake": stake} | ({"cur": cur} if stake else {})) \
-        | ({"coupon": coupon} if coupon else {}) | ({"at": at} if at else {}) | _has_value(legs)                 # mise 0 : pari sans mise
+        | ({"coupon": coupon} if coupon else {}) | ({"at": at} if at else {}) | _has_value(legs) \
+        | ({"sbuild": CB.season_signature()} if CB.season_no(target) is not None else {})          # mise 0 : pari sans mise ; voie `saison` : réglages de la construction (« construit avant la dernière mise à jour »)
 
 
 ODDS_TOLERANCE = 0.011        # écart de cote totale toléré avant de parler d'une autre version : la cote est arrondie à 3 puis 2 décimales (custom.remember, combo_row)
+
+
+def close_row(row, reason, hhmm):
+    """Ferme la ligne d'un combiné REMPLACÉ (« reconstruit ») : hors du bilan, de l'argent et du règlement (comme un combiné déclaré mort : dead + annulé), avec la raison et l'heure ; ses jambes
+    ne comptent plus dans la réutilisation des matchs. Jamais appelée sur un combiné noté joué (is_noted)."""
+    row["dead"] = True
+    row["result"] = "void"
+    row["closed"] = reason
+    row["closed_at"] = hhmm
+    return row
 
 
 def is_ticket(row):
@@ -772,7 +784,7 @@ def ghost_record(target, combo, day, kind):
     from datetime import date, timedelta
     rows = load_ghost()
     row = combo_row(target, combo, day) | {"kind": kind, "unsent": 1}
-    if any(r.get("date") == row["date"] and set(r.get("keys") or []) == set(row["keys"]) for r in rows):
+    if any(r.get("date") == row["date"] and set(r.get("keys") or []) == set(row["keys"]) and not r.get("closed") for r in rows):
         return True                                 # déjà suivi (relance, nouveau passage) : compté comme fantôme, jamais doublé
     rows.append(row)
     cut = str(date.fromisoformat(str(day)) - timedelta(days=C.FAIR_COMBO_KEEP_DAYS))
@@ -784,6 +796,6 @@ def ghost_drop(day, keys):
     """Un combiné qui était fantôme part finalement (relance où une jambe a gagné de la valeur, NOVALUE_SEND) : sa ligne fantôme tombe, il est suivi comme un combiné envoyé."""
     keys = set(keys)
     rows = load_ghost()
-    kept = [r for r in rows if not (r.get("date") == str(day) and set(r.get("keys") or []) == keys)]
+    kept = [r for r in rows if not (r.get("date") == str(day) and set(r.get("keys") or []) == keys and not r.get("closed"))]
     if len(kept) != len(rows):
         store.save(GHOST_COMBOS_FILE, kept)

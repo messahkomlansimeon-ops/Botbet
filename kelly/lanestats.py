@@ -486,8 +486,8 @@ def leg_clv_rows(days=None, today=None):
     bets = (store.load_doc("bets.json", {"combos": []}) or {}).get("combos", [])
     for combos in (fair.load_combos(), bets, fair.load_ghost()):
         for c in combos if isinstance(combos, list) else []:
-            if not isinstance(c, dict) or (c.get("date") or "") < cut:
-                continue
+            if not isinstance(c, dict) or (c.get("date") or "") < cut or c.get("closed"):
+                continue                                        # un combiné remplacé par une reconstruction (jamais joué) ne compte pas comme prix pris
             legs = [l for l in c.get("legs") or [] if isinstance(l, dict)]
             if not legs:                                        # combiné réel de bets.json : ses jambes n'ont que {clé, prix, référence} (xlegs) ; la voie vient du journal
                 legs = [{"key": x.get("key"), "xodds": x.get("xodds"), "id": str(x.get("key") or "").split("|")[0],

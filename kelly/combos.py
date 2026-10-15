@@ -780,20 +780,30 @@ def _auto_ok(ev_prod, odds, p=1.0):
     return ev_prod - 1 >= C.SEASON_AUTO_MIN_EV and odds <= C.SEASON_AUTO_MAX_ODDS and p >= C.SEASON_AUTO_MIN_P
 
 
-def season_auto_plan(legs, usage=None):
+def season_signature():
+    """Empreinte des réglages de la construction automatique `saison` (et de SEASON_AUTO_VERSION) : écrite sur chaque combiné bâti (`sbuild`) ; une autre empreinte à la lecture =
+    « construit avant la dernière mise à jour ». Pas le hash du dépôt : une mise à jour sans rapport ne doit pas tout marquer."""
+    return "|".join(f"{x:g}" if isinstance(x, (int, float)) and not isinstance(x, bool) else str(int(x) if isinstance(x, bool) else x) for x in (
+        C.SEASON_AUTO_VERSION, C.SEASON_AUTO, C.SEASON_AUTO_MIN_EV, C.SEASON_AUTO_MAX_ODDS, C.SEASON_AUTO_MAX_COMBOS, C.SEASON_AUTO_MIN_P, C.SEASON_AUTO_LOTTERY_ODDS, C.FILL_LEGS, C.SEASON_SEND_FILL))
+
+
+def season_auto_plan(legs, usage=None, max_combos=None, busy_tiers=(), exclude=()):
     """Combinés `saison` à paliers ADAPTATIFS : [(palier « ssa4.2 », (jambes, cote, proba))]. Les jambes (une par match : la meilleure) sont classées valeur d'abord (sval) puis par p x cote
     décroissant ; le combiné k prend les meilleures jambes encore libres, tant que l'espérance du combiné reste >= C.SEASON_AUTO_MIN_EV et la cote <= C.SEASON_AUTO_MAX_ODDS (arrêt à la
     première jambe qui ne passe pas : elle ouvre le combiné suivant). Arrêt : moins de 2 jambes utilisables, C.SEASON_AUTO_MAX_COMBOS combinés ou C.MAX_LEGS jambes. Aucune jambe n'est partagée
     entre deux combinés, envoyés ou en fantôme. Le palier porte la cote réelle (« ssa4.2 ») : jamais deux fois le même dans la journée. Un combiné envoyé consomme `usage` comme les autres."""
     usage = usage if usage is not None else Usage()
+    limit = C.SEASON_AUTO_MAX_COMBOS if max_combos is None else max_combos      # `max_combos` : places restantes (reconstruction à la demande) ; `busy_tiers` : paliers déjà pris dans la journée (fermés compris) ; `exclude` : matchs interdits (combinés notés joués)
+    exclude = {str(x) for x in exclude}
     best = {}
     key = lambda c: (1 if c.get("sval") else 0, c["prob"] * c["odds"])      # noqa: E731 - valeur d'abord, remplissage ensuite
-    for c in usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"]):
+    for c in usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and str(c.get("id")) not in exclude]):
         if c["id"] not in best or key(c) > key(best[c["id"]]):
             best[c["id"]] = c
     ranked = sorted((c for c in best.values() if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # FILL_LEGS éteint : jamais de remplissage
     out, used = [], set()
-    while len(out) < C.SEASON_AUTO_MAX_COMBOS:
+    busy_tiers = {str(t) for t in busy_tiers}
+    while len(out) < limit:
         free = [c for c in ranked if c["id"] not in used]
         taken, ev_prod, odds, p_all = [], 1.0, 1.0, 1.0
         for c in free:
@@ -808,11 +818,12 @@ def season_auto_plan(legs, usage=None):
         used |= {c["id"] for c in taken}
         legs_ = sorted(taken, key=lambda c: (c.get("commence", ""), str(c["id"])))
         tier, step = None, 1
+        busy = busy_tiers | {t for t, _ in out}
         for nd in (1, 2):
             tier = season_tier(round(odds, nd), auto=True)
-            if tier not in {t for t, _ in out}:
+            if tier not in busy:
                 break
-        while tier in {t for t, _ in out}:           # même cote à 0,01 près : le palier est décalé d'un centième (jamais deux paliers identiques)
+        while tier in busy:                          # même cote à 0,01 près (ou palier déjà pris ce jour, fermé compris) : décalé d'un centième, jamais deux paliers identiques
             tier = season_tier(round(odds + 0.01 * step, 2), auto=True)
             step += 1
         combo = (legs_, odds, combo_prob(legs_))

@@ -769,6 +769,13 @@ def on_callback(data, message_id=None, confirmed=False):
     if parts[0] == "cjoue" and len(parts) == 3:       # « ✅ Je le joue » sous un combiné « combi N » : il devient un pari suivi
         from . import custom
         return custom.track(parts[1], parts[2], message_id)
+    if parts[0] == "so" and len(parts) == 3:            # « 🔓 Rouvrir » sous « saison » : le combiné du jour, refait depuis sa ligne (sans réseau)
+        return app.season_open(parts[1], parts[2])
+    if parts[0] == "sa" and len(parts) == 3 and parts[1] == "rb":      # « 🔄 Reconstruire » sous « saison » : la construction automatique du jour est relancée
+        today = store.load("today.json", {})
+        if parts[2] != (today.get("day") or ""):
+            return "Ce bouton date d'un autre jour : écris « saison » pour avoir celui d'aujourd'hui."
+        return app.season_rebuild(today)
     if parts[0] == "xmaj" and len(parts) == 3:
         return app.refresh_combo(parts[1], parts[2])
     if parts[0] == "xmajr" and len(parts) == 3:
