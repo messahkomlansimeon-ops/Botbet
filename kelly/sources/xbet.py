@@ -2,7 +2,7 @@
 « les 2 marquent », corners, tirs, tirs cadrés, fautes, touches, hors-jeu) au lieu de dire « joue si la cote est au moins X ».
 
 Accès poli, uniquement par les adresses publiques que le site sert à tout visiteur : robots.txt respecté et cache (http.fetch),
-identité KellyBot déclarée, 3 s entre deux requêtes, un budget de temps et de matchs par passage. Aucune astuce anti-blocage :
+User-Agent de navigateur de téléphone (http.UA), 3 s entre deux requêtes, un budget de temps et de matchs par passage. Aucune astuce anti-blocage :
 ni jeton x-hd, ni proxy, ni faux navigateur ; un 403/429 ou une page anti-robot coupe la source 24 h (sources/state.py).
 
 Chemin (sans jeton). PIÈGE : l'API refuse (HTTP 400) une adresse dont les paramètres ne sont pas dans l'ordre alphabétique (url()).

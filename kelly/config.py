@@ -259,7 +259,7 @@ XG_MIN_MATCHES = _int("XG_MIN_MATCHES", 4)        # matchs portant un xG, par é
 XG_FULL_N = _int("XG_FULL_N", 6)                  # xG pleinement cru à partir de là ; en dessous, régression vers les buts : n/XG_FULL_N xG + le reste en buts
 # ---- Stats de match 365scores (kelly/sources/s365.py) : corners, tirs, tirs cadrés, fautes, touches, hors-jeu, cartons par équipe ----
 # Complète FotMob / API-Football là où Kelly n'a pas (assez) de matchs : championnats 1xBet, Amérique du Sud, Mexique, USL... Accès poli
-# seulement (robots.txt, identité KellyBot déclarée, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
+# seulement (robots.txt, User-Agent de navigateur de téléphone, >= 3 s entre deux requêtes, blocage 24 h sur 403 / 429), jamais de contournement.
 # Une liste de résultats par championnat et par jour (~50 matchs) + UNE requête par match pour ses statistiques.
 S365_ENABLED = _bool("S365_ENABLED", True)        # 0 : aucune requête vers 365scores
 S365_PROXY = _bool("S365_PROXY", True) if SANDBOX else True     # toujours par le proxy Webshare de 1xBet (XBET_PROXY), jamais en direct (0 : tests seulement)
@@ -610,7 +610,7 @@ SEASON_AUTO = (os.environ.get("SEASON_TIERS") or "auto").strip().lower() == "aut
 SEASON_AUTO_MIN_EV = _float("SEASON_AUTO_MIN_EV", -0.15)       # mode auto : espérance minimale d'un combiné (produit des p x cote - 1) ; on ajoute des jambes tant qu'elle reste au-dessus
 SEASON_AUTO_MAX_ODDS = _float("SEASON_AUTO_MAX_ODDS", 150)     # ... et que la cote totale ne dépasse pas ce plafond
 SEASON_AUTO_MAX_COMBOS = max(1, _int("SEASON_AUTO_MAX_COMBOS", 4))     # nombre de combinés construits au plus par jour
-SEASON_AUTO_MIN_P = max(0.0, _float("SEASON_AUTO_MIN_P", 0))   # mode auto, FACULTATIF (0 = éteint, comme la spécification) : probabilité minimale d'un combiné (produit des p) ; sans elle le premier combiné absorbe toutes les jambes à valeur jusqu'au plafond de cote
+SEASON_AUTO_MIN_P = max(0.0, _float("SEASON_AUTO_MIN_P", 0.25))   # mode auto (décision du 15/10) : probabilité minimale d'un combiné (produit des p des jambes) ; un combiné `saison` ne descend jamais sous 25 % de chances, cotes réelles ~2,5 à 4,5 ; 0 : éteint (le premier combiné absorbe alors toutes les jambes à valeur jusqu'au plafond de cote) ; « saison 30 » / « saison 100 » restent possibles à la demande
 SEASON_AUTO_LOTTERY_ODDS = _float("SEASON_AUTO_LOTTERY_ODDS", 25)      # mode auto : dès cette cote, mise plafonnée comme un ticket loterie (money.LOTTERY_STAKE)
 SEASON_SPREAD = min(0.9, max(0.0, _float("SEASON_SPREAD", 0.20)))
 SEASON_TIER_PREFIX = "ss"                                                    # palier d'un combiné de la voie : « ss3 », « ss10 », « ss30 », « ss100 »

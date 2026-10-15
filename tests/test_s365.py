@@ -469,7 +469,7 @@ def test_fill_pipeline_polite_and_idempotent():
         s365.stats_url(g) for g in (4867341, 4856756, 4861907, 4862065))
     # politesse : identité KellyBot déclarée, aucun en-tête de navigateur, aucune option (proxy, empreinte TLS...) ; >= 3 s entre deux requêtes
     for url, headers, t, opts in net.log:
-        assert headers == {"User-Agent": http.BROWSER_UA, "Accept": "*/*"} and "Bot" not in headers["User-Agent"], headers
+        assert headers == {"User-Agent": http.BROWSER_UA, "Accept": "*/*", "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"} and "Bot" not in headers["User-Agent"], headers
         assert opts == (), opts
     assert all(b[2] - a[2] >= 3.0 for a, b in zip(net.log, net.log[1:])), [e[2] for e in net.log]
     assert http.delay_for("webws.365scores.com") >= 3.0 and "webws.365scores.com" not in http.PROXIES

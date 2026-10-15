@@ -2,6 +2,7 @@
 plancher, cote <= plafond, une jambe par match, arrêt à la première jambe qui ne passe pas, cotes fixes toujours possibles (SEASON_TIERS=3,10 et « saison N »), relance sans doublon, mise plafonnée dès la
 cote 25, bilan par tranche de cote. Lancer : python -m tests.test_season_auto"""
 import math
+import random
 
 from tests import test_notes_fcfa as N      # fixe DATA_DIR (dossier temporaire), monde de test
 from kelly import app, combos as CB, config as C, fair, lanestats, money, store  # noqa: E402
@@ -85,17 +86,44 @@ def test_stop_rules():
     print("ok  arrêt à la première jambe qui ne passe pas, moins de 2 jambes = rien, une jambe par match, plancher d'espérance, plafond de combinés")
 
 
-def test_optional_min_probability():
+def test_min_probability_default():
+    """Décision du 15/10 : SEASON_AUTO_MIN_P = 0,25 par défaut ; aucun combiné auto ne descend sous 25 % de chances (produit des p des jambes)."""
+    assert C.SEASON_AUTO_MIN_P == 0.25, "défaut du code (pas un réglage de .env)"
+    random.seed(7)
+    for nv, nf in ((3, 0), (8, 17), (25, 55), (40, 30)):
+        setup()
+        legs = []
+        for i in range(nv):
+            p = random.uniform(0.50, 0.78)
+            legs.append(leg(i, p, round(random.uniform(1.02, 1.10) / p, 2)))
+        for j in range(nf):
+            p = random.uniform(0.60, 0.80)
+            legs.append(leg(nv + j, p, max(round(random.uniform(0.92, 0.99) / p, 2), 1.15), sval=False))
+        plan = CB.season_plan(legs)
+        check_invariants(plan)
+        for _, (cl, odds, _) in plan:
+            assert math.prod(c["prob"] for c in cl) >= 0.25 - 1e-9, (nv, nf, odds, [round(c["prob"], 2) for c in cl])
+    # éteint : le premier combiné absorbe les jambes à valeur (comportement littéral de la spécification)
     setup()
     legs = [leg(i, 0.7, 1.7) for i in range(12)]
-    free = CB.season_plan(legs)
-    C.SEASON_AUTO_MIN_P = 0.30
+    C.SEASON_AUTO_MIN_P = 0.0
     try:
-        capped = CB.season_plan(legs)
+        free = CB.season_plan(legs)
     finally:
-        C.SEASON_AUTO_MIN_P = 0.0
-    assert len(free[0][1][0]) > 4 and all(len(c[0]) <= 3 for _, c in capped) and len(capped) == 4 and all(c[2] >= 0.25 for _, c in capped), ([len(c[0]) for _, c in free], [len(c[0]) for _, c in capped])
-    print("ok  réglage facultatif SEASON_AUTO_MIN_P : des combinés plus petits et plus probables, éteint par défaut")
+        C.SEASON_AUTO_MIN_P = 0.25
+    kept = CB.season_plan(legs)
+    assert len(free[0][1][0]) > 4 and len(kept) == 4 and all(len(c[0]) <= 3 for _, c in kept), ([len(c[0]) for _, c in free], [len(c[0]) for _, c in kept])
+    print("ok  SEASON_AUTO_MIN_P = 0,25 par défaut : aucun combiné auto sous 25 % de chances (jours pauvres et riches fictifs), 0 l'éteint")
+
+
+def test_on_demand_big_ticket_capped():
+    setup()
+    money.set_daily(50000)
+    legs = [leg(i, 0.6, 1.9) for i in range(5)]
+    big = app._budget_stake(0.12, 25.0, legs=legs)
+    assert 0 < big <= money.LOTTERY_STAKE, big
+    assert app._budget_stake(0.4, 4.0, legs=legs) > money.LOTTERY_STAKE
+    print("ok  « saison 30 » / « saison 100 » à la demande : mise plafonnée à 100 FCFA dès la cote 25")
 
 
 def test_fill_legs_switch_and_row_item():
@@ -168,7 +196,8 @@ def test_lottery_stake_and_buckets():
 def main():
     test_poor_and_rich_days()
     test_stop_rules()
-    test_optional_min_probability()
+    test_min_probability_default()
+    test_on_demand_big_ticket_capped()
     test_fill_legs_switch_and_row_item()
     test_fill_after_value_and_ghost_no_share()
     test_fixed_tiers_still_work()

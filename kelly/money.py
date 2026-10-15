@@ -236,9 +236,6 @@ def allocate(items, budget=None, detail=False, step=None):
         stakes = [min(st, cap) for st in stakes]
     stakes = [min(st, LOTTERY_STAKE) if _lottery(it) else st for st, it in zip(stakes, items)]     # ticket « loterie » : 100 FCFA au plus (gardé)
     stakes = [math.floor(min(st, float(it["cap"])) / step) * step if isinstance(it, dict) and it.get("cap") else st for st, it in zip(stakes, items)]      # plafond propre d'une voie (SEASON_TICKET_MAX), arrondi au pas
-    if C.MAX_TICKETS_DAY > 0:                        # plafond de tickets par jour : les plus grosses mises restent, les autres sont laissées de côté (gardées)
-        keep = set(sorted(range(len(stakes)), key=lambda i: -stakes[i])[:C.MAX_TICKETS_DAY])
-        stakes = [st if i in keep else 0 for i, st in enumerate(stakes)]
     room = budget - sum(stakes)                      # combinés SANS valeur : par défaut AUCUNE mise (suivi en fantôme) ; NOVALUE_STAKE > 0 : mise fixe optionnelle, APRÈS les autres, même plafond de ticket, prise sur le reste du jour
     for i, it in enumerate(items):
         if isinstance(it, dict) and it.get("novalue") and C.NOVALUE_STAKE > 0:
@@ -246,6 +243,9 @@ def allocate(items, budget=None, detail=False, step=None):
             st = min(fixed, cap if cap is not None else fixed, LOTTERY_STAKE if _lottery(it) else fixed, room)
             stakes[i] = math.floor(max(0.0, st) / step) * step
             room -= stakes[i]
+    if C.MAX_TICKETS_DAY > 0:                        # plafond de tickets (par appel d'allocation : la voie `saison` est allouée à part) : les plus grosses mises restent, les autres sont laissées de côté (gardées) ; après les mises fixes optionnelles
+        keep = set(sorted(range(len(stakes)), key=lambda i: -stakes[i])[:C.MAX_TICKETS_DAY])
+        stakes = [st if i in keep else 0 for i, st in enumerate(stakes)]
     spent = round(sum(stakes), 2)
     out = (stakes, spent, round(budget - spent, 2))
     return out + (total < 1,) if detail else out

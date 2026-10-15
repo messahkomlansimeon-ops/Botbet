@@ -7,7 +7,7 @@ API web publique du site (https://webws.365scores.com/web, celle que lit www.365
   passage (cache 24 h) : s'il se met à interdire /web/, Kelly s'arrête.
 - une requête simple (requests, User-Agent de navigateur de téléphone (KELLY_UA pour en changer), aucune empreinte TLS imitée) suffit : HTTP 200 JSON.
   Politesse : >= 3 s entre deux requêtes (http.DEFAULT_DELAY), blocage de 24 h sur 403 / 429 / page de vérification (state.block), jamais de
-  proxy, d'imitation de navigateur ni de rotation d'adresse.
+  rotation d'adresse ni d'empreinte TLS imitée (le proxy de 1xBet sert à ne jamais montrer ton IP).
 - GET /games/results/?competitions={id} : environ les 50 DERNIERS matchs terminés du championnat (les dates startDate / endDate sont ignorées
   avec `competitions=`) + `paging.previousPage` (/web/games/?...&aftergame={id}&direction=-1) pour remonter plus loin : une page de
   15 à 85 matchs, 10 à 90 Ko.

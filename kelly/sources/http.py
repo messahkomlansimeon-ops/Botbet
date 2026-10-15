@@ -23,7 +23,12 @@ UA = os.environ.get("KELLY_UA") or BROWSER_UA     # identité de TOUTES les lect
 UA_BY_DOMAIN = {}         # domaine -> User-Agent à la place de UA (inutilisé par défaut)
 ROBOTS_TOKEN = "KellyBot"
 DEFAULT_DELAY = 3.0
-JITTER = float(os.environ.get("READ_JITTER") or 0.25)     # écart aléatoire ajouté entre deux requêtes d'un même site (0 : régulier comme avant)
+JITTER = 0.25
+try:
+    JITTER = max(0.0, float(os.environ.get("READ_JITTER") or JITTER))
+except ValueError:
+    pass
+# JITTER : écart aléatoire ajouté entre deux requêtes d'un même site (READ_JITTER ; 0 : régulier comme avant)
 MIN_DELAY = {"fbref.com": 6.0, "fotmob.com": 6.0, "betexplorer.com": 5.0}     # sites les plus sollicités : plus lents
 FLOOR = {"fbref.com": 6.0}
 TIMEOUT = (10, 30)
@@ -425,6 +430,11 @@ def delay_for(domain):
     return max(floor, conf, min(_crawl.get(domain, 0.0), MAX_CRAWL_DELAY))
 
 
+def _lang():
+    """Accept-Language d'un navigateur de téléphone (cohérent avec le User-Agent) ; rien si KELLY_UA déclare un robot."""
+    return {} if "bot" in UA.lower() else {"Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"}
+
+
 def _wait(domain):
     t = _last.get(domain)
     if t is not None:
@@ -432,13 +442,13 @@ def _wait(domain):
         gap = min(delay, delay - (state.clock() - t))      # horloge reculée (changement d'heure, NTP) : jamais plus d'attente que l'écart normal
         if gap > 0:
             _sleep(gap)
-        if JITTER > 0 and not C.SANDBOX:                  # rythme moins mécanique (15/10) : de 0 à JITTER de l'écart en PLUS, jamais en moins (le délai de robots.txt reste respecté)
-            _sleep(delay * random.uniform(0, JITTER))
+            if JITTER > 0 and not C.SANDBOX:              # rythme moins mécanique (15/10) : de 0 à JITTER de l'écart en PLUS, jamais en moins (le délai de robots.txt reste respecté) ; seulement quand on vient d'attendre
+                _sleep(delay * random.uniform(0, JITTER))
 
 
 def _request(url, headers=None):
     domain = urlparse(url).netloc.lower()
-    h = {"User-Agent": UA_BY_DOMAIN.get(domain, UA), "Accept": "*/*"} | (headers or {})
+    h = {"User-Agent": UA_BY_DOMAIN.get(domain, UA), "Accept": "*/*"} | _lang() | (headers or {})
     r, err, counted = None, None, False
     for attempt in (0, 1):
         proxy = PROXIES.get(domain)
@@ -503,7 +513,7 @@ def post(url, body, headers=None, timeout=TIMEOUT):
     source = SOURCES.get(domain)
     if source and state.is_blocked(source):
         return Result(url, None, error=state.health(source)["last_error"] or "source bloquée", blocked=True)
-    h = {"User-Agent": UA_BY_DOMAIN.get(domain, UA), "Accept": "application/json", "Content-Type": "application/json"} | (headers or {})
+    h = {"User-Agent": UA_BY_DOMAIN.get(domain, UA), "Accept": "application/json", "Content-Type": "application/json"} | _lang() | (headers or {})
     r, err = None, None
     for attempt in (0, 1):
         proxy = PROXIES.get(domain)

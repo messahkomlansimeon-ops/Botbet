@@ -2386,8 +2386,11 @@ def _budget_stake(prob, odds, kind="fair", tier=None, legs=None):
     ses chances selon 1xBet (ticket « loterie », money.is_lottery)."""
     if not money.active():
         return None
-    return money.allocate([{"kind": kind, "tier": odds if tier is None else tier, "prob": prob, "odds": odds,
-                            "p_mkt": CB.market_prob(legs) if legs else None} | (lanes.item_fields(legs) if legs else {})])[0][0]
+    item = {"kind": kind, "tier": odds if tier is None else tier, "prob": prob, "odds": odds,
+            "p_mkt": CB.market_prob(legs) if legs else None} | (lanes.item_fields(legs) if legs else {})
+    if C.SEASON_AUTO and legs and odds >= C.SEASON_AUTO_LOTTERY_ODDS and all(l.get("lane") == "saison" or l.get("strategy") == "saison" for l in legs):
+        item["lottery"] = True                       # « saison 30 » / « saison 100 » à la demande : mise plafonnée comme un ticket loterie (100 FCFA)
+    return money.allocate([item])[0][0]
 
 
 def _stake_words(st, prob=None, odds=None, legs=None):
