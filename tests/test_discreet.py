@@ -4,7 +4,7 @@ import tempfile
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-discreet-")
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-discreet-cache-")
-for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY", "XBET_UA"):
+for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY", "KELLY_UA"):
     os.environ.pop(k, None)
 
 from kelly import config as C, money  # noqa: E402
@@ -39,9 +39,9 @@ def test_ticket_cap():
 
 
 def test_user_agent():
-    assert http.UA_BY_DOMAIN[xbet.DOMAIN].startswith("Mozilla/5.0") and "Bot" not in http.UA_BY_DOMAIN[xbet.DOMAIN]
-    assert s365.HOST not in http.UA_BY_DOMAIN and http.UA.startswith("KellyBot"), "365scores et les autres sources gardent leur identité"
-    print("ok  1xBet : User-Agent de navigateur ; les autres sources restent déclarées")
+    assert http.UA == http.BROWSER_UA and http.UA.startswith("Mozilla/5.0") and "Bot" not in http.UA, "toutes les lectures se présentent comme un navigateur de téléphone"
+    assert not http.UA_BY_DOMAIN and "KellyBot" not in http.UA
+    print("ok  toutes les sources (1xBet, 365scores, FotMob, football-data…) : User-Agent de navigateur de téléphone")
 
 
 def main():

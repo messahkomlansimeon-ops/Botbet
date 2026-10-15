@@ -16,8 +16,10 @@ import requests
 from .. import cache as kcache, config as C
 from . import state
 
-UA = "KellyBot/1.0 (usage personnel)"
-UA_BY_DOMAIN = {}         # domaine -> User-Agent à la place de UA (1xBet : celui d'un navigateur de téléphone, voir sources/xbet.py)
+BROWSER_UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/124.0.0.0 Mobile Safari/537.36")
+UA = os.environ.get("KELLY_UA") or BROWSER_UA     # identité de TOUTES les lectures (15/10, demande de l'utilisateur : discrétion) : un navigateur de téléphone, pas un robot déclaré ; KELLY_UA=KellyBot/1.0 rétablit l'identité déclarée
+UA_BY_DOMAIN = {}         # domaine -> User-Agent à la place de UA (inutilisé par défaut)
 ROBOTS_TOKEN = "KellyBot"
 DEFAULT_DELAY = 3.0
 MIN_DELAY = {"fbref.com": 6.0, "fotmob.com": 6.0, "betexplorer.com": 5.0}     # sites les plus sollicités : plus lents

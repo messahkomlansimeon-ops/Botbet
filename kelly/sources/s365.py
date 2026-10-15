@@ -5,7 +5,7 @@ API web publique du site (https://webws.365scores.com/web, celle que lit www.365
 - robots.txt : webws.365scores.com/robots.txt répond 404 (aucune règle : tout est permis, RFC 9309) ; celui de www.365scores.com (200) ne
   parle que des pages du site (`*date=*`, `*/1*`...), jamais de ce nom d'hôte. http.fetch relit et respecte le robots.txt de webws à chaque
   passage (cache 24 h) : s'il se met à interdire /web/, Kelly s'arrête.
-- une requête simple (requests, identité KellyBot déclarée, aucun en-tête de navigateur, aucune empreinte TLS imitée) suffit : HTTP 200 JSON.
+- une requête simple (requests, User-Agent de navigateur de téléphone (KELLY_UA pour en changer), aucune empreinte TLS imitée) suffit : HTTP 200 JSON.
   Politesse : >= 3 s entre deux requêtes (http.DEFAULT_DELAY), blocage de 24 h sur 403 / 429 / page de vérification (state.block), jamais de
   proxy, d'imitation de navigateur ni de rotation d'adresse.
 - GET /games/results/?competitions={id} : environ les 50 DERNIERS matchs terminés du championnat (les dates startDate / endDate sont ignorées

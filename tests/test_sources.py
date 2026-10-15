@@ -354,7 +354,7 @@ def test_robots_and_user_agent():
     fresh()
     NET.routes[f"https://{FD}/robots.txt"] = Resp(200, b"User-agent: KellyBot\nDisallow: /private/\n\nUser-agent: *\nDisallow: /\n")
     assert http.fetch(EPL_FD, fd.NAME, http.TTL_CSV_CURRENT).ok
-    assert all(e[1]["User-Agent"] == "KellyBot/1.0 (usage personnel)" for e in NET.log), NET.log
+    assert all(e[1]["User-Agent"] == http.UA for e in NET.log), NET.log
     # robots.txt injoignable (5xx) : on ne télécharge pas
     fresh()
     NET.routes[f"https://{FD}/robots.txt"] = Resp(503)
@@ -554,12 +554,12 @@ def test_structure_change_reports_errors():
     NET.routes[EPL_US] = Resp(200, fixture("understat_epl_2025.html"))
     h = understat.refresh(["soccer_epl"])
     assert h["ok"] and store.load("src_understat.json", {})["leagues"]["EPL"]["teams"]["Arsenal"]["all"]["xg"] == 1.88
-    # requête principale : en-têtes du XHR du site + User-Agent honnête
+    # requête principale : en-têtes du XHR du site + User-Agent de navigateur
     fresh()
     understat.refresh(["soccer_epl"])
     hdr = NET.hits("getLeagueData/EPL/2025")[0][1]
     assert hdr["X-Requested-With"] == "XMLHttpRequest" and hdr["Referer"] == "https://understat.com/league/EPL"
-    assert hdr["User-Agent"].startswith("KellyBot/1.0") and not NET.hits("understat.com/league")
+    assert hdr["User-Agent"] == http.UA and not NET.hits("understat.com/league")
     # jamais d'exception, même sur une réponse absurde
     fresh()
     NET.routes[API_US] = Resp(200, b"\xff\xfe\x00 {")
