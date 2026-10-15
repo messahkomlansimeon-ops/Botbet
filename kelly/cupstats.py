@@ -50,12 +50,23 @@ def make(scan, now, today=None):
                 for b in fair.best_per_family(opts, STAT_MARKETS, bases):
                     c = fair.make_pick(ev, *b, "coupe")
                     c["alts"] = fair.alternatives(opts, bases, b[0])
-                    c["mu"], c["n_min"], c["cup"] = None, min(pred["n"]), True
+                    c["mu"], c["n_min"], c["cup"] = raw_mean(pred, b[0]), min(pred["n"]), True
                     fair._with_base(c, bases.get((b[0], b[1], b[2])), pred["qs"].get(seasonlane._stat_of(b[0]), pred["q"]))
                     out.append(c)
     except Exception as e:                          # noqa: BLE001 - les stats de coupe sont facultatives
         print(f"[coupes] stats de coupe ignorées : {type(e).__name__}: {e}", file=sys.stderr)
     return out
+
+
+def raw_mean(pred, market):
+    """Nombre attendu du chiffre d'un marché de coupe d'après la prévision `pred` (season.cup_predict) : total du match (corners, cartons, marchés « _total ») ou d'une équipe (« _home » / « _away »).
+    Posé sur le pronostic (« mu ») comme pour les autres lignes : le règlement écrit alors le nombre réel (« val »), ce qui permet de mesurer un biais des moyennes de coupe SANS reconstruire la
+    moyenne depuis la proba. Collecte seulement : le règlement des coupes n'apprend rien (settle_cups), aucune correction n'en est tirée. None sans chiffre."""
+    s = (pred.get("stats") or {}).get(seasonlane._stat_of(market))
+    if not s:
+        return None
+    whole = market in (prematch.CORNERS, prematch.CARDS) or market.endswith("_total")
+    return round(s["h"] + s["a"] if whole else s["h"] if market.endswith("_home") else s["a"], 3)
 
 
 def split(rows):

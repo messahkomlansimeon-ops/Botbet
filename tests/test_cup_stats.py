@@ -12,7 +12,7 @@ for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
 from tests.test_season import league  # noqa: E402
 from tests.test_season_cup import rename  # noqa: E402
 from tests import test_season_lane as T  # noqa: E402
-from kelly import app, calib, combos as CB, config as C, cupstats, ensemble, fair, lanes, lanestats as L, season, seasonlane as SL, settle, store, xprice  # noqa: E402
+from kelly import app, calib, combos as CB, config as C, cupstats, ensemble, fair, lanes, prematch, lanestats as L, season, seasonlane as SL, settle, store, xprice  # noqa: E402
 
 CUP = "soccer_uefa_champs_league"
 NOW = T.NOW
@@ -42,6 +42,15 @@ def test_make():
     assert not any(c["market"] in ("totals", "btts", "h2h", "double_chance") or c["market"].startswith("team_totals") for c in pronos), "stats seulement : buts / 1N2 inchangés"
     assert {c["id"] for c in pronos} == {"c1", "c2"}, "match commencé et championnat : jamais"
     assert all(c["src"] == "coupe" and "strategy" not in c for c in pronos)
+    assert all(isinstance(c["mu"], float) and c["mu"] > 0 for c in pronos), "le nombre attendu (mu) est enregistré comme pour les autres lignes : le règlement écrira le nombre réel (val)"
+    pred = season.cup_predict(SL.cup_models(NOW.date()), "XeT1", "YoT3")
+    c1 = next(c for c in pronos if c["id"] == "c1" and c["market"] in (prematch.CORNERS, prematch.CARDS))
+    st = pred["stats"][SL._stat_of(c1["market"])]
+    assert abs(c1["mu"] - round(st["h"] + st["a"], 3)) < 1e-9, "total du match = domicile + extérieur"
+    row = dict(pronos[0], date="2026-10-15", result="win", final="9 corners", val=9.0, key="k1")
+    back = ensemble.unpack_archive_row("k1", "2026-10-15", ensemble._pack(row))
+    assert (back["mu"], back["val"], back["final"]) == (pronos[0]["mu"], 9.0, "9 corners"), "l'archive garde mu, val et le score final"
+    assert ensemble.unpack_archive_row("k2", "2026-10-15", ensemble._pack(row)[:22]).get("mu") is None, "une ancienne ligne d'archive reste lisible"
     C.STATS_CUPS_MODE = "off"
     try:
         assert cupstats.make(scan, NOW) == []
