@@ -2566,8 +2566,13 @@ def season_command(args, today, now=None, fetch=None):
         line += f"\n♻️ {len(used.excluded)} jambe{'s' if len(used.excluded) > 1 else ''} écartée{'s' if len(used.excluded) > 1 else ''} : déjà utilisée{'s' if len(used.excluded) > 1 else ''} aujourd'hui"
     combo = CB.season_plan(legs, [target], usage=day_usage(day))[0][1]
     if not combo:
-        top = CB.reach([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs])
-        return line + f"\nAucun combiné « saison » à la cote {fmt.trim(target, 1)} avec ces jambes" + (f" : la plus haute cote atteignable est {fmt.trim(top, 1)}." if top > 1 else ".")
+        lo = target * (1 - C.SEASON_SPREAD)
+        free = day_usage(day).filter(CB.season_pool(legs))
+        top = CB.reach([c for c in free if c.get("sval") or C.FILL_LEGS], C.MAX_LEGS)        # les MÊMES jambes que le constructeur (voie saison, cote 1xBet, libres, de valeur si le remplissage est coupé)
+        head = f"\nAucun combiné « saison » à la cote {fmt.trim(target, 1)} avec ces jambes"
+        if top > 1 and top >= lo:       # la cote visée est atteignable en principe : le message ne doit pas dire le contraire
+            return line + head + f" : la plus haute cote atteignable ({fmt.trim(top, 1)}) atteint la fourchette de {fmt.trim(lo, 0)} à {fmt.trim(target * (1 + C.SEASON_SPREAD), 0)}, mais aucune combinaison ne respecte les règles de construction (un pari par match, plafond de remplissage). Essaie une autre cote."
+        return line + head + (f" : la plus haute cote atteignable est {fmt.trim(top, 1)}." if top > 1 else ".")
     lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)
     keep = {"day": day, "target": target, "lo": lo, "hi": hi, "src": "saison"}
     intro = f"{C.SEASON_TITLE.split(' ', 1)[0]} Combiné « saison en cours » à la cote {fmt.trim(target, 1)} (modèle des matchs de cette saison, mélangé au marché).\n{line}"

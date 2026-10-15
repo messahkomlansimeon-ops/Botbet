@@ -761,7 +761,7 @@ def season_plan(legs, tiers=None, usage=None):
     usage = usage if usage is not None else Usage()
     if tiers is None and C.SEASON_AUTO:              # paliers adaptatifs : la cote est le résultat (« saison N » passe `tiers` et reste en cote visée)
         return season_auto_plan(legs, usage)
-    pool = sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"), key=lambda c: -c["prob"])      # par proba retenue (p_ens) décroissante : jamais par écart au marché
+    pool = season_pool(legs)      # par proba retenue (p_ens) décroissante : jamais par écart au marché
     out = []
     for target in (tiers if tiers is not None else C.SEASON_TIERS):
         lo, hi = target * (1 - C.SEASON_SPREAD), target * (1 + C.SEASON_SPREAD)
@@ -773,6 +773,11 @@ def season_plan(legs, tiers=None, usage=None):
             usage.add(combo[0])
         out.append((season_tier(target), combo))
     return out
+
+
+def season_pool(legs):
+    """Jambes que `season_plan` peut prendre : voie `saison`, cote 1xBet, cote effective = xodds ; proba retenue décroissante."""
+    return sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"), key=lambda c: -c["prob"])
 
 
 def _auto_ok(ev_prod, odds, p=1.0):
