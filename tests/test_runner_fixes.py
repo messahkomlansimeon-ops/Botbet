@@ -495,7 +495,7 @@ def test_loop_supervises_during_task():
 
     def long_task(args):                            # un passage de plusieurs secondes pendant lequel --serve est tué
         ran.append(args)
-        end = time.time() + 10
+        end = time.time() + 40                       # large : le relancement de --serve est lent quand les 8 processus de la suite tournent ensemble (CI)
         while not os.path.exists(pidfile) and time.time() < end:
             time.sleep(0.05)
         pids.append(int(open(pidfile).read()))
@@ -512,12 +512,12 @@ def test_loop_supervises_during_task():
         with quiet()[0], quiet()[1]:
             t.start()
             t.join(0.5)
-            end = time.time() + 15
+            end = time.time() + 45
             while len(pids) < 2 and time.time() < end:
                 time.sleep(0.1)
             time.sleep(0.3)
             R.STOP.set()
-            t.join(10)
+            t.join(30)
         assert ran == [["--watch"]] and st["watch_at"] > 0 and len(pids) == 2 and pids[0] != pids[1], (ran, pids)
         assert os.path.exists(os.path.join(logs, "runner_state.json"))      # planning sauvegardé après le passage
     finally:
