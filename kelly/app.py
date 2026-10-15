@@ -1646,6 +1646,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
 🎯 <b>Combiné</b> : choisis la cote, les types de paris (victoire, buts, corners, tirs, fautes…) et le nombre de paris
 🔝 <b>Du jour</b> : les meilleurs paris encore jouables ; dessous, 🔄 <b>Mettre à jour les cotes</b> (ou écris <i>maj</i>)
 🧾 <b>Mes paris</b> : tes paris du jour, à noter quand tu les joues
+   quand Kelly te demande ta mise, des boutons <b>500 · 1 000 · 2 000 · 5 000</b> la notent d'un appui
 🔴 <b>Live</b> : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score
 📊 <b>Résultats</b> : gagnés, perdus, et le résultat en FCFA de tes paris notés
 ➕ <b>Plus</b> : les autres outils, en boutons sous le message :

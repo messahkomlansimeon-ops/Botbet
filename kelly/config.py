@@ -600,6 +600,7 @@ def _floats(name, default):
     return vals if vals and all(v > 1.0 for v in vals) else tuple(default)
 
 
+QUICK_STAKES = _floats("QUICK_STAKES", (500, 1000, 2000, 5000))       # boutons de mise rapide sous la question « quelle mise ? » (FCFA) ; un appui = la mise écrite
 SEASON_TIERS = _floats("SEASON_TIERS", (3, 10, 30, 100))                     # cotes visées des combinés de la voie `saison` (une fourchette de +-SEASON_SPREAD autour de chacune)
 SEASON_SPREAD = min(0.9, max(0.0, _float("SEASON_SPREAD", 0.20)))
 SEASON_TIER_PREFIX = "ss"                                                    # palier d'un combiné de la voie : « ss3 », « ss10 », « ss30 », « ss100 »

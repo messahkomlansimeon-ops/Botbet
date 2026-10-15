@@ -22,6 +22,14 @@ LABEL = "✅ Je le joue"
 ANOTHER = "🔀 Un autre sans mes matchs"      # même cote, mêmes types, ni tes matchs joués du jour ni ceux de ce combi (app.another_combo)
 
 
+
+def _prefixed(head, reply):
+    """`head` suivi de la réponse `reply`, avec ses boutons quand elle en porte (mises rapides) ; une réponse sans boutons reste un str ordinaire."""
+    markup = getattr(reply, "markup", None)
+    if markup is None:
+        return head + reply
+    return telegram.with_buttons(telegram.Text(head + str(reply)), markup)
+
 def _load(day):
     """Document du jour `day` ; vide si un autre jour y est écrit (la numérotation « m<n> » repart de 1 chaque jour)."""
     d = store.load(FILE, {})
@@ -107,7 +115,7 @@ def track(cid, day, message_id=None):
             return f"{name} est dans « 🧾 Mes paris » mais il est retiré de ton bilan : touche « finalement joué » dans « 🧾 Mes paris » pour le remettre."
         if row.get("played"):
             return f"✅ {name} est déjà dans « 🧾 Mes paris » (joué à {fmt.odds_txt(row['played']['odds'])})."
-        return f"✅ {name} est déjà dans « 🧾 Mes paris » : pas encore noté.\n" + chat.on_callback(f"joue|{what}|{day}", message_id)       # la question est reposée
+        return _prefixed(f"✅ {name} est déjà dans « 🧾 Mes paris » : pas encore noté.\n", chat.on_callback(f"joue|{what}|{day}", message_id))       # la question est reposée
     item = _load(day)["items"].get(cid) if re.fullmatch(r"m\d{1,4}", str(cid)) else None
     if item is None:
         return GONE
@@ -123,4 +131,4 @@ def track(cid, day, message_id=None):
         return (f"{reply}\n\n📌 Dans « 🧾 Mes paris », compté dans tes résultats."
                 + (" Kelly te prévient si un de ses paris n'est plus jouable." if real else ""))
     _buttons(message_id, what, day)
-    return f"{head} : il est dans « 🧾 Mes paris ».\n" + reply
+    return _prefixed(f"{head} : il est dans « 🧾 Mes paris ».\n", reply)

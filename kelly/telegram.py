@@ -81,7 +81,8 @@ def copy_row(code):
 
 def menu_keyboard(rows):
     """Menu fixe en bas de Telegram, à la place du clavier : rows = [[libellé]] ; un appui envoie le libellé comme message."""
-    return {"keyboard": [[{"text": label} for label in row] for row in rows], "resize_keyboard": True, "is_persistent": True}
+    return {"keyboard": [[{"text": label} for label in row] for row in rows], "resize_keyboard": True, "is_persistent": True,
+            "input_field_placeholder": "Une cote, une mise (5,40 1000) ou une équipe"}       # texte grisé de la zone de saisie
 
 
 def plain(text):

@@ -600,6 +600,18 @@ def _dur(minutes):
     return f"{minutes // 60} h" if minutes >= 120 and minutes % 60 == 0 else f"{minutes} min"
 
 
+def _stake_buttons(text, what, day, left=None):
+    """La question « quelle mise ? » (`text`) du pari `what` du jour `day`, avec les mises rapides (C.QUICK_STAKES, au plus ce qu'il reste sur la limite du jour `left`) : un appui = la mise tapée
+    (callback « st|<montant>|<pari>|<jour> » : le pari est dans le bouton, le bouton d'une ancienne question ne note jamais la mise d'un autre pari)."""
+    if left is None and money.capital_mode():
+        left = money.capital_state().get("left")             # mode capital : jamais plus que ce qu'il reste aujourd'hui
+    amounts = [q for q in C.QUICK_STAKES if left is None or q <= left]
+    if not amounts:
+        return text
+    row = [(money.money(q).replace(" FCFA", ""), f"st|{int(q)}|{what}|{day}") for q in amounts]
+    return telegram.with_buttons(telegram.Text(text), telegram.inline([row]))
+
+
 def _ask(t):
     """La question posée après « ✅ Je l'ai joué » / « ✏️ Autre cote » sur le pari `t` (played.find). Cote 1xBet CONNUE (t.known) et pas encore
     noté : jamais la cote, seulement la mise (on_callback a noté tout de suite quand une mise est conseillée). Sinon la cote, et la mise quand
@@ -642,6 +654,16 @@ def on_callback(data, message_id=None, confirmed=False):
         t = played.find(parts[1], parts[2])
         if t is not None and not isinstance(t, str) and t.item.get("played"):
             return confirm.ask(f"annuler la note du {t.label}", cb=data, msg=message_id)
+    if parts[0] == "st" and len(parts) == 4 and parts[1].isdigit():         # mise rapide : comme si tu avais tapé le montant (mêmes contrôles, même question refermée)
+        p = get_pending()
+        if not p or p.get("what") != parts[2] or p.get("day") != parts[3] or p.get("confirm") or p.get("odds") is None or p.get("what") in (COMBI_ASK, LIVE_ASK) or str(p.get("what") or "").startswith(LEGS_ASK + "|"):
+            if message_id:
+                telegram.edit_buttons(message_id, {"inline_keyboard": []})
+            return "Cette question n'est plus ouverte : touche « ✅ Je l'ai joué » sous le pari."
+        reply = _answer(p, parts[1])
+        if message_id and get_pending() is None:                            # la mise est prise : les boutons disparaissent (plus de double appui)
+            telegram.edit_buttons(message_id, {"inline_keyboard": []})
+        return reply
     if parts[0] == "q" and len(parts) == 2:               # réponse rapide (« q|status ») arrivée jusqu'ici (poll sans `quick`) : même réponse, sous le verrou
         return quick(parts[1])
     if parts[0] == "m" and len(parts) == 2:               # un bouton de « ➕ Plus »
@@ -671,8 +693,8 @@ def on_callback(data, message_id=None, confirmed=False):
             left = money.over_limit(t.stake) if t.stake > 0 else None
             if t.stake > 0 and left is not None:     # mode capital : la mise conseillée à l'envoi dépasse ce qu'il reste aujourd'hui -> la mise est demandée
                 set_pending(what, day, message_id, odds=t.ref, lst=page)
-                return (f"⚠️ Kelly te conseillait {money.money(t.stake)}, mais il ne reste que {money.money(money._r(left))} sur ta limite du jour "
-                        f"(d'autres tickets notés depuis).\n" + _ask(t))
+                return _stake_buttons(f"⚠️ Kelly te conseillait {money.money(t.stake)}, mais il ne reste que {money.money(money._r(left))} sur ta limite du jour "
+                                      f"(d'autres tickets notés depuis).\n" + _ask(t), what, day, left)
             if t.stake > 0:                          # et mise conseillée : noté tout de suite (« ✏️ Autre cote » / « ↩️ Annuler » corrigent)
                 reply = played.note(t, t.ref, t.stake, ref_at=played.read_note(t)) + played.overlap_suffix(what, t.item.get("date") or day)
                 clear_pending_for(what, day)
@@ -681,7 +703,7 @@ def on_callback(data, message_id=None, confirmed=False):
                     _refresh_msg(message_id, what, day, page)
                 return reply
             set_pending(what, day, message_id, odds=t.ref, lst=page)      # sinon seule la mise est demandée
-            return _ask(t)
+            return _stake_buttons(_ask(t), what, day)
         set_pending(what, day, message_id, lst=page)
         return _ask(t)
     if parts[0] == "annule" and len(parts) in (3, 4):     # « ↩️ Annuler » : la note du pari est retirée (comme /joue <quoi> 0), sa question referme
