@@ -13,7 +13,7 @@ for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
 
 from tests.test_season import league, row  # noqa: E402
 from tests import test_season_lane as T  # noqa: E402
-from kelly import config as C, fair, lanestats as L, season, seasonlane as SL, store, strength  # noqa: E402
+from kelly import config as C, fair, lanestats as L, prematch, season, seasonlane as SL, store, strength  # noqa: E402
 
 ON = date(2026, 10, 14)
 CUP = "soccer_uefa_champs_league"
@@ -76,6 +76,9 @@ def test_eligibility():
     print("ok  éligibilité : équipe inconnue, 2 matchs de championnat et nom ambigu refusés ; coupe nationale entre deux équipes de la même ligue possible")
 
 
+STAT_MKTS = frozenset(list(fair.STAT_SPECS) + [prematch.CORNERS, prematch.CARDS])
+
+
 def test_make_and_lane():
     scan = T.setup()
     models_obs = {"soccer_x": rename(league(10, 5, seed=1, mean_h=1.9, mean_a=1.5, corners=(6.5, 5.5), disp=0.1), "Xe"),
@@ -88,10 +91,14 @@ def test_make_and_lane():
                               {"id": "c3", "sport_key": CUP, "home_team": "Inconnu", "away_team": "XeT5", "commence_time": ko, "league": "LDC"}]}}
     pronos = SL.make(scan, T.NOW, T.DAY)
     assert pronos and all(c["cup"] is True and c["key"].endswith("|saison") and c["id"] in ("c1", "c2") for c in pronos), "jambes de coupe marquées cup, match inconnu écarté"
+    stat = [c for c in pronos if c["market"] in STAT_MKTS]
+    assert stat and all(isinstance(c["mu"], float) and c["mu"] > 0 for c in stat), "stats de coupe : le nombre attendu (mu) est enregistré, le règlement écrira le nombre réel (val)"
+    assert all(c["mu"] is None for c in pronos if c["market"] not in STAT_MKTS), "buts / 1N2 : pas de mu (aucun chiffre réglé)"
     legs, _ = SL.run(scan, [], T.DAY, T.NOW, fetch=T.fetch_of(pronos, over_odds=2.4, under_odds=1.62), history={})
     assert legs and all(c["cup"] is True and c["strategy"] == "saison" for c in legs), legs[:1]
     log = store.load(SL.LOG, [])
     assert log and all(r.get("cup") for r in log if r.get("sval") is not None), "le journal garde cup"
+    assert any(r.get("mu") for r in log if r["market"] in STAT_MKTS), "le journal garde mu"
     # jamais apprises : ni poids ni calibration
     for r in log:
         r["result"] = "win"

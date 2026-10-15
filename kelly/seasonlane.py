@@ -230,7 +230,7 @@ def make(scan, now, today=None, info=None):
                             "event": f'{ev["home_team"]} - {ev["away_team"]}', "home": ev["home_team"], "away": ev["away_team"], "commence": ev["commence_time"],
                             "start": ev["commence_time"][11:16], "market": mk, "name": n0, "point": pt0, "who": who, "group": "soccer",
                             "pick": odds.label(mk, n0, pt0, who, "soccer"), "p0": p0, "base": b0, "alts": alts, "conf": round(pred["qs"].get(_stat_of(mk), pred["q"]), 2), "score": p0 - 0.5, "src": "saison", "why": f"saison en cours ({model.get('source')})",
-                            "mu": None, "n_min": min(pred["n"]), "lane": "saison"} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {}) | ({"cup": True} if cup else {}))
+                            "mu": raw_mean(pred, mk) if cup else None, "n_min": min(pred["n"]), "lane": "saison"} | ({"xgid": ev["xgid"]} if ev.get("xgid") else {}) | ({"cup": True} if cup else {}))
     return out
 
 
@@ -240,6 +240,20 @@ def _ko(ev):
 
 def _stat_of(market):
     return {prematch.CORNERS: "corners", prematch.CARDS: "cards"}.get(market) or (market.split("_")[1] if market in fair.STAT_SPECS else "goals")
+
+
+def raw_mean(pred, market):
+    """Nombre attendu du chiffre d'un marché de STATS d'après la prévision `pred` (season.cup_predict) : total du match (corners, cartons, marchés « _total ») ou d'une équipe (« _home » / « _away »).
+    Posé sur les pronostics de COUPE (« mu »), comme pour les autres lignes : le règlement écrit alors le nombre réel (« val »), ce qui permet de mesurer un biais des moyennes de coupe SANS
+    reconstruire la moyenne depuis la proba. Collecte seulement : ni les stats de coupe (settle_cups) ni la voie `saison` (settle_season) n'en tirent de correction. None pour les buts / 1N2
+    (aucun chiffre réglé) ou sans chiffre."""
+    if market not in fair.STAT_SPECS and market not in (prematch.CORNERS, prematch.CARDS):
+        return None
+    s = (pred.get("stats") or {}).get(_stat_of(market))
+    if not s:
+        return None
+    whole = market in (prematch.CORNERS, prematch.CARDS) or market.endswith("_total")
+    return round(s["h"] + s["a"] if whole else s["h"] if market.endswith("_home") else s["a"], 3)
 
 
 def attach_sharp(pronos, picks, history=None):
