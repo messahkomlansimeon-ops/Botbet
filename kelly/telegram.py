@@ -478,6 +478,20 @@ def bot_name():
     return _bot["name"]
 
 
+# Commande écrite dans le fil GÉNÉRAL : sa réponse part dans le fil de son thème (premier motif qui colle ; autre texte : elle reste dans le fil général)
+ROUTES = [("live", r"live|🔴"), ("report", r"bilan|résultats?|resultats?|📊|capital|saison|tendances?|march[ée]s?|courbes?|graphiques?|🌱|📉"),
+          ("tech", r"status|état|etat|aide|help|🩺|start"), ("combos", r"combi|🎯|top|du jour|🔝|joue|mes paris|🧾|pronos?")]
+
+
+def route_kind(text):
+    """Fil du thème d'une commande (« /bilan », « 🔝 Du jour », « courbes »…) ; None si le texte n'est pas une commande reconnue (une cote, une mise, une équipe…)."""
+    t = str(text).strip().lower().lstrip("/")
+    for kind, pat in ROUTES:
+        if re.match(rf"(?:{pat})(?:\b|$|\s)", t) or (kind == "live" and t.startswith("🔴")):
+            return kind
+    return None
+
+
 _MENTION = re.compile(r"^(/\w+)@(\w+)")
 
 
@@ -810,12 +824,19 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
             if text is None:
                 continue
         th = _thread_in(msg)
+        general = None
+        if C.TOPICS and th is None:                 # écrit dans le fil général : la réponse va dans le fil de son thème, avec un mot ici pour le dire
+            kind = route_kind(text)
+            general = topic_ids().get(kind) if kind else None
+            th = general or th
         fast = None
         if quick:
             try:
                 fast = quick(text)
             except Exception as e:                  # noqa: BLE001 - traitement normal à la place
                 print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
+        if general:
+            send(f"↪️ Réponse dans le fil « {TOPIC_NAMES[kind]} ».", silent=True)
         with in_thread(th):
             if fast:
                 send(fast, silent=True)

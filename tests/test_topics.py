@@ -175,8 +175,9 @@ def test_poll_security_and_threads():
     telegram.poll(handler, on_callback=cb)
     assert seen == ["salut", "cb:y|2", "/top", "/top"], seen
     out = [(k["text"], k.get("message_thread_id")) for k in sent()]
-    assert out == [("re: salut", 5), ("bouton", 6), ("re: /top", None), ("re: /top", None)], out
-    print("ok  groupe : seul le créateur obéit (messages et boutons), réponse dans le fil de la demande, /top@NomDuBot compris, autre bot ignoré, fil général sans fil")
+    note = ("↪️ Réponse dans le fil « 🎯 Combinés ».", None)
+    assert out == [("re: salut", 5), ("bouton", 6), note, ("re: /top", 11), note, ("re: /top", 11)], out
+    print("ok  groupe : seul le créateur obéit (messages et boutons), réponse dans le fil de la demande, /top@NomDuBot compris, autre bot ignoré, commande du fil général : réponse dans le fil de son thème")
     setup()
     STATE["creator"] = None
     UPDATES.append(upd(1, "salut", user=1, thread=5))
@@ -189,6 +190,17 @@ def test_poll_security_and_threads():
     assert seen == ["privé"] and "message_thread_id" not in sent()[0]
     assert not [m for m, _ in CALLS if m in ("getChatAdministrators", "getMe")], "chat privé : aucun appel de plus"
     print("ok  créateur introuvable : personne ne passe ; chat privé : aucun appel de plus")
+
+
+def test_general_routes_to_theme():
+    setup()
+    assert [telegram.route_kind(t) for t in ("/bilan", "🔝 Du jour", "courbes", "/status@KellyBot", "🔴 Live", "5,40 1000", "Lens", "🎯 Combiné", "/combi 5")] == \
+        ["report", "combos", "report", "tech", "live", None, None, "combos", "combos"]
+    UPDATES.extend([upd(1, "/bilan", user=1), upd(2, "Lens", user=1)])
+    telegram.poll(lambda t: f"re: {t}")
+    out = [(k["text"], k.get("message_thread_id")) for k in sent()]
+    assert out == [("↪️ Réponse dans le fil « 📊 Bilan ».", None), ("re: /bilan", 14), ("re: Lens", None)], out
+    print("ok  commande écrite dans le fil général : réponse dans le fil de son thème (avec un mot dans le général), autre texte : reste dans le général")
 
 
 def test_defer_keeps_thread():
@@ -242,6 +254,7 @@ def main():
         test_file_fallback()
         test_quiet_keeps_topic()
         test_poll_security_and_threads()
+        test_general_routes_to_theme()
         test_defer_keeps_thread()
         test_setup_topics()
     finally:
