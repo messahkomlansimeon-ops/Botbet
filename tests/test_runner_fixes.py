@@ -467,8 +467,8 @@ def test_watch_thread_runs_during_long_task():
     t = threading.Thread(target=r.loop)
     t.start()
     try:
-        end = time.time() + 5
-        while time.time() < end and not any(a == "--watch" for a, _ in ran):
+        end = time.time() + 20                      # CI chargée : on attend que le --track ET le --watch aient tous deux tourné
+        while time.time() < end and not ({"--track", "--watch"} <= {a for a, _ in ran}):
             time.sleep(0.05)
         R.STOP.set()
         t.join(5)

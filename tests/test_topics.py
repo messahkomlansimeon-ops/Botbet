@@ -4,6 +4,7 @@ import os
 import tempfile
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-topics-")
+os.environ["XDG_RUNTIME_DIR"] = tempfile.mkdtemp(prefix="kelly-topics-run-")        # le verrou des données est propre à ce test (sur la CI, le dossier d'exécution est partagé entre les processus parallèles)
 os.environ["SOURCES_CACHE_DIR"] = tempfile.mkdtemp(prefix="kelly-topics-cache-")
 for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
     os.environ.pop(k, None)
