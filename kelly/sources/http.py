@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import json
 import os
+import random
 import re
 import socket
 import threading
@@ -22,6 +23,7 @@ UA = os.environ.get("KELLY_UA") or BROWSER_UA     # identité de TOUTES les lect
 UA_BY_DOMAIN = {}         # domaine -> User-Agent à la place de UA (inutilisé par défaut)
 ROBOTS_TOKEN = "KellyBot"
 DEFAULT_DELAY = 3.0
+JITTER = float(os.environ.get("READ_JITTER") or 0.25)     # écart aléatoire ajouté entre deux requêtes d'un même site (0 : régulier comme avant)
 MIN_DELAY = {"fbref.com": 6.0, "fotmob.com": 6.0, "betexplorer.com": 5.0}     # sites les plus sollicités : plus lents
 FLOOR = {"fbref.com": 6.0}
 TIMEOUT = (10, 30)
@@ -430,6 +432,8 @@ def _wait(domain):
         gap = min(delay, delay - (state.clock() - t))      # horloge reculée (changement d'heure, NTP) : jamais plus d'attente que l'écart normal
         if gap > 0:
             _sleep(gap)
+        if JITTER > 0 and not C.SANDBOX:                  # rythme moins mécanique (15/10) : de 0 à JITTER de l'écart en PLUS, jamais en moins (le délai de robots.txt reste respecté)
+            _sleep(delay * random.uniform(0, JITTER))
 
 
 def _request(url, headers=None):

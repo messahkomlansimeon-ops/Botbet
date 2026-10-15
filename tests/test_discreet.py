@@ -44,10 +44,32 @@ def test_user_agent():
     print("ok  toutes les sources (1xBet, 365scores, FotMob, football-data…) : User-Agent de navigateur de téléphone")
 
 
+def test_jitter():
+    sleeps = []
+    real = (http._sleep, http.delay_for, C.SANDBOX, http._last.copy())
+    http._sleep = sleeps.append
+    http.delay_for = lambda d: 3.0
+    http._last["x.test"] = http.state.clock()
+    try:
+        C.SANDBOX = False
+        http._wait("x.test")
+        assert len(sleeps) == 2 and 2.5 <= sleeps[0] <= 3.0 and 0 <= sleeps[1] <= 0.75 + 1e-9, sleeps
+        sleeps.clear()
+        C.SANDBOX = True
+        http._wait("x.test")
+        assert len(sleeps) == 1, "tests : pas d'écart aléatoire"
+    finally:
+        http._sleep, http.delay_for, C.SANDBOX = real[:3]
+        http._last.clear()
+        http._last.update(real[3])
+    print("ok  rythme : 0 à 25 % d'attente en plus entre deux requêtes, jamais moins ; aucun écart dans les tests")
+
+
 def main():
     test_round_stakes()
     test_ticket_cap()
     test_user_agent()
+    test_jitter()
     print("tests discrétion : OK")
 
 
