@@ -74,6 +74,14 @@ def test_bias_found():
     print(f"ok  biais retrouvé (rapport {res[1]:.2f}) ; marché et modèle juste : pas de biais ; moins de 30 matchs : indication")
 
 
+def test_stored_mu_used():
+    rows = [dict(r, mu=8.0) for r in fake_rows(1.0, n=40)]
+    us = A.units(A.prepare(rows, A.UEFA), "p", 0.15)
+    assert us and all(abs(u["mu"] - 8.0) < 1e-9 and u["spread"] is None for u in us), "mu enregistré : utilisé tel quel, sans reconstruction"
+    assert any(abs(u["mu"] - 10.0) < 1.0 for u in A.units(A.prepare(fake_rows(1.0, n=40), A.UEFA), "p", 0.15)), "sans mu enregistré : reconstruction"
+    print("ok  moyenne enregistrée utilisée quand elle existe")
+
+
 def test_selection_and_report():
     rows = fake_rows(0.8)
     shown = [dict(r, src="fair.json") for r in rows if r["name"] == "Under" and r["point"] == 8.5][:20]
@@ -105,5 +113,6 @@ def test_selection_and_report():
 if __name__ == "__main__":
     test_inversion_and_actual()
     test_bias_found()
+    test_stored_mu_used()
     test_selection_and_report()
     print("tests audit des coupes : OK")

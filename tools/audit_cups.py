@@ -7,7 +7,7 @@ Aucun réseau, aucune écriture dans data/, ni dans .env, ni dans le cache des s
 
 Ce que les lignes stockées permettent, et ne permettent pas :
   - le nombre RÉEL se lit dans `final` (« 9 corners », « 2 tirs », « 2-0 ») des lignes de fair.json et des journaux, pas des lignes d'archive (sans `final`) ;
-  - la moyenne PRÉVUE (`mu`) n'est PAS stockée pour les coupes (cupstats.make : mu = None, donc jamais de `val`) : elle est RECONSTRUITE en inversant la proba brute du modèle
+  - la moyenne PRÉVUE (`mu`) n'est stockée pour les coupes que depuis la collecte du 15/10 (avant, cupstats.make posait mu = None, donc jamais de `val`) ; l'outil la RECONSTRUIT toujours, faute de mu sur les lignes plus anciennes en inversant la proba brute du modèle
     (p0 : brute, avant la correction de calib ; rapprochée de 50 %, donc le biais est plutôt sous-estimé) d'une ligne dans une binomiale négative (strength.nb_pmf), pour deux dispersions (0 et 0,15) ; colonne « moyenne reconstruite ». Une ligne de
     CONTRÔLE : plusieurs lignes d'un même match et d'un même marché doivent donner presque la même moyenne ; sinon l'inversion n'est pas valable et le rapport ne conclut pas ;
   - le même calcul avec la proba du marché (px : 1xBet sans marge) dit ce que le MARCHÉ attendait : si lui est juste et pas le modèle, le biais est celui du modèle ;
@@ -139,7 +139,7 @@ def over_prob(p, name):
     return p if name == "Over" else (1.0 - p if name == "Under" else None)
 
 
-MERGE = ("p0", "pm", "prob", "px", "final", "result", "point", "name", "market", "id", "sport_key")
+MERGE = ("p0", "pm", "prob", "px", "final", "result", "point", "name", "market", "id", "sport_key", "mu", "val")
 
 
 def prepare(rows, sports):
@@ -166,7 +166,7 @@ def prepare(rows, sports):
         p, field = model_prob(r)
         out.append({"key": k, "id": r["id"], "market": r["market"], "fam": family_of(r["market"]), "name": r["name"], "point": float(r["point"]), "sport": r["sport_key"],
                     "side": "moins" if r["name"] == "Under" else "plus", "lot": "journal de coupe" if (r["id"], r["market"]) in cup_units else "autres lignes",
-                    "p": p, "pfield": field, "raw": field == "p0", "px": r.get("px"), "val": actual_value(r), "result": r.get("result"), "shown": k in shown,
+                    "p": p, "pfield": field, "raw": field == "p0", "px": r.get("px"), "mu": r.get("mu"), "val": actual_value(r) if actual_value(r) is not None else r.get("val"), "result": r.get("result"), "shown": k in shown,
                     "src": ",".join(sorted(x for x in r["srcs"] if x))})
     return out
 
@@ -179,7 +179,14 @@ def units(lines, p_key, alpha):
     out = []
     for (mid, mk), ls in by.items():
         mus, val = [], None
+        stored = next((l["mu"] for l in ls if l.get("mu") is not None), None) if p_key == "p" else None
+        if stored is not None:                           # moyenne ENREGISTRÉE par Kelly (collecte du 15/10) : plus de reconstruction, ni du biais de p0
+            mus = [float(stored)]
         for l in ls:
+            if stored is not None:
+                if l["val"] is not None:
+                    val = l["val"]
+                continue
             if p_key == "p" and not l["raw"]:
                 continue                                  # proba déjà corrigée par calib : pas une mesure du modèle brut
             p = l["p"] if p_key == "p" else (float(l["px"]) if l.get("px") is not None else None)
@@ -194,7 +201,7 @@ def units(lines, p_key, alpha):
         mus.sort()
         med = mus[len(mus) // 2] if len(mus) % 2 else 0.5 * (mus[len(mus) // 2 - 1] + mus[len(mus) // 2])
         spread = (mus[-1] - mus[0]) / med if len(mus) > 1 and med else None
-        out.append({"id": mid, "market": mk, "fam": ls[0]["fam"], "lot": ls[0]["lot"], "mu": med, "val": val, "n_lines": len(mus), "spread": spread})
+        out.append({"id": mid, "market": mk, "fam": ls[0]["fam"], "lot": ls[0]["lot"], "mu": med, "val": val, "n_lines": len(mus), "spread": spread, "stored": stored is not None})
     return out
 
 
@@ -222,6 +229,8 @@ def ratio_ci(us, seed=1, boot=1000):
 
 def valid(us):
     """Contrôle de l'inversion : part des points à plusieurs lignes dont l'écart relatif des moyennes reconstruites est sous TOL. -> (points testés, part valable)."""
+    if us and all(u.get("stored") for u in us):          # moyenne enregistrée : rien à contrôler
+        return len(us), 1.0
     t = [u for u in us if u["spread"] is not None]
     return len(t), (sum(1 for u in t if u["spread"] <= TOL) / len(t) if t else None)
 
