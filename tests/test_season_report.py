@@ -40,7 +40,7 @@ def test_lines():
     lines = L.lane_lines([], None, plain=False)
     sl = next(x for x in lines if x.startswith("saison"))
     assert "valeur : 1/2 (réalisé 50 % pour 60 % annoncé" in sl and "remplissage : 1/2 (réalisé 50 % pour 70 % annoncé" in sl, sl
-    assert "CLV 1xBet" in sl and "cote 3 : +1 000 FCFA sur 1" in sl and "cote 10 : −200 FCFA sur 1" in sl, sl
+    assert "CLV 1xBet" in sl and "cote < 5 : +1 000 FCFA sur 1" in sl and "cote 5-15 : −200 FCFA sur 1" in sl, sl      # tranches de cote réelle (anciens paliers ss3 / ss10 compris)
     assert sl.startswith("saison : 0 gagnée") or "gagnée" in sl.split(" · ")[0] or sl.startswith("saison : aucune jambe réglée dans un combiné"), sl
     assert "valeur : 1/2" in sl and "remplissage : 1/2" in sl, "la référence sans sval (5e ligne) n'est pas une jambe"
     # une jambe de remplissage de la voie (strategy « fill », lane « saison ») reste dans la ligne « saison », jamais dans « fill »
@@ -90,7 +90,7 @@ def test_isolation():
 def test_status_line():
     out = lanes.lines()
     sl = next(x for x in out if x.startswith("saison :"))
-    assert f"saison : {C.STRATEGY_SEASON}" in sl and f"poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %" in sl and "paliers 3, 10, 30, 100" in sl and "part de mise 0.15" in sl, sl
+    assert f"saison : {C.STRATEGY_SEASON}" in sl and f"poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %" in sl and "paliers adaptatifs" in sl and "part de mise 0.15" in sl, sl
     assert "a priori de marché, ajustement à l'adversaire (football-data seulement)" in sl, sl
     C.SEASON_PRIOR, C.SEASON_FIT = "flat", "moments"
     try:

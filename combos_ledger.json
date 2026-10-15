@@ -20,5 +20,8 @@
   "power": "n petit au début : le bloc dit « trop peu pour conclure » sous 30 jambes mesurées par variante.",
   "defaults_now": {"COMBO_OBJECTIVE": "prob", "COMBO_MAX_FILL_SHARE": 1.0}
  },
- "result": null
+ "result": null,
+ "clarifications": [
+  {"date": "2026-10-15", "text": "Hors pré-déclaration (aucun résultat lu). La voie `saison` de production passe en paliers adaptatifs (SEASON_TIERS=auto) ; le bloc « saison » des variantes reste construit sur les cotes visées fixes (ss3, ss10, ss30, ss100), pour que la mesure ne change pas en cours de route. Le bilan l'affiche par tranche de cote réelle (< 5, 5-15, 15-50, > 50)."}
+ ]
 }

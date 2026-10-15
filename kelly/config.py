@@ -606,6 +606,12 @@ def _floats(name, default):
 CHART_MIN_CLV = max(2, _int("CHART_MIN_CLV", 20))                   # courbe du CLV (kelly/charts.py) : au moins N lignes de valeur réglées avec un prix de clôture
 QUICK_STAKES = _floats("QUICK_STAKES", (500, 1000, 2000, 5000))       # boutons de mise rapide sous la question « quelle mise ? » (FCFA) ; un appui = la mise écrite
 SEASON_TIERS = _floats("SEASON_TIERS", (3, 10, 30, 100))                     # cotes visées des combinés de la voie `saison` (une fourchette de +-SEASON_SPREAD autour de chacune)
+SEASON_AUTO = (os.environ.get("SEASON_TIERS") or "auto").strip().lower() == "auto"       # paliers ADAPTATIFS (15/10, demande de l'utilisateur, défaut) : la cote est le résultat, pas l'objectif ; SEASON_TIERS=3,10,30,100 rétablit les cotes visées fixes
+SEASON_AUTO_MIN_EV = _float("SEASON_AUTO_MIN_EV", -0.15)       # mode auto : espérance minimale d'un combiné (produit des p x cote - 1) ; on ajoute des jambes tant qu'elle reste au-dessus
+SEASON_AUTO_MAX_ODDS = _float("SEASON_AUTO_MAX_ODDS", 150)     # ... et que la cote totale ne dépasse pas ce plafond
+SEASON_AUTO_MAX_COMBOS = max(1, _int("SEASON_AUTO_MAX_COMBOS", 4))     # nombre de combinés construits au plus par jour
+SEASON_AUTO_MIN_P = max(0.0, _float("SEASON_AUTO_MIN_P", 0))   # mode auto, FACULTATIF (0 = éteint, comme la spécification) : probabilité minimale d'un combiné (produit des p) ; sans elle le premier combiné absorbe toutes les jambes à valeur jusqu'au plafond de cote
+SEASON_AUTO_LOTTERY_ODDS = _float("SEASON_AUTO_LOTTERY_ODDS", 25)      # mode auto : dès cette cote, mise plafonnée comme un ticket loterie (money.LOTTERY_STAKE)
 SEASON_SPREAD = min(0.9, max(0.0, _float("SEASON_SPREAD", 0.20)))
 SEASON_TIER_PREFIX = "ss"                                                    # palier d'un combiné de la voie : « ss3 », « ss10 », « ss30 », « ss100 »
 SEASON_TITLE = "🧮 SAISON EN COURS"

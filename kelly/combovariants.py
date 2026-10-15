@@ -109,7 +109,7 @@ def build(day, by_voie, deadline=None):
         with variant_config(objective, share):
             plans = (("reels", lambda: CB.plan(by_voie.get("reels") or [], usage=usage) if by_voie.get("reels") else []),
                      ("fair", lambda: (CB.fair_plan(by_voie["fair"], usage=usage) + CB.fair_shots_plan(by_voie["fair"], usage=usage)) if by_voie.get("fair") else []),
-                     ("saison", lambda: CB.season_plan(by_voie["saison"], usage=usage) if by_voie.get("saison") else []))
+                     ("saison", lambda: CB.season_plan(by_voie["saison"], C.SEASON_TIERS, usage=usage) if by_voie.get("saison") else []))
             for voie, fn in plans:
                 if deadline and time.monotonic() > deadline:
                     return rows
@@ -238,9 +238,10 @@ def lines(days=None, today=None):
         sub = [r for r in rows if r.get("voie") == voie]
         if sub:
             block(f"voie {voie} :", sub)
-            for tier in sorted({r["tier"] for r in sub}):
-                t = summarize([r for r in sub if r["tier"] == tier], by_key)
-                out.append(f"    palier {tier} : " + " · ".join(f"{name} {t[name]['built']}/{t[name]['tried']}" + (f" ({t[name]['wins']}/{t[name]['settled']} gagnés)" if t[name]["settled"] else "")
+            lab = (lambda r: CB.odds_bucket(r.get("odds") or CB.season_no(r["tier"])) or CB.odds_bucket(CB.season_no(r["tier"])) or "?") if voie == "saison" else (lambda r: r["tier"])      # voie saison : par tranche de cote réelle
+            for tier in sorted({lab(r) for r in sub}, key=lambda x: ([l for _, l in CB.ODDS_BUCKETS].index(x) if voie == "saison" and x != "?" else 9, str(x))):
+                t = summarize([r for r in sub if lab(r) == tier], by_key)
+                out.append(f"    {'tranche de cote' if voie == 'saison' else 'palier'} {tier} : " + " · ".join(f"{name} {t[name]['built']}/{t[name]['tried']}" + (f" ({t[name]['wins']}/{t[name]['settled']} gagnés)" if t[name]["settled"] else "")
                                                                for name, _, _ in VARIANTS))
     for name, text in verdict(total, rows).items():
         out.append(f"règle pré-déclarée — {name} : {text}")

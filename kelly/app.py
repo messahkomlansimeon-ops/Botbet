@@ -58,6 +58,8 @@ def day_stakes(top, built, built_fair, gaps=()):
     for target, (legs, min_total, prob) in built_fair:
         item = {"kind": "fair", "tier": min_total, "prob": CB.stake_prob(legs, prob), "odds": min_total,           # jambe « probable » (sans avis sharp) :
                 "p_mkt": CB.market_prob(legs)} | lanes.item_fields(legs)                                          # proba 1xBet sans marge
+        if C.SEASON_AUTO and CB.season_auto(target) and min_total >= C.SEASON_AUTO_LOTTERY_ODDS:
+            item["lottery"] = True                       # voie `saison` auto : dès la cote 25, mise plafonnée comme un ticket loterie
         (s_keys if CB.season_no(target) is not None else keys).append(("fair", target))
         (s_items if CB.season_no(target) is not None else items).append(item)
     stakes, spent, kept, poor = money.allocate(items, detail=True)
@@ -155,7 +157,10 @@ def season_plan_all(season_legs, day, usage):
     if lanes.season_mode() != "on":
         return []
     legs = [c for c in season_legs if lanes.usable(c)]
-    return _resend_fair(season_legs, _recorded_season(day), CB.season_plan(legs, usage=usage))
+    again = _recorded_season(day)
+    if C.SEASON_AUTO and again:                      # relance du matin en mode auto : les combinés du jour sont renvoyés tels quels, jamais reconstruits (leurs paliers portent leur cote réelle)
+        return _resend_fair(season_legs, again, [(t, None) for t in again])
+    return _resend_fair(season_legs, again, CB.season_plan(legs, usage=usage))
 
 
 RETRY_BUTTON = "touche « 🎟️ Vérifier ce combiné »"        # sous un combiné qui devait avoir son code coupon et ne l'a pas eu (fmt.coupon_block)
@@ -288,6 +293,12 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
                            | ({"xlegs": [{"key": c["key"], "xodds": c["xodds"], "xref": c.get("xref")} for c in picks_],
                                "coupon": coupon, "at": when} if all(c.get("xodds") for c in picks_) else {}))      # de quoi refaire le coupon plus tard
     for target, (legs, min_total, prob) in built_fair + built_season:
+        auto = CB.season_auto(target)
+        if auto:                                                         # « 🧮 Saison · combiné 1 » : la cote est le résultat, avec son nombre de jambes, son espérance et sa part de remplissage
+            k = [t for t, _ in built_season].index(target) + 1
+            ev = math.prod(c["prob"] * (c.get("xodds") or c.get("odds") or 1.0) for c in legs) - 1
+            fill = sum(1 for c in legs if not c.get("sval"))
+            auto_note = fmt.i(fmt.esc(f"{len(legs)} jambes · espérance {ev * 100:+.0f} % · remplissage {fill}/{len(legs)}"))
         xfair = all(c.get("xref") and c.get("xodds") for c in legs)
         old = again_fair.get(str(target)) or {}
         old = old if set(old.get("keys") or []) == {c["key"] for c in legs} else {}      # relance : mêmes paris = même code coupon et même heure de cotes que l'envoi d'origine
@@ -299,8 +310,8 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         nov = bool(C.ENSEMBLE_ENABLED and ensemble.has_value(legs) is False) and not flat       # sans valeur et envoyé (NOVALUE_SEND) : toujours dit, jamais de mise conseillée
         messages.append(chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
                                                                stake_txt=mise(stakes.get(("fair", target)), CB.stake_prob(legs, prob), min_total, nov, flat),
-                                                               title=CB.shots_title(target), coupon=coupon, when=when,
-                                                               retry=RETRY_BUTTON if xfair and not coupon else None),
+                                                               title=(f"{C.SEASON_TITLE.split(' ', 1)[0]} SAISON · COMBINÉ {k}" if auto else CB.shots_title(target)), coupon=coupon, when=when,
+                                                               retry=RETRY_BUTTON if xfair and not coupon else None, **({"note": auto_note} if auto else {})),
                                                 f"v{target}", day, stake=stakes.get(("fair", target)),
                                                 refresh=target if all(c.get("xodds") for c in legs) else None, code=coupon))
     if pronos:
@@ -2323,7 +2334,7 @@ def season_command(args, today, now=None, fetch=None):
         rows = [r for r in fair.load_combos() if str(r.get("date")) == day and CB.season_no(r["tier"]) is not None]
         ghost = [r for r in fair.load_ghost() if r.get("date") == day and r.get("kind") == "saison"]
         value = sum(1 for c in morning if c.get("sval"))
-        out = [f"🧮 Saison en cours — voie : {mode} · cotes visées {', '.join(fmt.trim(t, 1) for t in C.SEASON_TIERS)} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %",
+        out = [f"🧮 Saison en cours — voie : {mode} · cotes visées {'adaptatives (la cote est le résultat)' if C.SEASON_AUTO else ', '.join(fmt.trim(t, 1) for t in C.SEASON_TIERS)} · poids du modèle {C.SEASON_MODEL_WEIGHT * 100:.0f} %",
                f"Jambes du matin encore jouables : {len(morning)} ({value} à valeur, {len(morning) - value} de remplissage)" if morning else "Aucune jambe « saison » jouable aujourd'hui."]
         for r in sorted(rows, key=lambda r: CB.season_no(r["tier"])):
             out.append(f"• cote {fmt.trim(r['min_odds'], 1)} ({len(r.get('legs') or [])} paris) — "

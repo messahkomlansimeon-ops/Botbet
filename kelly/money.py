@@ -265,7 +265,7 @@ def is_lottery(prob=None, odds=None, p_mkt=None):
 
 
 def _lottery(it):
-    return isinstance(it, dict) and is_lottery(it.get("prob"), it.get("odds"), it.get("p_mkt"))
+    return isinstance(it, dict) and (bool(it.get("lottery")) or is_lottery(it.get("prob"), it.get("odds"), it.get("p_mkt")))      # "lottery" : voie `saison` auto, cote de SEASON_AUTO_LOTTERY_ODDS et plus
 
 
 def ticket_cap():
@@ -284,7 +284,10 @@ def row_item(x):
     try:
         if "legs" in x:
             from . import combos, lanes
-            return {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"]), "p_mkt": combos.market_prob(x["legs"])} | lanes.item_fields(x["legs"])
+            item = {"kind": "fair", "tier": x["min_odds"], "prob": float(x["prob"]), "odds": float(x["min_odds"]), "p_mkt": combos.market_prob(x["legs"])} | lanes.item_fields(x["legs"])
+            if C.SEASON_AUTO and combos.season_auto(x.get("tier")) and item["odds"] >= C.SEASON_AUTO_LOTTERY_ODDS:
+                item["lottery"] = True                   # même plafond « loterie » que le matin (voie `saison` auto, cote 25 et plus)
+            return item
         if "keys" in x:
             return ({"kind": "combo", "tier": x["tier"], "prob": float(x["prob"]), "odds": float(x["odds"])}
                     | ({"novalue": True} if x.get("has_value") is False and C.ENSEMBLE_ENABLED else {}) | ({"frac": float(x["frac"])} if x.get("frac") is not None else {}))

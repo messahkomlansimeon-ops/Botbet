@@ -23,6 +23,7 @@ def setup():
     N.reset()
     C.NOVALUE_SEND = False
     C.SEASON_SEND_FILL = True
+    C.SEASON_AUTO = False                           # ce fichier teste les cotes visées fixes (ss3 ... ss100) ; les paliers adaptatifs sont dans test_season_auto
     C.STRATEGY_SEASON = "on"
     store.save(fair.GHOST_COMBOS_FILE, [])
     store.save("fair_combos.json", [])
@@ -109,6 +110,23 @@ def test_item_fields_and_cap():
     season_st = money.allocate([{"kind": "fair", "tier": 10.0, "prob": 0.2, "odds": 10.0, "p_mkt": 0.2} | lanes.item_fields([v, f])], budget=5000)[0][0]
     assert 0 < season_st < base and abs(season_st / base - C.KELLY_FRACTION_SEASON / C.KELLY_FRACTION_REF) < 0.15, (season_st, base)
     print("ok  mise : fraction propre à la voie (0,15 / 0,25 de la part), plafond SEASON_TICKET_MAX, remplissage seul = sans valeur")
+
+
+def test_auto_morning_message():
+    """Mode auto de bout en bout : jambes fictives du pipeline saison -> plan -> messages du matin (titre « combiné N », jambes, espérance, remplissage) -> enregistrement avec paliers « ssa… »."""
+    legs = setup()
+    C.SEASON_AUTO = True
+    try:
+        plan = CB.season_plan([c for c in legs if lanes.usable(c)], usage=CB.Usage())
+        assert plan and all(CB.season_auto(t) for t, _ in plan), plan
+        stakes, fc = {}, {}
+        msgs, _, sent = app.build_day([], DAY, pronos=[], fair_combos=plan, fair_stakes=stakes, fair_coupons=fc, odds_time="09:30")
+        txt = "\n".join(str(m) for m in msgs)
+        assert "SAISON · COMBINÉ 1" in txt and "jambes · espérance" in txt and "remplissage" in txt, txt[:600]
+        assert all(CB.season_no(t) is not None for t, _ in plan)
+    finally:
+        C.SEASON_AUTO = False
+    print("ok  mode auto : messages « SAISON · COMBINÉ N » avec jambes, espérance et remplissage")
 
 
 def test_morning_section_and_record():

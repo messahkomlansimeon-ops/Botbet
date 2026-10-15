@@ -717,10 +717,10 @@ def shots_title(target):
             or (f"{C.SEASON_TITLE} · cote {season_no(target):g}" if season_no(target) is not None else None))
 
 
-def season_tier(target):
-    """Palier d'un combiné de la voie `saison` pour la cote visée `target` : « ss3 », « ss10 », « ss2,5 » -> « ss2.5 »."""
+def season_tier(target, auto=False):
+    """Palier d'un combiné de la voie `saison` pour la cote visée `target` : « ss3 », « ss10 », « ss2,5 » -> « ss2.5 » ; `auto` : palier du mode auto (cote réelle) « ssa4.2 »."""
     t = float(target)
-    return f"{C.SEASON_TIER_PREFIX}{int(t) if t.is_integer() else t:g}"
+    return f"{C.SEASON_TIER_PREFIX}{'a' if auto else ''}{int(t) if t.is_integer() else t:g}"
 
 
 def season_no(tier):
@@ -729,10 +729,28 @@ def season_no(tier):
     if not t.startswith(C.SEASON_TIER_PREFIX):
         return None
     try:
-        v = float(t[len(C.SEASON_TIER_PREFIX):])
+        v = float(t[len(C.SEASON_TIER_PREFIX):].removeprefix("a"))        # « ss10 » (cote visée) ou « ssa4.2 » (mode auto : la cote réelle du combiné)
     except ValueError:
         return None
     return v if v > 1.0 else None
+
+
+def season_auto(tier):
+    """Vrai pour un palier du mode auto (« ssa4.2 »), faux pour les cotes visées fixes (« ss10 ») et tout autre palier."""
+    t = str(tier)
+    return t.startswith(C.SEASON_TIER_PREFIX + "a") and season_no(t) is not None
+
+
+ODDS_BUCKETS = ((5, "< 5"), (15, "5-15"), (50, "15-50"), (float("inf"), "> 50"))       # tranches de cote réelle du bilan de la voie `saison`
+
+
+def odds_bucket(odds):
+    """Tranche de cote réelle (« < 5 », « 5-15 », « 15-50 », « > 50 ») ; None si la cote est illisible."""
+    try:
+        o = float(odds)
+    except (TypeError, ValueError):
+        return None
+    return next((label for top, label in ODDS_BUCKETS if o < top), None)      # cote illisible (NaN) : None
 
 
 def season_plan(legs, tiers=None, usage=None):
@@ -741,6 +759,8 @@ def season_plan(legs, tiers=None, usage=None):
     combiné maximale (_best_combo : l'essai des tirs de best_combo ne concerne pas cette voie). `usage` : celui de toute la journée (mêmes règles de réutilisation que les autres tickets) ;
     un combiné de REMPLISSAGE est envoyé (C.SEASON_SEND_FILL, « sans valeur ») et consomme comme les autres ; avec l'interrupteur éteint il reste en fantôme et ne consomme rien (ensemble.unsent)."""
     usage = usage if usage is not None else Usage()
+    if tiers is None and C.SEASON_AUTO:              # paliers adaptatifs : la cote est le résultat (« saison N » passe `tiers` et reste en cote visée)
+        return season_auto_plan(legs, usage)
     pool = sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"), key=lambda c: -c["prob"])      # par proba retenue (p_ens) décroissante : jamais par écart au marché
     out = []
     for target in (tiers if tiers is not None else C.SEASON_TIERS):
@@ -752,6 +772,53 @@ def season_plan(legs, tiers=None, usage=None):
         if combo and not ensemble.unsent(combo[0]):
             usage.add(combo[0])
         out.append((season_tier(target), combo))
+    return out
+
+
+def _auto_ok(ev_prod, odds, p=1.0):
+    """Règle d'arrêt du mode auto : l'espérance du combiné (produit des p x cote - 1) reste >= C.SEASON_AUTO_MIN_EV et sa cote <= C.SEASON_AUTO_MAX_ODDS (et, si réglé, sa probabilité >= C.SEASON_AUTO_MIN_P)."""
+    return ev_prod - 1 >= C.SEASON_AUTO_MIN_EV and odds <= C.SEASON_AUTO_MAX_ODDS and p >= C.SEASON_AUTO_MIN_P
+
+
+def season_auto_plan(legs, usage=None):
+    """Combinés `saison` à paliers ADAPTATIFS : [(palier « ssa4.2 », (jambes, cote, proba))]. Les jambes (une par match : la meilleure) sont classées valeur d'abord (sval) puis par p x cote
+    décroissant ; le combiné k prend les meilleures jambes encore libres, tant que l'espérance du combiné reste >= C.SEASON_AUTO_MIN_EV et la cote <= C.SEASON_AUTO_MAX_ODDS (arrêt à la
+    première jambe qui ne passe pas : elle ouvre le combiné suivant). Arrêt : moins de 2 jambes utilisables, C.SEASON_AUTO_MAX_COMBOS combinés ou C.MAX_LEGS jambes. Aucune jambe n'est partagée
+    entre deux combinés, envoyés ou en fantôme. Le palier porte la cote réelle (« ssa4.2 ») : jamais deux fois le même dans la journée. Un combiné envoyé consomme `usage` comme les autres."""
+    usage = usage if usage is not None else Usage()
+    best = {}
+    key = lambda c: (1 if c.get("sval") else 0, c["prob"] * c["odds"])      # noqa: E731 - valeur d'abord, remplissage ensuite
+    for c in usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"]):
+        if c["id"] not in best or key(c) > key(best[c["id"]]):
+            best[c["id"]] = c
+    ranked = sorted((c for c in best.values() if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # FILL_LEGS éteint : jamais de remplissage
+    out, used = [], set()
+    while len(out) < C.SEASON_AUTO_MAX_COMBOS:
+        free = [c for c in ranked if c["id"] not in used]
+        taken, ev_prod, odds, p_all = [], 1.0, 1.0, 1.0
+        for c in free:
+            if len(taken) >= C.MAX_LEGS or not _auto_ok(ev_prod * c["prob"] * c["odds"], odds * c["odds"], p_all * c["prob"]):
+                break
+            taken.append(c)
+            ev_prod *= c["prob"] * c["odds"]
+            odds *= c["odds"]
+            p_all *= c["prob"]
+        if len(taken) < 2:
+            break
+        used |= {c["id"] for c in taken}
+        legs_ = sorted(taken, key=lambda c: (c.get("commence", ""), str(c["id"])))
+        tier, step = None, 1
+        for nd in (1, 2):
+            tier = season_tier(round(odds, nd), auto=True)
+            if tier not in {t for t, _ in out}:
+                break
+        while tier in {t for t, _ in out}:           # même cote à 0,01 près : le palier est décalé d'un centième (jamais deux paliers identiques)
+            tier = season_tier(round(odds + 0.01 * step, 2), auto=True)
+            step += 1
+        combo = (legs_, odds, combo_prob(legs_))
+        if not ensemble.unsent(legs_):
+            usage.add(legs_)
+        out.append((tier, combo))
     return out
 
 

@@ -242,12 +242,14 @@ def season_detail(days=None, today=None, plain=False, cup=False):
             if x.get("legs") is None:
                 continue
             sn = CB.season_no(x.get("tier"))
-            if sn is not None:
-                a = tiers.get(sn, (0.0, 0))
-                tiers[sn] = (a[0] + g, a[1] + 1)
+            if sn is not None:                  # par tranche de cote RÉELLE du combiné (< 5, 5-15, 15-50, > 50), anciens paliers « ss10 » compris (cote visée si la cote réelle manque)
+                bucket = CB.odds_bucket(x.get("min_odds") or x.get("odds") or sn) or CB.odds_bucket(sn)
+                a = tiers.get(bucket, (0.0, 0))
+                tiers[bucket] = (a[0] + g, a[1] + 1)
             elif x["legs"] and all(l.get("lane") == "saison" or l.get("strategy") == "saison" for l in x["legs"]):       # « saison N » : combiné sur mesure bâti sur les seules jambes de la voie
                 custom = (custom[0] + g, custom[1] + 1)
-        notes = [f"cote {fmt_odds(k)} : {money.signed(round(v[0]))} sur {v[1]}" for k, v in sorted(tiers.items())] + ([f"sur mesure : {money.signed(round(custom[0]))} sur {custom[1]}"] if custom[1] else [])
+        order = [label for _, label in CB.ODDS_BUCKETS]
+        notes = [f"cote {k} : {money.signed(round(v[0]))} sur {v[1]}" for k, v in sorted(tiers.items(), key=lambda kv: order.index(kv[0]))] + ([f"sur mesure : {money.signed(round(custom[0]))} sur {custom[1]}"] if custom[1] else [])
         if notes:
             parts.append("combinés notés " + " ; ".join(notes))
         return (" · " + " · ".join(parts)) if parts else ""
