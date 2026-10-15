@@ -453,7 +453,7 @@ def send(items, day, now):
             buttons += it["buttons"]
     blocks.append(fmt.i("Vérifie la cote dans l'appli avant de valider : 1xBet a pu bouger depuis sa lecture."
                         + (f" + {more} autre{'s' if more > 1 else ''} alerte{'s' if more > 1 else ''} au prochain passage." if more > 0 else "")))
-    msg = Html("\n\n".join(blocks))
+    msg = telegram.topic(Html("\n\n".join(blocks)), "alerts")
     if not any(it["type"] in RING for it in shown):       # seulement 📈 / ✅ : visibles, sans sonnerie
         telegram.silent(msg)
     rows = telegram.inline([[b] for b in buttons])["inline_keyboard"] + (telegram.copy_row(codes[0]) if len(codes) == 1 else [])   # « 📋 Copier » : un seul code

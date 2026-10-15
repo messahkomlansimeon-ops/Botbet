@@ -1011,7 +1011,7 @@ def board(now=None):
         else:
             if b.get("msg") and b.get("pinned") and b.get("day") != day:
                 telegram.unpin(b["msg"])
-            mid = telegram.send(text, queue=False)
+            mid = telegram.send(telegram.topic(text, "live"), queue=False)
             if type(mid) is not int:                     # pas envoyé (ou hors ligne) : au prochain passage
                 return
             b = {"day": day, "msg": mid, "hash": h, "pinned": telegram.pin(mid)}
@@ -1555,6 +1555,8 @@ def _tickets(now):
                 m.ttl = C.WATCH_LIVE_TTL_MIN * 60
             except AttributeError:
                 pass
+    if isinstance(msg, (telegram.Html, telegram.Text)):
+        telegram.topic(msg, "live")                      # fil « Suivi des matchs » (groupe à sujets)
     if C.WATCH_QUIET:                                    # gardé pour le réveil la nuit : chaque message (groupé, puis ⏰ 🔥 🎉 à part) l'un après l'autre
         ok = all([quiet.send(m, now, kind="suivi") for m in [msg, *getattr(msg, "more", ())]])
     else:

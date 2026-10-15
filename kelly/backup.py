@@ -17,7 +17,7 @@ import zipfile
 from contextlib import closing
 from datetime import datetime, timezone
 
-from . import store, telegram
+from . import config as C, store, telegram
 
 ZIP_NAME = "kelly_backup.zip"          # « backup » à la main ; l'automatique est daté (kelly_backup_2026-10-15.zip) : la plus récente se retrouve d'un coup d'œil
 SEARCH = ("~/storage/downloads", "~/storage/shared/Download", "~/storage/shared/Telegram", "/storage/emulated/0/Download",
@@ -81,7 +81,7 @@ def send(auto=False, now=None):
                        + "\nNouveau téléphone : installe Kelly, remets ton .env, télécharge ce fichier puis tape « kelly restaurer » dans Termux.")
         else:
             caption = f"💾 Sauvegarde Kelly ({size}, compressée depuis {orig_mb:.1f} Mo".replace(".", ",") + f") — {now:%d/%m/%Y %H:%M} UTC"
-        telegram.send_document(zip_path, caption=caption, **({"silent": True} if auto else {}))
+        telegram.send_document(zip_path, caption=caption, **({"silent": True} if auto else {}), **({"topic": "tech"} if C.TOPICS else {}))
     except telegram.TelegramError as e:
         return f"⚠️ Échec de la sauvegarde : {e}"
     except BackupError as e:

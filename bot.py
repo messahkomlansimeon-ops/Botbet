@@ -34,6 +34,8 @@
   python bot.py --export     copie lisible de la base (data/kelly.db) en JSON dans data/sauvegarde/ (la sauvegarde de 23:00 la commite) ;
                              --own-lock : prend lui-même le verrou des données (Termux, sans `flock`)
   python bot.py --import [dossier]  restaure la base depuis une copie JSON (data/sauvegarde/ par défaut) ; sous le verrou des données
+  python bot.py --topics     crée les fils (sujets) du groupe Telegram configuré : combinés, alertes, suivi des matchs, bilan, technique (idempotent ; « refaire » les
+                             recrée). Sans effet tant que TELEGRAM_TOPICS n'est pas à 1. Voir « kelly fils ».
   python bot.py --sample     test hors ligne avec données fictives (--daily par défaut)
 """
 import os
@@ -120,6 +122,11 @@ def main(argv):
                 sys.exit(1)
     elif "--alert" in argv:
         app.run_alert(sample)
+    elif "--topics" in argv:                # kelly fils : crée les fils du groupe à sujets (idempotent ; « refaire » les recrée tous)
+        from kelly import telegram
+        ok, text = telegram.setup_topics(refaire="refaire" in argv)
+        print(text)
+        sys.exit(0 if ok else 1)
     elif "--serve" in argv:
         app.run_commands(serve=True)
     elif "--commands" in argv:

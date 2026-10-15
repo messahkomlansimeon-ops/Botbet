@@ -780,7 +780,7 @@ def announce_repairs():
                                  else f"• {what} : document abîmé et pas encore de copie : Kelly n'y écrit plus. Restaure la dernière sauvegarde "
                                       "reçue ici (kelly restaurer dans Termux)."))
         msg = telegram.Html("\n".join(lines))
-        telegram.send(msg)
+        telegram.send(telegram.topic(msg, "tech"))
         return msg
     except Exception as e:                          # noqa: BLE001
         print(f"[store] annonce des réparations ignorée : {type(e).__name__}: {e}", file=sys.stderr)
@@ -898,7 +898,7 @@ def run_daily(sample=False, retry=False):
                | ({"xbet_at": odds_at} if odds_at and any(c.get("xodds") for c in keep) else {})
                | ({"picks_at": odds_at} if odds_at and any(c.get("xodds") for c in picks) else {}))
     progress.step("envoi")
-    deliver_morning([m if getattr(m, "loud", False) else telegram.silent(m) for m in report] + messages, day, now, sample)       # bilan, apprentissage, questions : sans sonnerie ; les combinés du matin sonnent          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
+    deliver_morning([telegram.topic(m if getattr(m, "loud", False) else telegram.silent(m), "report") for m in report] + [telegram.topic(m, "combos") for m in messages], day, now, sample)       # bilan, apprentissage, questions : sans sonnerie ; les combinés du matin sonnent          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
     if not sample:                                  # APRÈS l'envoi : jamais un retard du matin ; pool du jour gardé, quatre variantes en fantôme (jamais envoyées, hors Usage)
         _step("variantes du constructeur", lambda: combovariants.run(day, picks, pronos, season_legs))
     print(cache.line(), file=sys.stderr)
@@ -1090,9 +1090,9 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
     log_opinions(upcoming_, today["day"], now)      # derniers avis de l'ensemble avant le match (journal d'apprentissage)
     if new:
         fair.record(new, today["day"], shown=new)
-        telegram.send(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet", when=now.strftime("%H:%M"),
+        telegram.send(telegram.topic(fmt.pronos(new, limit=12, title="💎 Nouvelles cotes 1xBet", when=now.strftime("%H:%M"),
                                  intro="Paris devenus jouables avec les cotes 1xBet du moment (marchés ouverts ou cotes montées "
-                                       "depuis ce matin). Vérifie la cote avant de valider."), silent=True)       # annonce : visible, sans sonnerie (niveaux de bruit)
+                                       "depuis ce matin). Vérifie la cote avant de valider."), "combos"), silent=True)       # annonce : visible, sans sonnerie (niveaux de bruit)
     n_upd = _update_combos(today["day"], pronos, now, got)
     n_single = _upgrade_single(today, now, got, fetch)          # pari du jour sans cote 1xBet au matin : s'il y est maintenant, avec son code
     xalerts.LAST["gap"] = 0
@@ -1202,10 +1202,10 @@ def _run_evening(now, fetch, seconds):
         if rec:
             fair.record(rec, day, shown=rec)
         late = now.hour >= 17                       # relecture de 12:00 (timer) : « de la journée » ; lancée le soir : « de ce soir »
-        telegram.send(fmt.pronos(announce, limit=C.EVENING_LIMIT,
+        telegram.send(telegram.topic(fmt.pronos(announce, limit=C.EVENING_LIMIT,
                                  title=f"{'🌙 Pronostics de ce soir' if late else '🔄 Pronostics de la journée'} mis à jour : {len(announce)} 💎",
                                  when=stamp, intro=f"Matchs {'de ce soir' if late else 'à venir'} réanalysés avec les statistiques du moment et remis aux cotes 1xBet. "
-                                                   "Vérifie la cote avant de valider ; « combi N » bâtit un combiné avec ces paris."), silent=True)
+                                                   "Vérifie la cote avant de valider ; « combi N » bâtit un combiné avec ces paris."), "combos"), silent=True)
     print(f"[soir] {len(redo)}/{len(evs)} match(s) à venir relus chez 1xBet, {len(announce)} 💎 annoncé(s)", file=sys.stderr)
     return len(announce)
 
@@ -1356,8 +1356,8 @@ def _watch_ticket(sent, row, legs0, pool, now, refreshed, tier):
     last = sent["tiers"].get(tier) or {"keys": row.get("keys") or [], "total": row.get("min_odds") or 1.0}
     if keys and keys != last.get("warned"):
         p = row["played"]
-        telegram.send(Html(fmt.esc(f"⚠️ Un pari de ton ticket n'est plus proposé chez 1xBet (combiné joué à {fmt.odds_txt(p['odds'])}) :")
-                           + "\n" + "\n".join(_ticket_lines(probs)) + "\n\n" + fmt.i(fmt.esc(TICKET_ADVICE))))
+        telegram.send(telegram.topic(Html(fmt.esc(f"⚠️ Un pari de ton ticket n'est plus proposé chez 1xBet (combiné joué à {fmt.odds_txt(p['odds'])}) :")
+                           + "\n" + "\n".join(_ticket_lines(probs)) + "\n\n" + fmt.i(fmt.esc(TICKET_ADVICE))), "alerts"))
         sent["tiers"][tier] = last | {"warned": keys}
     elif not keys and last.get("warned"):
         sent["tiers"][tier] = {k: v for k, v in last.items() if k != "warned"}          # tout est revenu à la normale : une future alerte sera redite
@@ -1401,8 +1401,8 @@ def _update_combos(day, pronos, now, refreshed):
         res = CB.patch_combo(legs0, upcoming(pronos, now), lo, hi, fresh_ids=refreshed, prefix=prefix, usage=usage)
         if res is None:
             if not last.get("dead"):
-                telegram.send(f"⚠️ Le combiné {_of_day(tier)} (cote {fmt.trim(row.get('min_odds') or lo, 1)}) n'est plus jouable chez 1xBet "
-                              "(paris retirés ou devenus mal payés) et Kelly ne trouve pas de remplaçants : ne le joue pas.")
+                telegram.send(telegram.topic(f"⚠️ Le combiné {_of_day(tier)} (cote {fmt.trim(row.get('min_odds') or lo, 1)}) n'est plus jouable chez 1xBet "
+                              "(paris retirés ou devenus mal payés) et Kelly ne trouve pas de remplaçants : ne le joue pas.", "alerts"))
                 sent["tiers"][tier] = last | {"dead": True}
                 fair.kill_combo(row)                # pas joué : hors du règlement, du bilan et de l'argent
                 store.save(fair.COMBOS_FILE, rows)
@@ -3415,7 +3415,7 @@ def run_check():
     ok_send = False
     if chat_ok:
         summary = "\n".join(lines)
-        if telegram.send("✅ Kelly est en ligne\n\n" + summary, silent=True):
+        if telegram.send(telegram.topic("✅ Kelly est en ligne\n\n" + summary, "tech"), silent=True):
             ok_send = True
             lines.append("✅ Telegram : message de test envoyé à ton chat")
         else:

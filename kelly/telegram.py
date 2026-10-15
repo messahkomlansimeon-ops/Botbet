@@ -5,6 +5,7 @@ import html as _html
 import os
 import re
 import sys
+import threading
 import time
 
 import requests
@@ -46,12 +47,27 @@ def silent(msg):
     return msg
 
 
+def topic(msg, kind):
+    """Le message `msg` (et ses pages suivantes) est destiné au fil `kind` (TOPIC_NAMES) du groupe à sujets ; sans effet tant que C.TOPICS est éteint ou que le fil n'existe pas
+    (voir thread_of). Un `str` ordinaire devient un Text. -> le message."""
+    if not C.TOPICS:                                  # fils éteints : message laissé tel quel
+        return msg
+    if not isinstance(msg, (Html, Text)):
+        msg = Text(msg)
+    msg.topic = kind
+    for m in getattr(msg, "more", ()) or ():
+        topic(m, kind)
+    return msg
+
+
 def with_buttons(text, markup):
     """Le même message (HTML ou texte brut) avec des boutons : `markup` = inline(...) ou menu_keyboard(...)."""
     out = (Html if isinstance(text, Html) else Text)(text)
     out.markup = markup
     if getattr(text, "silent", False):               # le niveau de bruit suit le message
         out.silent = True
+    if getattr(text, "topic", None):                 # ... et son fil
+        out.topic = text.topic
     return out
 
 
@@ -175,7 +191,21 @@ def _transient(e):
     return e.code is None or e.code == 429 or e.code >= 500
 
 
-def _deliver(part, is_html, markup, chat_id, reply_to=None, quiet=False):
+def _deliver(part, is_html, markup, chat_id, reply_to=None, quiet=False, thread=None):
+    """_deliver_raw ; `thread` (fil d'un groupe à sujets) refusé par Telegram (fil supprimé, citation d'un autre fil : « message thread not found ») : le message est renvoyé UNE fois
+    hors fil et sans citation (dans le fil général) plutôt que perdu, avec une ligne dans le journal."""
+    if not thread:
+        return _deliver_raw(part, is_html, markup, chat_id, reply_to, quiet)
+    try:
+        return _deliver_raw(part, is_html, markup, chat_id, reply_to, quiet, thread)
+    except TelegramError as e:
+        if e.code != 400 or not any(k in str(e).lower() for k in ("thread", "reply", "topic")):
+            raise
+        print(f"[telegram] fil {thread} refusé ({e}) : message renvoyé dans le fil général (kelly fils pour refaire les fils)", file=sys.stderr)
+        return _deliver_raw(part, is_html, markup, chat_id, None, quiet)
+
+
+def _deliver_raw(part, is_html, markup, chat_id, reply_to=None, quiet=False, thread=None):
     """Un morceau de message -> réponse de l'API ; lève TelegramError. HTML refusé par Telegram : repli en texte brut. `reply_to` : id d'un message
     auquel celui-ci répond (toucher la citation y ramène) ; message disparu : envoyé quand même, sans citation."""
     extra = {"reply_markup": markup} if markup else {}
@@ -183,6 +213,8 @@ def _deliver(part, is_html, markup, chat_id, reply_to=None, quiet=False):
         extra["disable_notification"] = True
     if reply_to:
         extra |= {"reply_to_message_id": reply_to, "allow_sending_without_reply": True}
+    if thread:
+        extra["message_thread_id"] = thread
     if is_html:
         try:
             return api("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True, **extra)
@@ -194,14 +226,14 @@ def _deliver(part, is_html, markup, chat_id, reply_to=None, quiet=False):
     return api("sendMessage", chat_id=chat_id, text=part, **extra)
 
 
-def _enqueue(parts, is_html, markup, chat_id, reply_to=None, ttl=None, quiet=False):
+def _enqueue(parts, is_html, markup, chat_id, reply_to=None, ttl=None, quiet=False, thread=None):
     """Met des morceaux en attente dans data/outbox.json (les boutons vont sur le dernier, la citation `reply_to` sur le premier). Ajout ATOMIQUE
     (store.update) : le bot Telegram et le suivi des matchs peuvent ajouter en même temps sans s'écraser. LAST_QUEUED passe à vrai (le message n'est
     pas perdu : il partira plus tard)."""
     global LAST_QUEUED
     now = time.time()
     new = [{"text": p, "html": is_html, "markup": markup if i == len(parts) - 1 else None, "chat_id": chat_id, "ts": now}
-           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) | ({"ttl": ttl} if ttl else {}) | ({"silent": True} if quiet else {})
+           | ({"reply_to": reply_to} if reply_to and i == 0 else {}) | ({"ttl": ttl} if ttl else {}) | ({"silent": True} if quiet else {}) | ({"thread": thread} if thread else {})
            for i, p in enumerate(parts)]
 
     def add(box):
@@ -234,15 +266,19 @@ def _send_one(text, chat_id=None, queue=True):
     reply_to, ttl = getattr(text, "reply_to", None), getattr(text, "ttl", None)
     quiet = bool(C.NOTIFY_LEVELS and getattr(text, "silent", False))
     explicit = chat_id if chat_id != chat else None
+    kw = {"quiet": True} if quiet else {}
+    th = thread_of(text) if chat_id == chat else None          # fils : seulement vers le chat configuré (jamais un chat donné en clair)
+    if th:
+        kw["thread"] = th
     if queue and store.load(OUTBOX, []):                        # des messages plus anciens attendent : d'abord eux
         if time.monotonic() - _last_fail[0] > 60:
             flush_outbox()
         if store.load(OUTBOX, []):
-            _enqueue(parts, is_html, markup, explicit, reply_to, ttl, **({"quiet": True} if quiet else {}))
+            _enqueue(parts, is_html, markup, explicit, reply_to, ttl, **kw)
             return False
     for i, part in enumerate(parts):
         try:
-            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id, reply_to if i == 0 else None, **({"quiet": True} if quiet else {}))
+            sent = _deliver(part, is_html, markup if i == len(parts) - 1 else None, chat_id, reply_to if i == 0 else None, **kw)
         except TelegramError as e:
             LAST_ERROR = f"{e} (code {e.code})" if e.code else str(e)
             print(f"[telegram] envoi échoué : {LAST_ERROR}", file=sys.stderr)
@@ -250,10 +286,10 @@ def _send_one(text, chat_id=None, queue=True):
                 print("[telegram] délai sans réponse : le message a peut-être été livré, il n'est pas renvoyé", file=sys.stderr)
                 if queue and parts[i + 1:]:
                     _last_fail[0] = time.monotonic()
-                    _enqueue(parts[i + 1:], is_html, markup, explicit, ttl=ttl, **({"quiet": True} if quiet else {}))
+                    _enqueue(parts[i + 1:], is_html, markup, explicit, ttl=ttl, **kw)
             elif queue and _transient(e):
                 _last_fail[0] = time.monotonic()
-                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None, ttl, **({"quiet": True} if quiet else {}))
+                _enqueue(parts[i:], is_html, markup, explicit, reply_to if i == 0 else None, ttl, **kw)
             return False
     return (sent or {}).get("message_id", True) if isinstance(sent, dict) else True
 
@@ -320,7 +356,8 @@ def _flush(box, chat):
         try:
             if not target:
                 raise TelegramError("TELEGRAM_CHAT_ID absent")
-            _deliver(text, e.get("html"), e.get("markup"), target, e.get("reply_to"), **({"quiet": True} if C.NOTIFY_LEVELS and e.get("silent") else {}))
+            _deliver(text, e.get("html"), e.get("markup"), target, e.get("reply_to"),
+                     **({"quiet": True} if C.NOTIFY_LEVELS and e.get("silent") else {}) | ({"thread": e["thread"]} if C.TOPICS and e.get("thread") else {}))
         except TelegramError as err:
             if err.maybe_sent:                       # issue inconnue : abandonné plutôt que doublé (note sur stderr), la suite continue
                 print(f"[telegram] message en attente sans réponse (peut-être livré), abandonné : {err}", file=sys.stderr)
@@ -353,6 +390,143 @@ def _flush(box, chat):
     if sent:
         print(f"[telegram] {sent} message(s) en attente renvoyé(s), {remaining} restant(s)", file=sys.stderr)
     return sent, remaining
+
+
+# ---- Fils de discussion (groupe privé à sujets, C.TOPICS) -------------------------------------------------------------------------------------------------------------
+TOPICS_FILE = "topics.json"      # {"chat": id du groupe, "ids": {clé du fil: message_thread_id}} écrit par `kelly fils`
+TOPIC_NAMES = {"combos": "🎯 Combinés", "alerts": "🔔 Alertes", "live": "🔴 Suivi des matchs", "report": "📊 Bilan", "tech": "🛠️ Technique"}
+_ctx = threading.local()         # fil de la demande en cours de traitement (par thread : le suivi des matchs et le serveur tournent en parallèle)
+_creator = {"chat": None, "id": None, "at": float("-inf")}      # créateur du groupe (seul autorisé), relu au plus toutes les 10 min
+_bot = {}                        # getMe, gardé (nom d'utilisateur du bot : « /top@NomDuBot »)
+
+
+class in_thread:
+    """with in_thread(fil): les messages envoyés sans fil explicite partent dans le fil `fil` (réponse à une demande écrite dans un fil). None : rien ne change."""
+
+    def __init__(self, thread):
+        self.thread = thread
+
+    def __enter__(self):
+        self.prev = getattr(_ctx, "thread", None)
+        _ctx.thread = self.thread
+
+    def __exit__(self, *exc):
+        _ctx.thread = self.prev
+
+
+def topic_ids(chat=None):
+    """Fils créés pour le chat configuré ({clé: id}) ; {} si les fils sont éteints, pas encore créés, ou créés pour un autre groupe."""
+    if not C.TOPICS:
+        return {}
+    d = store.load(TOPICS_FILE, {})
+    chat = chat if chat is not None else creds()[1]
+    if not isinstance(d, dict) or str(d.get("chat")) != str(chat) or not isinstance(d.get("ids"), dict):
+        return {}
+    return {k: v for k, v in d["ids"].items() if isinstance(v, int)}
+
+
+def thread_of(msg):
+    """Fil où part `msg` : son fil marqué (topic()), sinon celui de la demande en cours (in_thread), sinon None (chat privé, fils éteints : rien n'est ajouté)."""
+    if not C.TOPICS:
+        return None
+    ctx = getattr(_ctx, "thread", None)
+    if ctx:                                          # une demande écrite dans un fil : la réponse y revient, même si le message est marqué pour un autre fil
+        return ctx
+    kind = getattr(msg, "topic", None)
+    return topic_ids().get(kind) if kind else None
+
+
+def _group(chat_id):
+    try:
+        return int(chat_id) < 0
+    except (TypeError, ValueError):
+        return False
+
+
+def creator_id(chat_id):
+    """Identifiant du créateur du groupe (getChatAdministrators, statut « creator ») ; None si introuvable. Gardé 10 min ; un échec n'est pas gardé plus de 30 s."""
+    now = time.monotonic()
+    if _creator["chat"] == str(chat_id) and now - _creator["at"] < (600 if _creator["id"] else 30):
+        return _creator["id"]
+    found = None
+    try:
+        for a in api("getChatAdministrators", chat_id=chat_id) or []:
+            if a.get("status") == "creator":
+                found = (a.get("user") or {}).get("id")
+    except TelegramError as e:
+        print(f"[telegram] créateur du groupe introuvable : {e}", file=sys.stderr)
+    _creator.update(chat=str(chat_id), id=found, at=now)
+    return found
+
+
+def sender_ok(chat_id, user):
+    """Dans un groupe, SEUL le créateur du groupe peut piloter Kelly (messages ET boutons) : n'importe quel membre ajouté plus tard est ignoré, et si le créateur est
+    introuvable personne ne passe. Chat privé : inchangé (le chat est celui de l'utilisateur)."""
+    if not _group(chat_id):
+        return True
+    uid = (user or {}).get("id")
+    return uid is not None and uid == creator_id(chat_id)
+
+
+def bot_name():
+    """Nom d'utilisateur du bot (sans @), minuscules ; '' si introuvable."""
+    if "name" not in _bot:
+        try:
+            _bot["name"] = str((api("getMe") or {}).get("username") or "").lower()
+        except TelegramError:
+            return ""
+    return _bot["name"]
+
+
+_MENTION = re.compile(r"^(/\w+)@(\w+)")
+
+
+def addressed(text):
+    """Texte de la commande « /top@NomDuBot » sans le @NomDuBot ; None si elle vise un autre bot (ou si on ne sait pas lequel). Texte sans mention : inchangé."""
+    m = _MENTION.match(text)
+    if not m:
+        return text
+    name = bot_name()
+    if name and m.group(2).lower() != name:          # nom du bot inconnu (getMe en panne) : la commande passe plutôt que d'être perdue
+        return None
+    return m.group(1) + text[m.end():]
+
+
+def setup_topics(refaire=False):
+    """`kelly fils` : crée les fils du groupe configuré (idempotent : un fil déjà créé n'est pas refait, sauf `refaire`) et les enregistre. -> (ok, texte à afficher)."""
+    token, chat = creds()
+    if not token or not chat:
+        return False, "❌ TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID absent."
+    if not _group(chat):
+        return False, ("❌ TELEGRAM_CHAT_ID est encore ton chat privé. Mets-y l'identifiant du groupe (un nombre négatif, souvent -100…) : écris un message dans le groupe, "
+                       "puis ouvre https://api.telegram.org/bot<TOKEN>/getUpdates sur ton ordinateur et lis « chat » > « id ».")
+    try:
+        info = api("getChat", chat_id=chat)
+        if not info.get("is_forum"):
+            return False, "❌ Les sujets ne sont pas activés : dans le groupe, Modifier > Sujets (Topics) > activer."
+        me = api("getMe")
+        member = api("getChatMember", chat_id=chat, user_id=me["id"])
+    except TelegramError as e:
+        return False, f"❌ Telegram refuse : {e}. Kelly est-elle bien dans le groupe ?"
+    if member.get("status") != "administrator" or not member.get("can_manage_topics"):
+        return False, "❌ Kelly doit être administratrice du groupe avec le droit « Gérer les sujets » (Modifier > Administrateurs > Kelly)."
+    d = store.load(TOPICS_FILE, {})
+    ids = dict(d["ids"]) if not refaire and isinstance(d, dict) and str(d.get("chat")) == str(chat) and isinstance(d.get("ids"), dict) else {}
+    made = []
+    for kind, name in TOPIC_NAMES.items():
+        if isinstance(ids.get(kind), int):
+            continue
+        try:
+            ids[kind] = api("createForumTopic", chat_id=chat, name=name)["message_thread_id"]
+        except (TelegramError, KeyError, TypeError) as e:
+            return False, f"❌ Création du fil « {name} » impossible : {e}"
+        made.append(name)
+        store.save(TOPICS_FILE, {"chat": str(chat), "ids": ids})      # enregistré fil par fil : une coupure en route ne refait pas ceux déjà créés
+    store.save(TOPICS_FILE, {"chat": str(chat), "ids": ids})
+    state = "activés" if C.TOPICS else "créés mais ÉTEINTS : ajoute TELEGRAM_TOPICS=1 dans ton fichier de configuration, puis kelly restart"
+    return True, (f"✅ Fils {state} : " + ", ".join(TOPIC_NAMES[k] for k in ids if k in TOPIC_NAMES)
+                  + (f"\n   Créés maintenant : {', '.join(made)}" if made else "\n   Rien à créer : tout existait déjà (kelly fils refaire pour tout recréer)."))
+
 
 
 COMMANDS = [("combi", "Un combiné à la cote voulue"), ("top", "Les meilleurs paris du jour"), ("joue", "Mes paris du jour, à noter"), ("live", "Un combiné sur les matchs en cours"),
@@ -499,8 +673,9 @@ def _run_later(handler, on_callback):
             later.pop(0)
             store.save(LATER, later)
             what = f"ton message « {item['args'][0]} »" if not item.get("cb") else "ton appui sur un bouton"
-            send(f"⚠️ Kelly était occupée trop longtemps : {what} (à {str(item.get('at') or '')[11:16]}) n'a pas été fait. Renvoie-le si tu le veux "
-                 "encore.", queue=False)                # une action attendue qui n'a pas eu lieu : sonne
+            with in_thread(item.get("thread") if C.TOPICS else None):
+                send(f"⚠️ Kelly était occupée trop longtemps : {what} (à {str(item.get('at') or '')[11:16]}) n'a pas été fait. Renvoie-le si tu le veux "
+                     "encore.", queue=False)                # une action attendue qui n'a pas eu lieu : sonne
             continue
         fn = on_callback if item.get("cb") else handler
         try:
@@ -508,7 +683,8 @@ def _run_later(handler, on_callback):
                 later.pop(0)
                 store.save(LATER, later)            # retiré avant d'être traité : jamais fait deux fois (un plantage le perd, comme avant)
                 if fn:
-                    _run(fn, *item["args"])
+                    with in_thread(item.get("thread") if C.TOPICS else None):         # la réponse part dans le fil de la demande
+                        _run(fn, *item["args"])
         except store.LockTimeout:
             break
     return not later
@@ -523,7 +699,7 @@ def _too_old(item):
     return time.time() - at > LATER_MAX_MIN * 60
 
 
-def _later(fn, args, cb):
+def _later(fn, args, cb, thread=None):
     """Traite tout de suite sous le verrou s'il est libre et que rien n'attend avant ; sinon met de côté (ordre gardé) et répond BUSY : le
     serveur continue de lire les messages suivants (« état » répond pendant le passage du matin)."""
     later = store.load(LATER, [])
@@ -534,7 +710,7 @@ def _later(fn, args, cb):
             return
         except store.LockTimeout:
             pass
-    later.append({"cb": cb, "args": list(args), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    later.append({"cb": cb, "args": list(args), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())} | ({"thread": thread} if thread else {}))
     store.save(LATER, later)
     send(_busy(), queue=False, silent=True)
 
@@ -602,43 +778,60 @@ def poll(handler, timeout=0, on_callback=None, lock=None, quick=None, defer=Fals
             answer_callback(cq.get("id"))           # tout de suite, avant une éventuelle attente du verrou : pas de sablier
             cmsg = cq.get("message") or {}
             data = cq.get("data") or ""
-            if quick and data.startswith("q|") and str(cmsg.get("chat", {}).get("id")) == str(chat):      # « 🩺 Status » de « ➕ Plus » : répondu SANS le verrou, comme le mot écrit (même pendant le passage du matin)
+            if str(cmsg.get("chat", {}).get("id")) != str(chat) or not sender_ok(chat, cq.get("from")):      # un autre chat, ou un autre membre du groupe : ignoré
+                _save_offset(state)
+                continue
+            th = _thread_in(cmsg)
+            if quick and data.startswith("q|"):      # « 🩺 Status » de « ➕ Plus » : répondu SANS le verrou, comme le mot écrit (même pendant le passage du matin)
                 try:
                     fast = quick(data[2:])
                 except Exception as e:                  # noqa: BLE001 - traitement normal à la place
                     print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
                     fast = None
                 if fast:
-                    send(fast, silent=True)
+                    with in_thread(th):
+                        send(fast, silent=True)
                     _save_offset(state)
                     continue
-            if on_callback and str(cmsg.get("chat", {}).get("id")) == str(chat):
-                if defer:
-                    _later(on_callback, [cq.get("data") or "", cmsg.get("message_id")], True)
-                else:
-                    _handle(lock, on_callback, cq.get("data") or "", cmsg.get("message_id"))
+            if on_callback:
+                with in_thread(th):
+                    if defer:
+                        _later(on_callback, [cq.get("data") or "", cmsg.get("message_id")], True, **({"thread": th} if th else {}))
+                    else:
+                        _handle(lock, on_callback, cq.get("data") or "", cmsg.get("message_id"))
             _save_offset(state)
             continue
         msg = u.get("message") or {}
         text = (msg.get("text") or "").strip()
-        if not text or str(msg.get("chat", {}).get("id")) != str(chat):
+        if not text or str(msg.get("chat", {}).get("id")) != str(chat) or not sender_ok(chat, msg.get("from")):
             continue
+        if _group(chat):
+            text = addressed(text)                  # « /top@NomDuBot » (groupe) -> « /top » ; commande d'un autre bot : ignorée
+            if text is None:
+                continue
+        th = _thread_in(msg)
         fast = None
         if quick:
             try:
                 fast = quick(text)
             except Exception as e:                  # noqa: BLE001 - traitement normal à la place
                 print(f"[telegram] réponse rapide ignorée : {type(e).__name__}: {e}", file=sys.stderr)
-        if fast:
-            send(fast, silent=True)
-        elif defer:
-            _later(handler, [text], False)
-        else:
-            _handle(lock, handler, text)
+        with in_thread(th):
+            if fast:
+                send(fast, silent=True)
+            elif defer:
+                _later(handler, [text], False, **({"thread": th} if th else {}))
+            else:
+                _handle(lock, handler, text)
         _save_offset(state)                         # offset sauvé à chaque commande : jamais traitée deux fois
     if state["offset"] != start:                    # rien de nouveau (la plupart des passages du serveur) : pas d'écriture inutile
         _save_offset(state)
     return len(updates)
+
+
+def _thread_in(m):
+    """Fil d'un message reçu (message_thread_id d'un groupe à sujets) ; None dans le fil général, un chat privé, ou quand les fils sont éteints."""
+    return m.get("message_thread_id") if C.TOPICS and m.get("is_topic_message") else None
 
 
 _OFFSET = [0]           # dernier décalage connu de ce processus : une écriture refusée (disque plein, base abîmée) ne fait jamais retraiter une commande
@@ -651,47 +844,53 @@ def _save_offset(state):
         print(f"[telegram] décalage non enregistré ({e}) : gardé en mémoire", file=sys.stderr)
 
 
+def _file_thread(chat_id, kind=None):
+    """{"message_thread_id": fil} pour un envoi de fichier (photo, document) vers le chat configuré : fil de la demande en cours, sinon fil `kind` ; {} sinon."""
+    if not C.TOPICS or chat_id != creds()[1]:
+        return {}
+    th = getattr(_ctx, "thread", None) or (topic_ids().get(kind) if kind else None)
+    return {"message_thread_id": th} if th else {}
+
+
+def _upload(method, field, filepath, data, ctype, timeout):
+    """Envoie un fichier (multipart) -> `result` ; lève TelegramError. Fil refusé (supprimé : « message thread not found ») : renvoyé UNE fois hors fil plutôt que perdu."""
+    token = creds()[0]
+    for attempt in (0, 1):
+        with open(filepath, "rb") as f:
+            try:
+                r = requests.post(f"https://api.telegram.org/bot{token}/{method}", data=data,
+                                  files={field: (os.path.basename(filepath), f) + ((ctype,) if ctype else ())}, timeout=timeout)
+            except requests.RequestException as e:
+                raise TelegramError(f"réseau : {_scrub(e)}") from None
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        if body.get("ok"):
+            return body.get("result")
+        err = TelegramError(body.get("description") or f"erreur HTTP {r.status_code}", body.get("error_code"))
+        if attempt == 0 and "message_thread_id" in data and err.code == 400 and any(k in str(err).lower() for k in ("thread", "reply", "topic")):
+            print(f"[telegram] fil refusé ({err}) : fichier renvoyé dans le fil général", file=sys.stderr)
+            data = {k: v for k, v in data.items() if k != "message_thread_id"}
+            continue
+        raise err
+
+
 def send_photo(filepath, caption=None, chat_id=None, silent=True):
     """Envoie une image (PNG) avec une légende HTML ; sans sonnerie par défaut (réponse à une demande). Lève TelegramError en cas d'échec."""
     token, chat = creds()
     chat_id = chat_id or chat
     if not (token and chat_id):
         raise TelegramError("TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID manquant")
-    with open(filepath, "rb") as f:
-        try:
-            r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
-                              data={"chat_id": chat_id, "caption": caption or "", "parse_mode": "HTML"} | ({"disable_notification": "true"} if silent else {}),
-                              files={"photo": (os.path.basename(filepath), f, "image/png")}, timeout=(30, 120))
-        except requests.RequestException as e:
-            raise TelegramError(f"réseau : {_scrub(e)}") from None
-    try:
-        body = r.json()
-    except ValueError:
-        body = {}
-    if not body.get("ok"):
-        raise TelegramError(body.get("description") or f"erreur HTTP {r.status_code}", body.get("error_code"))
-    return body.get("result")
+    data = {"chat_id": chat_id, "caption": caption or "", "parse_mode": "HTML"} | ({"disable_notification": "true"} if silent else {}) | _file_thread(chat_id)
+    return _upload("sendPhoto", "photo", filepath, data, "image/png", (30, 120))
 
 
-def send_document(filepath, caption=None, chat_id=None, silent=False):
+def send_document(filepath, caption=None, chat_id=None, silent=False, topic=None):
     """Envoie un fichier (document) sur Telegram ; `silent` : sans sonnerie (sauvegarde automatique). Lève TelegramError en cas d'échec."""
     token, chat = creds()
     chat_id = chat_id or chat
     if not (token and chat_id):
         raise TelegramError("TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID manquant")
-    with open(filepath, "rb") as f:
-        try:
-            r = requests.post(f"https://api.telegram.org/bot{token}/sendDocument",
-                              data={"chat_id": chat_id, "caption": caption or ""} | ({"disable_notification": "true"} if silent else {}),
-                              files={"document": (os.path.basename(filepath), f)},
-                              timeout=(30, 300))
-        except requests.RequestException as e:
-            raise TelegramError(f"réseau : {_scrub(e)}") from None
-    try:
-        body = r.json()
-    except ValueError:
-        body = {}
-    if not body.get("ok"):
-        raise TelegramError(body.get("description") or f"erreur HTTP {r.status_code}", body.get("error_code"))
-    return body.get("result")
-
+    data = {"chat_id": chat_id, "caption": caption or ""} | ({"disable_notification": "true"} if silent else {}) | _file_thread(chat_id, topic)
+    return _upload("sendDocument", "document", filepath, data, None, (30, 300))

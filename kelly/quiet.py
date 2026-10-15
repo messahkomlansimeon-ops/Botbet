@@ -45,6 +45,7 @@ def send(msg, now=None, kind="autre"):
     if not is_quiet(now):
         return telegram.send(msg)
     entry = {"text": str(msg), "html": isinstance(msg, telegram.Html), "markup": getattr(msg, "markup", None), "kind": kind, "silent": bool(getattr(msg, "silent", False)),
+             **({"topic": msg.topic} if getattr(msg, "topic", None) else {}),
              "at": (now or _now()).isoformat(timespec="minutes")}
 
     def add(held):
@@ -94,11 +95,15 @@ def flush(now=None, follow_only=False):
     if follow:
         parts = [(f"<b>{_hm(h.get('at'))}</b>\n" if _hm(h.get("at")) else "") + (h["text"] if h.get("html") else html.escape(h["text"], quote=False))
                  for h in follow]
-        telegram.send(telegram.Html("🌙 <b>Tes matchs pendant la nuit</b>\n\n" + "\n\n".join(parts)))
+        telegram.send(telegram.topic(telegram.Html("🌙 <b>Tes matchs pendant la nuit</b>\n\n" + "\n\n".join(parts)), "live"))
     if others:
-        telegram.send(f"🌙 {len(others)} alerte{'s' if len(others) > 1 else ''} de la nuit, gardée{'s' if len(others) > 1 else ''} pendant les heures "
-                      "calmes :", silent=all(h.get("silent") for h in others))      # l'en-tête sonne si une des alertes sonne
+        telegram.send(telegram.topic(f"🌙 {len(others)} alerte{'s' if len(others) > 1 else ''} de la nuit, gardée{'s' if len(others) > 1 else ''} pendant les heures "
+                                     "calmes :", "alerts"), silent=all(h.get("silent") for h in others))      # l'en-tête sonne si une des alertes sonne
         for h in others:
             text = telegram.Html(h["text"]) if h.get("html") else h["text"]
-            telegram.send(telegram.with_buttons(text, h["markup"]) if h.get("markup") else text, silent=bool(h.get("silent")))
+            if h.get("markup"):
+                text = telegram.with_buttons(text, h["markup"])
+            if h.get("topic"):
+                text = telegram.topic(text, h["topic"])
+            telegram.send(text, silent=bool(h.get("silent")))
     return len(held)
