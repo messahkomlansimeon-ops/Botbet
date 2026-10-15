@@ -429,6 +429,8 @@ LIVE_OPP = _bool("LIVE_OPP", True)                  # 0 : plus d'« 🔴 Opportu
 LIVE_OPP_HOURS = os.environ.get("LIVE_OPP_HOURS", "12-23")   # heures (Abidjan) où Kelly cherche des opportunités live
 CONFIRM_MIN = max(1, _int("CONFIRM_MIN", 15))                     # minutes de validité d'une demande « ⚠️ Confirmer ? » (annuler une note, changer le capital, régler à la main…)
 NOTIFY_LEVELS = _bool("NOTIFY_LEVELS", True)            # niveaux de bruit (14/10) : les messages marqués silencieux (réponses aux boutons, ⏳, bilans, status, annonces) arrivent sans sonnerie ; 0 : tout sonne comme avant
+STAKE_STEP = _int("STAKE_STEP", 0 if SANDBOX else 100)                  # mises rondes (15/10) : jamais plus fines que N FCFA dès que le budget du jour vaut au moins 10 pas (un joueur normal ne mise pas 1 450) ; 0 : pas de plancher
+MAX_TICKETS_DAY = _int("MAX_TICKETS_DAY", 0)           # nombre de tickets misés au plus par jour (les plus petites mises sont laissées de côté) ; 0 (défaut) : pas de plafond
 TOPICS = _bool("TELEGRAM_TOPICS", False)            # fils de discussion (15/10) : Kelly parle dans un groupe privé à sujets (combinés, alertes, suivi des matchs, bilan, technique) ; faux (défaut) = chat privé inchangé. Mise en place : kelly fils
 WATCH_AFTER_LOSS = _bool("WATCH_AFTER_LOSS", False)   # suivi des matchs (kelly/watch.py) : faux (défaut, demande du 14/10) = plus aucune alerte sur les matchs d'un coupon déjà perdu, sauf si un autre coupon encore en jeu les contient ; vrai = on continue aussi les matchs d'un ticket perdu (réglage du 11/10)
 WATCH_DEADLINE_S = _int("WATCH_DEADLINE_S", 400)   # suivi des matchs : le passage arrête ses téléchargements après N s (le runner le coupe à 540 s) ; le reste au passage suivant

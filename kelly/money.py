@@ -150,7 +150,8 @@ def set_daily(amount, currency=None):
 def round_step(budget):
     """Arrondi des mises : 50 pour un budget de 5 000, 500 pour 50 000, 0,5 pour 10."""
     budget = _amount(budget)
-    return 10 ** max(0, len(str(int(budget))) - 2) / 2 if budget >= 1 else 0.01
+    step = 10 ** max(0, len(str(int(budget))) - 2) / 2 if budget >= 1 else 0.01
+    return max(step, C.STAKE_STEP) if C.STAKE_STEP and budget >= 10 * C.STAKE_STEP else step      # mises rondes (STAKE_STEP) : 1 400 plutôt que 1 450
 
 
 def money(x, currency=None):
@@ -235,6 +236,9 @@ def allocate(items, budget=None, detail=False, step=None):
         stakes = [min(st, cap) for st in stakes]
     stakes = [min(st, LOTTERY_STAKE) if _lottery(it) else st for st, it in zip(stakes, items)]     # ticket « loterie » : 100 FCFA au plus (gardé)
     stakes = [math.floor(min(st, float(it["cap"])) / step) * step if isinstance(it, dict) and it.get("cap") else st for st, it in zip(stakes, items)]      # plafond propre d'une voie (SEASON_TICKET_MAX), arrondi au pas
+    if C.MAX_TICKETS_DAY > 0:                        # plafond de tickets par jour : les plus grosses mises restent, les autres sont laissées de côté (gardées)
+        keep = set(sorted(range(len(stakes)), key=lambda i: -stakes[i])[:C.MAX_TICKETS_DAY])
+        stakes = [st if i in keep else 0 for i, st in enumerate(stakes)]
     room = budget - sum(stakes)                      # combinés SANS valeur : par défaut AUCUNE mise (suivi en fantôme) ; NOVALUE_STAKE > 0 : mise fixe optionnelle, APRÈS les autres, même plafond de ticket, prise sur le reste du jour
     for i, it in enumerate(items):
         if isinstance(it, dict) and it.get("novalue") and C.NOVALUE_STAKE > 0:
