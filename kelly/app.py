@@ -2410,9 +2410,12 @@ def _season_number(day, tier):
     return act.index(str(tier)) + 1 if str(tier) in act else None
 
 
-def _committed(day, rows):
-    """Mises déjà engagées aujourd'hui (FCFA) : combinés du matin et à vérifier non morts (`rows` : fair_combos), combinés réels envoyés et paris seuls envoyés."""
+def _committed(day, rows, noted=True):
+    """Mises déjà engagées aujourd'hui (FCFA) : combinés du matin et à vérifier non morts (`rows` : fair_combos), combinés réels envoyés et paris seuls envoyés.
+    `noted=False` : sans les mises NOTÉES (en mode capital, money.daily() les a déjà retirées de la limite : les recompter les compterait deux fois)."""
     def amount(x):
+        if not noted and fair.is_noted(x):
+            return 0.0
         v = (x.get("played") or {}).get("stake") if fair.is_noted(x) else x.get("stake")      # un combiné noté joué : la mise NOTÉE (pas la conseillée)
         return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 else 0.0
     total = sum(amount(r) for r in rows if str(r.get("date")) == str(day) and not r.get("dead") and not r.get("closed"))
@@ -2475,7 +2478,7 @@ def season_rebuild(today, now=None, fetch=None):
     # tout ce qui peut échouer (mises, coupons) AVANT de fermer quoi que ce soit
     left = None
     if money.active():
-        left = max(0.0, money.daily() - _committed(day, [r for r in rows if r not in replace]))
+        left = max(0.0, money.daily() - _committed(day, [r for r in rows if r not in replace], noted=not money.capital_mode()))       # mode capital : daily() a déjà retiré les mises notées
         if money.capital_mode():
             left = min(left, max(0.0, money.capital_state().get("left") or 0.0))
     items = []

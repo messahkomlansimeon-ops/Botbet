@@ -13,7 +13,7 @@ for k in ("TELEGRAM_TOKEN", "XBET_PROXY", "S365_PROXY"):
 from tests.test_season import league, row  # noqa: E402
 from tests import test_season_lane as T  # noqa: E402
 from tests.test_season_cup import rename  # noqa: E402
-from kelly import app, config as C, lanes, season, seasonlane as SL, store  # noqa: E402
+from kelly import app, config as C, lanes, money, season, seasonlane as SL, store  # noqa: E402
 
 CUP = "soccer_uefa_champs_league"
 NOW = T.NOW
@@ -290,6 +290,17 @@ def test_command():
     print("ok  saison N : jambes reconstruites (championnat + LDC), une ligne « 🔎 … » avec ce qui a été trouvé, bouton « Je le joue » sans « Un autre » ; 1xBet muet : jambes du matin dites")
 
 
+def test_capital_mode_does_not_count_noted_stakes_twice():
+    """Mode capital : money.daily() a déjà retiré les mises NOTÉES de la limite ; _committed(noted=False) ne les recompte pas (limite 3000, 1000 notés, 500 conseillés : il reste 1500, pas 500)."""
+    day = "2026-10-16"
+    played = {"date": day, "tier": "ss3", "stake": 900, "played": {"stake": 1000}}
+    advised = {"date": day, "tier": "ss5", "stake": 500}
+    rows = [played, advised]
+    assert app._committed(day, rows) == 1500 and app._committed(day, rows, noted=False) == 500
+    assert app._committed(day, [played], noted=False) == 0
+    print("ok  mode capital : les mises notées ne sont comptées qu'une fois (limite 3000 − 1000 noté − 500 conseillé = 1500)")
+
+
 def main():
     real = (season.collect, SL.known_leagues)
     try:
@@ -302,6 +313,7 @@ def main():
         test_monthly_cap_guard()
         test_fallback_on_world_cache()
         test_command()
+        test_capital_mode_does_not_count_noted_stakes_twice()
     finally:
         season.collect, SL.known_leagues = real
     print("tests saison N (reconstruction à la demande) : OK")
