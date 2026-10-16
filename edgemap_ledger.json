@@ -58,5 +58,27 @@
   "not_done": "rien n'est appris de la carte (ni poids, ni calibration, ni coupure) ; elle ne change aucun pari tant que EDGEMAP_GATE est éteint"
  },
  "prereg_sha": "2d66247e0002d3a4763a4f134b687a6cefae6cc316f09311d5beb96c748d762a",
- "written_at": "2026-10-16T14:00:00+00:00"
+ "written_at": "2026-10-16T14:00:00+00:00",
+ "amendments": [
+  {
+   "on": "2026-10-16",
+   "before_any_real_read": true,
+   "prereg_sha_unchanged": true,
+   "why": "relecture adverse du commit 8a29356 : précisions et durcissements décidés AVANT la première évaluation réelle (lundi 19/10) ; le bloc `prereg` et son empreinte ne sont pas modifiés",
+   "clarifications": {
+    "gate_rule": "un seul sens : ROUGE -> fantôme ; VERT et GRIS -> comportement actuel (la formule « jouée seulement si verte » du bloc prereg est à lire ainsi)",
+    "activation_delay": "EDGEMAP_GATE n'agit que 28 jours après le premier lundi évalué (soit au plus tôt le 5e lundi) ET si l'état enregistré date de 14 jours au plus",
+    "matches_counted": "les 30 matchs distincts sont comptés parmi les lignes à CLV mesuré",
+    "clv_window": "relevé de clôture entre 0 et 90 min avant le match (lead_min >= 0), comme lanestats.x_clv",
+    "ci_formula": "lanestats.stats : 1,96 x erreur-type par grappes (id du match) avec correction k/(k-1) ; moins de 2 matchs -> pas d'intervalle -> grise",
+    "dedup": "une même clé n'est comptée qu'une fois ; le journal l'emporte sur l'archive",
+    "gain": "somme sur les lignes réglées à prix xodds valide (fini, > 1) seulement : gagnée (xodds-1), perdue -1 ; les lignes sans prix valide sont exclues des deux côtés ; affichage seul, n'entre pas dans la couleur",
+    "show_min": "SHOW_MIN = 30 lignes CLV : seuil d'affichage seul d'une case dans la commande, sans effet sur la couleur"
+   },
+   "hardening": {
+    "empty_read": "si la lecture du journal donne zéro ligne réglée, l'état n'est PAS écrasé (aucune évaluation ce lundi)",
+    "nan": "un CLV non fini (nan, inf) est traité comme non mesuré"
+   }
+  }
+ ]
 }
