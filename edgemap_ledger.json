@@ -1,0 +1,62 @@
+{
+ "prereg": {
+  "declared_by": "utilisateur (spécification « carte des edges par case », 16/10/2026) ; pré-déclaration rédigée par l'assistant AVANT le code et AVANT toute lecture des données réelles (aucune agrégation du journal réel n'a été faite)",
+  "declared_on": "2026-10-16",
+  "question": "pour chaque case (voie, ligue, famille, sens), le prix pris des jambes à valeur bat-il le dernier prix 1xBet connu, avec un intervalle à 95 % qui exclut zéro ?",
+  "voies": {
+   "stats": "lignes `strategy == \"stats\"` réglées du journal d'ensemble + archive (kelly/lanestats.journal_rows), hors lignes `cup` ; ligues en fantôme comprises (on mesure ce que la voie génère, pas seulement ce qui est joué)",
+   "stats_cup": "lignes `strategy == \"stats\"` réglées du journal des stats de coupe (kelly/cupstats.journal_rows)",
+   "saison": "jambes à VALEUR de la voie saison : `sval == 1`, réglées, hors coupe (même convention que lanestats.season_rows) ; les lignes de référence (`ref`) et le remplissage (`sval == 0`) n'en font pas partie",
+   "saison_cup": "mêmes jambes `sval == 1` portant `cup`",
+   "separation": "championnats et coupes ne se mélangent jamais, y compris dans les agrégats « toutes ligues » ; une même clé n'est comptée qu'une fois"
+  },
+  "case": "(voie, ligue = sport_key, famille = calib.family(marché), sens) ; sens : Over -> plus, Under -> moins, tout autre (1N2, les 2 marquent, double chance...) -> autre",
+  "measures": {
+   "lines": "lignes réglées (win | loss) et lignes à CLV mesuré",
+   "clv": "log(prix pris xodds / dernier prix 1xBet connu) exactement comme lanestats.x_clv (relevé <= 90 min avant le match, pas suspendu, pari non retiré par 1xBet) ; moyenne et demi-marge à 95 % avec erreur-type PAR MATCH (lanestats.stats, grappes = id du match)",
+   "realise_annonce": "réalisé = gagnées / réglées ; annoncé = moyenne de `pe` (proba retenue, saison) sinon de `pm` (proba du modèle : le journal des stats ne garde pas la proba retenue de l'ensemble)",
+   "gain_theorique": "somme sur les lignes réglées d'une mise de 1 unité au prix `xodds` du journal : (xodds - 1) si gagnée, -1 sinon. THÉORIQUE : ce n'est pas le prix réellement pris ni l'argent réellement misé"
+  },
+  "thresholds": {
+   "case_min_clv_lines": 100,
+   "aggregate_min_clv_lines": 300,
+   "min_distinct_matches": 30,
+   "counted_on": "lignes à CLV mesuré (pas les lignes réglées) : la couleur dépend du CLV, comme lanestats.verdict ; le nombre de lignes réglées est affiché à côté",
+   "min_distinct_matches_why": "même règle que la coupure de la voie stats (MIN_MATCHES) : un intervalle par grappes avec peu de grappes est trop optimiste ; 30 matchs distincts exigés aussi pour un agrégat",
+   "not_lowered": "ces seuils ne sont jamais abaissés pour animer la carte ; à volume actuel (journal des stats : très peu de lignes `stats`), la plupart des cases resteront grises pendant des semaines"
+  },
+  "colors": {
+   "green": "case lisible ET CLV moyen - demi-marge > 0",
+   "red": "case lisible ET CLV moyen + demi-marge < 0",
+   "grey": "lisible mais zéro dans l'intervalle (indécis) OR pas assez de données",
+   "never_green_below": "aucune case ne passe verte avec moins de 100 lignes à CLV mesuré (agrégat : 300)"
+  },
+  "cascade": [
+   "la case (voie, ligue, famille, sens) si elle est lisible",
+   "sinon (voie, famille, sens) toutes ligues, si lisible (>= 300)",
+   "sinon (voie, famille) tous sens et toutes ligues, si lisible (>= 300)",
+   "sinon grise : pas assez de données"
+  ],
+  "cadence": {
+   "evaluation": "le LUNDI seulement, juste après lanestats.apply dans le passage du matin ; état dans data/edgemap_state.json (jamais strategy_state.json)",
+   "colour_change": "une case ne change de couleur COMMITTÉE que si la même couleur candidate est constatée deux lundis consécutifs (à 7 jours exactement : un lundi manqué casse la chaîne), comme lanestats.apply ; la couleur initiale est grise",
+   "weekly_block": "le bloc du bilan hebdo et la commande `carte` montrent l'ÉTAT ENREGISTRÉ au dernier lundi (couleurs committées) et, à côté, la couleur du moment : le rapport et le mécanisme ne peuvent pas diverger"
+  },
+  "gate": {
+   "flag": "EDGEMAP_GATE, défaut off ; éteint : lanes.usable() est strictement inchangé",
+   "scope": "les jambes à valeur des voies stats et saison (stats : strategy `stats` ; saison : `sval == 1`) ; les jambes `fill` et les autres voies ne sont jamais touchées",
+   "rule": "jambe jouée seulement si sa case, ou à défaut l'agrégat le plus proche lisible, est VERTE (couleur committée) ; rouge -> fantôme (calculée et journalisée, jamais choisie) ; grise -> comportement actuel",
+   "journal": "une case rouge continue d'accumuler des lignes réglées au journal : le CLV est mesuré sur ce que la voie génère, pas sur ce qui est joué ; elle peut donc redevenir grise ou verte",
+   "reads": "usable() ne lit que l'état enregistré (jamais le journal)",
+   "activation": "ON seulement sur décision du superviseur, après au moins 4 semaines de carte en lecture seule (4 lundis évalués depuis le premier lundi enregistré) ; le code traite EDGEMAP_GATE comme éteint tant que 28 jours ne se sont pas écoulés depuis le premier lundi évalué"
+  },
+  "comparisons": {
+   "cells_upper_bound": "4 voies x ~60 ligues x (6 familles de stats | 11 familles saison) x 3 sens : la grande majorité jamais lisible",
+   "expected_false_greens": "à un seuil de 95 % bilatéral, environ 2,5 % des cases lisibles sans aucun edge réel passent vertes à chaque évaluation (idem rouges) ; le bloc du lundi et la commande `carte` répètent le nombre de cases lisibles pour qu'une poignée de vertes sur une centaine de cases ne soit pas lue comme un signal",
+   "no_correction": "aucune correction de comparaisons multiples ; la décision d'activer reste au superviseur et tient compte de ce nombre"
+  },
+  "not_done": "rien n'est appris de la carte (ni poids, ni calibration, ni coupure) ; elle ne change aucun pari tant que EDGEMAP_GATE est éteint"
+ },
+ "prereg_sha": "2d66247e0002d3a4763a4f134b687a6cefae6cc316f09311d5beb96c748d762a",
+ "written_at": "2026-10-16T14:00:00+00:00"
+}
