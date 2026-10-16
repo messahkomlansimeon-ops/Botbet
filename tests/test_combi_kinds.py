@@ -107,6 +107,12 @@ def test_combi_auto():
     store.save("today.json", dict(store.load("today.json", {}), picks=[], pronos=[]))
     r = app.handle_command("combi auto")
     assert str(r).startswith(("Pas assez de jambes jouables", "Kelly n'a pas encore analysé")), (r, "jour sans jambe")
+    # pronostics chiffrés mais sans jambe jouable (rien ne bat le marché) : les paris réels du jour servent, comme pour « combi N » (16/10)
+    picks = [T.pick(i, xodds=1.5) for i in range(1, 7)]
+    dead = [p | {"strategy": "fill", "xodds": 1.01, "min_odds": 9.0} for p in T.pronos(4)]
+    assert not CB.fair_legs(app.upcoming(dead)) and CB.make_pool(app.upcoming(picks))
+    got = app.auto_args(picks, dead, [])
+    assert got and float(got[0].replace(",", ".")) >= 1.5, got
     print("ok  « combi auto » : cote choisie par Kelly (types repris), explication sans jambe")
 
 

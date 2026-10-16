@@ -2274,20 +2274,22 @@ def auto_args(picks, pronos, rest):
     """Arguments de « /combi » pour « combi auto » : la cote visée est celle du combiné le plus probable que les jambes jouables du jour permettent, en partant de 10 (ou de la plus haute cote atteignable) et en descendant (min 1,5) ;
     None si aucun combiné de 2 paris n'est possible. `rest` : les mots qui suivent « auto » (types de paris, nombre de paris), repris tels quels."""
     live, free = upcoming(picks), upcoming(pronos)
-    legs = CB.fair_legs(free) if any(c.get("xodds") for c in free) else CB.make_pool(live)
     kinds, _ = chat.parse_kinds([w for w in rest if played.norm(w) not in chat.BOLD_WORDS])
-    if kinds:                                       # « combi auto fautes » : la cote atteignable se calcule sur ces types-là seulement
-        legs = CB._keep(legs, CB.kinds_prefix(kinds))
-    top = CB.reach(legs)
-    t = min(10.0, top)
-    while t >= 1.5:                                 # de la plus haute cote visée vers le bas : la première pour laquelle un combiné existe vraiment
-        got = CB.best_combo(legs, t, t * (1 + C.CUSTOM_TOLERANCE))
-        if got:
-            target = math.floor(got[1] * 10) / 10          # arrondie vers le bas : la cote visée ne dépasse jamais la cote du combiné
-            break
-        t *= 0.85
-    else:
+    best = None
+    xp, xk = any(c.get("xodds") for c in free), any(c.get("xodds") for c in live)
+    for legs in [CB.fair_legs(free)] + ([CB.make_pool(live)] if live and (xk or not xp) else []):         # comme « combi N » : les pronostics, puis les paris réels (le 16/10 les pronostics étaient vides, les paris réels non)
+        if kinds:                                   # « combi auto fautes » : la cote atteignable se calcule sur ces types-là seulement
+            legs = CB._keep(legs, CB.kinds_prefix(kinds))
+        t = min(10.0, CB.reach(legs))
+        while t >= 1.5:                             # de la plus haute cote visée vers le bas : la première pour laquelle un combiné existe vraiment
+            got = CB.best_combo(legs, t, t * (1 + C.CUSTOM_TOLERANCE))
+            if got:
+                best = max(best or 0.0, math.floor(got[1] * 10) / 10)      # arrondie vers le bas : la cote visée ne dépasse jamais la cote du combiné
+                break
+            t *= 0.85
+    if best is None:
         return None
+    target = best
     return [fmt.num(target)] + list(rest)
 
 
