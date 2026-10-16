@@ -274,7 +274,7 @@ def gap_items(today, now, reader, closing=(), skip=()):
         gapdist.observe(_fresh_sharp(today["picks"], closing, now), now, today)      # décision 5 : la lecture à sharp FRAIS du passage horaire entre dans la distribution (jamais une alerte)
     if not C.SHARPGAP_ENABLED or not day or not today.get("picks") or not lanes.gaps_allowed():       # voie « off » / « ghost » : aucune alerte, rien de réservé ni de suivi
         return []
-    picks = _fresh_sharp([c for c in today["picks"] if lanes.usable(c)], closing, now)       # ni un écart sur un marché de stats d'une ligue en fantôme
+    picks = _fresh_sharp([c for c in today["picks"] if lanes.usable(c) and lanes.ticket_ok(c)], closing, now)       # ni un écart sur un marché de stats d'une ligue en fantôme
     seen, room = sharpgap.sent_keys(day), sharpgap.room(day)
     res = sharpgap.scan(today | {"picks": picks}, now, min_edge=C.SHARPGAP_EDGE - C.SHARPGAP_PRESCREEN, x_fresh=False)
     new = [x for x in res["cands"] if x["key"] not in seen and x["key"] not in skip][:room]
@@ -381,13 +381,13 @@ def rise_items(pronos, got, at, targets, prices, noted=()):
     out, seen = [], set()
     for c in CB.shown_pronos(pronos):
         old, new = c.get("xodds0"), c.get("xodds")
-        if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0 and c.get("xkind") != "probable" and c["key"] not in noted:       # 🎯 « sans valeur » : jamais annoncé comme une valeur
+        if lanes.ticket_ok(c) and c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0 and c.get("xkind") != "probable" and c["key"] not in noted:       # 🎯 « sans valeur » : jamais annoncé comme une valeur
             seen.add(c["key"])
             out.append(_item("rise", c["key"], new, _rise_text(c, old, new, c["xev"], at), rank=new / old,
                              coupon={"xref": c["xref"], "xodds": new} if c.get("xref") else None))
     for _, _, _, _, legs in targets:
         for c in legs:
-            if c["key"] in seen or c["key"] in noted:
+            if c["key"] in seen or c["key"] in noted or not lanes.ticket_ok(c):       # famille hors voies : jamais une alerte « monté » avec code coupon
                 continue
             seen.add(c["key"])
             st, old = prices.get(c), c.get("xodds0") or c["xodds"]

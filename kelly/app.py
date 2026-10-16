@@ -177,8 +177,12 @@ def fair_combo_message(target, legs, min_total, prob, day, stake, mise, coupon, 
     if auto:                                                         # la cote est le résultat : jambes, espérance et part de remplissage
         ev = math.prod(c["prob"] * (c.get("xodds") or c.get("odds") or 1.0) for c in legs) - 1
         fill = sum(1 for c in legs if not c.get("sval"))
+        ev_txt = f"espérance {ev * 100:+.0f} %"
+        if fmt.all_fill(legs):                                       # pur remplissage : espérance au prix du marché seulement (pas aux chances de Kelly)
+            m = fmt.market_ev_txt(legs, math.prod(c.get("xodds") or c.get("odds") or 1.0 for c in legs))
+            ev_txt = f"espérance au prix du marché {m}" if m is not None else "espérance au prix du marché non mesurable"
         extra = {"title": f"{C.SEASON_TITLE.split(' ', 1)[0]} SAISON · COMBINÉ {k or 1}",
-                 "note": fmt.i(fmt.esc(f"{len(legs)} jambes · espérance {ev * 100:+.0f} % · remplissage {fill}/{len(legs)}"))}
+                 "note": fmt.i(fmt.esc(f"{len(legs)} jambes · {ev_txt} · remplissage {fill}/{len(legs)}"))}
     return chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
                                                   stake_txt=mise(stake, CB.stake_prob(legs, prob), min_total, nov, flat),
                                                   title=extra.pop("title", None) or CB.shots_title(target), coupon=coupon, when=when,
@@ -759,7 +763,7 @@ def morning_gaps(picks, pronos, day, odds_at):
     C.SHARPGAP_MAX_AGE_MIN minutes. [] si l'option est éteinte ou sans paris chiffrés. Ne lève jamais."""
     if not C.SHARPGAP_ENABLED or not picks or not lanes.gaps_allowed():      # voie sharpgap « off » / « ghost » : aucun écart annoncé ni numéroté (reserve) ni suivi (record_gap)
         return []
-    picks = [c for c in picks if lanes.usable(c)]                            # un écart sur un marché de stats d'une ligue en fantôme n'est pas annoncé non plus
+    picks = [c for c in picks if lanes.usable(c) and lanes.ticket_ok(c)]     # un écart sur un marché de stats d'une ligue en fantôme n'est pas annoncé non plus ; ni sur une famille hors voies
     if not picks:
         return []
     try:
@@ -3217,7 +3221,7 @@ def _bold_pools(picks, pronos, prefix, min_p=None, min_ev=None):
     lo_ev = C.COMBI_BOLD_MIN_EV if min_ev is None else min_ev
     real_odds = any(c.get("xodds") for c in pronos) or any(c.get("xodds") for c in picks)
     ok = lambda c, odd: (odd and (not prefix or c["market"].startswith(prefix)) and c.get("prob", 0) >= lo_p   # noqa: E731
-                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto") and lanes.usable(c) and lanes.ticket_ok(c)       # famille hors voies / non calibrée : jamais ; voie « ghost » / « off », ligue en fantôme, « fill » coupé
+                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto") and lanes.usable(c) and lanes.ticket_ok(c)       # famille hors voies : jamais ; voie « ghost » / « off », ligue en fantôme, « fill » coupé
                          and (c.get("xodds") or not real_odds))
     mine = [c | {"odds": c.get("xodds") or c.get("min_odds")} for c in pronos if ok(c, c.get("xodds") or c.get("min_odds") or 0)]
     real = [c for c in picks if ok(c, c.get("xodds") or c.get("odds") or 0)]

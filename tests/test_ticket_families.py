@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from tests import test_combi_kinds as K     # noqa: I001 - fixe DATA_DIR et les faux réseaux avant d'importer kelly
 from tests import test_combi_track as T
-from kelly import app, combos as CB, fmt, lanes  # noqa: E402
+from kelly import app, combos as CB, fmt, lanes, xalerts  # noqa: E402
 
 DAY = T.DAY
 NOW = datetime.now(timezone.utc)
@@ -56,6 +56,31 @@ def test_no_combo_from_off_lane_only():
     print("ok  un pool de touches et de hors-jeu ne produit aucun combiné (cote juste, audacieux, saison) ; témoin positif")
 
 
+def test_real_picks_pool_and_alerts():
+    """Paris réels (quality_legs -> make_pool, pari du jour, combinés réels, combi N) et alertes « monté » : touches et hors-jeu exclus ; le test prouve qu'il n'est pas vide en retirant le filtre."""
+    picks = [T.pick(i, market="team_throws_total", key=f"e{i}|team_throws_total||22.5|Over") for i in range(3)]
+    assert CB.make_pool(picks) == [] and len(CB.make_pool([T.pick(i) for i in range(3)])) == 3, "témoin : les mêmes paris en 1N2 sont des jambes"
+    old = lanes.ticket_ok
+    lanes.ticket_ok = lambda c: True
+    try:
+        assert len(CB.make_pool(picks)) == 3, "sans le filtre, ces paris seraient des jambes : le test n'est pas vide"
+    finally:
+        lanes.ticket_ok = old
+    # alertes « 📈 monté » : une cote qui monte sur un pronostic de touches ne donne ni alerte ni code
+    up = [leg(1, "team_throws_total", xodds0=1.5, xodds=1.9, xev=0.2, xkind="value"), leg(2, "team_fouls_total", xodds0=1.5, xodds=1.9, xev=0.2, xkind="value")]
+    items = xalerts.rise_items(up, {"t1", "t2"}, "10:00", [], {})
+    assert [i["key"] for i in items] == [up[1]["key"]], [i["key"] for i in items]
+    print("ok  paris réels et alertes « monté » : hors voies exclus (test non vide)")
+
+
+def test_season_auto_note_all_fill():
+    legs = [fill_leg(1, 0.43) | {"strategy": "saison", "sval": 0, "lane": "saison"}, fill_leg(2, 0.47) | {"strategy": "saison", "sval": 0, "lane": "saison"}]
+    with K.Fakes():
+        msg = str(app.fair_combo_message(CB.season_tier(4.4, auto=True), legs, 4.41, 0.41, DAY, None, lambda *a, **k: "", None, "10:00", k=1))
+    assert "espérance au prix du marché −" in msg and "espérance +" not in msg, msg
+    print("ok  « saison auto » de pur remplissage : l'espérance de la note est au prix du marché")
+
+
 def fill_leg(i, p_x=0.42):
     """Jambe de pur remplissage : Kelly la voit à 64 %, 1xBet (sans marge) à `p_x`, cote 2,10."""
     return K.fouls(i) | {"strategy": "fill", "prob": 0.64, "p_x": p_x, "xodds": 2.1, "odds": 2.1}
@@ -85,4 +110,6 @@ if __name__ == "__main__":
     test_ticket_ok()
     test_no_combo_from_off_lane_only()
     test_all_fill_expectation_at_market_price()
+    test_real_picks_pool_and_alerts()
+    test_season_auto_note_all_fill()
     print("tests familles de tickets : OK")

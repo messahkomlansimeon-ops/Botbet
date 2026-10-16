@@ -84,7 +84,7 @@ def _cup_stat(c):
 
 
 def ticket_ok(c):
-    """La jambe `c` peut-elle entrer dans un ticket (combiné, code coupon) ? Seulement une famille d'une voie (sharpgap : buts, 1N2... ; stats : corners, cartons, tirs, fautes), qui ont chacune leur calibration et leur mesure :
+    """La jambe `c` peut-elle entrer dans un ticket (combiné, code coupon) ? Seulement une famille d'une voie (sharpgap : buts, 1N2... ; stats : corners, cartons, tirs, fautes), (PAS de seuil de calibration : plusieurs familles de voie sont encore sous calibr.min_need, décision du superviseur) :
     touches, hors-jeu, joueurs et toute famille hors voies restent visibles (/match, /analyse) comme information, jamais sur un ticket : un écart de +26 points sur un marché jamais mesuré n'est pas une preuve."""
     return lane_of_market(c.get("market")) is not None
 

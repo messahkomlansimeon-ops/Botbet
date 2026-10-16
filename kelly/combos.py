@@ -122,7 +122,7 @@ def quality_legs(picks, special=False):
     from . import lanes
     real = any(c.get("xodds") for c in picks)
     return [c for c in picks if c.get("lane") != "saison" and (not special or mispriced(c)) and x_playable(c, real) and not cross_league_stat(c) and leg_reason(c)
-            and lanes.ticket_ok(c)]            # famille hors voies ou sans calibration mesurée : jamais sur un ticket
+            and lanes.ticket_ok(c)]            # famille hors voies : jamais sur un ticket
 
 
 def make_pool(picks):
