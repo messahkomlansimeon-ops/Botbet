@@ -13,7 +13,7 @@ from kelly import combos as CB  # noqa: E402
 
 
 def leg(i, o, lane="saison", xodds=True):
-    return {"id": f"m{i}", "market": "m", "odds": o, "xodds": o if xodds else None, "prob": 0.5, "lane": lane, "sval": True}
+    return {"id": f"m{i}", "market": "totals", "odds": o, "xodds": o if xodds else None, "prob": 0.5, "lane": lane, "sval": True}
 
 
 def test_reach_on_builder_pool():

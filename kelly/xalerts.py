@@ -227,7 +227,7 @@ def lag_items(alerts, today, reader, now, noted=(), skip=()):
     traitées par ✅."""
     out = []
     for _, c, prev in alerts:
-        if c["key"] in noted or c["key"] in skip or not _open(c, now):
+        if c["key"] in noted or c["key"] in skip or not _open(c, now) or not lanes.ticket_ok(c):       # famille hors voies : jamais un « joue maintenant » avec code coupon
             continue
         ev = _ref_event(c, today)
         m = reader.get(ev) if ev else None

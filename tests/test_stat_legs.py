@@ -121,13 +121,14 @@ def test_stats_tier():
     assert [t[0] for t in C.FAIR_SHOTS_TIERS] == ["tc5", "tv5", "ts5"] and CB.shots_title("ts5") == "🧮 COMBINÉ STATS"
     pronos = []
     for i, m in enumerate(("team_fouls_total", "team_throws_home", "team_offsides_total", "team_fouls_home", "team_throws_total", "team_offsides_total")):
-        pronos.append(prono(i, m, xodds=(2.1, 1.9, 1.6, 2.0, 1.7, 1.8)[i]))
+        pronos.append(prono(i, m, xodds=(2.1, 1.9, 1.6, 2.0, 1.7, 1.8)[i]))          # touches et hors-jeu : hors voies, jamais sur un ticket
+    pronos += [prono(12, "team_fouls_total", xodds=1.9), prono(13, "team_fouls_away", xodds=1.8)]
     pronos += [prono(10, "totals"), prono(11, "alternate_totals_corners")]          # hors stats : jamais dans ce combiné
     plan = dict(CB.fair_shots_plan(pronos))
     assert plan["tc5"] is None and plan["tv5"] is None, "pas de tirs : les deux paliers d'avant ne sont pas bâtis"
     legs, total, prob = plan["ts5"]
     assert 5.0 <= total <= 7.0 and len(legs) >= 2 and len({c["id"] for c in legs}) == len(legs), "un seul pari par match"
-    assert all(c["market"].startswith(("team_fouls_", "team_throws_", "team_offsides_")) for c in legs) and len({c["market"] for c in legs}) >= 2
+    assert all(c["market"].startswith("team_fouls_") for c in legs), "touches et hors-jeu (hors voies) exclus de tout ticket"
     # tirs mêlés aux autres familles
     mixed = dict(CB.fair_shots_plan(pronos + [prono(20 + i, "team_shots_home", xodds=(2.1, 1.9, 1.6, 2.0)[i]) for i in range(4)]))
     assert mixed["tv5"] and all(c["market"].startswith("team_shots_") for c in mixed["tv5"][0]), "les tirs servent d'abord le palier « tirs »"
@@ -180,7 +181,8 @@ def test_price_to_combo_and_custom():
     out = xprice.apply(pronos, fetch=lambda *a, **k: found)
     assert out["value"] == len(fams) and out["none"] == 0, out
     legs = CB.fair_legs(pronos)
-    assert len(legs) == len(fams) and all(l["odds"] == l["xodds"] and l["xref"][0] >= 800 for l in legs), [l["key"] for l in legs]
+    assert len(legs) == len(fams) - 2 and not any("throws" in l["market"] or "offsides" in l["market"] for l in legs), "touches et hors-jeu : hors voies, jamais sur un ticket"
+    assert all(l["odds"] == l["xodds"] and l["xref"][0] >= 800 for l in legs), [l["key"] for l in legs]
     combo = CB.fair_custom(pronos, 20)
     assert combo and combo[1] >= 20 and all(c["market"].startswith("team_") for c in combo[0]), combo
     assert len({c["id"] for c in combo[0]}) == len(combo[0]), "un pari par match"

@@ -46,6 +46,8 @@ STAT_MARKETS = (FOULS, SHOTS_H, SOT, THROWS_H, THROWS_T, OFFS, SHOTS_T)
 # prix 1xBet des sous-matchs stats OUVERTS : (match, marché) -> cote du « Under 9.5 » (ou {ligne: cote}) ; ce qui n'y est pas est fermé
 PRICES = {("M1", FOULS): 1.85, ("M1", SHOTS_H): 1.80, ("M1", SOT): 1.70, ("M2", SHOTS_H): 1.90, ("M3", THROWS_T): {9.5: 1.50, 10.5: 1.95},
           ("M4", OFFS): 1.85, ("M5", FOULS): 1.85, ("M5", SHOTS_T): 1.80, ("M8", SHOTS_H): 1.90, ("M9", OFFS): 1.80, ("M10", FOULS): 1.85}
+# sous-matchs de famille de voie (touches et hors-jeu n'entrent plus dans un ticket) : ouverts, mais sans pronostic tant qu'un test n'appelle pas setup_lane
+LANE_PRICES = {("M3", SHOTS_H): 1.90, ("M4", FOULS): 1.85, ("M9", FOULS): 1.80}
 
 
 MAIN_PRICES = {"totals": {("totals", "Over", 2.5): 1.9, ("totals", "Under", 2.5): 1.8}, "btts": {("btts", "Yes", None): 1.8, ("btts", "No", None): 1.95}}
@@ -68,6 +70,11 @@ def stat_pronos(p=0.66):
           prono("M3", THROWS_T, p=p, alts=[["Under", 9.5, p, None], ["Under", 10.5, min(0.9, p + 0.08), None]]), prono("M4", OFFS, p=p),
           prono("M5", FOULS, p=p), prono("M5", SHOTS_T, p=p), prono("M6", FOULS, p=p), prono("M7", FOULS, p=p)]
     return ps
+
+
+def setup_lane(p=0.66, extra=(), **kw):  # noqa
+    """Comme setup(), avec M3 et M4 reçoivent un sous-match de famille de voie (tirs, fautes) : touches et hors-jeu (hors voies) n'entrent plus dans un ticket, le combiné se bâtit sur les fautes et les tirs."""
+    return setup(p=p, extra=[prono("M3", SHOTS_H, p=p), prono("M4", FOULS, p=p), *extra], **kw)
 
 
 def setup(p=0.66, extra=(), announced=True, combos=None):
@@ -96,7 +103,7 @@ class Fx:
     """Faux relevé 1xBet (xbet.fetch_day) : ne rend les cotes que des marchés DEMANDÉS (`wanted`) dont le sous-match est ouvert (PRICES), comme les vraies requêtes."""
 
     def __init__(self, prices=None):
-        self.calls, self.prices = [], PRICES if prices is None else prices
+        self.calls, self.prices = [], PRICES | LANE_PRICES if prices is None else prices
 
     def __call__(self, events, deadline=None, wanted=None, **kw):
         self.calls.append({"ids": [e["id"] for _, e in events], "wanted": copy.deepcopy(wanted), "deadline": deadline, "kw": kw,
@@ -280,7 +287,7 @@ def test_pass_reads_only_stat_subgames_and_reprices():
 
 def test_combo_sent_once_with_coupon_and_tracking():
     """UN « 🧮 COMBINÉ STATS » par passage : cote 5 à 7, un pari par match, code coupon, mise du budget, boutons, suivi ts5w1, et jamais envoyé deux fois."""
-    setup()
+    setup_lane()
     fx = Fx()
     rep, sent, coupons = with_fakes(lambda: app.run_stats_window(NOW, fetch=fx))
     cmb, lst = window_msgs(sent)
@@ -325,7 +332,7 @@ def test_combo_sent_once_with_coupon_and_tracking():
 
 def test_dedup_same_legs_and_caps():
     """Jamais deux fois les mêmes jambes (jambes sûres : réutilisables, donc le même optimum reviendrait), au plus STATS_WINDOW_MAX_COMBOS par jour : ts5w1 puis ts5w2."""
-    setup(p=0.74)                                    # jambes SÛRES (proba >= 0,68)
+    setup_lane(p=0.74)                               # jambes SÛRES (proba >= 0,68)
     rep, sent, _ = with_fakes(lambda: app.run_stats_window(NOW, fetch=Fx()))
     assert rep["combo"] == "ts5w1"
     row = store.load(fair.COMBOS_FILE, [])[0]
@@ -339,7 +346,7 @@ def test_dedup_same_legs_and_caps():
     # plafond du jour
     old = C.STATS_WINDOW_MAX_COMBOS
     try:
-        setup(p=0.66, extra=[prono("M8", SHOTS_H), prono("M9", OFFS), prono("M10", FOULS)])
+        setup_lane(p=0.66, extra=[prono("M8", SHOTS_H), prono("M9", FOULS), prono("M10", FOULS)])
         C.STATS_WINDOW_MAX_COMBOS = 1
         r1, s1, _ = with_fakes(lambda: app.run_stats_window(NOW, fetch=Fx()))
         assert r1["combo"] == "ts5w1"
@@ -373,7 +380,7 @@ def test_reuse_rules_with_morning_combos():
     leg = {k: leg_prono.get(k) for k in ("key", "id", "market", "name", "point", "prob", "p0", "xodds", "xref", "min_odds", "commence", "home", "away")} | {"result": None}
     rows5 = [{"date": DAY, "tier": t, "min_odds": 6.1, "prob": 0.3, "keys": [leg["key"]], "legs": [leg], "result": None} for t in ("ts5", "ts12", "ts25", "ts50", "ts100")]
     row = rows5[0]
-    setup(combos=rows5)
+    setup_lane(combos=rows5)
     today = store.load("today.json", {})
     today["pronos"] = [leg_prono if c["key"] == leg_prono["key"] else c for c in today["pronos"]]
     store.save("today.json", today)
@@ -394,10 +401,10 @@ def test_reuse_rules_with_morning_combos():
 
 def test_no_read_when_fresh_combo_from_refresh_prices():
     """Cotes déjà fraîches (relevé manuel / de 15:00 il y a 10 min) : aucune requête, mais le combiné et les 💎 partent quand même avec ces cotes."""
-    today = setup()
+    today = setup_lane()
     for c in today["pronos"]:
         if statswindow.is_stat(c) and c["id"] in ("M1", "M2", "M3", "M4"):
-            price = PRICES.get((c["id"], c["market"]))
+            price = (PRICES | LANE_PRICES).get((c["id"], c["market"]))
             if price and not isinstance(price, dict):
                 c.pop("xnone", None)
                 c |= {"xodds": price, "xev": round(c["prob"] * price - 1, 4), "xat": "16:55", "xref": [901, 12, 9.5], "xodds0": price}
@@ -459,7 +466,7 @@ def test_announce_dedup_and_caps():
 
 def test_lock_not_held_during_network():
     """--own-lock : le verrou des données n'est tenu ni pendant la relecture 1xBet ni pendant la demande de code coupon (il l'est pour choisir, fusionner et envoyer)."""
-    setup()
+    setup_lane()
     states = {"sel": [], "send": [], "coupon": []}
     fx = Fx()
 
@@ -482,7 +489,7 @@ def test_lock_not_held_during_network():
     assert states["send"] and all(states["send"]), "les envois Telegram se font sous le verrou (outbox.json cohérent)"
     assert rep["combo"] == "ts5w1" and rep["read"] == 4 and lock_free(), "verrou rendu"
     # sans --own-lock (unité systemd sous flock) : AUCUN verrou repris ici (inter-blocage) : le passage va au bout même si le verrou est déjà tenu
-    setup()
+    setup_lane()
     old_wait = C.LOCK_WAIT_MIN
     C.LOCK_WAIT_MIN = 0.02
     try:
@@ -540,14 +547,14 @@ def test_morning_line():
 def test_combi_n_uses_window_priced_legs():
     """« combi N » : avant la fenêtre les pronostics stats sont écartés (la journée est chiffrée) ; après, leurs cotes servent ; la vérification en direct relit leurs
     sous-matchs ; keep_pronos garde ces jambes."""
-    today = setup()
+    today = setup_lane()
     pr0 = today["pronos"]
     assert not [l for l in CB.fair_legs(pr0) if statswindow.is_stat(l)], "avant : aucun pronostic stats n'est une jambe"
     fx = Fx()
     with_fakes(lambda: app.run_stats_window(NOW, fetch=fx))
     pr1 = store.load("today.json", {})["pronos"]
     legs = [l for l in CB.fair_legs(pr1) if statswindow.is_stat(l)]
-    assert {l["id"] for l in legs} >= {"M1", "M2", "M3", "M4"}, [l["key"] for l in legs]
+    assert {l["id"] for l in legs} >= {"M1", "M2", "M3", "M4"} and not any("throws" in l["market"] or "offsides" in l["market"] for l in legs), [l["key"] for l in legs]      # touches et hors-jeu : hors voies, jamais une jambe
     assert all(l["odds"] == l["xodds"] and l["xref"] for l in legs)
     combo = CB.fair_custom(pr1, 5)
     assert combo and any(statswindow.is_stat(l) for l in combo[0]), "combi 5 : des jambes de stats au prix de la fenêtre"
@@ -589,7 +596,7 @@ def test_combi_n_uses_window_priced_legs():
     # xprice.live_check directement (boutons « Vérifier ce combiné » et « combi N »)
     live2 = Fx()
     xprice.live_check({"M1", "M4"}, NOW + timedelta(minutes=3), fetch=live2)
-    assert live2.calls[0]["wanted"]["M4"] == {OFFS} and FOULS in live2.calls[0]["wanted"]["M1"]
+    assert OFFS in live2.calls[0]["wanted"]["M4"] and FOULS in live2.calls[0]["wanted"]["M1"]
     print("ok  « combi N » : jambes de stats aux cotes de la fenêtre, relues en direct avec leurs sous-matchs")
 
 
@@ -651,7 +658,7 @@ def test_data_budget_and_real_requests():
     assert now_by["M4|team_offsides_total||9.5|Under"]["xodds"] == 1.85 and now_by["M1|team_shots_home||9.5|Under"]["xodds"] == 1.8
     assert now_by["M3|team_throws_total||9.5|Under"]["xodds"] == 1.9 and now_by["M2|team_throws_home||9.5|Under"]["xodds"] == 1.9
     assert now_by["M1|team_sot_total||9.5|Under"]["xref"][0] == 101012, now_by["M1|team_sot_total||9.5|Under"]["xref"]      # référence = le sous-match (coupon)
-    assert rep["combo"] == "ts5w1" and coupons, rep
+    assert rep["combo"] is None and not coupons, rep      # M3 (touches) et M4 (hors-jeu) sont hors voies : trop peu de jambes pour une cote 5 à 7 (le combiné est testé avec setup_lane)
     # plafond mensuel : au-delà de STATS_WINDOW_MONTH_PCT % de XBET_MONTH_MB la fenêtre se tait (le matin passe avant)
     setup()
     limit = int(C.XBET_MONTH_MB * 1e6 * C.STATS_WINDOW_MONTH_PCT / 100)
@@ -788,7 +795,7 @@ def test_tier_helpers_and_wording():
 
 def test_refresh_button_on_window_combo():
     """« 🎟️ Vérifier ce combiné » sous un combiné de la fenêtre : relu en direct, même fourchette (5 à 7), familles stats seulement."""
-    setup()
+    setup_lane()
     with_fakes(lambda: app.run_stats_window(NOW, fetch=Fx()))
     row = store.load(fair.COMBOS_FILE, [])[0]
     pool = store.load("today.json", {})["pronos"]
@@ -803,7 +810,7 @@ def test_refresh_button_on_window_combo():
 def test_window_combo_followed_like_morning_combos():
     """Un combiné de la fenêtre est suivi comme ceux du matin : le relevé manuel / de 15:00 (_update_combos) le renvoie à jour si sa cote a bougé de plus de 5 %, avec les
     mots « combiné stats » ; noté joué, il n'est jamais remplacé (Kelly prévient seulement)."""
-    setup()
+    setup_lane()
     with_fakes(lambda: app.run_stats_window(NOW, fetch=Fx()))
     row = store.load(fair.COMBOS_FILE, [])[0]
     pronos = copy.deepcopy(store.load("today.json", {})["pronos"])
@@ -876,9 +883,9 @@ def test_bot_stats_window_cli():
 
 def test_stale_prices_never_make_a_combo():
     """Des cotes périmées (lues le matin) ne font jamais un combiné : si 1xBet ne répond pas, rien n'est envoyé ; relues, elles servent."""
-    today = setup()
+    today = setup_lane()
     for c in today["pronos"]:
-        price = PRICES.get((c["id"], c["market"]))
+        price = (PRICES | LANE_PRICES).get((c["id"], c["market"]))
         if statswindow.is_stat(c) and c["id"] in ("M1", "M2", "M3", "M4") and price and not isinstance(price, dict):
             c.pop("xnone", None)
             c |= {"xodds": price, "xev": round(c["prob"] * price - 1, 4), "xat": "10:00", "xref": [901, 12, 9.5], "xodds0": price}

@@ -3217,7 +3217,7 @@ def _bold_pools(picks, pronos, prefix, min_p=None, min_ev=None):
     lo_ev = C.COMBI_BOLD_MIN_EV if min_ev is None else min_ev
     real_odds = any(c.get("xodds") for c in pronos) or any(c.get("xodds") for c in picks)
     ok = lambda c, odd: (odd and (not prefix or c["market"].startswith(prefix)) and c.get("prob", 0) >= lo_p   # noqa: E731
-                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto") and lanes.usable(c)       # voie « ghost » / « off », ligue en fantôme, « fill » coupé
+                         and c["prob"] * odd - 1 >= lo_ev and CB.data_ok(c) and not c.get("xveto") and lanes.usable(c) and lanes.ticket_ok(c)       # famille hors voies / non calibrée : jamais ; voie « ghost » / « off », ligue en fantôme, « fill » coupé
                          and (c.get("xodds") or not real_odds))
     mine = [c | {"odds": c.get("xodds") or c.get("min_odds")} for c in pronos if ok(c, c.get("xodds") or c.get("min_odds") or 0)]
     real = [c for c in picks if ok(c, c.get("xodds") or c.get("odds") or 0)]
@@ -3321,7 +3321,8 @@ def _bold_combo(picks, pronos, target, day, kinds, now, usage=None, note="", nle
         else:
             lines = [f"🎲 Ticket de loterie, {small if sure_loss else 'mise très petite'}.{rare}"]
         if src == "pronos" and CB.ev(combo) < 1:     # le combiné à cote juste n'affiche pas l'espérance dans son en-tête
-            esp = f"Espérance selon Kelly {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}."
+            m = fmt.market_ev_txt(combo[0], combo[1]) if fmt.all_fill(combo[0]) else None
+            esp = (f"Espérance au prix du marché {m}." if m is not None else "Espérance au prix du marché non mesurable.") if fmt.all_fill(combo[0]) else f"Espérance selon Kelly {fmt.signed((CB.ev(combo) - 1) * 100, ' %')}."
             if lines:
                 lines[-1] += " " + esp
             else:

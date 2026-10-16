@@ -460,7 +460,7 @@ def combo(target, day, get=None, model_for=None, now=None, nlegs=None):
     except Exception as e:                          # noqa: BLE001 - le journal ne bloque jamais la réponse
         print(f"[live] journal non écrit : {http.err(e)}", file=sys.stderr)
     from . import lanes
-    cands = [c for c in cands if lanes.usable(c)]    # voie « ghost » / « off » : journalisé ci-dessus, jamais choisi (ligne non étiquetée : la voie d'une jambe live n'est pas définie, seul l'interrupteur de sa famille compte)
+    cands = [c for c in cands if lanes.usable(c) and lanes.ticket_ok(c)]    # voie « ghost » / « off » : journalisé ci-dessus, jamais choisi (ligne non étiquetée : la voie d'une jambe live n'est pas définie, seul l'interrupteur de sa famille compte)
     from . import chat
     n_max, exact = nlegs or (None, False)
     best = CB.best_combo(cands, lo, hi, max_legs=mx, min_legs=mn)

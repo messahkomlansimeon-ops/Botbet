@@ -405,6 +405,18 @@ def is_fill_leg(c):
     return c.get("strategy") == "fill" or (c.get("strategy") == "saison" and not c.get("sval"))
 
 
+def all_fill(picks):
+    """Toutes les jambes sont du remplissage : aucune n'a été jugée battre le marché, les chances de Kelly n'y valent pas plus que le prix du marché."""
+    return bool(picks) and all(is_fill_leg(c) for c in picks)
+
+
+def market_ev_txt(picks, odds_total):
+    """« −10 % » : espérance AU PRIX DU MARCHÉ d'un combiné (produit des p_x de 1xBet sans marge x cote - 1) ; None si une jambe n'a pas sa proba du marché."""
+    from . import combos
+    pm = combos.market_prob(picks)
+    return None if pm is None or not odds_total else signed((pm * odds_total - 1) * 100, ' %')
+
+
 def combo_ev_line(picks, prob, odds_total, mini=False):
     """« 📈 Espérance du combiné : +4 % (valeur 3/5, remplissage 2/5) » : Π(p x cote) − 1, soit la proba retenue du combiné (prudence par jambe comprise) x sa cote − 1 ; toujours dite, même négative.
     « valeur » : jambes qui ne sont pas du remplissage (strategy « fill ») ; à la cote MINI (jambes sans cote 1xBet) la ligne le dit. '' sans cote ou sans proba."""
@@ -412,6 +424,9 @@ def combo_ev_line(picks, prob, odds_total, mini=False):
         return ""
     fill = sum(1 for c in picks if is_fill_leg(c))
     mini = " à la cote mini" if mini else ""
+    if all_fill(picks):                             # que du remplissage : l'espérance se dit au prix du marché, jamais aux chances de Kelly (+62 % à côté de « perd sa marge » trompe)
+        m = market_ev_txt(picks, odds_total)
+        return f"📈 Espérance au prix du marché{mini} : {m if m is not None else 'non mesurable (proba du marché manquante)'} (valeur 0/{len(picks)}, remplissage {fill}/{len(picks)})"
     return f"📈 Espérance du combiné{mini} : {signed((prob * odds_total - 1) * 100, ' %')} (valeur {len(picks) - fill}/{len(picks)}, remplissage {fill}/{len(picks)})"
 
 
@@ -424,11 +439,12 @@ def combo_chances(picks, prob, odds_total, ev=True, mini=False):
     from . import combos, money
     pm = combos.market_prob(picks)
     lottery = money.is_lottery(prob, odds_total, pm)
+    full = all_fill(picks)                          # que du remplissage : une seule espérance, au prix du marché (ligne « 📈 » plus bas)
     if pm is None:
-        txt = f"🎯 {len(picks)} paris · {pct(prob)} de chances" + (f" · {expect(prob, odds_total)}" if ev else "")
+        txt = f"🎯 {len(picks)} paris · {pct(prob)} de chances" + (f" · {expect(prob, odds_total)}" if ev and not full else "")
     else:
         txt = f"🎯 {len(picks)} paris · {pct(prob)} selon Kelly · {pct(pm)} selon 1xBet"
-        if ev and not lottery:
+        if ev and not lottery and not full:
             txt += (f"\n📊 Espérance : {signed((prob * odds_total - 1) * 100, ' %')} selon Kelly · "
                     f"{signed((pm * odds_total - 1) * 100, ' %')} selon 1xBet")
     if lottery:

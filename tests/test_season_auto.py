@@ -11,7 +11,7 @@ from kelly import app, combos as CB, config as C, fair, lanestats, money, store 
 def leg(i, p, odds, sval=True, match=None):
     m = match if match is not None else i
     return {"id": f"m{m}", "key": f"m{m}|mk{i}|saison", "lane": "saison", "strategy": "saison", "sval": sval, "prob": p, "odds": odds, "xodds": odds, "xref": f"r{i}",
-            "commence": f"2026-10-15T{10 + i % 10:02d}:00:00Z", "market": "ou25", "sel": "over"}
+            "commence": f"2026-10-15T{10 + i % 10:02d}:00:00Z", "market": "totals", "sel": "over"}
 
 
 def pool(n, base_p=0.60, base_odds=1.75, fill=0):

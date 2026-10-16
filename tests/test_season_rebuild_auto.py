@@ -14,8 +14,8 @@ KO = T.KO
 
 
 def leg(i, p, odds, sval=True):
-    return {"id": f"m{i}", "key": f"m{i}|ou25||2.5|Over|saison", "lane": "saison", "strategy": "saison", "sval": sval, "prob": p, "odds": odds, "xodds": odds, "xref": f"r{i}", "xgid": i,
-            "market": "ou25", "name": "Over", "point": 2.5, "home": f"H{i}", "away": f"A{i}", "sport_key": "soccer_x", "league": "X", "commence": KO, "pick": "Plus de 2,5 buts", "min_odds": odds,
+    return {"id": f"m{i}", "key": f"m{i}|totals||2.5|Over|saison", "lane": "saison", "strategy": "saison", "sval": sval, "prob": p, "odds": odds, "xodds": odds, "xref": f"r{i}", "xgid": i,
+            "market": "totals", "name": "Over", "point": 2.5, "home": f"H{i}", "away": f"A{i}", "sport_key": "soccer_x", "league": "X", "commence": KO, "pick": "Plus de 2,5 buts", "min_odds": odds,
             "conf": 0.8, "start": KO}
 
 

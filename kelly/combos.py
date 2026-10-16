@@ -119,8 +119,10 @@ def x_playable(c, real):
 def quality_legs(picks, special=False):
     """Les jambes qui ont une raison d'être (pour le palier spécial : seulement corners, cartons et stats joueurs), aux cotes 1xBet
     quand 1xBet a chiffré les paris du jour (x_playable) : leur valeur est alors calculée à la cote 1xBet."""
+    from . import lanes
     real = any(c.get("xodds") for c in picks)
-    return [c for c in picks if c.get("lane") != "saison" and (not special or mispriced(c)) and x_playable(c, real) and not cross_league_stat(c) and leg_reason(c)]
+    return [c for c in picks if c.get("lane") != "saison" and (not special or mispriced(c)) and x_playable(c, real) and not cross_league_stat(c) and leg_reason(c)
+            and lanes.ticket_ok(c)]            # famille hors voies ou sans calibration mesurée : jamais sur un ticket
 
 
 def make_pool(picks):
@@ -647,9 +649,10 @@ def fair_legs(pronos):
     """Jambes d'un combiné à cote juste : les pronostics solides. Dès que le relevé 1xBet du jour a donné des cotes, SEULEMENT ceux
     qui ont leur cote 1xBet (c["xodds"], jamais sous la cote mini) : Kelly n'invente pas de cote quand 1xBet en donne. Sans aucune
     cote 1xBet (relevé en panne) : la cote minimale à exiger, « à vérifier »."""
+    from . import lanes
     real = any(c.get("xodds") for c in pronos)
     return [c | {"odds": c.get("xodds") or c["min_odds"]} for c in pronos
-            if c.get("lane") != "saison" and fair_eligible(c) and viable(c) and (c.get("xodds") or not real)]       # une ligne appartient à la voie qui l'a construite : jamais une jambe `saison` ici
+            if c.get("lane") != "saison" and fair_eligible(c) and viable(c) and (c.get("xodds") or not real) and lanes.ticket_ok(c)]       # une ligne appartient à la voie qui l'a construite : jamais une jambe `saison` ici
 
 
 def _fair_best(legs, lo, hi, max_legs=None, min_legs=None):
@@ -819,7 +822,8 @@ def season_plan(legs, tiers=None, usage=None):
 
 def season_pool(legs):
     """Jambes que `season_plan` peut prendre : voie `saison`, cote 1xBet, cote effective = xodds ; proba retenue décroissante."""
-    return sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison"), key=lambda c: -c["prob"])
+    from . import lanes
+    return sorted((c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and lanes.ticket_ok(c)), key=lambda c: -c["prob"])
 
 
 def _auto_ok(ev_prod, odds, p=1.0):
@@ -843,7 +847,8 @@ def season_auto_plan(legs, usage=None, max_combos=None, busy_tiers=(), exclude=(
     limit = C.SEASON_AUTO_MAX_COMBOS if max_combos is None else max_combos      # `max_combos` : places restantes (reconstruction à la demande) ; `busy_tiers` : paliers déjà pris dans la journée (fermés compris) ; `exclude` : matchs interdits (combinés notés joués)
     exclude = {str(x) for x in exclude}
     key = lambda c: (1 if c.get("sval") else 0, c["prob"] * c["odds"])      # noqa: E731 - valeur d'abord, remplissage ensuite
-    pool = usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and str(c.get("id")) not in exclude])
+    from . import lanes
+    pool = usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and str(c.get("id")) not in exclude and lanes.ticket_ok(c)])
     ranked = sorted((c for c in pool if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # TOUTES les jambes (plusieurs marchés par match) ; FILL_LEGS éteint : jamais de remplissage
     out, used = [], set()                            # used : jambes (match, marché, sélection, ligne) déjà prises par un combiné de ce passage
     busy_tiers = {str(t) for t in busy_tiers}

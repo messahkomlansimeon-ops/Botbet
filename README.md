@@ -174,6 +174,10 @@ C'est la seule source de valeur que l'audit n'a pas démentie : 1xBet est un boo
 - **Suivi comme les autres paris** (`track.record_gap`) : chaque pari est numéroté `g1`, `g2`... pour la journée (`/joue g1 2,10 1000`, « 🧾 Mes paris », boutons `joue|g1|<jour>`), c'est une ligne ENVOYÉE de `tracked.json` marquée `sharpgap` : sa **clôture est relevée par le passage horaire dans le budget « closing » existant** (aucun appel payant de plus ; même priorité qu'un pari envoyé), le règlement est gratuit, les résultats du lendemain l'annoncent, seuls ceux que tu **notes** comptent dans l'argent et le bilan. L'écart contre Pinnacle à la clôture (`gap_edge_close` = cote prise × proba de clôture − 1, aussi gratuitement via football-data pour le 1N2 et plus/moins 2,5) alimente « Paris 1xBet en retard : N suivis (M joués), CLV moyen contre Pinnacle +x % » dans « Mes résultats » et le message de la semaine.
 - `SHARPGAP_ENABLED=0` coupe la section, les alertes et le suivi neuf.
 
+## 🚧 Familles hors voies : jamais sur un ticket
+
+Touches, hors-jeu, stats joueurs et toute famille sans voie (`lanes.ticket_ok` : seulement sharpgap = buts, 1N2, les 2 marquent, double chance ; stats = corners, cartons, tirs, tirs cadrés, fautes) sont exclues de TOUT ticket avec code coupon : combinés du matin et à cote juste, `combi N` (hors-jeu compris), audacieux, voie saison, live, « 🧮 COMBINÉ STATS » (fautes et tirs seulement), pari du jour, alertes « joue maintenant ». Elles restent visibles dans `/match` et `/analyse` comme information. Un combiné de pur remplissage dit son espérance **au prix du marché** (« 📈 Espérance au prix du marché : −10 % »), jamais aux chances de Kelly.
+
 ## 🎯 Résultats séparés : combinés et voie saison (`kelly/resultats.py`)
 
 - **`combis [N]`** (ou `bilan combis [N]`) : tes combinés réglés (hors voie saison), les plus récents d'abord, avec le résultat en argent de ceux que tu as notés.

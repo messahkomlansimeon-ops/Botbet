@@ -2692,7 +2692,9 @@ def main():
     assert "PSG" in app.handle_command("/match psg")
     # cote 3 et non plus 30 : la dé-marge de Shin retire plus de marge aux longshots que la proportionnelle, et ces données
     # synthétiques ont une marge proportionnelle (sans biais favori-outsider) : il n'y reste que 4 jambes de qualité (max 3,6)
-    assert "COMBINÉ SUR MESURE" in app.handle_command("/combi 3")
+    # les jambes libres du jour étaient des paris de joueurs (player_shots_on_target) : hors voies, ils ne vont plus sur un ticket ; les jambes de voie restantes sont prises par les combinés du matin
+    _r = app.handle_command("/combi 3")
+    assert "COMBINÉ SUR MESURE" not in _r and "Pas de combiné" in _r and "joueur" not in _r.lower(), _r
     assert "meilleurs paris du jour" in app.handle_command("/top")
     before = bankroll.load()
     assert "ne suit plus de bankroll en unités" in app.handle_command("/bank 50000") and bankroll.load() == before      # /bank ne règle plus rien

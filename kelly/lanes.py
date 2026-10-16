@@ -83,6 +83,12 @@ def _cup_stat(c):
     return bool(c.get("cup")) and c.get("lane") != "saison" and lane_of_market(c.get("market")) == "stats"
 
 
+def ticket_ok(c):
+    """La jambe `c` peut-elle entrer dans un ticket (combiné, code coupon) ? Seulement une famille d'une voie (sharpgap : buts, 1N2... ; stats : corners, cartons, tirs, fautes), qui ont chacune leur calibration et leur mesure :
+    touches, hors-jeu, joueurs et toute famille hors voies restent visibles (/match, /analyse) comme information, jamais sur un ticket : un écart de +26 points sur un marché jamais mesuré n'est pas une preuve."""
+    return lane_of_market(c.get("market")) is not None
+
+
 def _edge_ok(c):
     """Carte des edges (kelly/edgemap.py) : éteinte par défaut (EDGEMAP_GATE) -> toujours vrai, sans rien lire ; allumée, une jambe à valeur dont la case est rouge est refusée (fantôme)."""
     return (not C.EDGEMAP_GATE) or edgemap.gate_ok(c)
