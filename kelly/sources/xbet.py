@@ -504,13 +504,16 @@ def _save_usage(u, start, session=None):
     qui a vraiment répondu (à retenir) ; sinon celui déjà enregistré reste."""
     b, n = _spent(start)
     day = str(state.now().date())
-    cur = usage(day)
-    cur["bytes"], cur["requests"] = int(cur["bytes"] + b), cur["requests"] + n
-    cur["days"][day] = int(cur["days"].get(day, 0) + b)
-    cur["days"] = dict(sorted(cur["days"].items())[-40:])
-    if session is not None:
-        cur["session"] = session
-    store.save(USAGE, cur)
+
+    def add(doc):                                      # atomique (une seule transaction) : le suivi, le matin et la fenêtre des stats peuvent compter en même temps
+        cur = doc if isinstance(doc, dict) and doc.get("month") == day[:7] else {"month": day[:7], "bytes": 0, "requests": 0, "days": {}}
+        cur["bytes"], cur["requests"] = int(cur["bytes"] + b), cur["requests"] + n
+        cur["days"][day] = int(cur["days"].get(day, 0) + b)
+        cur["days"] = dict(sorted(cur["days"].items())[-40:])
+        if session is not None:
+            cur["session"] = session
+        return cur, cur
+    cur = store.update(USAGE, add, {})
     u.clear()
     u.update(cur)
     return b, n
