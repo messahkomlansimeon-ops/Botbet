@@ -137,9 +137,16 @@ def test_gate_off_by_default_and_effect():
         C.EDGEMAP_GATE = True
         E._today = lambda: MONDAY + timedelta(days=7 + 10)
         assert lanes.usable(leg(LIGA)), "allumé mais moins de 28 jours depuis le premier lundi : sans effet"
+        for w in (14, 21, 28):
+            E.apply(MONDAY + timedelta(days=w))                  # lundis évalués de suite : l'état reste frais
         E._today = lambda: MONDAY + timedelta(days=28)
         E.reset()
         assert not lanes.usable(leg(LIGA)), "case rouge : fantôme"
+        E._today = lambda: MONDAY + timedelta(days=28 + 15)
+        E.reset()
+        assert lanes.usable(leg(LIGA)), "état enregistré vieux de plus de 14 jours (lundis manqués) : le mécanisme n'agit plus"
+        E._today = lambda: MONDAY + timedelta(days=28)
+        E.reset()
         assert lanes.usable(leg(EPL)) and lanes.usable(leg(SERIA)), "verte et grise : comportement actuel"
         assert lanes.usable(leg(LIGA, strategy="fill")), "une jambe de remplissage n'est jamais touchée"
         assert lanes.usable(leg(LIGA, market="totals", strategy="sharpgap")), "autre voie : jamais touchée"
@@ -158,7 +165,7 @@ def test_red_leg_still_journaled():
     import inspect
     assert "usable" not in inspect.getsource(ensemble.record) and "edgemap" not in inspect.getsource(ensemble.record)
     put_journal()
-    store.save(E.STATE_FILE, {"first": str(MONDAY), "colours": {key("stats", LIGA, "corners", "plus"): {"c": "red", "r": True, "voie": "stats", "league": LIGA, "fam": "corners", "sens": "plus"}}})
+    store.save(E.STATE_FILE, {"first": str(MONDAY), "week": str(MONDAY + timedelta(days=35)), "colours": {key("stats", LIGA, "corners", "plus"): {"c": "red", "r": True, "voie": "stats", "league": LIGA, "fam": "corners", "sens": "plus"}}})
     old_gate, old_today = C.EDGEMAP_GATE, E._today
     try:
         C.EDGEMAP_GATE, E._today = True, (lambda: MONDAY + timedelta(days=40))
@@ -192,12 +199,33 @@ def test_report_and_weekly():
     print("ok  commande carte (mesure du moment avant le premier lundi, état du lundi ensuite) et bloc hebdo lu dans l'état enregistré")
 
 
+def test_hardening():
+    """Amendement du ledger : CLV non fini ignoré, gain sur prix valides seulement, lecture vide = état conservé."""
+    rows = rows_for("h", 4, EPL)
+    rows[0]["xodds"] = float("nan")
+    rows[1]["xclose"] = {"odds": float("inf"), "read": "x", "lead_min": 30, "susp": False}
+    rows[2] |= {"xodds": 1.0}
+    m = E.measure(rows)
+    assert m["nc"] == 2 and m["clv"] is not None and math.isfinite(m["clv"]), m
+    assert m["gain"] == 2.0, m                                       # lignes n°2 et n°4 (gagnées à 2,00) ; n°1 (nan) et n°3 (1,00) exclues
+    put_journal(rows_for("e", 120, EPL, base=0.03))
+    store.save(E.STATE_FILE, {})
+    E.reset()
+    assert E.apply(MONDAY)
+    before = store.load(E.STATE_FILE, {})
+    put_journal()
+    assert not E.apply(MONDAY + timedelta(days=7)), "journal vide : rien n'est écrit"
+    assert store.load(E.STATE_FILE, {}) == before, "l'état enregistré n'est pas écrasé"
+    print("ok  durcissements : CLV non fini ignoré, gain sur prix valides, lecture vide ne détruit pas l'état")
+
+
 def test_declaration_matches_code():
     led = json.load(open(LEDGER))
     pre = led["prereg"]
     assert hashlib.sha256(json.dumps(pre, sort_keys=True, ensure_ascii=False).encode()).hexdigest() == led["prereg_sha"], "pré-déclaration inchangée depuis son commit"
     th = pre["thresholds"]
     assert (th["case_min_clv_lines"], th["aggregate_min_clv_lines"], th["min_distinct_matches"]) == (E.CASE_MIN, E.AGG_MIN, E.MIN_MATCHES) == (100, 300, 30)
+    assert "14 jours" in json.dumps(led["amendments"], ensure_ascii=False) and E.STALE_DAYS == 14
     assert E.GATE_WAIT_DAYS == 28 and E.VOIES == ("stats", "stats_cup", "saison", "saison_cup")
     print("ok  seuils et voies du code = pré-déclaration (empreinte inchangée)")
 
@@ -208,6 +236,7 @@ def main():
     test_populations_and_numbers()
     test_two_mondays()
     test_gate_off_by_default_and_effect()
+    test_hardening()
     test_red_leg_still_journaled()
     test_report_and_weekly()
     test_declaration_matches_code()

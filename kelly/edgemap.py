@@ -11,6 +11,7 @@ données). Cascade quand une case est trop mince : (voie, famille, sens) toutes 
 data/edgemap_state.json ; le bilan hebdo, la commande `carte` et le mécanisme lisent cet état enregistré. Mécanisme (EDGEMAP_GATE, éteint par défaut) : une jambe à valeur dont la case, ou à défaut
 son agrégat lisible le plus proche, est ROUGE passe en fantôme (lanes.usable) ; vert et gris : comportement actuel. Il ne s'active qu'après 4 semaines de carte en lecture seule. Rien n'est appris
 de la carte. Aucune écriture hors edgemap_state.json ; rien ne lève : un document illisible donne une carte vide."""
+import math
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -23,6 +24,7 @@ VOIE_LABEL = {"stats": "stats", "stats_cup": "stats (coupes)", "saison": "saison
 CASE_MIN = 100                                 # lignes à CLV mesuré pour lire une case
 AGG_MIN = 300                                  # ... pour lire un agrégat (toutes ligues)
 MIN_MATCHES = 30                               # matchs distincts (comme la coupure de la voie stats)
+STALE_DAYS = 14                                 # état enregistré plus vieux que ça : le mécanisme n'agit plus
 GATE_WAIT_DAYS = 28                            # le mécanisme reste éteint tant que 4 semaines ne se sont pas écoulées depuis le premier lundi évalué
 SHOW_MIN = 30                                  # affichage seulement : les cases plus minces sont comptées, pas listées
 ICON = {"green": "🟢", "red": "🔴", "grey": "⚪"}
@@ -79,17 +81,19 @@ def voie_rows():
 
 def measure(rows):
     """Chiffres d'un groupe de lignes réglées : n (réglées), nc (CLV mesuré), matchs (distincts, parmi les CLV mesurés), clv, h (demi-marge à 95 % par match), réalisé, annoncé, gain théorique."""
-    xs = [LS.x_clv(r) for r in rows]
+    xs = [x if isinstance(x, (int, float)) and math.isfinite(x) else None for x in (LS.x_clv(r) for r in rows)]      # nan / inf = non mesuré
     nc, m, h = LS.stats(xs, [r.get("id") or i for i, r in enumerate(rows)])
     wins = sum(1 for r in rows if r.get("result") == "win")
     ann = [r.get("pe") if r.get("pe") is not None else r.get("pm") for r in rows]
     ann = [a for a in ann if isinstance(a, (int, float)) and not isinstance(a, bool)]
     gain = 0.0
-    for r in rows:
+    for r in rows:                                  # seulement les lignes à prix valide (fini, > 1) : ni gagnée ni perdue sans prix
         try:
-            gain += (float(r["xodds"]) - 1.0) if r.get("result") == "win" else -1.0
+            o = float(r["xodds"])
         except (KeyError, TypeError, ValueError):
-            pass
+            continue
+        if math.isfinite(o) and o > 1.0:
+            gain += (o - 1.0) if r.get("result") == "win" else -1.0
     return {"n": len(rows), "nc": nc, "matches": len({r.get("id") for r, x in zip(rows, xs) if x is not None}), "clv": m, "h": h,
             "real": wins / len(rows) if rows else None, "ann": sum(ann) / len(ann) if ann else None, "gain": round(gain, 2)}
 
@@ -162,6 +166,9 @@ def apply(today=None):
         watch_prev = doc.get("watch") if isinstance(doc.get("watch"), dict) else {}
         week_ago, iso = str(day - timedelta(days=7)), str(day)
         table = compute()
+        if not any(s["n"] for s in table.values()):                     # lecture du journal vide ou en échec : on n'écrase pas l'état enregistré
+            print("[carte] aucune ligne réglée lue : état conservé", file=sys.stderr)
+            return False
         snap, watch = {}, {}
         for k, s in table.items():
             cur = (prev.get(k) or {}).get("c", "grey")
@@ -193,8 +200,10 @@ def gate_active(st=None):
         return False
     st = state() if st is None else st
     try:
-        return bool(st.get("first")) and _today() >= date.fromisoformat(str(st["first"])) + timedelta(days=GATE_WAIT_DAYS)
-    except ValueError:
+        t = _today()
+        return (bool(st.get("first")) and t >= date.fromisoformat(str(st["first"])) + timedelta(days=GATE_WAIT_DAYS)
+                and (t - date.fromisoformat(str(st["week"]))).days <= STALE_DAYS)         # un état périmé (lundis manqués) ne bloque rien
+    except (ValueError, KeyError, TypeError):
         return False
 
 
