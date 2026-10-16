@@ -70,8 +70,9 @@ try:
                                      headers={"Accept": "application/vnd.github+json", "User-Agent": "kelly-update"})
         data = json.load(urllib.request.urlopen(req, timeout=15))
     runs = data["check_runs"]
-except Exception:
+except Exception as e:
     print("injoignable")
+    print(f"{type(e).__name__}: {e}"[:150], file=sys.stderr)      # la cause (certificats, DNS, limite de l'API...) s'affiche au lieu d'être avalée
     sys.exit(0)
 if any(r.get("status") == "completed" and r.get("conclusion") not in ("success", "skipped", "neutral") for r in runs):
     print("rouge")
