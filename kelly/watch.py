@@ -649,6 +649,8 @@ def _follow(d, now, games=None, live_for=None, stats_for=None, final_for=None, d
         for m, why in _unfollowed(ts, d, now, games):
             _out(d, now, "nf", "👁️ " + fmt.esc(f"Pas suivi en direct (verdict au règlement du matin) : {m} : {why}"))
         d["health"].update(at=now.isoformat(timespec="minutes"), open=0)
+        if d["health"].get("ok") is False:               # plus rien à suivre : la panne ne peut plus gêner personne (sinon « ❌ En panne depuis… » resterait affiché jusqu'au prochain match suivi)
+            d["health"].update(ok=True, why="", since=None, fails=0, warned=False, backup=False)       # état propre : une panne ultérieure sera avertie à neuf, sans « rétabli » à durée absurde (rien n'était à suivre)
         return
     alive = {t.get("tid") or t["what"] for t in ts if _verdict(d, t) not in ("won", "lost")}            # tickets encore en jeu avant ce passage
     alive_legs = {leg["key"] for t in ts if (t.get("tid") or t["what"]) in alive for leg in t["legs"]}

@@ -203,6 +203,16 @@ def test_unfollowed_once():
     print("ok  pari non suivi en direct : dit une fois, avec la raison")
 
 
+def test_outage_cleared_when_nothing_left_to_follow():
+    """Une panne dite, puis plus aucun match à suivre : le statut ne reste pas « ❌ En panne depuis… » jusqu'au prochain match suivi."""
+    reset({"health": {"at": "2030-01-01T19:20", "ok": False, "why": "365scores ne répond pas", "since": "2030-01-01T19:20", "warned": True, "fails": 3, "open": 1}})
+    with tickets([]):
+        watch.follow(KO + timedelta(hours=12), **kw({}))
+    h = store.load(watch.FILE, {})["health"]
+    assert h["ok"] is True and h["open"] == 0 and h["fails"] == 0 and not h["warned"] and not h["since"] and not h.get("backup"), h        # état propre : une panne ultérieure sera avertie à neuf
+    print("ok  suivi : plus rien à suivre -> la panne est effacée du statut")
+
+
 def test_var_and_correction():
     reset()
     ts = [ticket("vm1", [leg(0)])]
@@ -343,6 +353,7 @@ def main():
     test_unreadable_doc()
     test_lines_kept_until_sent()
     test_unfollowed_once()
+    test_outage_cleared_when_nothing_left_to_follow()
     test_var_and_correction()
     test_quiet_digest()
     test_outbox_two_processes()
