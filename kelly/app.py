@@ -11,7 +11,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, confirm, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
-               cupstats, edgemap, seasonlane, xprice, xworld)
+               cupstats, edgemap, resultats, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
@@ -1673,6 +1673,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
    💼 <b>Mon capital</b> (bouton « Capital ») : ton capital, ta limite du jour, ce que tu as déjà misé et tes deux objectifs mesurés (CLV 1xBet, capital)
    🌱 <b>Saison</b> (ou écris <i>saison</i>, <i>saison 10</i>, <i>saison auto</i>) : la voie « saison en cours », qui juge les équipes sur les seuls matchs de cette saison ; son état (un bouton rouvre chaque combiné, « 🔄 Reconstruire » relance la construction automatique du jour : les combinés non joués sont remplacés, ceux que tu as notés joués sont gardés), ou un combiné à la cote voulue
    📈 <b>Tendances</b> : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
+   🎯 <b>Combis</b> (écris <i>combis</i>, <i>combis 7</i>) : les résultats de tes combinés, jour par jour · 🌱 <i>saison résultats</i> : ceux de la voie saison, séparés
    📉 <b>Courbes</b> (ou écris <i>courbes</i>) : deux images, ton capital jour après jour et ton CLV 1xBet cumulé avec son intervalle
    🗺️ <b>Carte</b> (écris <i>carte</i>, <i>carte stats</i>, <i>carte saison</i>) : où les voies stats et saison battent le dernier prix 1xBet, case par case (lecture seule)
    🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
@@ -2124,6 +2125,12 @@ def _handle_command(text):
     picks = today.get("picks") or []
     if cmd in ("/aide", "/help", "/start"):
         return telegram.with_buttons(HELP, chat.menu())
+    if cmd in ("/combis", "/combines", "/combinés"):                  # résultats des combinés, vue séparée : « combis [N jours] »
+        return resultats.combis(_days_arg(args))
+    if cmd == "/bilan" and args and args[0].lower() in ("combi", "combis", "combiné", "combinés", "combines"):
+        return resultats.combis(_days_arg(args[1:]))
+    if cmd == "/bilan" and args and args[0].lower() == "saison":
+        return resultats.saison(_days_arg(args[1:]))
     if cmd == "/bilan":
         detail = any(a.lower() in ("détail", "detail", "details", "détails") for a in args)
         nums = [a for a in args if a.isdigit()]
@@ -2564,6 +2571,12 @@ def season_rebuild(today, now=None, fetch=None):
     return reply
 
 
+def _days_arg(args):
+    """Nombre de jours d'une commande de résultats (« combis 7 ») ; None = tout ; plafonné à MAX_BILAN_DAYS."""
+    n = next((a for a in args if str(a).isdigit() and len(str(a)) <= 4), None)
+    return min(int(n), MAX_BILAN_DAYS) if n else None
+
+
 def season_command(args, today, now=None, fetch=None):
     """« saison » : l'état de la voie `saison` (jambes du matin, combinés du jour, fantômes) ; « saison N » : un combiné sur mesure à la cote N bâti sur les SEULES jambes `saison`,
     RECONSTRUITES à la demande sur les matchs du jour pas encore commencés (championnats suivis et coupes, LDC comprise) avec les cotes 1xBet relues à l'instant (seasonlane.rebuild :
@@ -2575,6 +2588,8 @@ def season_command(args, today, now=None, fetch=None):
     mode = lanes.season_mode()
     if args and str(args[0]).lower() in ("auto", "reconstruire"):          # « saison auto » / « 🔄 Reconstruire » : relance la construction automatique du jour
         return season_rebuild(today, now, fetch)
+    if args and str(args[0]).lower() in ("résultats", "resultats", "résultat", "resultat", "bilan"):     # « saison résultats [N] » : la vue séparée des résultats de la voie
+        return resultats.saison(_days_arg(args[1:]))
     if not args:
         return season_listing(today, day, mode, morning, now)
     target = combi_target(args)
