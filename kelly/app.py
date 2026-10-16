@@ -323,7 +323,7 @@ def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(
         k = [t for t, _ in built_season].index(target) + 1 if CB.season_auto(target) else None
         messages.append(fair_combo_message(target, legs, min_total, prob, day, stakes.get(("fair", target)), mise, coupon, when, k))
     if pronos:
-        shown = CB.best_per_match(pronos)          # un seul pronostic par match : le meilleur, s'il est viable
+        shown = CB.shown_pronos(pronos)          # toutes les jambes à valeur viables (toutes familles) + le meilleur pari du match
         if shown:
             msg = fmt.pronos(shown, C.FAIR_MAX if not (sent_combos or built_fair or built_season) else max(3, C.FAIR_MAX // 2), when=odds_time)
             if stats_note and not picks:             # pas d'en-tête (aucun pari réel) : la ligne passe sous la liste des pronostics
@@ -655,7 +655,7 @@ def world_report(scan, picks, day, now):
         if xb:                        # cotes 1xBet réelles : meilleure ligne, ou pronostic écarté si mal payé (les paris réels donnent l'avis sharp)
             xprice.apply(pronos, picks=picks)
         tracked = [c for c in pronos if not c.get("cup")]                # les stats de coupe ne sont jamais suivies dans fair.json (calibration, moyennes)
-        fair.record(tracked, day, shown=[c for c in CB.best_per_match(pronos) if not c.get("cup")])     # suivis : les montrés + d'autres en silence (fiabilité)
+        fair.record(tracked, day, shown=[c for c in CB.shown_pronos(pronos) if not c.get("cup")])     # suivis : les montrés + d'autres en silence (fiabilité)
     except Exception as e:                          # noqa: BLE001
         print(f"[fair] pronostics ignorés : {type(e).__name__}: {e}", file=sys.stderr)
     data = None
@@ -950,11 +950,11 @@ def fair_plan_all(pronos, picks=None, gaps=(), usage=None):
 
 
 def keep_pronos(pronos, fair_combos=()):
-    """Pronostics gardés dans today.json (relus par /top, /match, /combi et le relevé de 15:00) : TOUJOURS les paris montrés (un par
-    match, CB.best_per_match), chaque jambe des combinés du jour et toute jambe possible d'un combiné (CB.fair_legs : « combi N » les rebâtit), puis,
+    """Pronostics gardés dans today.json (relus par /top, /match, /combi et le relevé de 15:00) : TOUJOURS les paris montrés (toutes les
+    jambes à valeur, CB.shown_pronos), chaque jambe des combinés du jour et toute jambe possible d'un combiné (CB.fair_legs : « combi N » les rebâtit), puis,
     jusqu'à la limite, les 40 meilleurs des autres et ceux assez solides pour un combiné à cote juste ou trouvés chez 1xBet (relus à 15:00).
     Dans l'ordre du classement."""
-    must = {c["key"] for c in CB.best_per_match(pronos)} | {l["key"] for _, combo in fair_combos if combo for l in combo[0]}
+    must = {c["key"] for c in CB.shown_pronos(pronos)} | {l["key"] for _, combo in fair_combos if combo for l in combo[0]}
     must |= {c["key"] for c in CB.fair_legs(pronos)}        # toutes les jambes possibles d'un combiné : « combi N » et la relecture de 15:00 les rebâtissent (rejeu du 09/10 : 3 sur 26 perdues)
     must |= {c["key"] for legs in _bold_pools([], pronos, None) for c in legs}    # paris probables chiffrés, mal payés compris : « 🎲 » et « min N » s'en servent
     must |= {c["key"] for c in pronos if c.get("cup")}       # stats de coupe (fantôme comprises) : relues à 15:00 et par la fenêtre des stats, sans quoi leur CLV serait sous-échantillonné
@@ -1077,7 +1077,7 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
     soon = now + timedelta(minutes=C.XBET_SOON_MIN)
     upcoming_ = [c for c in pronos if datetime.fromisoformat(c["commence"].replace("Z", "+00:00")) > soon]
     if "announced" not in today:                    # premier relevé du jour : les 💎 du matin sont déjà connus
-        today["announced"] = [_slot(c) for c in CB.best_per_match(upcoming_) if c.get("xodds")]
+        today["announced"] = [_slot(c) for c in CB.shown_pronos(upcoming_) if c.get("xodds")]
     got = set()
     first = _priority_ids(today["day"], upcoming_)
     limit = time.monotonic() + seconds if seconds else None
@@ -1101,7 +1101,7 @@ def run_xbet_refresh(now=None, fetch=None, announce=True, live=False, seconds=No
     new = []
     if announce:
         seen = {_slot(k) for k in today["announced"]}                        # par match et marché : une ligne changée n'est pas annoncée deux fois
-        new = [c for c in CB.best_per_match(upcoming_) if c.get("xodds") and _slot(c) not in seen]
+        new = [c for c in CB.shown_pronos(upcoming_) if c.get("xodds") and _slot(c) not in seen][:12]      # 12 = la limite du message : une jambe non montrée n'est jamais marquée annoncée
         today["announced"] += [_slot(c) for c in new]
     if got:
         today["xbet_at"] = now.strftime("%H:%M")    # heure du dernier relevé 1xBet (partiel ou non) ; l'heure de chaque cote est dans c["xat"] (fmt.pronos)
@@ -1205,11 +1205,11 @@ def _run_evening(now, fetch, seconds):
     held = {_slot(c) for c in kept if c["id"] in redo}
     merged = kept + [c for c in fresh if _slot(c) not in held]
     if "announced" not in today:                    # premier relevé du jour : les 💎 du matin sont déjà connus
-        today["announced"] = [_slot(c) for c in CB.best_per_match([c for c in old if (c.get("commence") or "9")[:16] > soon.isoformat()[:16]])
+        today["announced"] = [_slot(c) for c in CB.shown_pronos([c for c in old if (c.get("commence") or "9")[:16] > soon.isoformat()[:16]])
                               if c.get("xodds")]
     seen = {_slot(k) for k in today["announced"]}
     upcoming_ = [c for c in merged if (c.get("commence") or "9")[:16] > soon.isoformat()[:16]]
-    announce = [c for c in CB.best_per_match(upcoming_) if c["id"] in redo and c.get("xodds") and _slot(c) not in seen]
+    announce = [c for c in CB.shown_pronos(upcoming_) if c["id"] in redo and c.get("xodds") and _slot(c) not in seen][:C.EVENING_LIMIT]      # la limite du message : une jambe non montrée n'est pas marquée annoncée
     today["pronos"] = merged
     today["announced"] += [_slot(c) for c in announce]
     today["xbet_at"] = stamp
@@ -1910,7 +1910,7 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
         rl = referee_line(ref, deep, "\n".join(fl))
         if rl:
             body += "\n" + rl
-        shown, wait = CB.best_per_match(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
+        shown, wait = CB.shown_pronos(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
         return Html(comma(head + "\n" + body) + "\n\n" + ("\n\n".join(([str(fmt.pronos(shown, 6, when=when))] if shown or not wait else []) + [wait])
                                                          if wait else str(fmt.pronos(shown, 6, when=when))))
     events = list(dict.fromkeys(c["event"] for c in found))
@@ -2018,18 +2018,20 @@ def reread_match(pronos, query, now=None):
 def _event_pronos(pronos, found):
     """Pronostics 💎 (cote 1xBet relevée) des matchs de `found` : de quoi montrer leurs prix 1xBet à côté des paris réels."""
     ids = {c["id"] for c in found}
-    return CB.best_per_match([c for c in pronos if c["id"] in ids and c.get("xodds")])
+    return CB.shown_pronos([c for c in pronos if c["id"] in ids and c.get("xodds")])
 
 
 def top_reply(live, live_pronos, when=None, picks_when=None):
     """/top : les meilleurs paris réels encore jouables (cotes 1xBet de `picks_when` quand 1xBet les a chiffrés ; sinon cotes de référence
     des autres bookmakers, dites comme telles) ET les pronostics 💎 aux cotes 1xBet (`when`) des autres matchs. Un pari absent de
     1xBet n'est pas montré comme jouable (CB.make_pool)."""
-    best = sorted(CB.per_event(CB.make_pool(live), k=1), key=lambda c: c["score"], reverse=True)[:10] if live else []
-    shown = CB.best_per_match(live_pronos)
-    if best:                                        # avec des paris réels : seulement les 💎 d'autres matchs (jamais deux fois le même match)
-        ids = {c["id"] for c in best}
-        shown = [c for c in shown if c.get("xodds") and c["id"] not in ids]
+    pool = CB.make_pool(live) if live else []
+    keep = {c["key"] for c in CB.per_event(pool, k=1)} | {c["key"] for c in pool if CB.value_leg(c)}      # le meilleur pari de chaque match + TOUTES les jambes à valeur
+    best = sorted((c for c in pool if c["key"] in keep), key=lambda c: c["score"], reverse=True)[:10]
+    shown = CB.shown_pronos(live_pronos)
+    if best:                                        # avec des paris réels : seulement les 💎 d'un autre marché ou d'un autre match (jamais deux fois le même pari)
+        slots = {_slot(c) for c in best}
+        shown = [c for c in shown if c.get("xodds") and _slot(c) not in slots]
     parts = []
     if best:
         priced = all(c.get("xodds") for c in best)
@@ -2218,7 +2220,7 @@ def _handle_command(text):
         if not found:
             free = event_matches(pronos, " ".join(args))
             if free:
-                shown, wait = CB.best_per_match(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
+                shown, wait = CB.shown_pronos(free), "\n\n".join(x for x in (pending_lines(free), underpaid_lines(free)) if x)
                 if wait and not shown:
                     return Html(wait)
                 return Html(str(fmt.pronos(shown, 8, when=when)) + ("\n\n" + wait if wait else ""))
@@ -2289,13 +2291,10 @@ def _sweep_line(picks, pronos):
         return ""
     fams = {calib.family(c["market"]) for c in rows}
     lines = sum(len(c.get("alts") or [None]) for c in rows)
-    per = {}
-    for c in legs:
-        per[c["id"]] = per.get(c["id"], 0) + 1
     miss = [calib.LABELS.get(f, f) for f in SWEEP_FAMILIES if f not in fams]
     s = lambda n, one, many: f"{n} {one if n <= 1 else many}"      # noqa: E731
     return (f"📊 {s(len({c['id'] for c in rows}), 'match', 'matchs')} · {s(len(fams), 'famille analysée', 'familles analysées')} · {s(lines, 'ligne évaluée', 'lignes évaluées')}"
-            f" · {s(len(legs), 'jambe possible', 'jambes possibles')}" + (f" (jusqu'à {max(per.values())} marchés par match ; un combiné n'en prend qu'un par match)" if per and max(per.values()) > 1 else "")
+            f" · {s(len(legs), 'jambe possible', 'jambes possibles')} · {CB.value_line(legs)}"
             + (f" · non balayées : {', '.join(miss)}" if miss else ""))
 
 

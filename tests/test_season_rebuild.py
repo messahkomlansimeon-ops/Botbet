@@ -107,7 +107,8 @@ def test_several_markets_per_match():
         by.setdefault(c["id"], set()).add(c["market"])
     assert any(len(v) >= 2 for v in by.values()), by
     line = SL.summary_line(info).split("\n")[1]
-    assert f"{info['families']} familles analysées" in line and f"{info['lines']} lignes évaluées" in line and f"jusqu'à {info['per_match_max']} marchés par match ; un combiné n'en prend qu'un par match" in line, line
+    assert f"{info['families']} familles analysées" in line and f"{info['lines']} lignes évaluées" in line and "jambes à valeur sur" in line and "matchs avec plusieurs)" in line and "jusqu'à" not in line, line
+    assert info["value_matches"] >= 2 and info["value_multi"] >= 1 and f"{info['value_legs']} jambes à valeur sur {info['value_matches']} matchs ({info['value_multi']} match" in line, (info, line)
     # le combiné, lui, ne prend qu'un pari par match
     combo = CB_plan(legs)
     assert combo and len({l["id"] for l in combo[0]}) == len(combo[0])

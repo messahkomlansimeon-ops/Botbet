@@ -589,10 +589,52 @@ def best_per_match(pronos):
     real = any(c.get("xodds") for c in pronos)
     best = {}
     # à la cote 1xBet : le pari du match qui rapporte le plus (valeur x proba, comme xprice.choose) ; sinon le mieux classé
-    for c in sorted(pronos, key=lambda c: -((c.get("xev") or 0.0) * c["prob"] if real and c.get("xodds") else c.get("score", 0))):       # xev absent : ligne écartée plus loin (viable)
+    for c in sorted(pronos, key=lambda c: -_show_rank(c, real)):
         if c["id"] not in best and viable(c) and (c.get("xodds") or not real):
             best[c["id"]] = c
     return list(best.values())
+
+
+def _show_rank(c, real):
+    return (c.get("xev") or 0.0) * c["prob"] if real and c.get("xodds") else c.get("score", 0)       # xev absent : ligne écartée plus loin (viable)
+
+
+VALUE_STRATEGIES = ("sharpgap", "stats", "saison")
+
+
+def value_leg(c):
+    """Jambe à valeur : sa voie est sharpgap / stats / saison (ensemble.strategy_of) et ce n'est pas un favori « probable » 🎯 (sans valeur)."""
+    return c.get("strategy") in VALUE_STRATEGIES and c.get("xkind") != "probable"
+
+
+def value_counts(legs):
+    """(jambes à valeur, matchs, matchs avec plusieurs jambes à valeur) de `legs`."""
+    per = {}
+    for c in legs:
+        if value_leg(c):
+            per[c["id"]] = per.get(c["id"], 0) + 1
+    return sum(per.values()), len(per), sum(1 for v in per.values() if v > 1)
+
+
+def value_line(legs):
+    """« 12 jambes à valeur sur 9 matchs (4 matchs avec plusieurs) » : combien de jambes à valeur le jour offre, et sur combien de matchs (celles d'un même match
+    vont dans des combinés différents, jamais dans le même)."""
+    n, m, k = value_counts(legs)
+    if not n:
+        return "aucune jambe à valeur"
+    many = "aucun match avec plusieurs" if not k else f"{k} match{'s' if k > 1 else ''} avec plusieurs"
+    return f"{n} jambe{'s' if n > 1 else ''} à valeur sur {m} match{'s' if m > 1 else ''} ({many})"
+
+
+def shown_pronos(pronos):
+    """Les pronostics à montrer (💎 / 🎯) : TOUTES les jambes à valeur viables chez 1xBet, de toutes les familles (une ligne par famille et par match : la ligne
+    de xprice.choose), plus le meilleur pari du match de best_per_match (un 🎯 probable n'est montré que lui, un par match). Toujours un sur-ensemble de
+    best_per_match, dans le même ordre de classement. Le « un pari par match » ne vaut que DANS un combiné (best_combo) ; deux combinés peuvent
+    prendre deux marchés différents du même match, dans le plafond de réutilisation de chaque jambe (reuse_cap)."""
+    real = any(c.get("xodds") for c in pronos)
+    keep = {c["key"] for c in best_per_match(pronos)}
+    keep |= {c["key"] for c in pronos if c.get("xodds") and value_leg(c) and viable(c)}
+    return [c for c in sorted(pronos, key=lambda c: -_show_rank(c, real)) if c["key"] in keep]
 
 
 def fair_eligible(c):
@@ -793,34 +835,34 @@ def season_signature():
 
 
 def season_auto_plan(legs, usage=None, max_combos=None, busy_tiers=(), exclude=()):
-    """Combinés `saison` à paliers ADAPTATIFS : [(palier « ssa4.2 », (jambes, cote, proba))]. Les jambes (une par match : la meilleure) sont classées valeur d'abord (sval) puis par p x cote
-    décroissant ; le combiné k prend les meilleures jambes encore libres, tant que l'espérance du combiné reste >= C.SEASON_AUTO_MIN_EV et la cote <= C.SEASON_AUTO_MAX_ODDS (arrêt à la
+    """Combinés `saison` à paliers ADAPTATIFS : [(palier « ssa4.2 », (jambes, cote, proba))]. Toutes les jambes (plusieurs marchés par match possibles) sont classées valeur d'abord (sval) puis par p x cote
+    décroissant ; le combiné k prend les meilleures jambes encore libres (une par match dans un combiné), tant que l'espérance du combiné reste >= C.SEASON_AUTO_MIN_EV et la cote <= C.SEASON_AUTO_MAX_ODDS (arrêt à la
     première jambe qui ne passe pas : elle ouvre le combiné suivant). Arrêt : moins de 2 jambes utilisables, C.SEASON_AUTO_MAX_COMBOS combinés ou C.MAX_LEGS jambes. Aucune jambe n'est partagée
-    entre deux combinés, envoyés ou en fantôme. Le palier porte la cote réelle (« ssa4.2 ») : jamais deux fois le même dans la journée. Un combiné envoyé consomme `usage` comme les autres."""
+    entre deux combinés, envoyés ou en fantôme (un autre marché du même match peut aller dans un autre combiné). Le palier porte la cote réelle (« ssa4.2 ») : jamais deux fois le même dans la journée. Un combiné envoyé consomme `usage` comme les autres."""
     usage = usage if usage is not None else Usage()
     limit = C.SEASON_AUTO_MAX_COMBOS if max_combos is None else max_combos      # `max_combos` : places restantes (reconstruction à la demande) ; `busy_tiers` : paliers déjà pris dans la journée (fermés compris) ; `exclude` : matchs interdits (combinés notés joués)
     exclude = {str(x) for x in exclude}
-    best = {}
     key = lambda c: (1 if c.get("sval") else 0, c["prob"] * c["odds"])      # noqa: E731 - valeur d'abord, remplissage ensuite
-    for c in usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and str(c.get("id")) not in exclude]):
-        if c["id"] not in best or key(c) > key(best[c["id"]]):
-            best[c["id"]] = c
-    ranked = sorted((c for c in best.values() if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # FILL_LEGS éteint : jamais de remplissage
-    out, used = [], set()
+    pool = usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and str(c.get("id")) not in exclude])
+    ranked = sorted((c for c in pool if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # TOUTES les jambes (plusieurs marchés par match) ; FILL_LEGS éteint : jamais de remplissage
+    out, used = [], set()                            # used : jambes (match, marché, sélection, ligne) déjà prises par un combiné de ce passage
     busy_tiers = {str(t) for t in busy_tiers}
     while len(out) < limit:
-        free = [c for c in ranked if c["id"] not in used]
-        taken, ev_prod, odds, p_all = [], 1.0, 1.0, 1.0
+        free = [c for c in ranked if leg_id(c) not in used]
+        taken, ev_prod, odds, p_all, matches = [], 1.0, 1.0, 1.0, set()
         for c in free:
+            if c["id"] in matches:                   # un seul pari par match DANS un combiné ; un autre marché du même match peut aller dans le combiné suivant
+                continue
             if len(taken) >= C.MAX_LEGS or not _auto_ok(ev_prod * c["prob"] * c["odds"], odds * c["odds"], p_all * c["prob"]):
                 break
             taken.append(c)
+            matches.add(c["id"])
             ev_prod *= c["prob"] * c["odds"]
             odds *= c["odds"]
             p_all *= c["prob"]
         if len(taken) < 2:
             break
-        used |= {c["id"] for c in taken}
+        used |= {leg_id(c) for c in taken}
         legs_ = sorted(taken, key=lambda c: (c.get("commence", ""), str(c["id"])))
         tier, step = None, 1
         busy = busy_tiers | {t for t, _ in out}
@@ -862,11 +904,7 @@ def season_patch(legs, pool, lo, hi, fresh_ids=None, usage=None):
     if not keep or total < lo or len(keep) < 2:
         used = {c["id"] for c in keep}
         spares = [c for c in pool if c["id"] not in used and c.get("xodds") and c.get("sval") is not None and c.get("lane") == "saison" and lanes.usable(c) and (usage is None or usage.allowed(c))]
-        best = {}
-        for c in spares:                                    # une jambe par match : la plus probable
-            if c["id"] not in best or c["prob"] > best[c["id"]]["prob"]:
-                best[c["id"]] = c
-        spares = [c | {"odds": c["xodds"]} for c in best.values()]
+        spares = [c | {"odds": c["xodds"]} for c in spares]            # toutes les jambes : _best_combo n'en prend qu'une par match
         rlo, rhi = max(lo / total, 1.01), hi / total
         if rhi < rlo:
             return None

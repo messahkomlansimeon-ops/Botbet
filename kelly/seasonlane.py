@@ -519,10 +519,13 @@ def rebuild(now, fetch=None):
             legs.append(chosen)
     asked = {e["id"] for _, e in events}
     info["unread"] = len(ids - asked)                  # prédits mais au-delà du plafond de matchs : jamais demandés à 1xBet
-    per = {}
+    per, val = {}, {}
     for c in legs:
         per[c["id"]] = per.get(c["id"], 0) + 1
-    info.update(lines=tally["lines"], families=len(tally["fams"]), legs=len(legs), legs_matches=len(per), per_match_max=max(per.values(), default=0))
+        if c.get("sval"):
+            val[c["id"]] = val.get(c["id"], 0) + 1
+    info.update(lines=tally["lines"], families=len(tally["fams"]), legs=len(legs), legs_matches=len(per), per_match_max=max(per.values(), default=0),
+                value_legs=sum(val.values()), value_matches=len(val), value_multi=sum(1 for v in val.values() if v > 1))      # jambes à valeur (sval 1) : le reste est du remplissage
     info["no_price"] = len(asked - priced)             # demandés mais AUCUNE ligne n'a de prix ni d'avis de marché (match introuvable chez 1xBet, marché absent, ou relevé arrêté par le délai)
     record(rows, day, now)
     return legs, info
@@ -541,9 +544,11 @@ def summary_line(info):
     if info.get("unread"):
         out += f" · {s(info['unread'], 'match non relu', 'matchs non relus')} (au-delà du plafond de {C.SEASON_MAX_MATCHES} matchs)"
     if info.get("lines"):                             # le balayage : tout ce qui est évalué, pas seulement ce qui est gardé ; un match garde PLUSIEURS marchés intéressants (un combiné n'en prend qu'un)
+        many = "aucun match avec plusieurs" if not info.get("value_multi", 0) else s(info.get("value_multi", 0), "match avec plusieurs", "matchs avec plusieurs")
+        fill = info["legs"] - info.get("value_legs", 0)
         out += (f"\n📊 {s(info['read'], 'match', 'matchs')} · {s(info['families'], 'famille analysée', 'familles analysées')} · {s(info['lines'], 'ligne évaluée', 'lignes évaluées')}"
-                f" · {s(info['legs'], 'jambe retenue', 'jambes retenues')} sur {s(info['legs_matches'], 'match', 'matchs')}"
-                + (f" (jusqu'à {info['per_match_max']} marchés par match ; un combiné n'en prend qu'un par match)" if info['per_match_max'] > 1 else "")
+                f" · {s(info.get('value_legs', 0), 'jambe à valeur', 'jambes à valeur')} sur {s(info.get('value_matches', 0), 'match', 'matchs')} ({many})"
+                + (f" + {s(fill, 'jambe de remplissage', 'jambes de remplissage')}" if fill else "")
                 + f" · non balayées : {', '.join(NOT_SWEPT)}")
     return out
 

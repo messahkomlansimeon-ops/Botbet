@@ -272,7 +272,7 @@ def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep, before=None):
     protected = app._sent_keys(day)
     if "announced" not in today:                    # premier relevé du jour : les 💎 du matin sont déjà connus (comme run_xbet_refresh)
         soon = now + timedelta(minutes=C.XBET_SOON_MIN)
-        today["announced"] = [app._slot(c) for c in CB.best_per_match(
+        today["announced"] = [app._slot(c) for c in CB.shown_pronos(
             [c for c in today["pronos"] if (c.get("commence") or "9")[:16] > soon.isoformat()[:16]]) if c.get("xodds")]
     changed = []
     if jobs:
@@ -328,22 +328,26 @@ def _value(c):
 
 
 def announce_list(today, doc, now):
-    """Nouveaux 💎 stats à annoncer : pronostics stats de la fenêtre, à cote 1xBet fraîche et viables (combos.viable : jamais sous la cote mini), le meilleur de chaque match
-    (valeur x proba), pas déjà annoncés : un match qui a déjà eu un 💎 stats aujourd'hui n'en a pas un deuxième (ni une ligne qui change dans la journée, ni un autre marché
-    stats du même match qui s'ouvre plus tard : « écris un nom d'équipe » les montre), dans la limite du jour."""
+    """Nouveaux 💎 stats à annoncer : pronostics stats de la fenêtre, à cote 1xBet fraîche et viables (combos.viable : jamais sous la cote mini), TOUTES les jambes à valeur (tous les marchés stats d'un match), plus
+    le meilleur pari du match s'il n'a pas de valeur et si le match n'a pas encore eu de 💎 stats ; pas déjà annoncés (une ligne qui change dans la journée reste le même pari : _slot),
+    dans la limite du jour."""
     if C.STATS_WINDOW_ANNOUNCE <= 0:
         return []
     seen = {str(s) for s in doc["announced"]} | {str(s) for s in today.get("announced") or []}
     done = {s.partition("|")[0] for s in seen if s.partition("|")[2].startswith(PREFIX)}      # matchs dont un 💎 stats a déjà été annoncé aujourd'hui
     room = C.STATS_WINDOW_DAY_ANNOUNCE - len(doc["announced"])
-    best = {}
+    best, extra = {}, {}
     for c in today["pronos"]:
         if not (is_stat(c) and in_window(c, now) and fresh(c, now) and CB.viable(c)):
             continue
-        if _app()._slot(c) in seen or c["id"] in done:
+        slot = _app()._slot(c)
+        if slot in seen:                             # déjà annoncé (même match, même marché)
             continue
-        if c["id"] not in best or _value(c) > _value(best[c["id"]]):
-            best[c["id"]] = c
+        if CB.value_leg(c):                          # une jambe à valeur est toujours annoncée, même si un autre marché du match l'a déjà été
+            extra[slot] = c
+        if c["id"] not in done and (c["id"] not in best or _value(c) > _value(best[c["id"]])):
+            best[c["id"]] = c                        # sans valeur (🎯 / complément) : le meilleur du match seulement, et pas si le match a déjà eu un 💎 stats
+    best = extra | {_app()._slot(c): c for c in best.values()}
     new = sorted(best.values(), key=lambda c: -_value(c))
     return new[:max(0, min(C.STATS_WINDOW_ANNOUNCE, room))]
 

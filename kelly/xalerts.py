@@ -373,10 +373,10 @@ def _rise_text(c, old, new, value, at):
 
 
 def rise_items(pronos, got, at, targets, prices, noted=()):
-    """📈 Les paris montrés ce matin (pronostics 💎 : CB.best_per_match, relus à ce relevé `at` ; paris réels : pari du jour et jambes des
+    """📈 Les paris montrés ce matin (pronostics 💎 : CB.shown_pronos, relus à ce relevé `at` ; paris réels : pari du jour et jambes des
     combinés non notés joués) dont la cote 1xBet a monté d'au moins C.XALERT_RISE depuis le matin (xodds0) et qui ont toujours de la valeur."""
     out, seen = [], set()
-    for c in CB.best_per_match(pronos):
+    for c in CB.shown_pronos(pronos):
         old, new = c.get("xodds0"), c.get("xodds")
         if c["id"] in got and old and new and new / old - 1 >= C.XALERT_RISE and (c.get("xev") or 0) > 0 and c.get("xkind") != "probable" and c["key"] not in noted:       # 🎯 « sans valeur » : jamais annoncé comme une valeur
             seen.add(c["key"])
