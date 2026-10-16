@@ -70,7 +70,7 @@ def test_morning_not_sent():
     try:
         msgs3, _, _ = app.build_day([], DAY, pronos=legs, fair_combos=fair_combos, odds_time="09:30")
         t3 = "\n".join(str(m) for m in msgs3)
-        assert "1,30" in t3 and "sans valeur : suivi en fantôme, pas de mise" in t3 and not fair.load_ghost(), t3[:600]          # envoyé, avec la mention, rien en fantôme
+        assert "1,30" in t3 and "sans valeur : aucune jambe ne bat le marché" in t3 and "pas de mise conseillée" in t3 and not fair.load_ghost(), t3[:600]          # envoyé, avec la mention, rien en fantôme
         assert "FCFA → si ça passe" not in t3, "aucune mise conseillée"
         C.NOVALUE_STAKE = 50.0                                                          # mise fixe optionnelle : montant ET mention
         t4 = "\n".join(str(m) for m in app.build_day([], DAY, pronos=legs, fair_combos=fair_combos, odds_time="09:30")[0])

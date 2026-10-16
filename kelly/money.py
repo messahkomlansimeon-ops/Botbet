@@ -340,6 +340,13 @@ def no_stake_txt(prob=None, odds=None):
 
 
 NOVALUE_TXT = "👻 sans valeur : suivi en fantôme, pas de mise"
+NOVALUE_SENT_TXT = "⚠️ sans valeur : aucune jambe ne bat le marché, en moyenne ce combiné perd sa marge · pas de mise conseillée"      # NOVALUE_SEND : le combiné est ENVOYÉ, il n'est plus un fantôme
+
+
+def novalue_txt():
+    """La mention d'un combiné sans valeur : fantôme (NOVALUE_TXT) ou envoyé avec avertissement (NOVALUE_SEND)."""
+    from . import config as C
+    return NOVALUE_SENT_TXT if C.NOVALUE_SEND else NOVALUE_TXT
 
 
 NOFILL_TXT = "sans valeur · pas de mise (budget du jour épuisé ou mise sous le pas d'arrondi)"      # combiné de remplissage ENVOYÉ de la voie `saison` sans mise ce jour-là
@@ -359,7 +366,7 @@ def stake_words(st, prob=None, odds=None, suffix="", p_mkt=None, novalue=False, 
     if st is None:
         return NO_EDGE if prob is not None and odds is not None and not has_edge(prob, odds) else None
     if not st:
-        return NOVALUE_TXT if novalue else no_stake_txt(prob, odds)
+        return novalue_txt() if novalue else no_stake_txt(prob, odds)
     tag = " · sans valeur" if novalue else ""            # mise fixe optionnelle d'un combiné sans valeur : toujours dite
     if capital_mode():
         lot = " · ticket loterie" if is_lottery(prob, odds, p_mkt) else ""

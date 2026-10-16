@@ -629,7 +629,7 @@ KELLY_FRACTION = KELLY_FRACTION_SHARPGAP
 # Un combiné SANS aucune jambe à valeur est « sans valeur » : pas dimensionné par Kelly, mise fixe (FCFA) ; 0 = la mise minimale, c'est-à-dire un pas d'arrondi du budget (money.round_step).
 # Elle passe par la même limite que les autres (3 % / 1 % du capital) et est déduite du reste du jour : le bilan montre ce que ces combinés coûtent.
 NOVALUE_STAKE = _float("NOVALUE_STAKE", 0)
-NOVALUE_SEND = _bool("NOVALUE_SEND", False)      # faux : un combiné SANS valeur (toutes jambes fill) construit automatiquement n'est PAS envoyé (suivi en fantôme, ghost_combos.json) ; vrai : envoyé avec la mention « sans valeur », sans mise conseillée
+NOVALUE_SEND = _bool("NOVALUE_SEND", True)      # (vrai par défaut depuis le 16/10, sur demande : un jour sans valeur, les combinés partent quand même avec un avertissement) faux : un combiné SANS valeur (toutes jambes fill) construit automatiquement n'est PAS envoyé (suivi en fantôme, ghost_combos.json) ; vrai : envoyé avec la mention « sans valeur », sans mise conseillée
 STAKE_CAP = {"🛡️": 0.05, "⚖️": 0.02, "🎯": 0.015, "🔥": 0.01, "💀": 0.005}   # part max de la bankroll par tier
 MIN_STAKE_SHARE = 0.002
 # Espérance minimale d'un combiné (proba x cote typique) : la marge du bookmaker se multiplie à chaque jambe. Sous ce seuil Kelly

@@ -258,8 +258,8 @@ def test_day_stakes_end_to_end():
     with conf(NOVALUE_STAKE=50.0):
         fixed = app.day_stakes(top, built, [(6.0, ([fl, fl2], 6.0, 0.10))])
     assert fixed[0][("fair", 6.0)] == 50 and fixed[1] == plain["🛡️ SÛR"] + 50, "mise fixe optionnelle, comptée dans le misé"
-    assert money.stake_words(0, 0.1, 6.0, novalue=True) == money.NOVALUE_TXT and "· sans valeur" in money.stake_words(50, 0.1, 6.0, novalue=True)
-    assert app._stake_words(0, 0.1, 6.0, legs=[fl, fl2]) == money.NOVALUE_TXT
+    assert money.stake_words(0, 0.1, 6.0, novalue=True) == money.novalue_txt() and "· sans valeur" in money.stake_words(50, 0.1, 6.0, novalue=True)
+    assert app._stake_words(0, 0.1, 6.0, legs=[fl, fl2]) == money.novalue_txt()
     stats = prono("alternate_totals_corners", "Under", 9.5, lane="stats")
     stake_stats = app.day_stakes(None, [("🛡️ SÛR", ([stats, stats | {"key": "k3"}], 3.0, 0.40))], [])[0]["🛡️ SÛR"]
     assert stake_stats < plain["🛡️ SÛR"], "un combiné de la voie stats mise 60 % de la part"

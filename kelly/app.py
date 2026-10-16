@@ -1279,7 +1279,7 @@ def _stake_txt(row):
     if st:
         return money.money(st)
     it = money.row_item(row) or {}
-    return money.NOVALUE_TXT if it.get("novalue") else money.NOFILL_TXT if it.get("flat") else money.no_stake_txt(it.get("prob"), it.get("odds"))
+    return money.novalue_txt() if it.get("novalue") else money.NOFILL_TXT if it.get("flat") else money.no_stake_txt(it.get("prob"), it.get("odds"))
 
 
 def _record_version(sent, row, rows, combo, hhmm, coupon=None):

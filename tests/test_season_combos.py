@@ -206,7 +206,7 @@ def test_fill_only_is_sent():
     assert money.stake_words(200, 0.1, 3.0, " (sur ton budget du jour)", flat=True) == "200 FCFA · sans valeur (sur ton budget du jour)"
     assert money.stake_words(0, 0.1, 3.0, flat=True) == money.NOFILL_TXT and "fantôme" not in money.NOFILL_TXT
     assert money.stake_words(None, 0.1, 3.0, flat=True).startswith("sans valeur") and "Kelly ne conseille" not in money.stake_words(None, 0.1, 3.0, flat=True)
-    assert money.stake_words(0, 0.1, 3.0, novalue=True) == money.NOVALUE_TXT, "un vrai fantôme garde son texte"
+    assert money.stake_words(0, 0.1, 3.0, novalue=True) == money.novalue_txt(), "un vrai fantôme garde son texte"
     assert app._stake_words(0, 0.1, 3.0, plan[0][1][0]) == money.NOFILL_TXT
     # l'argent de la voie n'entre pas dans « avec / sans valeur » des autres voies
     row = {"date": str(DAY), "tier": "ss3", "min_odds": 3.0, "prob": 0.3, "result": "win", "has_value": False, "legs": plan[0][1][0],
