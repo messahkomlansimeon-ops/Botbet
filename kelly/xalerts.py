@@ -367,9 +367,12 @@ def danger_items(targets, prices, day):
 
 
 def _rise_text(c, old, new, value, at):
+    """💎 seulement si le prix bat vraiment le marché ; une jambe jouable à valeur négative (stats / sûre : plancher −5 % / −9 %) est dite telle quelle."""
+    last = (f"💎 Valeur {fmt.signed(round(value * 100), ' %')} à ce prix" if value > 0
+            else f"⚖️ Valeur {fmt.signed(round(value * 100), ' %')} à ce prix : jambe jouable, mais elle ne bat pas le marché")
     return (f"{_match(c)}\n👉 {fmt.esc(c['pick'])} : 1xBet payait {fmt.odds_txt(old)} au premier relevé du jour, il paie maintenant "
             f"{fmt.b(fmt.odds_txt(new))} ({fmt.signed(round((new / old - 1) * 100), ' %')}, lu à {at})\n"
-            f"💎 Valeur {fmt.signed(round(value * 100), ' %')} à ce prix")
+            + last)
 
 
 def rise_items(pronos, got, at, targets, prices, noted=()):
