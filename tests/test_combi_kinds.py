@@ -95,6 +95,21 @@ def test_command():
     print("ok  combiné bâti seulement sur les types choisis, types gardés, mot inconnu expliqué, échec qui garde les types")
 
 
+def test_combi_auto():
+    """« combi auto » : pas de cote à choisir, la cote visée vient des jambes du jour (plafond 10) ; sans jambe, une explication."""
+    setup()
+    with Fakes():
+        out = app.handle_command("combi auto")
+    assert "Pas de combiné" not in str(out) and "Pas assez de jambes" not in str(out) and "Je le joue" in str(T.buttons(out)) + str(out.markup), out
+    with Fakes():
+        out2 = app.handle_command("/combi auto fautes")
+    assert "🎯 Paris choisis : fautes" in out2, out2
+    store.save("today.json", dict(store.load("today.json", {}), picks=[], pronos=[]))
+    r = app.handle_command("combi auto")
+    assert str(r).startswith(("Pas assez de jambes jouables", "Kelly n'a pas encore analysé")), (r, "jour sans jambe")
+    print("ok  « combi auto » : cote choisie par Kelly (types repris), explication sans jambe")
+
+
 def test_picker_buttons():
     setup()
     msg = chat.on_callback("combi|20", 55)
@@ -370,6 +385,7 @@ def test_force_and_proches():
 def main():
     test_parse()
     test_command()
+    test_combi_auto()
     test_picker_buttons()
     test_other_odds()
     test_tracked_and_refresh()

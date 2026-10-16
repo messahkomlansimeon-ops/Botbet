@@ -1694,7 +1694,7 @@ Touche un code pour le copier, ou le bouton <b>📋 Copier le code</b> sous un m
 
 <b>Tu peux aussi écrire</b>
 • un nom d'équipe : <i>Flamengo</i>
-• <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>capital 50000</i>, <i>perte max 5000</i>, <i>objectif 5000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
+• <i>combi auto</i> (Kelly choisit la cote, 10 au plus), <i>combi 20</i>, <i>combi 20 tirs fautes</i> (seulement ces types de paris), <i>combi 20 max 4</i> (4 paris au plus ; <i>pile 4</i> : exactement 4 ; <i>min 15</i> : 15 au moins, complétés si besoin par des paris probables mais mal payés, signalés), <i>bilan</i>, <i>bilan détail</i>, <i>mes paris</i>, <i>capital 50000</i>, <i>perte max 5000</i>, <i>objectif 5000</i>, <i>joué sûr 5,40 2000</i> (ou <i>2k</i>)
 • <i>état</i> : où en est le passage du matin (pourcentage et heure de fin estimée), réponse immédiate même pendant qu'il tourne
 • <i>status</i> : l'état de Kelly en un message (services, sources de stats, API et quotas), réponse immédiate
 • <i>live 20</i> (ou le bouton 🔴 Live) : un combiné sur les matchs en cours (30e à 88e minute), chances recalculées avec le score et le temps restant
@@ -2243,6 +2243,10 @@ def _handle_command(text):
     if cmd in ("/cotes", "/actualiser"):
         return manual_refresh()
     if cmd == "/combi":
+        if args and played.norm(args[0]) in ("auto", "automatique"):      # « combi auto » : pas de cote à choisir, Kelly vise la plus haute cote raisonnable (10 au plus) avec les jambes du jour
+            args = auto_args(picks, pronos, args[1:])
+            if args is None:
+                return "Pas assez de jambes jouables aujourd'hui pour un combiné automatique (il en faut au moins 2 de matchs différents)."
         target = combi_target(args)
         if target is None:
             return "Exemple : /combi 30, ou /combi 20 tirs fautes"
@@ -2264,6 +2268,27 @@ def _handle_command(text):
                              when=picks_when, kinds=kinds or None, bold=bold, nlegs=(n, exact) if n else None)
         return _with_sweep(reply, "\n".join(x for x in (sweep_line(live, upcoming(pronos)), dropped) if x))
     return "Commande inconnue. /aide pour la liste."
+
+
+def auto_args(picks, pronos, rest):
+    """Arguments de « /combi » pour « combi auto » : la cote visée est celle du combiné le plus probable que les jambes jouables du jour permettent, en partant de 10 (ou de la plus haute cote atteignable) et en descendant (min 1,5) ;
+    None si aucun combiné de 2 paris n'est possible. `rest` : les mots qui suivent « auto » (types de paris, nombre de paris), repris tels quels."""
+    live, free = upcoming(picks), upcoming(pronos)
+    legs = CB.fair_legs(free) if any(c.get("xodds") for c in free) else CB.make_pool(live)
+    kinds, _ = chat.parse_kinds([w for w in rest if played.norm(w) not in chat.BOLD_WORDS])
+    if kinds:                                       # « combi auto fautes » : la cote atteignable se calcule sur ces types-là seulement
+        legs = CB._keep(legs, CB.kinds_prefix(kinds))
+    top = CB.reach(legs)
+    t = min(10.0, top)
+    while t >= 1.5:                                 # de la plus haute cote visée vers le bas : la première pour laquelle un combiné existe vraiment
+        got = CB.best_combo(legs, t, t * (1 + C.CUSTOM_TOLERANCE))
+        if got:
+            target = math.floor(got[1] * 10) / 10          # arrondie vers le bas : la cote visée ne dépasse jamais la cote du combiné
+            break
+        t *= 0.85
+    else:
+        return None
+    return [fmt.num(target)] + list(rest)
 
 
 MIN_COMBI = 1.01                         # cote visée minimale de « /combi N »
