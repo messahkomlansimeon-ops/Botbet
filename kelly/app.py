@@ -11,7 +11,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, confirm, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
-               cupstats, seasonlane, xprice, xworld)
+               cupstats, edgemap, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
@@ -489,6 +489,7 @@ def morning_report(now):
     if got_sea and (got_sea[0] or got_sea[1]):
         print(f"[saison] journal : {len(got_sea[0])} ligne(s) réglée(s), {got_sea[1]} apprise(s)", file=sys.stderr)
     cut = _step("coupure automatique de la voie stats", lambda: lanestats.apply(now.date()), [])      # après le règlement : juge les lignes réglées ; le message passe en PREMIER
+    _step("carte des edges", lambda: edgemap.apply(now.date()))            # le lundi seulement, après la coupure : lecture seule, aucun pari ne change tant que EDGEMAP_GATE est éteint
     cut_msgs = _step("état des voies", lanestats.cut_lines, [])
     if cut_msgs:
         cut_msg = Html("\n".join(fmt.esc(x) for x in cut_msgs))
@@ -1673,6 +1674,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
    🌱 <b>Saison</b> (ou écris <i>saison</i>, <i>saison 10</i>, <i>saison auto</i>) : la voie « saison en cours », qui juge les équipes sur les seuls matchs de cette saison ; son état (un bouton rouvre chaque combiné, « 🔄 Reconstruire » relance la construction automatique du jour : les combinés non joués sont remplacés, ceux que tu as notés joués sont gardés), ou un combiné à la cote voulue
    📈 <b>Tendances</b> : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
    📉 <b>Courbes</b> (ou écris <i>courbes</i>) : deux images, ton capital jour après jour et ton CLV 1xBet cumulé avec son intervalle
+   🗺️ <b>Carte</b> (écris <i>carte</i>, <i>carte stats</i>, <i>carte saison</i>) : où les voies stats et saison battent le dernier prix 1xBet, case par case (lecture seule)
    🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
    🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage) · ❓ <b>Aide</b> · 🔄 <b>Actualiser les cotes</b>
 Le bouton <b>/</b> à gauche de la zone de saisie liste aussi les commandes principales.
@@ -2168,6 +2170,8 @@ def _handle_command(text):
         return money.max_loss_command(args)
     if cmd == "/voies":
         return lanes.command(args)
+    if cmd == "/carte":                             # « carte [stats | saison] » : carte des edges par case (kelly/edgemap.py)
+        return edgemap.report(args)
     if cmd == "/saison":
         return season_command(args, today)
     if cmd == "/objectif":

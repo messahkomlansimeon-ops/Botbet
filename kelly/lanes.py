@@ -7,7 +7,7 @@ L'état de la coupure automatique de la voie stats est dans le document strategy
 il PRIME sur la configuration « on » et ne revient à « on » qu'à la main (reset)."""
 import time
 
-from . import config as C, ensemble, store
+from . import config as C, edgemap, ensemble, store
 
 STATE_FILE = "strategy_state.json"
 _memo = {"t": 0.0, "v": None}
@@ -83,19 +83,24 @@ def _cup_stat(c):
     return bool(c.get("cup")) and c.get("lane") != "saison" and lane_of_market(c.get("market")) == "stats"
 
 
+def _edge_ok(c):
+    """Carte des edges (kelly/edgemap.py) : éteinte par défaut (EDGEMAP_GATE) -> toujours vrai, sans rien lire ; allumée, une jambe à valeur dont la case est rouge est refusée (fantôme)."""
+    return (not C.EDGEMAP_GATE) or edgemap.gate_ok(c)
+
+
 def usable(c):
     """La ligne `c` (pronostic ou pari réel) peut-elle être sélectionnée pour un pari ou une jambe de combiné ? Ensemble éteint : toujours (comportement d'avant)."""
     if not C.ENSEMBLE_ENABLED:
         return True
     if _cup_stat(c):                                # stats de coupe : « on » seulement (ghost / off : calculées, journalisées, jamais choisies), voie stats « on » et non coupée
         return (C.STATS_CUPS_MODE == "on" and C.STRATEGY_STATS == "on" and (state().get("stats") or {}).get("mode") != "ghost"
-                and not (c.get("strategy") == "fill" and not C.FILL_LEGS))
+                and not (c.get("strategy") == "fill" and not C.FILL_LEGS) and _edge_ok(c))
     if c.get("strategy") == "saison" or c.get("lane") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
-        return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS)
+        return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS) and _edge_ok(c)
     lane = lane_of_market(c.get("market"))
     if lane and mode(lane, c.get("sport_key")) != "on":
         return False
-    return not (c.get("strategy") == "fill" and not C.FILL_LEGS)
+    return not (c.get("strategy") == "fill" and not C.FILL_LEGS) and _edge_ok(c)
 
 
 def gaps_allowed():

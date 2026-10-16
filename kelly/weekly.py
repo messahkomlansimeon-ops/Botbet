@@ -95,6 +95,13 @@ def message(now=None):
     except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
         print(f"[weekly] voies illisibles : {type(e).__name__}: {e}", file=sys.stderr)
     try:
+        from . import edgemap
+        em = edgemap.weekly_lines()                 # l'état ENREGISTRÉ au dernier lundi (le même que celui du mécanisme), jamais un recalcul
+        if em:
+            blocks.append(["🗺️ <b>Carte des edges</b> " + fmt.i("(CLV 1xBet par case ; lecture seule tant que le mécanisme est éteint)")] + [fmt.esc(("• " if not x.startswith(" ") else "") + x) for x in em])
+    except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
+        print(f"[weekly] carte illisible : {type(e).__name__}: {e}", file=sys.stderr)
+    try:
         from . import combovariants
         cv = combovariants.lines()                  # lecture du lundi : sur toute la période suivie (la règle pré-déclarée compte des paliers et des jours cumulés)
         if cv:

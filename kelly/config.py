@@ -614,6 +614,7 @@ SEASON_AUTO_VERSION = 1                                        # à AUGMENTER à
 SEASON_REBUILD_GAP = max(0, _int("SEASON_REBUILD_GAP", 5))     # minutes au moins entre deux « saison auto » / « 🔄 Reconstruire » (chaque reconstruction relit 1xBet par le proxy)
 SEASON_AUTO_LOTTERY_ODDS = _float("SEASON_AUTO_LOTTERY_ODDS", 25)      # mode auto : dès cette cote, mise plafonnée comme un ticket loterie (money.LOTTERY_STAKE)
 SEASON_SPREAD = min(0.9, max(0.0, _float("SEASON_SPREAD", 0.20)))
+EDGEMAP_GATE = _bool("EDGEMAP_GATE", False)       # carte des edges (kelly/edgemap.py) : ÉTEINT par défaut ; allumé, une jambe à valeur (stats, saison) dont la case ou l'agrégat lisible le plus proche est ROUGE passe en fantôme ; agit seulement 28 jours après le premier lundi évalué (activation : décision du superviseur, edgemap_ledger.json)
 SEASON_TIER_PREFIX = "ss"                                                    # palier d'un combiné de la voie : « ss3 », « ss10 », « ss30 », « ss100 »
 SEASON_TITLE = "🧮 SAISON EN COURS"
 KELLY_FRACTION_SEASON = _float("KELLY_FRACTION_SEASON", 0.15)                # part de mise de la voie (relative à KELLY_FRACTION_REF, comme les autres voies)
