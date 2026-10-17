@@ -87,6 +87,14 @@
    "by": "superviseur (confirmation écrite dans la session du 16/10/2026)",
    "gate_rule": "rouge -> fantôme ; vert et gris -> joués (comportement actuel). La carte retire ce qui a prouvé qu'il perd ; elle n'exige pas de preuve positive pour jouer.",
    "activation": "le mécanisme ne peut agir qu'après 28 jours à compter du premier lundi évalué (19/10/2026, donc au plus tôt le 16/11/2026) ET une décision explicite du superviseur : les deux conditions ensemble. EDGEMAP_GATE reste éteint jusque-là."
+  },
+  {
+   "on": "2026-10-17",
+   "before_any_real_read": true,
+   "prereg_sha_unchanged": true,
+   "by": "demande de l'utilisateur (voie cotes « et dans carte », 17/10/2026) ; amendement écrit AVANT la première évaluation du lundi 19/10/2026",
+   "voie_cotes": "une cinquième voie « cotes » (affichée « cotes (fantôme) ») entre dans la carte : population = lignes de oddsonly_log.json des mécanismes 1a, 1b, 1c et 2, de statut « value » à la première détection, jamais devenues suspectes (went_suspect faux), RÉGLÉES, une clé une seule fois ; ligue = sport_key, famille = calib.family(marché), sens = plus (Over) / moins (Under) / autre ; mesures, seuils (100 / 300 lignes à CLV mesuré, 30 matchs), couleurs, cascade, cadence du lundi et règle des deux lundis IDENTIQUES aux autres voies ; annoncé = p_impl (champ pe)",
+   "caveats": "la case ne distingue pas les mécanismes (1a, 1b, 1c et 2 sont mélangés dans une case voie × ligue × famille × sens) : la lecture par mécanisme est celle de la commande « incohérences » ; EDGEMAP_GATE ne s'applique pas à cette voie (aucune jambe : lanes.usable ne la lit jamais), elle est en lecture seule ; aucune case ne sera lisible avant des semaines de collecte et de règlement"
   }
  ]
 }
