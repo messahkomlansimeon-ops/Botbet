@@ -35,17 +35,25 @@ def test_replies():
     reset()
     r = MC.handle([], NOW)
     assert "Je lance le matin" in r and MC.read_request() == {"at": MC.read_request()["at"], "force": False}, r
-    assert "déjà demandé" in MC.handle([], NOW) and "déjà demandé" in MC.handle(["force"], NOW).replace("(force)", ""), "une seule demande à la fois"
+    assert "déjà demandé" in MC.handle([], NOW) and MC.read_request()["force"] is False, "une seule demande à la fois"
+    assert "je le passe en « force »" in MC.handle(["force"], NOW) and MC.read_request()["force"] is True, "« matin force » promeut la demande en attente"
+    assert "déjà demandé" in MC.handle([], NOW) and "(force)" in MC.handle([], NOW)
+    reset()
+    MC.handle([], NOW)
+    assert "je le passe en « force »" in MC.handle(["forcé"], NOW), "« matin forcé » est lu comme force"
     reset("2026-10-18")
     r = MC.handle([], NOW)
     assert r == "Le matin est déjà fait à 04h12, écris « matin force » pour le refaire." and MC.read_request() is None, r
     r = MC.handle(["force"], NOW)
-    assert "Je refais le matin (force)" in r and "sans doublon" in r and MC.read_request()["force"] is True, r
+    assert "Je refais le matin (force)" in r and "pas de doublon" in r and "joués ou qui sont réglés restent tels quels" in r and MC.read_request()["force"] is True, r
     reset("2026-10-17")                                   # fait HIER (09h30 UTC, après DAY_END_HOUR) : le matin du jour n'est pas fait -> relance
     assert "Je lance le matin" in MC.handle([], NOW) and MC.read_request()["force"] is False
     reset("2026-10-17")                                   # 02h00 UTC : le jour Kelly d'hier court encore et est fait -> « déjà fait »
     early = datetime(2026, 10, 18, 2, 0, tzinfo=timezone.utc)
-    assert "déjà fait" in MC.handle([], early)
+    r = MC.handle([], early)
+    assert "Le matin du 2026-10-17 (fait à 04h12 le 18/10)" in r and "couvre encore le jour en cours" in r and "04h00 UTC" in r and MC.read_request() is None, r
+    r = MC.handle(["force"], early)
+    assert "n'est pas proposé avant cette heure" in r and MC.read_request() is None, "avant 04h UTC la veille faite : pas de force (il ferait sauter le vrai matin)"
     # force sur une demande normale en attente : la demande passe en force, jamais deux fichiers
     reset()
     MC.write_request(False)
@@ -73,7 +81,7 @@ def test_lock_and_running():
                 try:
                     bot.main(["--daily"])
                 except SystemExit as e:
-                    assert e.code == 0
+                    assert e.code == bot.BUSY_RC == R.DAILY_BUSY_RC == 74, "occupé : un code à part, JAMAIS 0 (le runner compterait le matin réussi)"
             assert not ran and "un autre passage du matin tourne déjà" in err.getvalue()
         err = io.StringIO()
         with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
@@ -86,6 +94,20 @@ def test_lock_and_running():
     finally:
         app.daily_entry = real
     print("ok  verrou « daily » : second lancement refusé, bot.py --daily se retire, verrou rendu")
+
+
+def test_runner_busy_rc_not_counted():
+    st = R.new_state()
+    now = datetime(2026, 10, 18, 4, 0, tzinfo=timezone.utc)
+    R.mark_done(st, ["--daily"], now, 1000.0, R.DAILY_BUSY_RC)
+    assert st["daily_ok_day"] == "" and st["daily_tries"] == 0 and st["daily_try_day"] == "2026-10-18" and st["daily_try_at"] == 1000.0, st
+    due = R.due_tasks(now + timedelta(seconds=R.DAILY_RETRY_GAP + 1), st, 1000.0 + R.DAILY_RETRY_GAP + 1)
+    assert ["--daily"] in due, "re-regardé plus tard"
+    R.mark_done(st, ["--daily"], now, 2000.0, 1)
+    assert st["daily_tries"] == 1 and st["daily_ok_day"] == ""
+    R.mark_done(st, ["--daily"], now, 3000.0, 0)
+    assert st["daily_ok_day"] == "2026-10-18"
+    print("ok  runner : un matin ignoré parce qu'un autre tourne (code 74) n'est ni réussi ni compté comme essai")
 
 
 def test_runner_takes_request_once():
@@ -139,6 +161,7 @@ def test_chat_word():
 def main():
     test_replies()
     test_lock_and_running()
+    test_runner_busy_rc_not_counted()
     test_runner_takes_request_once()
     test_chat_word()
     print("tests commande matin : OK")

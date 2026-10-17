@@ -177,8 +177,11 @@ def main(argv):
         with passlock.hold("daily") as got:     # un seul matin à la fois (commande « matin », runner, ligne de commande) : le second se retire sans rien faire
             if not got:
                 print("[daily] ignoré : un autre passage du matin tourne déjà (verrou data/daily.lock)", file=sys.stderr)
-                sys.exit(0)
+                sys.exit(BUSY_RC)               # PAS 0 : le runner ne doit pas compter ce matin comme réussi (le passage qui tourne peut encore échouer)
             _daily_locked(app, argv, force)
+
+
+BUSY_RC = 74                                    # code de sortie « un autre matin tourne » (termux_runner.mark_done : ni réussi, ni essai compté)
 
 
 def _daily_locked(app, argv, force):

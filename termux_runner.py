@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 BOT = os.path.join(ROOT, "bot.py")
 LOGS = os.path.join(ROOT, "logs")
 
+DAILY_BUSY_RC = 74            # = bot.BUSY_RC : le matin a été ignoré parce qu'un autre matin tourne
 DAILY_HOUR = 4               # passage du matin dès 04:00 UTC (= C.DAY_END_HOUR) ; rattrapage ensuite, une seule fois par jour
 DAILY_LAST_HOUR = 20         # après cette heure on n'ouvre plus de rattrapage du matin (attendre le lendemain)
 DAILY_MAX_TRIES = 3          # essais du matin par jour (échec, délai dépassé) ...
@@ -144,8 +145,10 @@ def mark_done(state, args, now, epoch, rc):
     if name == "--daily":
         if state["daily_try_day"] != day:
             state["daily_try_day"], state["daily_tries"] = day, 0
-        state["daily_tries"] += 1
         state["daily_try_at"] = epoch
+        if rc == DAILY_BUSY_RC:                     # un autre matin tourne (verrou) : ni réussi ni essai compté, on re-regarde plus tard (DAILY_RETRY_GAP)
+            return
+        state["daily_tries"] += 1
         if rc == 0:
             state["daily_ok_day"] = day
     elif name == "--track":

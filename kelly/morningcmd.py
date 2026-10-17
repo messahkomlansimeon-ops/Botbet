@@ -70,21 +70,30 @@ def handle(args, now=None):
     try:
         from . import app
         now = now or app.now_utc()
-        force = any(str(a).lower().strip("-/") in ("force", "forcer") for a in args)
+        force = any(str(a).lower().strip("-/").startswith("forc") for a in args)
         done = store.load(app.DAILY_FILE, {})
         req = read_request()
         if passlock.busy(LOCK):
             return "Le matin tourne déjà (environ 30 min) : les messages arrivent au fil du passage."
         if req:
-            return f"Le matin est déjà demandé à {hm(req['at'])}{' (force)' if req['force'] else ''} : il démarre au prochain tour du runner (quelques secondes)."
-        if app.daily_skip_reason(now) is None:
+            if force and not req["force"]:
+                write_request(True)
+                return "Le matin était déjà demandé : je le passe en « force » (combinés déjà enregistrés renvoyés sans doublon)."
+            return (f"Le matin est déjà demandé à {hm(req['at'])}{' (force)' if req['force'] else ''} : il démarre dès que le runner le prend (quelques secondes ; "
+                    "sans nouvelles, « status » dit si Kelly tourne).")
+        reason = app.daily_skip_reason(now)
+        if reason is None:
             write_request(False)
             return "🌅 Je lance le matin maintenant (environ 30 min). Les messages arrivent au fil du passage."
+        day, at = (done or {}).get("day"), (done or {}).get("at")
+        if now.hour < app.C.DAY_END_HOUR and day != str(now.date()):         # avant 04h UTC : le jour Kelly d'hier court encore ; refaire poserait « fait aujourd'hui » et ferait sauter le vrai matin
+            return (f"Le matin du {day} (fait à {hm(at)} le {str(at)[8:10]}/{str(at)[5:7]}) couvre encore le jour en cours : le prochain matin est à {app.C.DAY_END_HOUR:02d}h00 UTC. "
+                    "« matin force » n'est pas proposé avant cette heure.")
         if not force:
-            return f"Le matin est déjà fait à {hm((done or {}).get('at'))}, écris « matin force » pour le refaire."
+            return f"Le matin est déjà fait à {hm(at)}, écris « matin force » pour le refaire."
         write_request(True)
-        return ("🌅 Je refais le matin (force) : les combinés déjà enregistrés aujourd'hui sont renvoyés tels quels, sans doublon. "
-                "Environ 30 min.")
+        return ("🌅 Je refais le matin (force) : les combinés déjà enregistrés sont renvoyés (ceux que tu as notés joués ou qui sont réglés restent tels quels), pas de doublon. "
+                "Les questions et le bilan repartent aussi. Environ 30 min.")
     except Exception as e:                          # noqa: BLE001
         print(f"[matin] commande ignorée : {type(e).__name__}: {e}", file=sys.stderr)
         return "Je n'ai pas pu lancer le matin (voir « erreurs »)."
