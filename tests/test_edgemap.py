@@ -32,7 +32,13 @@ def rows_for(tag, n, league, **kw):
     return [row(tag, i, league, **kw) for i in range(n)]
 
 
+GUARD_SEASON = {"key": "guard|saison", "id": "guard", "sport_key": "ZZ", "market": "totals", "name": "Over", "result": "win", "xodds": 2.0, "strategy": "saison", "sval": 1, "pm": 0.5}
+
+
 def put_journal(stats=(), season=(), cups=()):
+    """Journaux fictifs ; avec des lignes stats et sans ligne saison, une seule ligne saison réglée (ligue « ZZ », illisible) satisfait la garde « une ligne réglée par voie active »."""
+    if stats and not season:
+        season = [GUARD_SEASON]
     store.save(ensemble.LOG_FILE, list(stats))
     store.save(seasonlane.LOG, list(season))
     store.save(cupstats.LOG, list(cups))
@@ -181,6 +187,31 @@ def test_red_leg_still_journaled():
     print("ok  une jambe d'une case rouge reste au journal (la case peut changer de couleur)")
 
 
+def test_guard_unreadable_lane():
+    put_journal(rows_for("g", 120, EPL, base=0.03), season=[])          # saison illisible / vide : la voie stats a des lignes, pas la saison
+    store.save(ensemble.LOG_FILE, rows_for("g", 120, EPL, base=0.03))
+    store.save(seasonlane.LOG, [])
+    store.save(E.STATE_FILE, {"first": "2026-10-19", "week": "2026-10-19", "colours": {"k": {"c": "red", "r": True, "voie": "stats", "fam": "corners", "sens": "plus", "league": EPL, "agg": False, "n": 120, "nc": 120, "matches": 50, "clv": -0.03, "h": 0.01, "real": 0.5, "ann": 0.55, "gain": -5.0}}})
+    E.reset()
+    assert E.apply(MONDAY + timedelta(days=7)) is False
+    st = store.load(E.STATE_FILE, {})
+    assert st["week"] == "2026-10-19" and st["colours"]["k"]["c"] == "red" and "watch" not in st, st           # couleurs et semaine intactes : rien de « grise » écrit
+    assert st["skipped"] == {"week": "2026-10-26", "voies": ["saison"]}, st
+    wk = "\n".join(E.weekly_lines())
+    assert "carte non évaluée le lundi 2026-10-26 : journal saison illisible" in wk, wk
+    store.save(seasonlane.LOG, [GUARD_SEASON])                          # journal revenu : évaluée, la mention disparaît
+    E.reset()
+    assert E.apply(MONDAY + timedelta(days=14)) is True
+    st = store.load(E.STATE_FILE, {})
+    assert "skipped" not in st and st["week"] == "2026-11-02"
+    assert "non évaluée" not in "\n".join(E.weekly_lines())
+    store.save(ensemble.LOG_FILE, [])                                   # stats vide : même garde
+    E.reset()
+    assert E.apply(MONDAY + timedelta(days=21)) is False and store.load(E.STATE_FILE, {})["skipped"]["voies"] == ["stats"]
+    assert E.active_voies() == ("stats", "saison")                      # cotes fantôme : pas exigée
+    print("ok  garde : une ligne réglée par voie active, sinon aucun état écrit et la ligne « carte non évaluée » du bilan")
+
+
 def test_report_and_weekly():
     put_journal(rows_for("g", 120, EPL, base=0.03) + rows_for("r", 120, LIGA, base=-0.03))
     store.save(E.STATE_FILE, {})
@@ -215,7 +246,8 @@ def test_hardening():
     before = store.load(E.STATE_FILE, {})
     put_journal()
     assert not E.apply(MONDAY + timedelta(days=7)), "journal vide : rien n'est écrit"
-    assert store.load(E.STATE_FILE, {}) == before, "l'état enregistré n'est pas écrasé"
+    after = store.load(E.STATE_FILE, {})
+    assert {k: v for k, v in after.items() if k != "skipped"} == before and after["skipped"]["voies"] == ["stats", "saison"], "couleurs conservées, seule la mention « non évaluée » s'ajoute"
     print("ok  durcissements : CLV non fini ignoré, gain sur prix valides, lecture vide ne détruit pas l'état")
 
 
@@ -238,6 +270,7 @@ def main():
     test_gate_off_by_default_and_effect()
     test_hardening()
     test_red_leg_still_journaled()
+    test_guard_unreadable_lane()
     test_report_and_weekly()
     test_declaration_matches_code()
     print("tests carte des edges : OK")

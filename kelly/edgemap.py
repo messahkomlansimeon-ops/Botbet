@@ -156,6 +156,11 @@ def reset():
     _memo.update(t=0.0, v=None)
 
 
+def active_voies():
+    """Voies dont le journal doit donner au moins une ligne réglée pour que la carte soit évaluée : stats et saison ; cotes seulement si elle est « on » (aujourd'hui fantôme : jamais)."""
+    return ("stats", "saison") + (("cotes",) if getattr(C, "STRATEGY_ODDSONLY", "ghost") == "on" else ())
+
+
 def apply(today=None):
     """Évalue la carte et enregistre l'état, LE LUNDI SEULEMENT. Une couleur committée ne change que si la même couleur candidate est constatée deux lundis consécutifs (7 jours exacts : un lundi manqué
     casse la chaîne) ; la couleur initiale est grise. -> True si l'état a été écrit ; ne lève jamais."""
@@ -167,7 +172,14 @@ def apply(today=None):
         prev = doc.get("colours") if isinstance(doc.get("colours"), dict) else {}
         watch_prev = doc.get("watch") if isinstance(doc.get("watch"), dict) else {}
         week_ago, iso = str(day - timedelta(days=7)), str(day)
-        table = compute()
+        rows = voie_rows()
+        missing = [v for v in active_voies() if not rows.get(v)]
+        if missing:                                                     # un journal de voie active illisible ou vide : « pas de données » se lirait « pas d'edge » -> aucune écriture de couleurs ce lundi-là
+            print(f"[carte] non évaluée : journal illisible ({', '.join(missing)}) : état conservé", file=sys.stderr)
+            store.save(STATE_FILE, {**doc, "skipped": {"week": iso, "voies": missing}})
+            reset()
+            return False
+        table = compute(rows)
         if not any(s["n"] for s in table.values()):                     # lecture du journal vide ou en échec : on n'écrase pas l'état enregistré
             print("[carte] aucune ligne réglée lue : état conservé", file=sys.stderr)
             return False
@@ -306,9 +318,12 @@ def weekly_lines():
     try:
         st = state()
         cols = st.get("colours") if isinstance(st.get("colours"), dict) else {}
-        if not cols:
-            return []
+        sk = st.get("skipped") if isinstance(st.get("skipped"), dict) else None
         out = []
+        if sk and str(sk.get("week", "")) >= str(st.get("week", "")):      # le dernier lundi n'a pas pu être évalué : dit en clair
+            out.append(f"carte non évaluée le lundi {sk.get('week')} : journal {', '.join(VOIE_LABEL.get(v, v) for v in sk.get('voies', []))} illisible")
+        if not cols:
+            return out
         for voie in VOIES:
             cases = [v for v in cols.values() if isinstance(v, dict) and v.get("voie") == voie and not v.get("agg") and v.get("r")]
             if not cases:
@@ -318,7 +333,7 @@ def weekly_lines():
             for e in sorted((e for e in cases if e.get("c") != "grey"), key=lambda e: e.get("clv") or 0, reverse=True)[:5]:
                 out.append("  " + _line(e))
         out.append(f"mécanisme : {'allumé' if C.EDGEMAP_GATE else 'éteint'} · carte évaluée le lundi {st.get('week')} · commande « carte » pour le détail")
-        return out if len(out) > 1 else []
+        return out if len(out) > 1 or (out and sk) else []
     except Exception as e:                      # noqa: BLE001
         print(f"[carte] bloc hebdo illisible : {type(e).__name__}: {e}", file=sys.stderr)
         return []
