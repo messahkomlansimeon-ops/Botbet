@@ -155,6 +155,13 @@ def test_picker_hides_throws_and_offsides():
         assert not any("Touches" in t or "Hors-jeu" in t for t in texts), texts
         assert not any(".to" in d or "to." in d or "|to|" in d or ".hj" in d or "hj." in d or "|hj|" in d for d in data), data
         assert "⬜ Fautes (4)" in texts or "✅ Fautes (4)" in texts, texts
+    # vieux boutons / texte libre : un type caché est écarté ; s'il ne reste rien, une réponse claire (jamais un « tout » silencieux)
+    out = app.custom_combo([], app.upcoming(store.load("today.json", {})["pronos"]), 20.0, DAY, kinds=["to"])
+    assert str(out).startswith("🚫 Les touches et le hors-jeu ne vont dans aucun combiné"), out
+    assert "touches" not in chat.kinds_help(["xyz"]) and "hors-jeu" not in chat.kinds_help(["xyz"])
+    with Fakes():
+        mixed = app.custom_combo([], app.upcoming(store.load("today.json", {})["pronos"]), 20.0, DAY, kinds=["to", "f"])
+    assert not str(mixed).startswith("🚫"), "fautes restent : le combiné se construit sur les fautes"
     _, mk = app.kinds_picker(20, ["to", "f"])
     assert mk["inline_keyboard"][-1][0]["callback_data"] == "cgo|20|f|", "un code caché reçu d'un vieux bouton est écarté"
     print("ok  sélecteur : Touches et Hors-jeu retirés (cases, ⏳, codes des boutons, vieux boutons)")

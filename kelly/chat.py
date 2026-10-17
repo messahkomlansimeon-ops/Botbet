@@ -519,7 +519,7 @@ def kinds_help(unknown):
     """Réponse à « combi 20 xyz » : le mot inconnu et les types de paris possibles."""
     return (f"❓ « {' '.join(unknown)} » : type de pari inconnu.\n"
             "Exemples : combi 20 tirs fautes · combi 10 victoire max 3 · combi 50 corners audacieux\n"
-            "Types : victoire, double chance, buts, les 2 marquent, corners, cartons, tirs, tirs cadrés, fautes, touches, hors-jeu, joueurs, tout.")
+            "Types : victoire, double chance, buts, les 2 marquent, corners, cartons, tirs, tirs cadrés, fautes, joueurs, tout.")
 
 
 def quick(text):

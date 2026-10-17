@@ -28,6 +28,11 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     touché « 🔀 » (un échec propose « 🔀 Cote X sans mes matchs » au plus haut atteignable, et « 🎯 Cote N avec mes matchs »). `nlegs` : (N, exact) —
     au plus N paris (« combi 20 max 4 », case « ≤ 4 »), ou exactement N (« combi 20 pile 4 ») ; un échec dit la plus haute cote en N paris et propose
     « ➕ Autoriser plus de paris »."""
+    if kinds and any(k in HIDDEN_KINDS for k in kinds):     # Touches / Hors-jeu (vieux bouton, texte libre) : jamais dans un ticket
+        kinds = [k for k in kinds if k not in HIDDEN_KINDS]
+        if not kinds:
+            return ("🚫 Les touches et le hors-jeu ne vont dans aucun combiné (familles sans mesure de fiabilité : ils restent visibles dans « match » comme information). "
+                    "Choisis un autre type : tirs, fautes, corners, cartons, buts...")
     n_max, exact = (nlegs or (None, False))
     mx, mn = chat.legs_bounds(n_max, exact)        # au plus / pile / au moins (« combi 100 min 15 »)
     lim = {"max_legs": mx, "min_legs": mn}
