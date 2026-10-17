@@ -138,6 +138,28 @@ def test_picker_buttons():
     print("ok  cases à cocher : Tout / types du jour avec leur nombre de matchs, cocher refait les boutons, « Construire » bâtit")
 
 
+def test_picker_hides_throws_and_offsides():
+    setup()
+    today = store.load("today.json", {})
+    base = next(c for c in today["pronos"] if str(c["market"]).startswith("team_fouls_"))
+    extra = []
+    for i, m in enumerate(("team_throws_total", "team_offsides_total")):
+        extra.append(dict(base, id=f"x{i}", key=f"x{i}|{m}||9.5|Over", market=m, xodds=None, xgid=1000 + i))       # pas encore ouverts chez 1xBet : d'habitude un ⏳
+        extra.append(dict(base, id=f"y{i}", key=f"y{i}|{m}||9.5|Over", market=m))                                    # et des paris jouables
+    today["pronos"] = today["pronos"] + extra
+    store.save("today.json", today)
+    for sel in ([], ["to", "hj", "f"]):
+        text, mk = app.kinds_picker(20, sel)
+        texts = [b["text"] for row in mk["inline_keyboard"] for b in row]
+        data = [b["callback_data"] for row in mk["inline_keyboard"] for b in row]
+        assert not any("Touches" in t or "Hors-jeu" in t for t in texts), texts
+        assert not any(".to" in d or "to." in d or "|to|" in d or ".hj" in d or "hj." in d or "|hj|" in d for d in data), data
+        assert "⬜ Fautes (4)" in texts or "✅ Fautes (4)" in texts, texts
+    _, mk = app.kinds_picker(20, ["to", "f"])
+    assert mk["inline_keyboard"][-1][0]["callback_data"] == "cgo|20|f|", "un code caché reçu d'un vieux bouton est écarté"
+    print("ok  sélecteur : Touches et Hors-jeu retirés (cases, ⏳, codes des boutons, vieux boutons)")
+
+
 def test_other_odds():
     setup()
     first = chat.combi_picker()
@@ -393,6 +415,7 @@ def main():
     test_command()
     test_combi_auto()
     test_picker_buttons()
+    test_picker_hides_throws_and_offsides()
     test_other_odds()
     test_tracked_and_refresh()
     test_split_note()

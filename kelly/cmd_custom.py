@@ -495,6 +495,9 @@ def _kinds_split(picks, pronos, kinds):
             "demande-les à part.")
 
 
+HIDDEN_KINDS = ("to", "hj")               # Touches et Hors-jeu : familles hors voies (lanes.ticket_ok), jamais dans un ticket : retirées du sélecteur (17/10)
+
+
 def kinds_picker(target, sel=(), n=None):
     """Cases à cocher des types de paris d'un combiné à la cote `target` (après « 🎯 Un combiné » -> cote) : « ✅ Tout » puis les types jouables
     aujourd'hui avec leur nombre de matchs (combos.kinds_available), et « 🎯 Construire le combiné ». Rien de coché = tous les paris.
@@ -505,16 +508,18 @@ def kinds_picker(target, sel=(), n=None):
     wait = {}                                       # pronostics stats solides pas encore ouverts chez 1xBet : relus en construisant (_open_stats)
     for c in A._pending(pronos):
         k = CB.kind_of(c["market"])
-        if k:
+        if k and k not in HIDDEN_KINDS:
             wait.setdefault(k, set()).add(c["id"])
     wait = {k: len(v) for k, v in wait.items()}
-    sel = [k for k in CB.KIND_CODES if k in set(sel)]
+    sel = [k for k in CB.KIND_CODES if k in set(sel) and k not in HIDDEN_KINDS]
     t = fmt.trim(target, 1)
     n = str(n) if n else ""                          # « 5 » : au plus 5 ; « 15+ » : au moins 15 ; « » : libre
     num, at_least = (int(n.rstrip("+")) if n.rstrip("+").isdigit() else None), n.endswith("+")
     rows = [[(("✅ " if not sel else "⬜ ") + "Tout", f"ck|{t}||{n}")]]
     items = []
     for k, label, _ in CB.KINDS:
+        if k in HIDDEN_KINDS:
+            continue
         if avail.get(k) or wait.get(k) or k in sel:
             on = k in sel
             nxt = [x for x in CB.KIND_CODES if x in set(sel) ^ {k}]          # cocher / décocher, dans l'ordre de KINDS
