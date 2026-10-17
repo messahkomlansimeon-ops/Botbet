@@ -217,8 +217,12 @@ def _a13_legs(*specs):
 
 def test_a13_season_auto_plan_head_leg():
     from kelly import combos as CB, config as C, ensemble, lanes
+    import signal
     old = (lanes.ticket_ok, ensemble.unsent)
     lanes.ticket_ok, ensemble.unsent = (lambda c: True), (lambda legs: False)
+    if hasattr(signal, "SIGALRM"):
+        signal.signal(signal.SIGALRM, lambda *a: (_ for _ in ()).throw(AssertionError("season_auto_plan ne se termine pas")))
+        signal.alarm(20)                               # une boucle qui ne se termine plus échoue vite au lieu de bloquer la suite
     try:
         assert C.SEASON_AUTO_MIN_P == 0.25
         plan = lambda legs, **k: [(t, [c["id"] for c in x[0]], round(x[1], 2)) for t, x in CB.season_auto_plan(legs, CB.Usage(), **k)]
@@ -238,10 +242,14 @@ def test_a13_season_auto_plan_head_leg():
         big = _a13_legs((1, (0.60, C.SEASON_AUTO_MAX_ODDS + 5)), *bcd)
         assert plan(big) == ref, plan(big)
         # un combiné commencé se ferme à la première jambe qui ne passe pas (comme avant : les jambes de valeur passent avant le remplissage, test_season_auto) : une petite jambe en queue ne s'y glisse pas
-        tail = _a13_legs((2, (0.70, 1.6)), (3, (0.70, 1.6)), (4, (0.70, 1.6)), (5, (0.30, 1.05)))
-        tail[3]["sval"] = 0
-        assert plan(tail) == ref, plan(tail)
+        tail = _a13_legs((2, (0.70, 1.6)), (3, (0.70, 1.6)), (4, (0.70, 1.6)), (5, (0.70, 1.9)), (6, (0.99, 1.01)))
+        tail[3]["sval"] = tail[4]["sval"] = 0          # F (échoue : p du combiné 0,24 < 0,25) puis G (passerait seule après F) : G ne se glisse pas dans le combiné de valeur
+        got = plan(tail)
+        assert got[0] == ref[0], got                  # le premier combiné reste [2, 3, 4] ; F et G forment le suivant, G ne se glisse pas dans le premier
+        assert [x[1] for x in got[1:]] == [["5", "6"]], got
     finally:
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
         lanes.ticket_ok, ensemble.unsent = old
     print("ok  A13 : une jambe de tête qui ne passe pas (seule ou à deux) n'arrête plus le plan saison ; la boucle se termine")
 

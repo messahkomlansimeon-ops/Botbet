@@ -138,7 +138,13 @@
     "result": "season_log.json absent de cette base (la voie saison automatique est postérieure) : AUCUN rejeu possible ici. À lancer sur la sauvegarde récente du téléphone : jours où le plan change, jours où il passe de [] à au moins un combiné, cotes obtenues.",
     "status": "EN ATTENTE d'une sauvegarde récente"
    },
-   "stakes": "aucune règle de mise ne change ; des combinés saison supplémentaires peuvent apparaître (leurs mises suivent les règles existantes : voie saison, Kelly par voie, plafond loterie)."
+   "stakes": "aucune règle de mise ne change ; des combinés saison supplémentaires peuvent apparaître (leurs mises suivent les règles existantes : voie saison, Kelly par voie, plafond loterie).",
+   "review": [
+    "relecture adverse : aucune boucle infinie ni régression (30 000 jeux aléatoires + 8 000 adverses ; dans tous les plans qui diffèrent, l'ancien plan est un préfixe exact du nouveau : mêmes combinés, combinés EN PLUS)",
+    "à noter : des combinés en plus peuvent aussi apparaître quand le plan d'avant n'était pas vide (après un premier combiné, une tête qui ne s'associait à rien laissait un deuxième combiné possible) ; une tête mise dans `dropped` est perdue pour tout le passage (limite que le `break` initial avait déjà)",
+    "SEASON_AUTO_VERSION 1 -> 2 (convention du dépôt : la construction automatique change) : les combinés du jour bâtis avant sont marqués « construit avant la dernière mise à jour » et proposent la reconstruction",
+    "test : cas de queue renforcé (une jambe G qui passerait seule après une jambe F qui échoue ne se glisse pas dans le combiné de valeur ; tue le mutant `continue`), garde-fou signal.alarm contre une boucle sans fin"
+   ]
   }
  ]
 }
