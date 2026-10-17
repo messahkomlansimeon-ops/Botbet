@@ -32,7 +32,7 @@ def test_paid_match_gets_stat_families():
     opts += [(m, "Over", 7.5, 0.66, "s") for m in STAT]
     old_opts, old_num = fair._options, odds.match_numbers
     fair._options = lambda f, h, a: (opts, {})
-    odds.match_numbers = lambda h, a, k: {"n_home": 8, "n_away": 8}
+    odds.match_numbers = lambda h, a, k, **kw: {"n_home": 8, "n_away": 8}
     picks = [{"id": "p1", "market": "h2h"}, {"id": "p1", "market": "totals"}]          # pari réel du match payé
     scan = {"leagues": {"soccer_france_ligue_one": [ev], "soccer_france_ligue_two": [free]}}
     try:

@@ -145,6 +145,25 @@
     "SEASON_AUTO_VERSION 1 -> 2 (convention du dépôt : la construction automatique change) : les combinés du jour bâtis avant sont marqués « construit avant la dernière mise à jour » et proposent la reconstruction",
     "test : cas de queue renforcé (une jambe G qui passerait seule après une jambe F qui échoue ne se glisse pas dans le combiné de valeur ; tue le mutant `continue`), garde-fou signal.alarm contre une boucle sans fin"
    ]
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A15",
+   "prereg_sha_unchanged": true,
+   "by": "assistant",
+   "implemented": "(1) means.learn : clé = jour du MATCH (commence[:10], à défaut date) ; une ancienne clé (jour de suivi) déjà dans `done` n'est pas recomptée (aucun double comptage au passage d'une version à l'autre pour les lignes déjà apprises). (2) strength.match_day ; features.match_features / _deep, odds.match_numbers, fair (_stat_options : ev.commence_time), stats.enrich (c.commence) et analysis (3 appels) passent le jour du match à strength.predict : les jours de repos et le nombre de matchs sur 14 jours se comptent jusqu'au jour DU MATCH. Appels sans jour (live, apistats, model_covered) : comme avant (aujourd'hui). Demi-vie et autres réglages inchangés.",
+   "measure": {
+    "tool": "tools/audit_fixes_measure.py a15 (testé)",
+    "source": "sauvegarde du 13/10 12:00 : fair.json 8-13/10 (1060 lignes), journal d'ensemble 10-13/10 (1753 lignes)",
+    "horizon_production": "jour du match moins jour de calcul : fair.json 999 lignes à 0 jour, 61 à +1 jour (5,8 %) ; journal d'ensemble 1672 à 0, 81 à +1 (4,6 %) ; aucune ligne à +2 ou plus. Le repos n'était donc sous-estimé que pour ~5 % des lignes, d'au plus 1 jour (jour Kelly de 04:00 UTC : la plupart des matchs sont joués le jour même) : effet attendu PETIT. Le barème (<= 3 j : -3 %, 4 j : -1,5 %) ne joue que pour les équipes dont le vrai repos est de 4 jours (4 -> 3 : -1,5 % de buts attendus) ou dont le repos tombe sous le seuil de 14 jours de matchs.",
+    "calibration_par_famille_et_sens": "écart réalisé - annoncé par famille et par sens, horizon <= 0 contre >= 1, tableau complet dans la sortie de l'outil. Les cases à horizon >= 1 ont 0 à 8 lignes (buts : plus n 3, moins n 8 ; corners moins n 1...) : AUCUNE conclusion possible sur 6 jours ; le tableau est au format de l'Étape 1 (calibration par sens) et sera à relire sur la sauvegarde récente.",
+    "paires_a_deux_dates": "0 paire (id, marché, côté, ligne) vue à deux dates sur 2260 : le doublon de means n'a pas pu se produire dans cette fenêtre (il exige qu'un pronostic soit recréé le lendemain).",
+    "means_avant_apres": "aucune ligne avec mu et val dans cette base (collectés après le 13/10) : rapport réel/attendu avant/après non calculable ici ; l'outil le calcule sur la sauvegarde récente.",
+    "rejeu_saison_passee": "le rejeu (replay.py:124) passe DÉJÀ le jour du match à predict : il ne peut montrer aucune différence sur le repos (avant = après). Il n'a donc pas été relancé ; la mesure demandée avant/après ne peut venir que du journal de production, ci-dessus.",
+    "status": "mesure faite sur 6 jours (horizon, paires) ; calibration par famille/sens et means avant/après EN ATTENTE d'une sauvegarde récente"
+   },
+   "etape1": "alimente H0 (biais de sélection contre biais de modèle) : le repos sous-estimé et le double comptage de means sont deux sources de biais de MODÈLE avant la sélection ; sur la fenêtre mesurée ils touchent ~5 % des lignes (repos) et 0 ligne (doublon). À relire quand la sauvegarde récente arrive.",
+   "stakes": "les probabilités des matchs à horizon >= 1 jour changent de quelques dixièmes de point (repos) ; aucune règle de mise ne change."
   }
  ]
 }

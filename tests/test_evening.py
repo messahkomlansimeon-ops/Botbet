@@ -87,7 +87,7 @@ def with_fakes(fn, found_ids=("A", "B")):
     sent, seen = [], {}
     old = (fair._options, odds.match_numbers, requests.get, requests.post, telegram.send, app.log_opinions)
     fair._options = lambda f, h, a: ([], {}) if h == "HE" else (OPTS, {})           # E : rien à proposer (le repli API-Football serait tenté si un jour était passé)
-    odds.match_numbers = lambda h, a, k: {"n_home": 8, "n_away": 8}
+    odds.match_numbers = lambda h, a, k, **kw: {"n_home": 8, "n_away": 8}
     old_api = (stats.left_today, stats.expected_totals, apistats.active)
     stats.left_today, apistats.active = (lambda: 999), (lambda: False)
     stats.expected_totals = Net.boom                                                  # quota API-Football : jamais touché

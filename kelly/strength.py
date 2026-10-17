@@ -1210,6 +1210,17 @@ def lines(pred, home, away):
     return out
 
 
+def match_day(v):
+    """Jour (date) du match d'après son coup d'envoi ISO (« 2026-10-18T15:00:00Z ») ou une date ; None si illisible (predict prend alors aujourd'hui). A15 : les jours de repos se comptent
+    jusqu'au jour DU MATCH, pas jusqu'à aujourd'hui."""
+    if isinstance(v, date):
+        return v.date() if hasattr(v, "hour") else v
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
 def market_grid(home, away, sport_key, referee=None, on=None, model=None):
     """Point d'entrée « tout-en-un » : {pred, grid, lines} d'un match (noms The Odds API ou football-data), ou None si la
     ligue n'a pas assez de matchs en cache ou si une équipe est inconnue. `grid` : voir grid() ; `lines` : voir lines()."""

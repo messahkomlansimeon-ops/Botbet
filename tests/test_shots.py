@@ -21,7 +21,7 @@ def test_shots_kept_per_match():
             ("totals", "Under", 3.5, 0.80, "g"), ("team_shots_total", "Over", 22.5, 0.70, "s"), ("team_sot_total", "Over", 7.5, 0.70, "t")]
     old_opts, old_num = fair._options, odds.match_numbers
     fair._options = lambda f, h, a: (opts, {})
-    odds.match_numbers = lambda h, a, k: {"n_home": 8, "n_away": 8}
+    odds.match_numbers = lambda h, a, k, **kw: {"n_home": 8, "n_away": 8}
     try:
         pronos = fair.make({"leagues": {"soccer_epl": [ev]}}, day=date.fromisoformat(DAY))
         every = fair.make({"leagues": {"soccer_epl": [ev]}}, day=date.fromisoformat(DAY), all_families=True)

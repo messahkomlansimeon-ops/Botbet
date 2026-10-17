@@ -386,7 +386,7 @@ def make(scan, picks=(), day=None, deadline=None, africa=(), all_families=False)
         if key in C.SEASON_CUPS and C.ENSEMBLE_ENABLED and C.STATS_CUPS_MODE != "off":
             families = families - set(STAT_MARKETS) - {prematch.CORNERS, prematch.CARDS}      # stats d'une coupe : calculées par kelly/cupstats.py (profils de championnat, journal à part), plus par les moyennes sans correction de niveau
         ref = ev.get("referee") or stats.referee_for(ev)          # arbitre désigné (liste du jour d'API-Football, en cache) : cartons, jaunes et fautes
-        f = odds.match_numbers(ev["home_team"], ev["away_team"], key, **({"referee": ref} if ref else {}))
+        f = odds.match_numbers(ev["home_team"], ev["away_team"], key, on=ev.get("commence_time"), **({"referee": ref} if ref else {}))
         f["sk"] = ev.get("sport_key") or key                      # championnat : correction de ses moyennes de stats (kelly/means.py)
         (opts, bases), src = _options(f, ev["home_team"], ev["away_team"]), "football-data" if key != "africa" else "API-Football"
         if not opts and not paid and api_left > 0 and day is not None and stats.left_today() > C.FAIR_API_RESERVE:

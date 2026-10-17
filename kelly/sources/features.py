@@ -292,11 +292,11 @@ def _fbref(out, home, away, sport_key):
         _put_pair(out, stat, key, hv, av, total=key in ("cards", "fouls", "corners"))
 
 
-def _deep(out, home, away, sport_key, referee):
+def _deep(out, home, away, sport_key, referee, on=None):
     from .. import strength
     div = footballdata.SPORT_TO_DIV.get(sport_key)
     model = strength.get(div) if div else None
-    pred = strength.predict(model, out.get("home_team") or home, out.get("away_team") or away, referee=referee) if model else None
+    pred = strength.predict(model, out.get("home_team") or home, out.get("away_team") or away, strength.match_day(on), referee) if model else None
     if pred:
         fill_deep(out, pred)
 
@@ -530,7 +530,8 @@ def _s365(out, home, away, sport_key):
     out.setdefault("n_away", n_a)
 
 
-def match_features(home, away, sport_key, referee=None):
+def match_features(home, away, sport_key, referee=None, on=None):
+    """Chiffres d'avant-match d'un match. `on` : coup d'envoi (ISO) ou jour du match, pour les jours de repos du modèle approfondi (A15) ; absent : aujourd'hui."""
     out = {"sources": []}
     if sport_key.startswith("africa"):
         steps = [(_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key)), (_s365, (home, away, sport_key))]
@@ -539,7 +540,7 @@ def match_features(home, away, sport_key, referee=None):
     else:
         steps = [(_football_data, (home, away, sport_key, referee)), (_understat, (home, away, sport_key)),
                  (_fotmob, (home, away, sport_key)), (_fbref, (home, away, sport_key)),
-                 (_deep, (home, away, sport_key, referee)), (_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key)),
+                 (_deep, (home, away, sport_key, referee, on)), (_fmmatch, (home, away, sport_key)), (_apistats, (home, away, sport_key)),
                  (_s365, (home, away, sport_key))]
     for fn, args in steps:
         try:

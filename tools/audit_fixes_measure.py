@@ -184,7 +184,67 @@ def a13():
     print(f"  jours où le plan change : {changed}/{len(days)} ; jours où il passe de [] à au moins un combiné : {empty_to_some}")
 
 
-POINTS = {"a3": a3, "a1": a1, "a4": a4, "a13": a13}
+def a15():
+    """A15 — (a) horizon réel de production (jour du match moins jour de calcul) : de combien le repos était sous-estimé ; écart de calibration (réalisé - annoncé) des lignes de buts par sens
+    (plus / moins) selon l'horizon ; (b) paires (id, marché) vues à deux dates ; (c) cumul de means (n, rapport réel / attendu) avec la clé d'avant (jour de suivi) et la clé d'après (jour du match).
+    Le rejeu de la saison passée passe déjà le jour du match à predict : il ne montre RIEN sur le repos, d'où cette mesure sur le journal de production."""
+    from datetime import date as D
+    from kelly import calib, lanestats as LS, means, store
+    fair = [r for r in store.load("fair.json", []) if isinstance(r, dict)]
+    ens = LS.journal_rows()
+    print("A15 — un match = un point (means) ; repos jusqu'au jour du match")
+    print(f"  source : fair.json {window(fair)} ({len(fair)} lignes) ; journal d'ensemble {window(ens)} ({len(ens)} lignes)")
+
+    def hz(r):
+        try:
+            return (D.fromisoformat(str(r["commence"])[:10]) - D.fromisoformat(str(r["date"])[:10])).days
+        except (KeyError, ValueError, TypeError):
+            return None
+    for name, rows in (("fair.json", fair), ("journal d'ensemble", ens)):
+        c = defaultdict(int)
+        for r in rows:
+            h = hz(r)
+            if h is not None:
+                c[min(max(h, -1), 4)] += 1
+        tot = sum(c.values())
+        print(f"  (a) horizon {name} (jours, -1 = veille Kelly, 4 = 4 et plus) : " + ", ".join(f"{k:+d}: {v}" for k, v in sorted(c.items())) + (f" — {sum(v for k, v in c.items() if k >= 1)}/{tot} lignes à horizon >= 1 jour" if tot else ""))
+    print("      repos sous-estimé de `horizon` jours pour ces lignes ; barème de strength._rest_adj : <= 3 j : -3 %, 4 j : -1,5 %, plus : 0 (effet seulement pour les équipes dont le vrai repos dépasse 3 j - horizon).")
+    print("  (a') calibration (réalisé - annoncé) par FAMILLE et par SENS, selon l'horizon — format de l'Étape 1 (step1_ledger : calibration par sens, lignes générées / choisies) ; ici toutes les lignes réglées de fair.json :")
+    fams = sorted({calib.family(r.get("market") or "") for r in fair if r.get("result") in ("win", "loss")})
+    for fam in fams:
+        for sd in ("plus", "moins"):
+            cells = []
+            for h_lbl, ok in (("h<=0", lambda h: h is not None and h <= 0), ("h>=1", lambda h: h is not None and h >= 1)):
+                g = [r for r in fair if r.get("result") in ("win", "loss") and calib.family(r.get("market") or "") == fam and calib.side(r) == sd and ok(hz(r))]
+                if g:
+                    pw = sum(1 for r in g if r["result"] == "win") / len(g)
+                    pa = sum(float(r.get("p0") or r.get("prob") or 0) for r in g) / len(g)
+                    cells.append(f"{h_lbl} n {len(g):>4} écart {pw - pa:+.3f}")
+                else:
+                    cells.append(f"{h_lbl} n    0")
+            print(f"      {fam:<11} {sd:<5} " + " | ".join(cells))
+    seen = defaultdict(set)
+    for r in fair + ens:
+        seen[(r.get("id"), r.get("market"), r.get("name"), r.get("point"))].add(str(r.get("date"))[:10])
+    twice = {k: v for k, v in seen.items() if len(v) > 1}
+    print(f"  (b) paires (id, marché, côté, ligne) vues à plusieurs dates : {len(twice)}/{len(seen)}")
+    rows = [r for r in fair + ens if r.get("mu") and r.get("val") is not None and r.get("result") in ("win", "loss", "push") and calib.family(r.get("market") or "") in means.FAMILIES]
+    for lbl, keyf in (("clé d'avant (jour de suivi)", lambda r: f"{str(r.get('date') or r.get('commence') or '')[:10]}|{r.get('id')}|{r.get('market')}"),
+                      ("clé d'après (jour du match)", lambda r: f"{str(r.get('commence') or r.get('date') or '')[:10]}|{r.get('id')}|{r.get('market')}")):
+        done, acc = set(), defaultdict(lambda: [0, 0.0, 0.0])
+        for r in rows:
+            k = keyf(r)
+            if k in done:
+                continue
+            done.add(k)
+            a = acc[calib.family(r["market"])]
+            a[0] += 1
+            a[1] += float(r["val"])
+            a[2] += float(r["mu"])
+        print(f"  (c) means, {lbl} : " + (" ; ".join(f"{f} n {a[0]} réel/attendu {a[1] / a[2]:.3f}" for f, a in sorted(acc.items())) or "aucune ligne avec mu et val"))
+
+
+POINTS = {"a3": a3, "a1": a1, "a4": a4, "a13": a13, "a15": a15}
 
 
 def main():

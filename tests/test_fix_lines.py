@@ -133,7 +133,7 @@ def test_per_stat_confidence():
     # via make() : chaque pronostic porte la qualité de SA statistique
     old, orig = S.load_matches, fair.odds.match_numbers
     S.load_matches = lambda d_: []
-    fair.odds.match_numbers = lambda h, a, k: f2
+    fair.odds.match_numbers = lambda h, a, k, **kw: f2
     try:
         pronos = fair.make({"leagues": {"soccer_epl": [EV]}}, [], day)
     finally:

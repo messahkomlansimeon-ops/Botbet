@@ -111,8 +111,9 @@ def learn(rows, today=None):
             mu, val = _num(r.get("mu")), _num(r.get("val"))
             if fam not in FAMILIES or mu is None or mu <= 0 or val is None or r.get("result") not in ("win", "loss", "push"):
                 continue
-            key = f"{str(r.get('date') or r.get('commence') or '')[:10]}|{r.get('id')}|{r.get('market')}"
-            if key in d["done"]:
+            # un match = un point par marché : la clé porte le JOUR DU MATCH (commence), pas le jour de suivi (`date`, qui change si le pronostic est recréé le lendemain : A15, audit du 17/10)
+            key = f"{str(r.get('commence') or r.get('date') or '')[:10]}|{r.get('id')}|{r.get('market')}"
+            if key in d["done"] or f"{str(r.get('date') or r.get('commence') or '')[:10]}|{r.get('id')}|{r.get('market')}" in d["done"]:      # ancienne clé (jour de suivi) : déjà comptée avant ce correctif
                 continue
             if not new:
                 _age(d, today)

@@ -925,7 +925,7 @@ def enrich(picks, day, max_events=8):
         try:
             if c["id"] not in feats:
                 ref = referee_for({"home_team": c["home"], "away_team": c["away"], "commence_time": c.get("commence") or ""})      # arbitre désigné (liste du jour en cache)
-                feats[c["id"]] = sources.match_features(c["home"], c["away"], c["sport_key"], **({"referee": ref} if ref else {}))
+                feats[c["id"]] = sources.match_features(c["home"], c["away"], c["sport_key"], on=c.get("commence"), **({"referee": ref} if ref else {}))
             a = prematch.assess(c, feats[c["id"]], sources)
         except Exception as e:                  # noqa: BLE001 - une source cassée ne doit jamais bloquer
             _warn(f"sources ignorées pour {c.get('event', '?')} : {type(e).__name__}")

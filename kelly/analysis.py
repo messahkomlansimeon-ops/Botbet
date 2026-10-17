@@ -133,7 +133,7 @@ def deep_analysis(first, referee=None):
     if not first.get("sport_key", "").startswith("soccer"):
         return None
     try:
-        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"], referee=referee)
+        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"], referee=referee, on=strength.match_day(first.get("commence")))
     except Exception as e:                       # noqa: BLE001 - l'analyse ne doit jamais casser la commande
         print(f"analyse approfondie : {e}", file=sys.stderr)
         return None
@@ -198,7 +198,7 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
         ref = A.referee_of(free[0])
         deep = A.deep_analysis(free[0], ref)
         head = f"🔬 {fmt.b(fmt.esc(free[0]['event']))}\n{fmt.i(fmt.hhmm(free[0]['start']) + ' · ' + fmt.esc(free[0]['league']))}"
-        fl = [] if deep else A.features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"], **({"referee": ref} if ref else {})))
+        fl = [] if deep else A.features_lines(sources.match_features(free[0]["home"], free[0]["away"], free[0]["sport_key"], on=free[0].get("commence"), **({"referee": ref} if ref else {})))
         body = ("\n" + fmt.esc(deep)) if deep else ("\n".join(fl) if fl else "\nPas assez de données pour une analyse approfondie de ce match.")
         rl = A.referee_line(ref, deep, "\n".join(fl))
         if rl:
@@ -213,7 +213,7 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
     lines = [f"🔬 {fmt.b(fmt.event_name(first))}", fmt.i(f"{fmt.hhmm(first['start'])} · {fmt.esc(first['league'])}")]
     ref = A.referee_of(first)
     deep = A.deep_analysis(first, ref)
-    f = {"sources": []} if first["group"] != "soccer" else sources.match_features(first["home"], first["away"], first["sport_key"], **({"referee": ref} if ref else {}))
+    f = {"sources": []} if first["group"] != "soccer" else sources.match_features(first["home"], first["away"], first["sport_key"], on=first.get("commence"), **({"referee": ref} if ref else {}))
     shown_ = []
     if deep:
         lines += ["", fmt.esc(deep)]

@@ -272,12 +272,120 @@ def test_a13_measure_tool():
     print("ok  A13 : l'outil de mesure rejoue les jours depuis le journal saison (avant / après)")
 
 
+# ---------- A15 : un match = un point (means), repos jusqu'au jour du match (strength) ----------
+
+def _a15_model():
+    import math
+    import random
+    from datetime import date, timedelta
+    from kelly import strength as S
+    rnd = random.Random(1)
+    teams = [f"T{i}" for i in range(8)]
+    att = {t: math.exp(rnd.gauss(0, .25)) for t in teams}
+
+    def pois(l):
+        L, k, p = math.exp(-l), 0, 1.0
+        while True:
+            p *= rnd.random()
+            if p < L:
+                return k
+            k += 1
+    ms, d = [], date(2026, 2, 1)
+    for r in range(40):
+        rnd.shuffle(teams)
+        for i in range(0, 8, 2):
+            h, a = teams[i], teams[i + 1]
+            m = dict(date=(d + timedelta(days=r * 4)).isoformat(), div="E0", home=h, away=a, hg=pois(1.5 * att[h]), ag=pois(1.2 * att[a]), referee="A Ref", odds={})
+            m.update(hs=pois(12), **{"as": pois(10)}, hy=pois(2), ay=pois(2), hr=0, ar=0, hc=pois(5), ac=pois(4), hf=pois(11), af=pois(11), hst=pois(4), ast=pois(3))
+            m["ftr"] = "H" if m["hg"] > m["ag"] else "A" if m["hg"] < m["ag"] else "D"
+            ms.append(m)
+    return S.build(ms, date(2026, 7, 1), div="E0"), S
+
+
+def test_a15_means_one_match_one_point():
+    from datetime import date
+    from kelly import means, store
+    store.save(means.FILE, {})
+    means.reset()
+    base = dict(id="ev1", market="team_shots_total", sport_key="soccer_epl", commence="2026-10-17T15:00:00Z", mu=24.0, val=26.0, result="win")
+    # le même match suivi deux jours de suite (date = jour du suivi) : UN point (avant : deux, n gonflé)
+    assert means.learn([dict(base, date="2026-10-16"), dict(base, date="2026-10-17", mu=24.5)], date(2026, 10, 18)) == 1
+    assert means.load()["fam"]["shots"][0] == 1.0
+    # une ancienne clé (jour de suivi) déjà comptée avant le correctif n'est pas recomptée
+    store.save(means.FILE, {"fam": {"shots": [1.0, 26.0, 24.0]}, "lg": {}, "done": {"2026-10-16|ev9|team_shots_total": "2026-10-17"}, "t": "2026-10-17"})
+    means.reset()
+    row9 = dict(base, id="ev9", date="2026-10-16", commence="2026-10-17T15:00:00Z")
+    assert means.learn([row9], date(2026, 10, 18)) == 0
+    # deux matchs différents le même jour, ou le même match sur deux marchés : comptés séparément
+    other = dict(base, id="ev2", date="2026-10-17")
+    assert means.learn([other, dict(other, market="team_corners_total")], date(2026, 10, 18)) == 2
+    print("ok  A15 : means compte un match une fois par marché (jour du match), sans recompter une ancienne clé")
+
+
+def test_a15_rest_days_until_match_day():
+    from datetime import date, timedelta
+    from kelly import strength as S
+    from kelly.sources import features
+    M, S = _a15_model()
+    last = date.fromisoformat(M["ctx"]["form"]["T1"]["ld"][-1])
+    seen = {}
+    real_get, real_predict, real_today = S.get, S.predict, S.today
+    S.get = lambda div, on=None, loader=None: M
+    S.today = lambda: last + timedelta(days=2)                       # « aujourd'hui » : 2 jours après son dernier match
+    def predict(model, h, a, on=None, referee=None, **k):
+        r = real_predict(model, h, a, on, referee, **k)
+        seen["rest"] = None if r is None else r["info"]["rest"]
+        return r
+    S.predict = predict
+    try:
+        out = {"sources": []}
+        features._deep(out, "T1", "T2", "soccer_epl", None, on=(last + timedelta(days=6)).isoformat() + "T15:00:00Z")
+        assert seen["rest"]["home"] == (last + timedelta(days=6) - date.fromisoformat(M["ctx"]["form"]["T1"]["ld"][-1])).days == 6, seen
+        features._deep({"sources": []}, "T1", "T2", "soccer_epl", None)            # sans jour de match : comme avant (aujourd'hui)
+        assert seen["rest"]["home"] == 2, seen
+        assert S.match_day("2026-10-18T15:00:00Z") == date(2026, 10, 18) and S.match_day(None) is None and S.match_day("x") is None
+    finally:
+        S.get, S.predict, S.today = real_get, real_predict, real_today
+    import inspect
+    from kelly import analysis, fair, odds, stats
+    for mod, needle in ((stats, "on=c.get(\"commence\")"), (fair, "on=ev.get(\"commence_time\")"), (analysis, "on=free[0].get(\"commence\")"), (analysis, "on=first.get(\"commence\")"),
+                        (analysis, "on=strength.match_day(first.get(\"commence\"))")):
+        assert needle in inspect.getsource(mod), (mod.__name__, needle)
+    assert "on=on" in inspect.getsource(odds.match_numbers)
+    print("ok  A15 : les jours de repos se comptent jusqu'au jour du match (_deep, appelants de production), sans jour : comme avant")
+
+
+def test_a15_measure_tool():
+    import contextlib
+    import importlib.util
+    import io
+    from kelly import ensemble, store
+    spec = importlib.util.spec_from_file_location("audit_fixes_measure", os.path.join(os.path.dirname(LEDGER), "tools", "audit_fixes_measure.py"))
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    base = {"id": "m1", "market": "team_shots_total", "name": "Over", "point": 9.5, "sport_key": "soccer_epl", "commence": "2026-10-18T15:00:00Z", "mu": 24.0, "val": 26.0, "result": "win", "prob": 0.6, "p0": 0.6}
+    fair = [dict(base, key="k1", date="2026-10-17"), dict(base, key="k1", date="2026-10-18")]
+    store.save("fair.json", fair)
+    store.save(ensemble.LOG_FILE, [])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        tool.a15()
+    txt = out.getvalue()
+    assert "+1: 1" in txt and "+0: 1" in txt and "vues à plusieurs dates : 1/1" in txt, txt
+    assert "clé d'avant (jour de suivi) : shots n 2" in txt and "clé d'après (jour du match) : shots n 1" in txt, txt
+    store.save("fair.json", [])
+    print("ok  A15 : l'outil de mesure (horizon, paires à deux dates, means avant / après)")
+
+
 def main():
     test_declaration_unchanged()
     test_a1_double_chance_freshness()
     test_a4_calibrated_probability_bounded()
     test_a13_season_auto_plan_head_leg()
     test_a13_measure_tool()
+    test_a15_means_one_match_one_point()
+    test_a15_rest_days_until_match_day()
+    test_a15_measure_tool()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()

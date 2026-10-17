@@ -242,7 +242,7 @@ def scan_ahead(day, sports, days=7, seconds=None):
     return out
 
 
-def match_numbers(home, away, sport_key, referee=None):
+def match_numbers(home, away, sport_key, referee=None, on=None):
     """Chiffres d'avant-match gratuits d'un match (sources.match_features) ; {"sources": []} si rien. Les sélections ne
     sont pas dans les profils de clubs : un nom proche d'un club serait une fausse piste. `referee` : arbitre désigné (stats.referee_for), qui
     corrige cartons et fautes (sources.features, strength.referee_factor) ; inconnu = rien de changé."""
@@ -250,7 +250,7 @@ def match_numbers(home, away, sport_key, referee=None):
         return {"sources": []}
     try:
         from .sources import features             # import tardif : sources importe stats
-        return features.match_features(home, away, sport_key, referee=referee)
+        return features.match_features(home, away, sport_key, referee=referee, on=on)
     except Exception:                                # noqa: BLE001 - stats facultatives
         return {"sources": []}
 
