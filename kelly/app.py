@@ -186,11 +186,12 @@ def fair_combo_message(target, legs, min_total, prob, day, stake, mise, coupon, 
             ev_txt = f"espérance au prix du marché {m}" if m is not None else "espérance au prix du marché non mesurable"
         extra = {"title": f"{C.SEASON_TITLE.split(' ', 1)[0]} SAISON · COMBINÉ {k or 1}",
                  "note": fmt.i(fmt.esc(f"{len(legs)} jambes · {ev_txt} · remplissage {fill}/{len(legs)}"))}
-    return chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
+    msg = chat.with_played_button(fmt.fair_combo(min_total, legs, prob, CB.fair_stake(min_total),
                                                   stake_txt=mise(stake, CB.stake_prob(legs, prob), min_total, nov, flat),
                                                   title=extra.pop("title", None) or CB.shots_title(target), coupon=coupon, when=when,
                                                   retry=RETRY_BUTTON if xfair and not coupon else None, **extra),
                                    f"v{target}", day, stake=stake, refresh=target if all(c.get("xodds") for c in legs) else None, code=coupon, lookup=lookup)
+    return telegram.topic(msg, "season") if CB.season_no(target) is not None else msg           # voie saison : son propre fil (groupe à sujets)
 
 
 def build_day(picks, day, world=None, pronos=(), why_no_odds=None, fair_combos=(), fair_stakes=None, odds_time=None, fair_coupons=None, gaps=None,
@@ -927,7 +928,7 @@ def run_daily(sample=False, retry=False):
                | ({"xbet_at": odds_at} if odds_at and any(c.get("xodds") for c in keep) else {})
                | ({"picks_at": odds_at} if odds_at and any(c.get("xodds") for c in picks) else {}))
     progress.step("envoi")
-    deliver_morning([telegram.topic(m if getattr(m, "loud", False) else telegram.silent(m), "report") for m in report] + [telegram.topic(m, "combos") for m in messages], day, now, sample)       # bilan, apprentissage, questions : sans sonnerie ; les combinés du matin sonnent          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
+    deliver_morning([telegram.topic(m if getattr(m, "loud", False) else telegram.silent(m), "report") for m in report] + [m if getattr(m, "topic", None) else telegram.topic(m, "combos") for m in messages], day, now, sample)       # bilan, apprentissage, questions : sans sonnerie ; les combinés du matin sonnent          # le garde-fou « matin fait » n'est écrit qu'APRÈS l'envoi
     if not sample:                                  # APRÈS l'envoi : jamais un retard du matin ; pool du jour gardé, quatre variantes en fantôme (jamais envoyées, hors Usage)
         _step("variantes du constructeur", lambda: combovariants.run(day, picks, pronos, season_legs))
     print(cache.line(), file=sys.stderr)

@@ -51,7 +51,7 @@ def setup(chat="-1001", topics=True):
     store.save(telegram.OUTBOX, [])
     store.save(telegram.LATER, [])
     store.save("telegram.json", {"offset": 0})
-    store.save(telegram.TOPICS_FILE, {"chat": chat, "ids": {"combos": 11, "alerts": 12, "live": 13, "report": 14, "tech": 15}} if topics else {})
+    store.save(telegram.TOPICS_FILE, {"chat": chat, "ids": {"combos": 11, "alerts": 12, "live": 13, "report": 14, "tech": 15, "livebet": 16, "season": 17}} if topics else {})
     C.TOPICS = topics
 
 
@@ -163,10 +163,27 @@ def test_automatic_senders_are_marked():
     srcs = {"kelly/statswindow.py": 'with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon), "combos")',
             "kelly/run_refresh.py": 'lookup=True, code=code), "combos"))',
             "kelly/xalerts.py": 'quiet.send(telegram.topic(msg, "alerts"), now)',
-            "kelly/watch.py": 'quiet.send(telegram.topic(msg, "live"), now)'}
+            "kelly/watch.py": 'quiet.send(telegram.topic(msg, "livebet"), now)',
+            "kelly/commands.py": 'telegram.topic(reply, "livebet")'}
     for f, needle in srcs.items():
         assert needle in open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), f)).read(), f
     print("ok  fils : combinés stats / rafraîchis, écarts 💰, opportunité live marqués pour leur fil")
+
+
+def test_season_and_live_have_their_own_topics():
+    """Combinés saison -> « Saison », combinés live -> « Combinés live », même envoyés pendant une demande tapée dans un autre fil ; le matin ne remet pas « Combinés » par-dessus."""
+    from kelly import app, combos as CB
+    setup()
+    msg = telegram.topic(telegram.Html("ss"), "season")
+    live = telegram.topic(telegram.Html("lv"), "livebet")
+    with telegram.in_thread(11):
+        telegram.send(msg)
+        telegram.send(live)
+    assert [k.get("message_thread_id") for k in sent()] == [17, 16], sent()
+    assert set(telegram.TOPIC_NAMES) >= {"season", "livebet", "live"} and telegram.TOPIC_NAMES["live"] != telegram.TOPIC_NAMES["livebet"]
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "kelly/app.py")).read()
+    assert 'm if getattr(m, "topic", None) else telegram.topic(m, "combos")' in src and 'telegram.topic(msg, "season") if CB.season_no(target)' in src
+    print("ok  fils : saison et combinés live ont leur fil, le matin garde les marques déjà posées")
 
 
 def test_quiet_keeps_topic():
@@ -230,7 +247,8 @@ def test_poll_security_and_threads():
 def test_general_routes_to_theme():
     setup()
     assert [telegram.route_kind(t) for t in ("/bilan", "🔝 Du jour", "courbes", "/status@KellyBot", "🔴 Live", "5,40 1000", "Lens", "🎯 Combiné", "/combi 5")] == \
-        ["report", "combos", "report", "tech", "live", None, None, "combos", "combos"]
+        ["report", "combos", "report", "tech", "livebet", None, None, "combos", "combos"]
+    assert [telegram.route_kind(t) for t in ("/saison", "🌱 Saison", "saison 10", "/live 20")] == ["season", "season", "season", "livebet"]
     UPDATES.extend([upd(1, "/bilan", user=1), upd(2, "Lens", user=1)])
     telegram.poll(lambda t: f"re: {t}")
     out = [(k["text"], k.get("message_thread_id")) for k in sent()]
@@ -262,14 +280,20 @@ def test_defer_keeps_thread():
 def test_setup_topics():
     setup(topics=False)
     ok, txt = telegram.setup_topics()
-    assert ok and len([1 for m, _ in CALLS if m == "createForumTopic"]) == 5 and set(store.load(telegram.TOPICS_FILE, {})["ids"]) == set(telegram.TOPIC_NAMES)
+    assert ok and len([1 for m, _ in CALLS if m == "createForumTopic"]) == 7 and set(store.load(telegram.TOPICS_FILE, {})["ids"]) == set(telegram.TOPIC_NAMES)
     assert "ÉTEINTS" in txt
     CALLS.clear()
     ok, txt = telegram.setup_topics()
     assert ok and not [1 for m, _ in CALLS if m == "createForumTopic"] and "Rien à créer" in txt, "idempotent"
     CALLS.clear()
     ok, _ = telegram.setup_topics(refaire=True)
-    assert ok and len([1 for m, _ in CALLS if m == "createForumTopic"]) == 5
+    assert ok and len([1 for m, _ in CALLS if m == "createForumTopic"]) == 7
+    d = store.load(telegram.TOPICS_FILE, {})                      # installation d'avant (5 fils) : « kelly fils » ne crée que les deux nouveaux
+    d["ids"] = {k: v for k, v in d["ids"].items() if k not in ("season", "livebet")}
+    store.save(telegram.TOPICS_FILE, d)
+    CALLS.clear()
+    ok, txt = telegram.setup_topics()
+    assert ok and len([1 for m, _ in CALLS if m == "createForumTopic"]) == 2 and "Saison" in txt and "Combinés live" in txt, txt
     STATE["forum"] = False
     assert not telegram.setup_topics()[0]
     STATE.update(forum=True, admin=False)
@@ -277,7 +301,7 @@ def test_setup_topics():
     setup("42", topics=False)
     ok, txt = telegram.setup_topics()
     assert not ok and "chat privé" in txt and not [1 for m, _ in CALLS if m == "createForumTopic"]
-    print("ok  kelly fils : crée les 5 fils, idempotent, « refaire » les recrée, refuse chat privé / sans sujets / sans droit")
+    print("ok  kelly fils : crée les 7 fils, idempotent, « refaire » les recrée, refuse chat privé / sans sujets / sans droit")
 
 
 def main():
@@ -287,6 +311,7 @@ def main():
         test_routing()
         test_mark_beats_request_thread()
         test_automatic_senders_are_marked()
+        test_season_and_live_have_their_own_topics()
         test_dead_thread_and_outbox()
         test_file_fallback()
         test_quiet_keeps_topic()

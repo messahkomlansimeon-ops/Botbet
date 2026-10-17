@@ -93,7 +93,8 @@ def _handle_command(text):
     if cmd == "/carte":                             # « carte [stats | saison] » : carte des edges par case (kelly/edgemap.py)
         return edgemap.report(args)
     if cmd == "/saison":
-        return A.season_command(args, today)
+        reply = A.season_command(args, today)
+        return telegram.topic(reply, "season") if reply else reply
     if cmd == "/objectif":
         return money.goal_command(args)
     if cmd in ("/regle", "/reglé", "/régler", "/regler"):     # « réglé vm3 gagné 12/10 » : un ticket noté que le règlement gratuit ne trouve pas
@@ -118,7 +119,8 @@ def _handle_command(text):
             return chat.live_picker()
         toks = money.split_tokens(args)
         n, exact, _ = chat.parse_nlegs(toks[money.take_amount(toks)[1]:])        # « live 20 max 3 »
-        return LV.combo(target, str(A.now_utc().date()), nlegs=(n, exact) if n and 2 <= n <= C.MAX_LEGS else None)
+        reply = LV.combo(target, str(A.now_utc().date()), nlegs=(n, exact) if n and 2 <= n <= C.MAX_LEGS else None)
+        return telegram.topic(reply, "livebet") if reply else reply
     if cmd in ("/monde", "/ligues"):
         # jour Kelly en cours ; après un rattrapage d'avant C.DAY_END_HOUR h (voir daily_skip_reason), today.json et monde.json portent la
         # date UTC du jour : c'est elle qu'il faut lire, sinon /monde ne trouve rien

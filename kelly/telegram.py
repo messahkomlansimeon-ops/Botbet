@@ -394,7 +394,7 @@ def _flush(box, chat):
 
 # ---- Fils de discussion (groupe privé à sujets, C.TOPICS) -------------------------------------------------------------------------------------------------------------
 TOPICS_FILE = "topics.json"      # {"chat": id du groupe, "ids": {clé du fil: message_thread_id}} écrit par `kelly fils`
-TOPIC_NAMES = {"combos": "🎯 Combinés", "alerts": "🔔 Alertes", "live": "🔴 Suivi des matchs", "report": "📊 Bilan", "tech": "🛠️ Technique"}
+TOPIC_NAMES = {"combos": "🎯 Combinés", "alerts": "🔔 Alertes", "live": "🔴 Suivi des matchs", "livebet": "🎲 Combinés live", "season": "🌱 Saison", "report": "📊 Bilan", "tech": "🛠️ Technique"}
 _ctx = threading.local()         # fil de la demande en cours de traitement (par thread : le suivi des matchs et le serveur tournent en parallèle)
 _creator = {"chat": None, "id": None, "at": float("-inf")}      # créateur du groupe (seul autorisé), relu au plus toutes les 10 min
 _bot = {}                        # getMe, gardé (nom d'utilisateur du bot : « /top@NomDuBot »)
@@ -478,7 +478,7 @@ def bot_name():
 
 
 # Commande écrite dans le fil GÉNÉRAL : sa réponse part dans le fil de son thème (premier motif qui colle ; autre texte : elle reste dans le fil général)
-ROUTES = [("live", r"live|🔴"), ("report", r"bilan|résultats?|resultats?|📊|capital|saison|tendances?|march[ée]s?|courbes?|graphiques?|🌱|📉"),
+ROUTES = [("livebet", r"live|🔴"), ("season", r"saison|🌱"), ("report", r"bilan|résultats?|resultats?|📊|capital|tendances?|march[ée]s?|courbes?|graphiques?|📉"),
           ("tech", r"status|état|etat|aide|help|🩺|start"), ("combos", r"combi|🎯|top|du jour|🔝|joue|mes paris|🧾|pronos?")]
 
 
@@ -486,7 +486,7 @@ def route_kind(text):
     """Fil du thème d'une commande (« /bilan », « 🔝 Du jour », « courbes »…) ; None si le texte n'est pas une commande reconnue (une cote, une mise, une équipe…)."""
     t = str(text).strip().lower().lstrip("/")
     for kind, pat in ROUTES:
-        if re.match(rf"(?:{pat})(?:\b|$|\s)", t) or (kind == "live" and t.startswith("🔴")):
+        if re.match(rf"(?:{pat})(?:\b|$|\s)", t) or (kind == "livebet" and t.startswith("🔴")):
             return kind
     return None
 
