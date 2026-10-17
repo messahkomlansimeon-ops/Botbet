@@ -463,7 +463,10 @@ P_MIN, P_MAX = 0.01, 0.99      # bornes d'une proba corrigée (A4, audit du 17/1
 
 
 def bound(p):
-    """`p` ramenée dans [P_MIN, P_MAX] : la cote minimale 1 / p x (1 + marge) qui en découle est toujours > 1."""
+    """`p` ramenée dans [P_MIN, P_MAX] : la cote minimale 1 / p x (1 + marge) qui en découle est toujours > 1. Un NaN ou un infini passe INCHANGÉ (max/min en feraient une proba de 0,99,
+    donc une jambe quasi sûre : il doit rester rejeté par les comparaisons d'espérance en aval)."""
+    if not math.isfinite(p):
+        return p
     return max(P_MIN, min(P_MAX, p))
 
 

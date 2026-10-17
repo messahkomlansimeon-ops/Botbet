@@ -194,7 +194,14 @@ def test_a4_calibrated_probability_bounded():
     assert calib.bound(1.04) == 0.99 and calib.bound(-0.076) == 0.01 and calib.bound(0.3) == 0.3
     # voie saison : même borne ; live : borne sauf résultat acquis (p0 = 0 ou 1)
     from kelly import seasonlane
-    assert seasonlane.calibrated("totals", 0.95, "s", "plus", {"goals": [100, 70, 60.0]}) <= 0.99
+    assert seasonlane.calibrated("totals", 0.95, "s", "plus", {"goals": [100, 70, 60.0]}) == 0.99
+    assert seasonlane.calibrated("totals", 0.02, "s", "moins", {"goals": [100, 70, 60.0]}) == 0.01
+    nan = float("nan")
+    assert calib.bound(nan) != calib.bound(nan) and calib.bound(float("inf")) == float("inf"), "NaN / inf : inchangés (jamais une proba de 0,99)"
+    import inspect
+    from kelly import live as _live
+    assert "corrected(p0" in inspect.getsource(_live.legs), "la correction live passe par live.corrected"
+    assert calib.calibrate("totals", 0.995) == 0.99 and calib.calibrate("totals", 0.003) == 0.01, "proba brute hors bornes : ramenée dans [0,01 ; 0,99] (changement assumé, ledger)"
     from kelly import live
     assert live.corrected(0.95, 1.2) == 0.99 and live.corrected(0.02, 1.2) == 0.01 and live.corrected(0.6, 1.0) == 0.6
     assert abs(live.corrected(1.0, 1.2) - 1.1) < 1e-9 and abs(live.corrected(0.0, 1.2) + 0.1) < 1e-9, "résultat acquis (p0 0 ou 1) : pas touché par la borne"

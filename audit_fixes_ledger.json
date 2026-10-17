@@ -117,7 +117,13 @@
     "result": "0 ligne hors de [0,1], 0 ligne hors de [0,01 ; 0,99], 0 ligne refusée par la borne dans cette fenêtre : à cette date aucune famille n'avait un k assez haut pour sortir des bornes (K_RANGE haut = 1,2 exige une famille mesurée sous-confiante avec au moins FAIR_CALIB_MIN résultats). Le défaut est donc démontré par le test mais NON observé dans le journal disponible ; la fenêtre de 14 jours reste à mesurer sur la sauvegarde récente.",
     "status": "mesure faite sur 6 jours : 0 ; 14 jours EN ATTENTE d'une sauvegarde récente"
    },
-   "stakes": "aucune règle de mise ne change ; les lignes dont la valeur ne tenait qu'à une proba > 0,99 sont plafonnées (effet nul sur la fenêtre mesurée)."
+   "stakes": "aucune règle de mise ne change ; les lignes dont la valeur ne tenait qu'à une proba > 0,99 sont plafonnées (effet nul sur la fenêtre mesurée).",
+   "review": [
+    "NaN / inf : bound les passait à 0,99 (jambe quasi sûre) ; ils passent maintenant inchangés (rejetés en aval comme avant) ; test ajouté",
+    "seasonlane : le test fige les deux bornes ; live : le câblage live.legs -> live.corrected est vérifié",
+    "CHANGEMENT DE COMPORTEMENT ASSUMÉ, plus large que la déclaration initiale : la borne touche aussi les probas brutes légitimes > 0,99 (un Over 0,5 à 0,997 cote 1,05 : espérance +4,7 % -> +3,95 %, cote minimale 1,05 -> 1,06) et relève une queue < 0,01 (0,002 -> 0,01, soit x5 sur une ligne alternative très improbable : risque de valeur fictive sur une queue à grosse cote, filtrée en général par xprice.choose / VIABLE_MIN_P ; à surveiller). Fenêtre mesurée (8-13/10) : 0 ligne concernée.",
+    "live.corrected : l'exemption p0 = 0 ou 1 est atteignable seulement par appel direct : en pratique blend() borne à 1e-4, p0 vaut au plus 0,9999 et est plafonné à 0,99 (un quasi-acquis à cote 1,01 voit son espérance recalculée avec 0,99 au lieu de 0,9999). Conséquence acceptée, code conservé."
+   ]
   },
   {
    "on": "2026-10-17",
