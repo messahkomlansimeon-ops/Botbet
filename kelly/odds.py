@@ -696,6 +696,6 @@ def snapshot(picks):
     # « p » = consensus des books sans marge (prob_book), jamais la proba calibrée / mêlée au modèle (c["prob"]) : sinon le
     # moindre écart modèle-books ressemble à un mouvement de cote (faux steam, fausses alertes). « pb » (même valeur) est la
     # seule clé que build_picks lit pour le steam : les anciens relevés, sans « pb », ne comptent plus (pas de migration) ;
-    # find_alerts (app.py) lit encore « p ».
+    # find_alerts (run_track.py) lit encore « p ».
     return {c["key"]: {"p": round(c.get("prob_book", c["prob"]), 4), "pb": round(c.get("prob_book", c["prob"]), 4),
                        "src": c.get("prob_src", "consensus"), "o": c.get("typ_odds", c["odds"]), "t": now} for c in picks}

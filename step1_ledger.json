@@ -98,6 +98,32 @@
     "order": "une couche à la fois, dans l'ordre means, calib, leg_discount ; puis, seulement ensuite, les facteurs de contexte (prereg.chain_cleaning.no_context_factor_before)",
     "report": "tableau complet (par famille et par sens) AVANT toute modification de production ; aucune modification de pari sans lecture écrite dans ce ledger"
    }
+  },
+  {
+   "at": "2026-10-17T00:00:00+00:00",
+   "kind": "précisions APRÈS une première lecture, écrites avant la deuxième",
+   "first_reading": {
+    "what": "première exécution de tools/audit_sens.py et de tools/audit_chain.py sur la sauvegarde du 17/10 (kelly_backup_2)",
+    "audit_sens": "verdict NON CONCLUANT (112 lignes de référence et 165 choisies hors coupes, 26 matchs au plus : sous les seuils de lisibilité)",
+    "audit_chain": "tableau complet lu (5 341 matchs notés, 18 divisions)",
+    "flaw_found_by_review": "la première exécution d'audit_sens mélangeait, dans REF et CHOSEN, des p0 BRUTS (journal) et des pm CALIBRÉS (archive compacte, qui n'a pas de p0) ; la calibration de la voie `saison` est apprise sur ces mêmes lignes de référence : le repli sur pm poussait vers « H0 tient ». Corrigé : une ligne sans p0 est exclue et comptée. Le ledger demandait p0 ; le repli sur pm de la première version contredisait l'esprit de la règle"
+   },
+   "precisions": {
+    "audit_sens": [
+     "lignes sans p0 (archive) exclues et leur nombre rapporté, coupes comprises",
+     "test BILATÉRAL : H0 rejetée si l'IC exclut zéro, quel que soit le signe ; le signe attendu (moins : négatif, plus : positif) est rapporté comme lecture, pas comme condition",
+     "l'écart choisies - référence suppose deux échantillons indépendants (un même match peut avoir les deux : intervalle conservateur)",
+     "REF = référence qui n'a pas été prise comme jambe"
+    ],
+    "audit_chain": [
+     "seuil de lecture des verdicts MIEUX / PIRE : 30 matchs et un IC à 95 % par match qui exclut zéro (non écrit plus haut)",
+     "cellules PRIMAIRES, déclarées après la première lecture : means = les 5 familles en NLL des comptes ; calib et chaîne = les lignes « toutes / all » ; les autres cellules sont descriptives (une soixantaine de verdicts émis, sans correction de multiplicité)",
+     "la couche means du rejeu est IDÉALE (facteur réel / attendu brut cumulé sur la division, sans rapprochement n / (n + 40), sans bornes, sans demi-vie, sans point de départ du rejeu ; dispersion de la division) et calib est celle de kelly/calib.py sans amorce, poids 1 par ligne (la production pèse 1 / k par match), sans vieillissement, par division : le verdict porte sur ces couches-là, pas sur celles de la production, et le rapport le dit",
+     "C0 « brut » contient le contexte et l'ancrage marché de strength.predict / build : le nettoyage du contexte vient APRÈS cette chaîne (prereg.chain_cleaning)",
+     "les lignes sont choisies sur C0 dans la plage de FAIR_P_RANGE : biais du gagnant possible en faveur de C0, dit dans le rapport",
+     "football-data ne voit pas l'écart de comptage des autres sources ni de 1xBet : calib n'y est jugée que sur la distribution des CSV"
+    ]
+   }
   }
  ]
 }
