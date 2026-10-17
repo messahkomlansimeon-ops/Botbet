@@ -426,14 +426,13 @@ def topic_ids(chat=None):
 
 
 def thread_of(msg):
-    """Fil où part `msg` : son fil marqué (topic()), sinon celui de la demande en cours (in_thread), sinon None (chat privé, fils éteints : rien n'est ajouté)."""
+    """Fil où part `msg` : son fil marqué (topic()) s'il existe, sinon celui de la demande en cours (in_thread : une réponse sans marque revient où l'on a écrit), sinon None
+    (chat privé, fils éteints : rien n'est ajouté). Le fil marqué passe AVANT celui de la demande : une alerte reste dans « Alertes » même déclenchée par un bouton tapé ailleurs."""
     if not C.TOPICS:
         return None
-    ctx = getattr(_ctx, "thread", None)
-    if ctx:                                          # une demande écrite dans un fil : la réponse y revient, même si le message est marqué pour un autre fil
-        return ctx
     kind = getattr(msg, "topic", None)
-    return topic_ids().get(kind) if kind else None
+    marked = topic_ids().get(kind) if kind else None
+    return marked or getattr(_ctx, "thread", None)
 
 
 def _group(chat_id):

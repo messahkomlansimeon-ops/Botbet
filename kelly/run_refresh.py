@@ -200,7 +200,7 @@ def _update_combos(day, pronos, now, refreshed):
         msg = A._fair_reply((legs, total, prob), head + "(l'ancien code est remplacé)." + (A.DROPPED_NOTE if dropped else ""),
                           fmt.combo_changes(removed, added, changed), title=f"🔄 COMBINÉ À JOUR {hhmm}", stake_txt=A._stake_txt(row),
                           when=hhmm, code=code, retry=A.RETRY_BUTTON)
-        telegram.send(chat.with_played_button(msg, f"v{tier}", day, refresh=tier, lookup=True, code=code))
+        telegram.send(telegram.topic(chat.with_played_button(msg, f"v{tier}", day, refresh=tier, lookup=True, code=code), "combos"))
         n += 1
     store.save(A.COMBO_UPDATES, sent)
     return n
@@ -225,7 +225,7 @@ def _upgrade_combo(sent, row, rows, legs0, rng, tier, pronos, now, refreshed, la
     msg = A._fair_reply((legs, total, prob), f"💎 Ton combiné du matin est maintenant aux cotes 1xBet de {hhmm}, avec son code coupon.",
                       fmt.combo_changes(removed, added, changed), title=CB.shots_title(row["tier"]), stake_txt=A._stake_txt(row), when=hhmm,
                       code=code, retry=A.RETRY_BUTTON)
-    telegram.send(chat.with_played_button(msg, f"v{tier}", row["date"], refresh=tier, lookup=True, code=code))
+    telegram.send(telegram.topic(chat.with_played_button(msg, f"v{tier}", row["date"], refresh=tier, lookup=True, code=code), "combos"))
     return 1
 
 
@@ -258,8 +258,8 @@ def _upgrade_single(today, now, got, fetch=None):
         today.setdefault("picks_at", hhmm)
         store.save("today.json", today)
         body = fmt.single(new, CB.leg_reason(new), stake_txt=A._stake_txt(row), coupon=code, when=hhmm, retry=A.RETRY_BUTTON)
-        telegram.send(chat.with_played_button(Html(fmt.esc(f"🎟️ Le pari du jour est maintenant aux cotes 1xBet de {hhmm}.") + "\n\n" + body),
-                                               "pari", day, xrefresh=True, lookup=True, code=code))
+        telegram.send(telegram.topic(chat.with_played_button(Html(fmt.esc(f"🎟️ Le pari du jour est maintenant aux cotes 1xBet de {hhmm}.") + "\n\n" + body),
+                                               "pari", day, xrefresh=True, lookup=True, code=code), "combos"))
         return 1
     except Exception as e:                          # noqa: BLE001 - une tentative en échec ne bloque jamais le relevé
         print(f"[1xbet] pari du jour aux cotes 1xBet ignoré : {type(e).__name__}: {e}", file=sys.stderr)

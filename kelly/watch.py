@@ -1615,7 +1615,7 @@ def tick(now=None):
         try:
             msg = opportunity(now)
             if msg:
-                quiet.send(msg, now)
+                quiet.send(telegram.topic(msg, "live"), now)
                 print("[suivi] opportunité live : message envoyé", file=sys.stderr)
         except Exception as e:                      # noqa: BLE001
             print(f"[suivi] opportunité live ignorée : {http.err(e)}", file=sys.stderr)

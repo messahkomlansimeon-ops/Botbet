@@ -77,7 +77,7 @@ def test_routing():
         telegram.send("réponse")
         telegram.send(telegram.topic("alerte", "alerts"))
     got = [(k["text"], k.get("message_thread_id")) for k in sent()]
-    assert got == [("combiné", 11), ("sans fil", None), ("réponse", 5), ("alerte", 5)], got
+    assert got == [("combiné", 11), ("sans fil", None), ("réponse", 5), ("alerte", 12)], got
     m = telegram.with_buttons(telegram.topic("avec boutons", "live"), telegram.inline([[("a", "b")]]))
     p = telegram.Html("page 1")
     p.more = [telegram.Html("page 2")]
@@ -133,6 +133,40 @@ def test_file_fallback():
         telegram.requests.post = real
     assert [p.get("message_thread_id") for p in posts] == [15, None, 5, None], posts
     print("ok  fichiers : fil de la demande ou fil marqué, renvoyé hors fil s'il est supprimé")
+
+
+def test_mark_beats_request_thread():
+    """Une alerte reste dans « Alertes » même envoyée pendant une demande tapée dans un autre fil ; une réponse sans marque suit la demande."""
+    setup()
+    with telegram.in_thread(11):                                  # l'utilisateur a tapé dans « Combinés »
+        telegram.send(telegram.topic("⚠️ alerte", "alerts"))
+        telegram.send(telegram.with_buttons(telegram.topic("💰 écart", "alerts"), telegram.inline([[("a", "b")]])))
+        telegram.send("réponse sans marque")
+    assert [(k["text"], k.get("message_thread_id")) for k in sent()] == [("⚠️ alerte", 12), ("💰 écart", 12), ("réponse sans marque", 11)]
+    print("ok  fils : la marque d'un message passe avant le fil de la demande, une réponse sans marque suit la demande")
+
+
+def test_automatic_senders_are_marked():
+    """Chaque expéditeur automatique qui n'avait pas de marque arrive dans son fil (chemin d'envoi réel, pas l'attribut), même pendant une demande dans un autre fil."""
+    from kelly import chat, quiet, xalerts
+    setup()
+    real_quiet = quiet.is_quiet
+    quiet.is_quiet = lambda now=None: False
+    try:
+        with telegram.in_thread(14):                              # demande tapée dans « Bilan »
+            quiet.send(telegram.topic(chat.with_played_button(telegram.Html("combiné stats"), "v1", "2030-01-01", refresh="v1", code="AB12"), "combos"))
+            quiet.send(telegram.topic(telegram.Html("opportunité live"), "live"))
+            xalerts.quiet.send(telegram.topic(telegram.Html("💰 écart"), "alerts"))
+    finally:
+        quiet.is_quiet = real_quiet
+    assert [k.get("message_thread_id") for k in sent()] == [11, 13, 12], sent()
+    srcs = {"kelly/statswindow.py": 'with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon), "combos")',
+            "kelly/run_refresh.py": 'lookup=True, code=code), "combos"))',
+            "kelly/xalerts.py": 'quiet.send(telegram.topic(msg, "alerts"), now)',
+            "kelly/watch.py": 'quiet.send(telegram.topic(msg, "live"), now)'}
+    for f, needle in srcs.items():
+        assert needle in open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), f)).read(), f
+    print("ok  fils : combinés stats / rafraîchis, écarts 💰, opportunité live marqués pour leur fil")
 
 
 def test_quiet_keeps_topic():
@@ -251,6 +285,8 @@ def main():
     try:
         test_off_is_unchanged()
         test_routing()
+        test_mark_beats_request_thread()
+        test_automatic_senders_are_marked()
         test_dead_thread_and_outbox()
         test_file_fallback()
         test_quiet_keeps_topic()

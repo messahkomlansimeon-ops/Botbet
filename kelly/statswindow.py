@@ -417,6 +417,6 @@ def send_combo(app, plan, day, now):
                 f"voici un combiné aux cotes de {when}.")
         msg = app._fair_reply((legs, total, prob), head, title=C.STATS_WINDOW_TITLE, stake_txt=app._stake_words(stake, legs=legs), when=when, code=coupon,
                               retry=app.RETRY_BUTTON)
-        quiet.send(app.chat.with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon))
+        quiet.send(telegram.topic(app.chat.with_played_button(msg, f"v{tier}", day, stake=stake, refresh=tier, code=coupon), "combos"))
     print(f"[stats] combiné {tier} envoyé : cote {total:.2f}, {len(legs)} pari(s), code {'oui' if coupon else 'non'}", file=sys.stderr)
     return tier

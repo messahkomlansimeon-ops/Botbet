@@ -303,7 +303,7 @@ def _send_gap(entries, day, now):
         return None
     track.record_gap(rec, day, now)                   # retenus avant l'envoi : un message mis en attente (réseau) n'est pas doublé
     LAST["gap"] += len(rec)
-    quiet.send(msg, now)                              # heures calmes : gardé pour le réveil
+    quiet.send(telegram.topic(msg, "alerts"), now)    # heures calmes : gardé pour le réveil
     return msg
 
 
