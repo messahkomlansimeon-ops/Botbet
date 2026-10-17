@@ -133,7 +133,7 @@ def deep_analysis(first, referee=None):
     if not first.get("sport_key", "").startswith("soccer"):
         return None
     try:
-        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"], referee=referee, on=strength.match_day(first.get("commence")))
+        txt = strength.analysis_text(first["home"], first["away"], first["sport_key"], referee=referee, match_on=strength.match_day(first.get("commence")))
     except Exception as e:                       # noqa: BLE001 - l'analyse ne doit jamais casser la commande
         print(f"analyse approfondie : {e}", file=sys.stderr)
         return None

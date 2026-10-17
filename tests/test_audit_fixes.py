@@ -349,10 +349,50 @@ def test_a15_rest_days_until_match_day():
     import inspect
     from kelly import analysis, fair, odds, stats
     for mod, needle in ((stats, "on=c.get(\"commence\")"), (fair, "on=ev.get(\"commence_time\")"), (analysis, "on=free[0].get(\"commence\")"), (analysis, "on=first.get(\"commence\")"),
-                        (analysis, "on=strength.match_day(first.get(\"commence\"))")):
+                        (analysis, "match_on=strength.match_day(first.get(\"commence\"))")):
         assert needle in inspect.getsource(mod), (mod.__name__, needle)
     assert "on=on" in inspect.getsource(odds.match_numbers)
     print("ok  A15 : les jours de repos se comptent jusqu'au jour du match (_deep, appelants de production), sans jour : comme avant")
+
+
+def test_a15_review_gaps():
+    """Trous de la relecture : match_features transmet `on`, /analyse ne reconstruit pas le modèle par jour de match, le repos n'est jamais négatif."""
+    from datetime import date, timedelta
+    from kelly import strength as S
+    from kelly.sources import features
+    M, S = _a15_model()
+    last_h = date.fromisoformat(M["ctx"]["form"]["T1"]["ld"][-1])
+    # match_features -> _deep : le jour du match arrive à predict
+    got = {}
+    names = ("_football_data", "_understat", "_fotmob", "_fbref", "_fmmatch", "_apistats", "_s365", "_deep")
+    saved = {n: getattr(features, n) for n in names}
+    for n in names:
+        setattr(features, n, lambda out, *a, **k: None)
+    features._deep = lambda out, home, away, sport_key, referee, on=None: got.update(on=on)
+    try:
+        features.match_features("T1", "T2", "soccer_epl", on="2026-10-18T15:00:00Z")
+        assert got == {"on": "2026-10-18T15:00:00Z"}, got
+    finally:
+        for n, f in saved.items():
+            setattr(features, n, f)
+    # /analyse et market_grid : un seul modèle (celui du jour), `on` seulement pour predict
+    calls = []
+    real_get = S.get
+    S.get = lambda div, on=None, loader=None: calls.append(on) or M
+    try:
+        S.market_grid("T1", "T2", "soccer_epl", match_on=last_h + timedelta(days=6))
+        S.analysis_text("T1", "T2", "soccer_epl", None, match_on=last_h + timedelta(days=6))
+        assert calls == [None, None], calls                # le modèle reste celui du jour : le jour du match ne sert qu'à predict
+        rest = S.analysis_text("T1", "T2", "soccer_epl", None, match_on=last_h + timedelta(days=6))
+        assert "Repos" in rest and " 6 j" in rest, rest
+    finally:
+        S.get = real_get
+    # repos jamais négatif : jour visé antérieur à un match déjà au modèle
+    p = S.predict(M, "T1", "T2", last_h - timedelta(days=4), ctx=["rest"])
+    assert all(v >= 0 for v in p["info"]["rest"].values()), p["info"]["rest"]
+    p = S.predict(M, "T1", "T2", last_h + timedelta(days=5), ctx=["rest"])
+    assert p["info"]["rest"]["home"] == 5
+    print("ok  A15 (relecture) : match_features transmet le jour du match, un seul modèle par jour pour /analyse, repos jamais négatif")
 
 
 def test_a15_measure_tool():
@@ -385,6 +425,7 @@ def main():
     test_a13_measure_tool()
     test_a15_means_one_match_one_point()
     test_a15_rest_days_until_match_day()
+    test_a15_review_gaps()
     test_a15_measure_tool()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()

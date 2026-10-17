@@ -164,6 +164,21 @@
    },
    "etape1": "alimente H0 (biais de sélection contre biais de modèle) : le repos sous-estimé et le double comptage de means sont deux sources de biais de MODÈLE avant la sélection ; sur la fenêtre mesurée ils touchent ~5 % des lignes (repos) et 0 ligne (doublon). À relire quand la sauvegarde récente arrive.",
    "stakes": "les probabilités des matchs à horizon >= 1 jour changent de quelques dixièmes de point (repos) ; aucune règle de mise ne change."
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A15",
+   "prereg_sha_unchanged": true,
+   "by": "assistant, après relecture adverse du commit A15",
+   "review_fixes": [
+    "/analyse : analysis_text et market_grid passaient le jour du match comme `on` à strength.get : le modèle était reconstruit (et écrit sur disque) pour CHAQUE jour de match, pondéré jusqu'à ce jour (lh -6,6 % mesuré à +4 j sur le modèle synthétique) et différait des probabilités de pari. Un paramètre séparé `match_on` ne sert qu'à predict (repos, matchs sur 14 jours) ; `on` garde son rôle de date de référence du modèle (tests, rejeu) ; un seul modèle (celui du jour) en production ; test sur les appels de get",
+    "repos négatif : un jour visé antérieur à un match déjà au modèle donnait « a joué il y a -4 j » et la pénalité -3 % ; predict ne retient que les matchs joués au plus tard le jour visé (repos >= 0) ; test",
+    "match_features(on=) : maillon commun du correctif, non couvert par la première suite ; test qui vérifie que le jour du match arrive à _deep"
+   ],
+   "corrections_of_claims": [
+    "« aucun double comptage au passage d'une version à l'autre » : exact seulement si commence[:10] = date[:10] pour la ligne déjà apprise. Un match de nuit (coup d'envoi après minuit UTC : jour Kelly D, commence[:10] = D+1) appris avant ce correctif puis recréé le lendemain peut être recompté UNE fois, à la transition (effet marginal, une fois).",
+    "la sortie de l'outil de mesure compte la calibration par famille/sens et l'horizon sur fair.json seulement"
+   ]
   }
  ]
 }

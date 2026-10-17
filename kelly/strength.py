@@ -1000,7 +1000,8 @@ def predict(model, home, away, on=None, referee=None, ctx=True):
             if abs(sa) >= 0.015:
                 notes.append(("split", f"{a} {'plus fort' if sa > 0 else 'moins fort'} à l'extérieur que sa force globale", 0.0, sa))
             for t, rec, key in ((h, fh, "home"), (a, fa, "away")):
-                last = rec["ld"][-1] if rec.get("ld") else None
+                past = [d for d in rec.get("ld") or [] if date.fromisoformat(d) <= on]       # matchs joués AVANT le jour visé : jamais un repos négatif (A15)
+                last = past[-1] if past else None
                 if last:
                     days = (on - date.fromisoformat(last)).days
                     p14 = sum(1 for d in rec["ld"] if 0 <= (on - date.fromisoformat(d)).days <= 14)
@@ -1221,13 +1222,13 @@ def match_day(v):
         return None
 
 
-def market_grid(home, away, sport_key, referee=None, on=None, model=None):
+def market_grid(home, away, sport_key, referee=None, on=None, model=None, match_on=None):
     """Point d'entrée « tout-en-un » : {pred, grid, lines} d'un match (noms The Odds API ou football-data), ou None si la
     ligue n'a pas assez de matchs en cache ou si une équipe est inconnue. `grid` : voir grid() ; `lines` : voir lines()."""
     from .sources import footballdata as fd
     div = fd.SPORT_TO_DIV.get(sport_key)
     model = model or (get(div, on) if div else None)
-    pred = predict(model, home, away, on, referee) if model else None
+    pred = predict(model, home, away, match_on or on, referee) if model else None            # match_on : jour du match (repos), `on` : date de référence du modèle (A15)
     if not pred:
         return None
     return {"pred": pred, "grid": grid(pred), "lines": lines(pred, pred["home"], pred["away"])}
@@ -1320,24 +1321,24 @@ def _dm(s):
     return f"{s[8:10]}/{s[5:7]}/{s[2:4]}"
 
 
-def analysis_text(home, away, sport_key, referee=None, on=None, model=None):
+def analysis_text(home, away, sport_key, referee=None, on=None, model=None, match_on=None):
     """Texte de /analyse : score probable, buts attendus, 1N2, forme, face-à-face, repos, classement et enjeu, arbitre,
     corners / cartons / tirs et les 5 meilleures lignes (cote juste, confiance). Texte brut en français. Ne lève jamais.
     `model` : modèle déjà construit (tests) ; sinon cache du jour de la ligue (get)."""
     try:
-        return _analysis_text(home, away, sport_key, referee, on, model)
+        return _analysis_text(home, away, sport_key, referee, on, model, match_on)
     except Exception as e:                                       # noqa: BLE001
         return f"🔬 {home} - {away}\nAnalyse indisponible ({type(e).__name__})."
 
 
-def _analysis_text(home, away, sport_key, referee, on, model):
+def _analysis_text(home, away, sport_key, referee, on, model, match_on=None):
     from . import catalogue
     from .sources import footballdata as fd
     div = fd.SPORT_TO_DIV.get(sport_key)
     league = catalogue.name(sport_key) if sport_key else ""
     head = f"🔬 {home} - {away}" + (f" [{league}]" if league else "")
     model = model or (get(div, on) if div else None)
-    pred = predict(model, home, away, on, referee) if model else None
+    pred = predict(model, home, away, match_on or on, referee) if model else None            # match_on : jour du match (repos, A15) ; `on` : date de référence du modèle
     if not pred:
         return (head + "\nPas assez de données pour une analyse détaillée de ce match (équipe inconnue, ligue absente de "
                 "football-data ou historique trop court).")
