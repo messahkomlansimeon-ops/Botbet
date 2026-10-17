@@ -87,9 +87,10 @@ def a3():
             zero_to_none = sum(1 for b, a in zip(before, after) if b is not None and a is None)
             true_zero_lost = sum(1 for r, b, a in zip(g, before, after) if b is not None and a is None and ensemble.take_ts(r) is None and b == 0.0
                                  and (ensemble.close_read_ts(r.get("xclose")) or 0) > (ensemble.ts_of(r.get("at")) or 0) + 60)
+            nosrc = sum(1 for r, b in zip(g, before) if b == 0.0 and not (r.get("xclose") or {}).get("src") and ensemble.take_ts(r) is None)
             print(f"    voie {lane:<14} lignes à xclose {len(g):>4} | CLV mesuré avant {sum(b is not None for b in before):>4} -> après {sum(a is not None for a in after):>4} | "
                   f"passent de mesuré à None {zero_to_none:>4} (dont CLV exactement 0 : {sum(1 for b, a in zip(before, after) if b == 0.0 and a is None)}, "
-                  f"vrais zéros écartés par la règle de repli : {true_zero_lost}) | moyenne avant {f(mean(before))} après {f(mean(after))}")
+                  f"vrais zéros écartés par la règle de repli : {true_zero_lost} ; zéros SANS source gardés (hors règle) : {nosrc}) | moyenne avant {f(mean(before))} après {f(mean(after))}")
             tot["avant"] += sum(b is not None for b in before)
             tot["apres"] += sum(a is not None for a in after)
     if not tot["avant"]:

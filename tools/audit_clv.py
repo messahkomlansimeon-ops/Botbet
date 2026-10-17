@@ -23,7 +23,7 @@ import sqlite3
 import sys
 import tempfile
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -221,7 +221,7 @@ def section_c(rows):
         out.append(f"     - {r.get('event')} / {r.get('pick')} : prix marché {r.get('odds')}, 1xBet {r.get('xodds')}, edge à la prise {g.get('edge')}, "
                    f"edge contre la clôture {r.get('gap_edge_close')} ({r.get('gap_close_src')}), résultat {r.get('result')}")
     xc = [r for r in rows if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r.get("xodds")]
-    fresh = [r for r in xc if (r["xclose"].get("lead_min") is not None and r["xclose"]["lead_min"] <= LEAD_OK_MIN and not r.get("xgone"))]    # ≤ 90 min AVANT LE MATCH (comme la section G), pas l'âge du relevé
+    fresh = [r for r in xc if (r["xclose"].get("lead_min") is not None and r["xclose"]["lead_min"] <= LEAD_OK_MIN and not r.get("xgone") and not _own_read(r))]    # ≤ 90 min AVANT LE MATCH (comme la section G), pas l'âge du relevé
     out.append(f"   Prix 1xBet de clôture (champ xclose, lu dans le cache, collecté seulement depuis l'Étape 0b) : {len(xc)} lignes, dont {len(fresh)} avec un relevé "
                "de moins de 90 min avant la clôture.")
     if xc:
@@ -342,6 +342,27 @@ def _ko_hour(r):
         return "?"
 
 
+def _own_read(r):
+    """Miroir de ensemble.not_a_close (A3, audit du 17/10) sans importer kelly : le `xclose` est-il lu à l'instant de la prise ou avant (prix pris comparé à sa propre lecture) ?"""
+    xc = r.get("xclose")
+    if not isinstance(xc, dict) or xc.get("ok"):
+        return False
+
+    def ts(v):
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+        try:
+            d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+            return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).timestamp()
+        except (ValueError, TypeError):
+            return None
+    take = ts(r.get("tk")) if ts(r.get("tk")) is not None else ts(r.get("first_at"))
+    seen = ts(xc.get("read_ts")) if ts(xc.get("read_ts")) is not None else ts(xc.get("read"))
+    if take is not None:
+        return seen is not None and seen <= take
+    return xc.get("src") == "cache" and xc.get("odds") is not None and r.get("xodds") is not None and xc.get("odds") == r.get("xodds")
+
+
 def _cover(rs):
     ok = [r for r in rs if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r["xclose"].get("lead_min") is not None
           and r["xclose"]["lead_min"] <= LEAD_OK_MIN]
@@ -354,7 +375,7 @@ def section_g(log, lk=None):
     rows = [r for r in log if is_stat(r.get("market"))]
     withref = [r for r in rows if r.get("xref") and r.get("commence")]
     good = [r for r in withref if isinstance(r.get("xclose"), dict) and r["xclose"].get("odds") and r["xclose"].get("lead_min") is not None
-            and r["xclose"]["lead_min"] <= LEAD_OK_MIN]
+            and r["xclose"]["lead_min"] <= LEAD_OK_MIN and not _own_read(r)]
     out = ["G. MARCHÉS DE STATS : CLV CONTRE 1xBET (aucun prix sharp n'existe sur ces marchés ; la seule référence est le dernier prix 1xBet)",
            f"   {len(rows)} lignes de stats au journal, dont {len(withref)} avec la référence 1xBet (collectée depuis l'Étape 0b)."]
     cover = len(good) / len(withref) if withref else 0.0

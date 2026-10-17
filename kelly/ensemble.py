@@ -813,7 +813,7 @@ def not_a_close(r, xc=None):
     Ligne qui porte l'instant de sa prise : comparaison exacte. Ligne plus ancienne (sans « tk » ni « first_at ») : un xclose de source « cache » au même prix que la prise est
     traité comme non mesuré (règle du superviseur du 17/10 ; perte assumée de vrais zéros, chiffrée dans audit_fixes_ledger.json)."""
     xc = r.get("xclose") if xc is None else xc
-    if not isinstance(xc, dict):
+    if not isinstance(xc, dict) or xc.get("ok"):                # « ok » : déjà vérifiée avant l'archivage (voir _pack)
         return False
     take, seen = take_ts(r), close_read_ts(xc)
     if take is not None:
@@ -884,15 +884,18 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
 ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
 ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref", "pe", "swhy", "refused", "cup", "mu", "val", "final")
 # mu / val / final : nombre attendu, nombre réel et score final (collecte des coupes ; une colonne ajoutée en fin reste compatible avec les anciennes lignes)
-# xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1, source « close_read » / « cache » ou None (anciennes lignes)] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
+# xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1, source « close_read » / « cache » ou None (anciennes lignes), vérifiée 0/1 (A3 : relevé postérieur à la prise, contrôlé avant l'archivage)] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
 # règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
 
 
 def _pack(r):
     xc = r.get("xclose") or {}
+    if not_a_close(r, xc):
+        xc = {}                                         # lu à l'instant de la prise ou avant : pas une clôture, rien à archiver (A3, audit du 17/10)
+    verified = take_ts(r) is not None and close_read_ts(xc) is not None       # tk / read_ts ne sont pas archivés : la vérification est faite ICI et gardée (5e élément de xclose)
     sh = r.get("shadow") or {}
     return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
-            [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp"))), xc.get("src")] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
+            [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp"))), xc.get("src"), int(verified)] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
             r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
             r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref"), r.get("pe"), r.get("swhy"), r.get("refused"), r.get("cup"), r.get("mu"), r.get("val"), r.get("final")]
 
@@ -907,6 +910,8 @@ def unpack_archive_row(key, day, vals):
         out["xclose"] = {"odds": d["xclose"][0], "lead_min": d["xclose"][1], "susp": bool(d["xclose"][2]) if len(d["xclose"]) > 2 else False}
         if len(d["xclose"]) > 3 and d["xclose"][3]:                     # src : « close_read » / « cache » (absent des lignes d'avant le 17/10)
             out["xclose"]["src"] = d["xclose"][3]
+        if len(d["xclose"]) > 4 and d["xclose"][4]:                     # vérifiée avant l'archivage (instant de la prise connu et relevé postérieur)
+            out["xclose"]["ok"] = True
     if d["xref"]:
         out["xref"] = d["xref"]
     if d["xgone"] is not None:

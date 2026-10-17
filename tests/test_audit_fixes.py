@@ -74,6 +74,31 @@ def test_a3_mark_x_close_and_record():
     print("ok  A3 : record garde l'instant de la prise ; mark_x_close ne pose jamais un relevé antérieur ou égal à la prise")
 
 
+def test_a3_review_gaps():
+    """Trous relevés par la relecture adverse : ts_of (Z, ISO naïf), archive aller-retour, lignes anciennes sans source, xclose de track.py."""
+    from kelly import ensemble, lanestats as LS
+    assert ensemble.ts_of("2026-10-17T18:50:00Z") == ensemble.ts_of("2026-10-17T18:50:00+00:00") == ensemble.ts_of("2026-10-17T18:50:00") == 1792263000.0
+    assert ensemble.ts_of(None) is None and ensemble.ts_of(True) is None and ensemble.ts_of("pas une date") is None
+    tk = 1_792_263_000.0
+    base = {"key": "k", "market": "team_corners_total", "xodds": 1.9, "commence": "2026-10-17T19:45:00Z", "result": "win"}
+    cl = lambda ts, odds=1.9, **k: {"odds": odds, "read_ts": ts, "lead_min": 55, "susp": False, "src": "cache"} | k
+    # archive : un VRAI zéro (tk connu, relevé postérieur) reste mesuré après archivage ; une auto-comparaison n'est pas archivée
+    good = ensemble.unpack_archive_row("k", "2026-10-17", ensemble._pack(base | {"tk": tk, "xclose": cl(tk + 600)}))
+    assert good["xclose"]["ok"] and LS.x_clv(good) == 0.0, good
+    own = ensemble.unpack_archive_row("k", "2026-10-17", ensemble._pack(base | {"tk": tk, "xclose": cl(tk)}))
+    assert "xclose" not in own and LS.x_clv(own) is None
+    old = ensemble.unpack_archive_row("k", "2026-10-17", ensemble._pack(base | {"xclose": cl(tk)}))          # ligne ancienne, cache, même prix : écartée (règle de repli)
+    assert LS.x_clv(old) is None
+    moved = ensemble.unpack_archive_row("k", "2026-10-17", ensemble._pack(base | {"xclose": cl(tk, odds=1.8)}))
+    assert LS.x_clv(moved) > 0, "ligne ancienne au prix différent : mesurée"
+    # ligne ancienne SANS source (xclose d'avant le champ src) : hors de la règle de repli du superviseur (src == « cache » exactement) -> mesurée comme avant ; écart signalé dans le ledger
+    assert LS.x_clv(base | {"xclose": {"odds": 1.9, "read_ts": tk, "lead_min": 55, "susp": False}}) == 0.0
+    assert LS.x_clv(base | {"xclose": {"odds": 1.9, "read_ts": tk, "lead_min": 55, "susp": False, "src": "close_read"}}) == 0.0
+    # xclose de track.py (age_min, aucun instant) sur une ligne qui porte tk : non vérifiable, inchangé (limite assumée, ledger)
+    assert LS.x_clv(base | {"tk": tk, "xclose": {"odds": 1.7, "age_min": 5, "lead_min": 40, "susp": False}}) > 0
+    print("ok  A3 (relecture) : ts_of Z / naïf, archive aller-retour (vrai zéro gardé, auto-comparaison non archivée), lignes anciennes sans source (hors règle)")
+
+
 def test_a3_oddsonly_close_skips_own_read():
     from kelly import oddsonly
     row = {"first_at": "2026-10-20T18:50+00:00", "xodds": 2.2, "xclose": None, "market": "totals", "name": "Over", "point": 2.5}
@@ -144,6 +169,12 @@ def test_a1_double_chance_freshness():
     picks = odds.build_picks([_a1_event(h2h_read="2026-10-17T15:20:00+00:00", dc_read="2026-10-17T10:00:00+00:00")], date(2026, 10, 17), None, {}, {})
     dc = next(c for c in picks if c["market"] == "double_chance" and c["name"] == "Alpha or Draw")
     assert dc["sharp_at"] == "2026-10-17T15:20:00+00:00"
+    # lecture détaillée du 1X2 (read_m['h2h']) : elle l'emporte sur la lecture groupée read_at
+    ev = _a1_event()
+    ev["read_m"]["h2h"] = "2026-10-17T14:00:00+00:00"
+    picks = odds.build_picks([ev], date(2026, 10, 17), None, {}, {})
+    dc = next(c for c in picks if c["market"] == "double_chance" and c["name"] == "Alpha or Draw")
+    assert dc["sharp_at"] == "2026-10-17T14:00:00+00:00"
     print("ok  A1 : la double chance prend l'heure de lecture du 1X2 d'où vient sa proba sharp (périmé -> stale)")
 
 
@@ -153,6 +184,7 @@ def main():
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()
+    test_a3_review_gaps()
     test_a3_oddsonly_close_skips_own_read()
     print("tests correctifs de l'audit : OK")
 

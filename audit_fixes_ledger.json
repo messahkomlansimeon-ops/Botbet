@@ -85,7 +85,25 @@
     "result": "2 écarts sharp dans cette base, 0 sur la double chance : aucun chiffre sur 14 jours possible ici. L'instant du 1X2 d'où vient la proba n'était PAS enregistré dans les anciennes alertes : un compte exact des alertes parties à tort est impossible a posteriori ; l'outil donne une BORNE HAUTE (toutes les alertes 💰 double chance de la fenêtre), et les alertes écrites après ce correctif portent sharp_src == « h2h » et la bonne heure.",
     "status": "EN ATTENTE d'une sauvegarde récente (borne haute)"
    },
-   "stakes": "une alerte 💰 double chance retirée = une mise conseillée en moins ; aucune règle de mise ne change."
+   "stakes": "une alerte 💰 double chance retirée = une mise conseillée en moins ; aucune règle de mise ne change.",
+   "review": "relecture adverse : correctif juste, mutants tués ; trou de test comblé (read_m['h2h'] prioritaire sur read_at). Résiduel signalé : sans read_at ni read_m['h2h'] (rare : run_track pose read_at en setdefault) la double chance n'a plus de sharp_at ; sharpgap.sharp_age retombe alors sur la date de l'historique de la clé, qui est celle du relevé double chance et non du 1X2 — à durcir (age_unknown imposé) seulement si le cas se produit."
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A3",
+   "prereg_sha_unchanged": true,
+   "by": "assistant, après relecture adverse du commit A3",
+   "review_fixes": [
+    "règle de repli NON étendue aux xclose sans source (src None : écrits entre le 15 et le 17/10, avant le champ src) : la relecture le proposait, mais la règle du superviseur est « src == cache » exactement, et les tests de la carte et des lanes traitent « dernier prix = prix pris » comme un zéro mesuré ; ces lignes restent donc mesurées. À trancher par le superviseur ; l'outil de mesure les compte à part.",
+    "archive : les lignes archivées perdaient tk et read_ts (une même ligne changeait de CLV à l'archivage) ; _pack vérifie la règle AVANT l'archivage : une auto-comparaison n'est pas archivée, un xclose vérifié (tk connu, relevé postérieur) porte le drapeau « ok » (5e élément de xclose) et reste mesuré, vrai zéro compris ; format compatible (les anciennes lignes ont 4 éléments)",
+    "tools/audit_clv.py recalculait log(xodds / xclose) à la main : il exclut maintenant les auto-comparaisons (miroir local de not_a_close, sans importer kelly) ; tools/audit_gaps.py utilise une autre structure et n'est pas touché",
+    "l'amendement précédent disait « tous les consommateurs » : exact pour le noyau (carte, familles, courbes, voie cotes, jambes de combinés), pas pour les deux outils d'audit ci-dessus"
+   ],
+   "residuals_assumed": [
+    "xclose de track.py (age_min, aucun instant de lecture) : non vérifiable, inchangé",
+    "combovariants : le prix d'une jambe peut être pris après tk de la ligne ; un relevé entre tk et la prise réelle de la jambe, au même prix, n'est pas écarté (la jambe ne porte pas son instant de prise)",
+    "tk est l'instant de l'enregistrement, postérieur ou égal à la lecture réelle : un relevé du cache lu entre les deux est écarté à tort (sens prudent ; perte possible si aucune relecture ne suit)"
+   ]
   }
  ]
 }
