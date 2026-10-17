@@ -623,12 +623,14 @@ def build_picks(events, day, after=None, history=None, model=None):
         # élevée et sans Pinnacle, n'apporte pas d'information propre. Sinon : consensus proportionnel de masse 2.
         h2h = {k[3]: cons[k] for k, es in probs.items()
                if k[0] == "h2h" and k[1] is None and k[2] is None and len(es) >= C.MIN_BOOKMAKERS}
+        dc_from_h2h = set()                             # double chances dont la proba sharp vient du 1X2 : leur fraîcheur est celle du 1X2 (A1, audit du 17/10)
         if len(h2h) == 3 and {ev["home_team"], ev["away_team"], "Draw"} == set(h2h):
             for k in probs:
                 parts = _dc_parts(k[3], ev["home_team"], ev["away_team"]) if k[0] == "double_chance" else None
                 if parts:
                     cs = [h2h[x] for x in parts]
                     cons[k] = (sum(c[0] for c in cs), cs[0][1] if cs[0][1] == cs[1][1] else "consensus", min(c[2] for c in cs))
+                    dc_from_h2h.add(k)
         for k, es in probs.items():
             ps = [p for _, p in es]
             if len(ps) < C.MIN_BOOKMAKERS:
@@ -671,6 +673,9 @@ def build_picks(events, day, after=None, history=None, model=None):
                 "why": ", ".join(signals),
             }
             read = (ev.get("read_m") or {}).get(market) or ev.get("read_at")      # VRAIE heure de lecture chez The Odds API (fraîcheur du sharp)
+            if k in dc_from_h2h:                    # la proba sharp d'une double chance est la somme du 1X2 : sa fraîcheur est la lecture du 1X2, pas celle du marché double chance
+                read = (ev.get("read_m") or {}).get("h2h") or ev.get("read_at")
+                c["sharp_src"] = "h2h"
             if read:
                 c["sharp_at"] = read
             if model and model.get("adopted"):

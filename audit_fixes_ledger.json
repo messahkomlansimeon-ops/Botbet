@@ -71,6 +71,21 @@
     "result": "0 ligne avec xclose dans cette base (le relevé de clôture et mark_x_close sont postérieurs) : AUCUN chiffre avant/après possible ici. Les chiffres par voie (lignes qui passent de 0 à None, moyenne CLV avant/après, vrais zéros écartés par la règle de repli) sont à produire en lançant l'outil sur une sauvegarde récente du téléphone ; l'amendement suivant les portera.",
     "status": "EN ATTENTE d'une sauvegarde récente"
    }
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A1",
+   "prereg_sha_unchanged": true,
+   "by": "assistant",
+   "implemented": "odds.build_picks : pour une double chance dont le consensus est remplacé par la somme du 1X2 (dc_from_h2h), sharp_at = read_m['h2h'] (à défaut read_at) et c['sharp_src'] = 'h2h' ; sharpgap.judge porte sharp_src dans le candidat et track.record_gap dans gap.sharp_src. Lecture inchangée par ailleurs : double chance sans 1X2 complet = consensus proportionnel de masse 2, sharp_at = lecture du marché double chance.",
+   "naming": "le champ pré-déclaré « sharp_src_at » devient « sharp_src » = « h2h » (marqueur) ; l'instant lui-même est déjà dans sharp_at/gap.sharp_at (corrigé).",
+   "measure": {
+    "tool": "tools/audit_fixes_measure.py a1 (testé sur la copie)",
+    "source": "tracked.json de la sauvegarde du 13/10 12:00, écarts sharp du 12/10",
+    "result": "2 écarts sharp dans cette base, 0 sur la double chance : aucun chiffre sur 14 jours possible ici. L'instant du 1X2 d'où vient la proba n'était PAS enregistré dans les anciennes alertes : un compte exact des alertes parties à tort est impossible a posteriori ; l'outil donne une BORNE HAUTE (toutes les alertes 💰 double chance de la fenêtre), et les alertes écrites après ce correctif portent sharp_src == « h2h » et la bonne heure.",
+    "status": "EN ATTENTE d'une sauvegarde récente (borne haute)"
+   },
+   "stakes": "une alerte 💰 double chance retirée = une mise conseillée en moins ; aucune règle de mise ne change."
   }
  ]
 }

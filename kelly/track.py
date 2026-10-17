@@ -125,7 +125,7 @@ def record_gap(entries, day, now=None, read_at=None):
     by_key = {r["key"]: r for r in rows}
     n = 0
     for pick, cand, stake, code in entries:
-        mark = {"sharpgap": True, "gap": {k: cand.get(k) for k in ("edge", "p_sharp", "src", "n_sharp", "fair_odds", "xodds", "sharp_at", "batch")}
+        mark = {"sharpgap": True, "gap": {k: cand.get(k) for k in ("edge", "p_sharp", "src", "n_sharp", "fair_odds", "xodds", "sharp_at", "sharp_src", "batch")}
                                           | {"at": now.strftime("%H:%M")}}
         r = by_key.get(cand["key"])
         if not cand.get("n"):                                # écart qui est AUSSI le pari du jour : seulement marqué (mesure contre Pinnacle), pas de numéro « g<n> »

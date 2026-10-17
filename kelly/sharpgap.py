@@ -113,7 +113,7 @@ def judge(c, today, now, history, xp=None, price=None, min_edge=None, max_age=No
             "xodds": xodds, "xref": xref, "xgid": xgid, "xcid": c.get("xcid"), "edge": round(edge, 4),
             "kelly_f": round(edge / (xodds - 1), 4), "age_min": None if age is None else round(age),
             "x_age_min": None if xage is None else round(xage), "mins_to_start": round(mins), "book": c.get("book"),
-            "best_odds": c.get("best_odds"), "typ_odds": c.get("typ_odds"), "sharp_at": c.get("sharp_at")}
+            "best_odds": c.get("best_odds"), "typ_odds": c.get("typ_odds"), "sharp_at": c.get("sharp_at"), "sharp_src": c.get("sharp_src")}
     why = ("age_unknown" if age is None else "stale" if age > max_age
            else "x_stale" if x_fresh and xage is not None and xage > C.SHARPGAP_MAX_X_AGE_MIN else "")
     if edge < min_edge:

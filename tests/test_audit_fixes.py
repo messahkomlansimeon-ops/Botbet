@@ -108,8 +108,48 @@ def test_a3_measure_tool():
     print("ok  A3 : l'outil de mesure compte les zéros d'auto-comparaison et les vrais zéros écartés")
 
 
+# ---------- A1 : double chance, fraîcheur du sharp ----------
+
+def _a1_event(h2h_read="2026-10-17T04:00:00+00:00", dc_read="2026-10-17T15:00:00+00:00", with_h2h=True):
+    H, A = "Alpha", "Beta"
+
+    def bk(key, h2h, dc):
+        ms = [{"key": "double_chance", "outcomes": [{"name": f"{H} or Draw", "price": dc[0]}, {"name": f"{H} or {A}", "price": dc[1]}, {"name": f"Draw or {A}", "price": dc[2]}]}]
+        if with_h2h:
+            ms.insert(0, {"key": "h2h", "outcomes": [{"name": H, "price": h2h[0]}, {"name": "Draw", "price": h2h[1]}, {"name": A, "price": h2h[2]}]})
+        return {"key": key, "title": key, "markets": ms}
+    return {"id": "e1", "sport_key": "soccer_epl", "commence_time": "2026-10-17T17:00:00Z", "home_team": H, "away_team": A,
+            "bookmakers": [bk("pinnacle", (2.0, 3.5, 4.0), (1.28, 1.34, 1.87)), bk("b1", (1.9, 3.4, 3.8), (1.25, 1.3, 1.8)),
+                           bk("b2", (1.95, 3.3, 3.9), (1.26, 1.3, 1.8)), bk("b3", (1.92, 3.3, 3.7), (1.26, 1.31, 1.85))],
+            "read_at": h2h_read, "read_m": {"double_chance": dc_read}}
+
+
+def test_a1_double_chance_freshness():
+    from datetime import date, datetime, timezone
+    from kelly import odds, sharpgap
+    now = datetime(2026, 10, 17, 15, 30, tzinfo=timezone.utc)
+    picks = odds.build_picks([_a1_event()], date(2026, 10, 17), None, {}, {})
+    dc = next(c for c in picks if c["market"] == "double_chance" and c["name"] == "Alpha or Draw")
+    h = next(c for c in picks if c["market"] == "h2h" and c["name"] == "Alpha")
+    assert dc["sharp_at"] == h["sharp_at"] == "2026-10-17T04:00:00+00:00", (dc["sharp_at"], h["sharp_at"])
+    assert dc.get("sharp_src") == "h2h" and "sharp_src" not in h
+    dc["xodds"] = 1.38
+    cand, why = sharpgap.judge(dc, {"picks_at": "15:25"}, now, {}, None)
+    assert why == "stale" and cand["age_min"] == 690 and cand["sharp_src"] == "h2h", (why, cand and cand["age_min"])        # avant : why == '' et age_min == 30 (alerte 💰 sur un prix de 11 h 30 plus tôt)
+    # 1X2 absent : la double chance garde sa propre lecture (consensus proportionnel de masse 2)
+    picks = odds.build_picks([_a1_event(with_h2h=False)], date(2026, 10, 17), None, {}, {})
+    dc = next(c for c in picks if c["market"] == "double_chance" and c["name"] == "Alpha or Draw")
+    assert dc["sharp_at"] == "2026-10-17T15:00:00+00:00" and "sharp_src" not in dc
+    # 1X2 plus récent que la double chance : la fraîcheur est celle du 1X2 (la proba vient de lui)
+    picks = odds.build_picks([_a1_event(h2h_read="2026-10-17T15:20:00+00:00", dc_read="2026-10-17T10:00:00+00:00")], date(2026, 10, 17), None, {}, {})
+    dc = next(c for c in picks if c["market"] == "double_chance" and c["name"] == "Alpha or Draw")
+    assert dc["sharp_at"] == "2026-10-17T15:20:00+00:00"
+    print("ok  A1 : la double chance prend l'heure de lecture du 1X2 d'où vient sa proba sharp (périmé -> stale)")
+
+
 def main():
     test_declaration_unchanged()
+    test_a1_double_chance_freshness()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()

@@ -96,7 +96,25 @@ def a3():
         print("  Aucune ligne à xclose dans cette base : rien à mesurer (le relevé de clôture est postérieur à cette sauvegarde).")
 
 
-POINTS = {"a3": a3}
+def a1(days=14):
+    """A1 — alertes 💰 (écarts sharp) sur la double chance. L'instant de lecture du 1X2 d'où vient la proba n'était pas enregistré : pas de compte exact des alertes qui n'auraient pas dû partir,
+    une BORNE (toutes les alertes 💰 double chance de la fenêtre) ; les alertes écrites à partir du correctif portent gap.sharp_src == « h2h » et la bonne heure."""
+    from kelly import track
+    rows = [r for r in track.load() if isinstance(r, dict)]
+    gaps = [r for r in rows if r.get("sharpgap") or (r.get("mark") or {}).get("sharpgap")]
+    dates = sorted(str(r.get("date") or r.get("commence"))[:10] for r in gaps)
+    print("A1 — alertes 💰 double chance")
+    print(f"  source : tracked.json de la copie, fenêtre des écarts sharp {dates[0] if dates else '—'} -> {dates[-1] if dates else '—'} ({len(gaps)} écarts, {len(rows)} paris suivis)")
+    dc = [r for r in gaps if r.get("market") == "double_chance"]
+    print(f"  écarts sharp sur la double chance : {len(dc)} (borne haute des alertes à tort ; l'âge réel du 1X2 n'est pas enregistré dans les anciennes lignes)")
+    fixed = [r for r in dc if (r.get("gap") or {}).get("sharp_src") == "h2h"]
+    print(f"  dont déjà écrites avec sharp_src == h2h (après correctif) : {len(fixed)}")
+    for r in dc[:10]:
+        g = r.get("gap") or {}
+        print(f"    {str(r.get('commence'))[:16]} {r.get('event')} {r.get('pick')} edge {g.get('edge')} sharp_at {g.get('sharp_at')}")
+
+
+POINTS = {"a3": a3, "a1": a1}
 
 
 def main():
