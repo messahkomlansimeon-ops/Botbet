@@ -171,7 +171,7 @@ def label(fam):
 def resolve(word):
     """Famille nommée par `word` (code, libellé, alias ; sans accents ni casse) ou None."""
     from . import played
-    w = played.norm(str(word or "")).strip(" .?!")
+    w = played.norm(str(word or "")).strip(" .?!").replace(" ", "")
     if not w:
         return None
     for f in list(F.snapshot()) + list(LABELS):
@@ -275,7 +275,10 @@ def command(args=(), today=None):
     if rec.get("voie") is None:
         return f"🚫 {name} : aucune voie définie, jamais admissible aux tickets."
     if st == "proposee" or (st == "fantome" and rec.get("demoted")):
-        r = F.set_state(fam, "jouee", "main", day, by="superviseur", demoted=False)
+        try:
+            r = F.set_state(fam, "jouee", "main", day, by="superviseur", demoted=False)
+        except OSError:
+            return "⚠️ Le document des familles est illisible pour l'instant : rien n'a été changé (voir kelly logs)."
         extra = " (STATS_CUPS_MODE=off prime encore.)" if fam == "stats_cup" and C.STATS_CUPS_MODE == "off" else ""
         return f"✅ {name} est jouée depuis le {day:%d/%m/%Y} ({STATE_TEXT[r[0]]} → jouée, à la main).{extra}" if r else f"ℹ️ {name} est déjà jouée."
     if st == "fantome":

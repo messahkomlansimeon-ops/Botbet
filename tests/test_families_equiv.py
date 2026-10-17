@@ -137,7 +137,7 @@ def test_fantome_family_never_reaches_a_builder():
 
     def leg(market, **kw):
         return {"id": "m1", "key": f"m1|{market}||9.5|Under", "market": market, "name": "Under", "point": 9.5, "sport_key": "soccer_epl", "prob": 0.9, "conf": 0.9, "min_odds": 1.1, "fair": 1.1,
-                "xodds": 1.9, "xev": 0.5, "xref": [1, 2, 9.5], "commence": "2099-01-01T15:00:00Z", "strategy": "stats", "odds": 1.9, "who": None, "group": "soccer", "why": "x"} | kw
+                "xodds": 1.9, "xev": 0.5, "xref": [1, 2, 9.5], "commence": "2099-01-01T15:00:00Z", "strategy": "stats", "n_min": 10, "odds": 1.9, "who": None, "group": "soccer", "why": "x"} | kw
     ctrl, thr = leg("team_shots_total"), leg("team_throws_total")
     for fam_state in ("hors_ticket", "fantome", "proposee"):
         F.set_state("throws", fam_state, "essai", day)
@@ -149,6 +149,13 @@ def test_fantome_family_never_reaches_a_builder():
         plan = CB.season_auto_plan([sea(ctrl), sea(leg("team_fouls_total", id="m2", key="m2|f")) | {"id": "m2"}, sea(leg("team_sot_total", key="m4|s")) | {"id": "m4"}, sea(thr) | {"id": "m3"}])
         assert plan and all(l["market"] != "team_throws_total" for _, combo in plan for l in (combo[0] if combo else [])), fam_state
         assert lanes.usable(sea(thr)) is False and lanes.usable(sea(ctrl)) is True, fam_state
+    thr9 = thr | {"id": "m9", "key": "m9|team_throws_total||9.5|Under"}
+    for fam_state, shown in (("hors_ticket", True), ("fantome", False), ("proposee", False), ("jouee", True)):       # montrées / annoncées (💎) : message du matin, relevés, /match
+        F.set_state("throws", fam_state, "essai", day)
+        assert CB.viable(ctrl) and CB.viable(thr) is shown, fam_state
+        got = [c["market"] for c in CB.shown_pronos([ctrl, thr9])]
+        assert ("team_throws_total" in got) is shown and "team_shots_total" in got, (fam_state, got)
+        assert ("team_throws_total" in [c["market"] for c in CB.best_per_match([ctrl, thr9])]) is shown, fam_state
     F.set_state("throws", "jouee", "main", day)
     assert [c["market"] for c in CB.fair_legs([ctrl, thr])] == ["team_shots_total", "team_throws_total"], "jouee : sur les tickets"
     store.remove(F.FILE)

@@ -282,6 +282,8 @@ def test_display_and_command():
     wl = FE.weekly_lines(MON)
     assert "🟢 famille touches proposée pour les tickets : familles throws on" in wl, wl
     assert chat.WORDS["familles"] == "/familles" and chat.WORDS["famille"] == "/familles"
+    assert [FE.resolve(w) for w in ("stats de coupe", "hors jeu", "tirs cadrés", "cartons jaunes", "double chance", "les 2 marquent", "buts d'une équipe", "Touches", "throws")] == [
+        "stats_cup", "offsides", "sot", "yellow", "dc", "btts", "team_goals", "throws", "throws"]
     # familles X on : seulement depuis proposee, ou une famille rétrogradée ; sinon refus avec la raison
     r = FE.command(["offsides", "on"], MON)
     assert r.startswith("🚫") and "hors ticket" in r and F.state_of("offsides") == "hors_ticket"

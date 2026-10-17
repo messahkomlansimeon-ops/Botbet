@@ -563,6 +563,8 @@ def viable(c):
     le veto (c["xveto"]) et une cote 1xBet sous la cote mini relevée (c["min_odds"], (1 + marge) / p_ens) écartent le pari comme avant. La référence c["base"] est
     une proba du MODÈLE (un match moyen vu par Kelly) : elle se compare à la proba du modèle (c["p_model"]), pas à p_ens (voir ensemble.model_prob)."""
     from . import ensemble, lanes
+    if families.reads(families.family_of(c["market"])) and not lanes.ticket_ok(c):      # famille LUE mais pas jouée (fantôme, proposée) : chiffrée pour le CLV, jamais montrée ni annoncée (💎)
+        return False
     if not lanes.usable(c):                         # voie en « ghost » / « off », ligue de stats en fantôme, jambe « fill » coupée : calculée et journalisée, jamais sélectionnée
         return False
     if ensemble.model_silent(c["market"]) and c.get("p_ens") is None:       # famille figée : sans proba retenue du MARCHÉ (c["p_ens"]), le modèle ne décide pas seul
