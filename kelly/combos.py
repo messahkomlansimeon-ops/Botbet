@@ -555,7 +555,7 @@ def stake_prob(legs, prob):
     return prob
 
 
-def viable(c):
+def viable(c, info=False):
     """Pronostic sans cote assez solide pour être montré ou joué (C.VIABLE_*) : assez de chances après correction de fiabilité, assez
     de matchs de données pour les deux équipes, données de qualité suffisante, match plus favorable au pari qu'un match moyen du
     championnat (c["base"], modèle approfondi), et marché ou championnat où Kelly ne s'est pas montrée trop sûre d'elle.
@@ -563,7 +563,7 @@ def viable(c):
     le veto (c["xveto"]) et une cote 1xBet sous la cote mini relevée (c["min_odds"], (1 + marge) / p_ens) écartent le pari comme avant. La référence c["base"] est
     une proba du MODÈLE (un match moyen vu par Kelly) : elle se compare à la proba du modèle (c["p_model"]), pas à p_ens (voir ensemble.model_prob)."""
     from . import ensemble, lanes
-    if families.reads(families.family_of(c["market"])) and not lanes.ticket_ok(c):      # famille LUE mais pas jouée (fantôme, proposée) : chiffrée pour le CLV, jamais montrée ni annoncée (💎)
+    if not info and families.reads(families.family_of(c["market"])) and not lanes.ticket_ok(c):      # `info` : la vue d'information (/match) garde ces lignes, marquées ; famille LUE mais pas jouée (fantôme, proposée) : chiffrée pour le CLV, jamais montrée ni annoncée (💎)
         return False
     if not lanes.usable(c):                         # voie en « ghost » / « off », ligue de stats en fantôme, jambe « fill » coupée : calculée et journalisée, jamais sélectionnée
         return False
@@ -647,6 +647,21 @@ def shown_pronos(pronos):
     keep = {c["key"] for c in best_per_match(pronos)}
     keep |= {c["key"] for c in pronos if c.get("xodds") and value_leg(c) and viable(c)}
     return [c for c in sorted(pronos, key=lambda c: -_show_rank(c, real)) if c["key"] in keep]
+
+
+def info_pronos(pronos):
+    """Pronostics de la vue d'INFORMATION (/match, /analyse) : shown_pronos, plus les lignes chiffrées des familles fantôme / proposée (lues pour mesurer le CLV, jamais montrées ailleurs), marquées
+    c["ghost_family"] (« fantome » ou « proposee ») : fmt.pronos les affiche « fantôme (mesure en cours) », sans 💎. Même classement."""
+    real = any(c.get("xodds") for c in pronos)
+    base = shown_pronos(pronos)
+    keys = {c["key"] for c in base}
+    extra = []
+    for c in pronos:
+        fam = families.family_of(c["market"])
+        st = families.state_of(fam)
+        if c["key"] not in keys and st in ("fantome", "proposee") and c.get("xodds") and viable(c, info=True):
+            extra.append(c | {"ghost_family": st})
+    return sorted(base + extra, key=lambda c: -_show_rank(c, real))
 
 
 def fair_eligible(c):

@@ -163,6 +163,32 @@ def test_fantome_family_never_reaches_a_builder():
     print("ok  famille hors_ticket / fantôme / proposée : aucun constructeur ne la prend (matin, saison) ; jouee : oui")
 
 
+def test_match_view_keeps_ghost_families_marked():
+    """/match et /analyse (vue d'information) gardent une famille fantôme / proposée, marquée, sans 💎 ; le matin et les relevés (shown_pronos) ne la montrent pas."""
+    from kelly import fmt
+    day = date(2026, 10, 19)
+    store.remove(F.FILE) if store.exists(F.FILE) else None
+    F.reset()
+    base = {"id": "m1", "name": "Under", "point": 9.5, "sport_key": "soccer_epl", "prob": 0.9, "conf": 0.9, "min_odds": 1.1, "fair": 1.1, "n_min": 10, "xodds": 1.9, "xev": 0.5,
+            "xref": [1, 2, 9.5], "commence": "2099-01-01T15:00:00Z", "strategy": "fill", "odds": 1.9, "who": None, "group": "soccer", "why": "x", "event": "A - B", "league": "L",
+            "start": "15:00", "home": "A", "away": "B", "pick": "Moins de 9,5 touches", "xat": "09:00"}
+    ctrl = base | {"market": "team_shots_total", "key": "m1|shots", "pick": "Moins de 9,5 tirs"}
+    thr = base | {"market": "team_throws_total", "key": "m1|throws"}
+    for st, mark in (("fantome", "fantôme (mesure en cours)"), ("proposee", "proposée (pas encore jouée)")):
+        F.set_state("throws", st, "essai", day)
+        info = CB.info_pronos([ctrl, thr])
+        assert {c["market"] for c in info} == {"team_shots_total", "team_throws_total"} and {c["market"] for c in CB.shown_pronos([ctrl, thr])} == {"team_shots_total"}, st
+        txt = str(fmt.pronos(info, 8, when="09:00"))
+        assert "👻 Moins de 9,5 touches" in txt and mark in txt and "💎 Moins de 9,5 touches" not in txt and "💎 Moins de 9,5 tirs" in txt, txt
+    F.set_state("throws", "hors_ticket", "essai", day)
+    assert [c["market"] for c in CB.info_pronos([ctrl, thr])] == [c["market"] for c in CB.shown_pronos([ctrl, thr])], "hors_ticket : comme avant"
+    F.set_state("throws", "fantome", "essai", day)
+    assert "💎 = cote" not in str(fmt.pronos(CB.info_pronos([thr]), 8, when="09:00")), "seul un fantôme : aucune invitation à jouer"
+    store.remove(F.FILE)
+    F.reset()
+    print("ok  /match : une famille fantôme / proposée reste visible, marquée, sans 💎 ; le matin ne la montre pas")
+
+
 def test_sample_output_identical():
     """`python bot.py --sample` : sortie standard identique à celle d'avant le câblage (fichier d'or, journée fictive déterministe)."""
     env = {k: v for k, v in os.environ.items() if k not in ("DATA_DIR", "TELEGRAM_TOKEN", "XBET_PROXY")}
@@ -178,5 +204,6 @@ if __name__ == "__main__":
     test_migrated_document_equal_old_lists()
     test_state_changes_move_exactly_their_decisions()
     test_fantome_family_never_reaches_a_builder()
+    test_match_view_keeps_ghost_families_marked()
     test_sample_output_identical()
     print("tests équivalence des familles : OK")

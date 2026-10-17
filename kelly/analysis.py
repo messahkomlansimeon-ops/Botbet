@@ -203,7 +203,7 @@ def analyse(picks, query, pronos=(), when=None, picks_when=None):
         rl = A.referee_line(ref, deep, "\n".join(fl))
         if rl:
             body += "\n" + rl
-        shown, wait = CB.shown_pronos(free), "\n\n".join(x for x in (A.pending_lines(free), A.underpaid_lines(free)) if x)
+        shown, wait = CB.info_pronos(free), "\n\n".join(x for x in (A.pending_lines(free), A.underpaid_lines(free)) if x)
         return Html(A.comma(head + "\n" + body) + "\n\n" + ("\n\n".join(([str(fmt.pronos(shown, 6, when=when))] if shown or not wait else []) + [wait])
                                                          if wait else str(fmt.pronos(shown, 6, when=when))))
     events = list(dict.fromkeys(c["event"] for c in found))

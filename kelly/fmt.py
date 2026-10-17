@@ -521,7 +521,7 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
         when = next(iter(stamps))                      # toutes lues à la même heure : c'est elle, même si un relevé plus récent a eu lieu ailleurs
     stamp = f" Cotes 1xBet de {when}." if when and priced and not partial else ""
     maybe = any(c.get("xodds") and c.get("xkind") == "probable" for c in shown)
-    value = any(c.get("xodds") and c.get("xkind") != "probable" for c in shown)            # pronostics de buts sans avis d'un book de référence : « probables », pas « valeur »
+    value = any(c.get("xodds") and c.get("xkind") != "probable" and not c.get("ghost_family") for c in shown)            # pronostics de buts sans avis d'un book de référence : « probables », pas « valeur »
     when_txt = "(relevé partiel : heure sur chaque pari)" if partial else f"de {esc(when)}" if when else "du jour"
     note = ("🎯 = probable, pas une valeur (aucun book de référence ne confirme la cote, ou elle ne dépasse pas celle des books de référence) : pas de mise conseillée." if maybe else "")
     lines = [b(title or "🎲 Pronostics Kelly"),
@@ -543,6 +543,11 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
             if c.get("xodds"):
                 who = prob_label(c)
                 at = f" (lue à {esc(c.get('xat') or when)})" if partial and (c.get("xat") or when) else ""
+                if c.get("ghost_family"):                  # famille en mesure (fantôme / proposée) : information seulement, jamais une invitation à jouer
+                    mark = "fantôme (mesure en cours)" if c["ghost_family"] == "fantome" else "proposée (pas encore jouée)"
+                    lines.append(f"👻 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
+                    lines.append(i(f"   {who} {pct(c['prob'])}{odds_vs} · {mark}{data}"))
+                    continue
                 if c.get("xkind") == "probable":
                     lines.append(f"🎯 {esc(c['pick'])} · {b(num(c['xodds']))}{at}")
                     note = ("favori des books de référence, sans valeur" if c.get("p_sharp") is not None else "probable, pas une valeur (aucun book de référence)")

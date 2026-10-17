@@ -144,7 +144,7 @@ def _handle_command(text):
         if not found:
             free = A.event_matches(pronos, " ".join(args))
             if free:
-                shown, wait = CB.shown_pronos(free), "\n\n".join(x for x in (A.pending_lines(free), A.underpaid_lines(free)) if x)
+                shown, wait = CB.info_pronos(free), "\n\n".join(x for x in (A.pending_lines(free), A.underpaid_lines(free)) if x)
                 if wait and not shown:
                     return Html(wait)
                 return Html(str(fmt.pronos(shown, 8, when=when)) + ("\n\n" + wait if wait else ""))
