@@ -115,7 +115,8 @@ def test_who_rings():
     combos = [telegram.Html("🎯 combiné du matin")]
     app.deliver_morning([m if getattr(m, "loud", False) else telegram.silent(m) for m in report] + combos, "2026-10-15", now, sample=True)
     assert [(k["text"], bool(k.get("disable_notification"))) for k in SENT] == [("📊 bilan", True), ("🛑 voie coupée", False), ("🎯 combiné du matin", False)], SENT
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "kelly", "app.py"), encoding="utf-8").read()
+    kd = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "kelly")
+    src = "".join(open(os.path.join(kd, f), encoding="utf-8").read() for f in ("app.py", "cmd_custom.py", "commands.py", "run_refresh.py", "run_track.py", "analysis.py", "cmd_season.py", "run_check.py"))      # app.py et les modules de son découpage
     assert 'm if getattr(m, "loud", False) else telegram.silent(m)' in src, "app.run envoie le bilan comme ce test"
     assert src.count("queue=False, silent=True") >= 10, "les messages ⏳ sont sans sonnerie"
     print("ok  qui sonne : ⚠️, 💰, écarts, 🛑, combinés du matin ; qui se tait : 📈, ✅ seuls, bilan, ⏳, annonces")
