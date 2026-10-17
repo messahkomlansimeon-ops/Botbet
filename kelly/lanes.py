@@ -101,7 +101,7 @@ def usable(c):
         return (families.cup_ok() and C.STRATEGY_STATS == "on" and (state().get("stats") or {}).get("mode") != "ghost"
                 and not (c.get("strategy") == "fill" and not C.FILL_LEGS) and _edge_ok(c))
     if c.get("strategy") == "saison" or c.get("lane") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
-        return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS) and _edge_ok(c)
+        return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS) and _edge_ok(c) and ticket_ok(c)      # une famille fantôme est LUE (et journalisée) par la voie saison, jamais sur un ticket
     lane = lane_of_market(c.get("market"))
     if lane and mode(lane, c.get("sport_key")) != "on":
         return False

@@ -346,6 +346,23 @@ def test_combo_sent_once_with_coupon_and_tracking():
     print("ok  un seul combiné stats : coupon, mise, boutons, suivi ts5w1, jamais renvoyé")
 
 
+def test_fantome_family_is_read_but_never_announced_nor_in_a_combo():
+    """Une famille FANTÔME (touches ici) est relue et mise au prix 1xBet (CLV mesurable), mais jamais annoncée (💎) ni jambe d'un combiné de la fenêtre."""
+    setup_lane(extra=[prono("M1", "team_throws_total", p=0.9), prono("M2", "team_throws_total", p=0.9)])
+    families.set_state("throws", "fantome", "essai", DAY)
+    try:
+        fx = Fx(PRICES | LANE_PRICES | {("M1", "team_throws_total"): 1.9, ("M2", "team_throws_total"): 1.9})
+        rep, sent, coupons = with_fakes(lambda: app.run_stats_window(NOW, fetch=fx))
+        assert by_key()["M1|team_throws_total||9.5|Under"]["xodds"] == 1.9, "relu et mis au prix"
+        cmb, lst = window_msgs(sent)
+        assert not any("touches" in str(m).lower() for m in cmb + lst), "jamais annoncée"
+        assert not any("throws" in l["market"] for r in store.load(fair.COMBOS_FILE, []) for l in r["legs"]), "jamais jambe d'un combiné"
+    finally:
+        store.remove(families.FILE)
+        families.reset()
+    print("ok  famille fantôme : relue et chiffrée, jamais annoncée ni dans un combiné")
+
+
 def test_dedup_same_legs_and_caps():
     """Jamais deux fois les mêmes jambes (jambes sûres : réutilisables, donc le même optimum reviendrait), au plus STATS_WINDOW_MAX_COMBOS par jour : ts5w1 puis ts5w2."""
     setup_lane(p=0.74)                               # jambes SÛRES (proba >= 0,68)
@@ -932,6 +949,7 @@ if __name__ == "__main__":
     test_selection_caps()
     test_pass_reads_only_stat_subgames_and_reprices()
     test_combo_sent_once_with_coupon_and_tracking()
+    test_fantome_family_is_read_but_never_announced_nor_in_a_combo()
     test_dedup_same_legs_and_caps()
     test_reuse_rules_with_morning_combos()
     test_no_read_when_fresh_combo_from_refresh_prices()

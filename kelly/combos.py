@@ -856,7 +856,7 @@ def season_auto_plan(legs, usage=None, max_combos=None, busy_tiers=(), exclude=(
     exclude = {str(x) for x in exclude}
     key = lambda c: (1 if c.get("sval") else 0, c["prob"] * c["odds"])      # noqa: E731 - valeur d'abord, remplissage ensuite
     from . import lanes
-    pool = usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and str(c.get("id")) not in exclude and lanes.ticket_ok(c)])
+    pool = usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and lanes.ticket_ok(c) and str(c.get("id")) not in exclude and lanes.ticket_ok(c)])
     ranked = sorted((c for c in pool if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # TOUTES les jambes (plusieurs marchés par match) ; FILL_LEGS éteint : jamais de remplissage
     out, used = [], set()                            # used : jambes (match, marché, sélection, ligne) déjà prises par un combiné de ce passage
     busy_tiers = {str(t) for t in busy_tiers}

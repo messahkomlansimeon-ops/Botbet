@@ -342,7 +342,7 @@ def announce_list(today, doc, now):
     room = C.STATS_WINDOW_DAY_ANNOUNCE - len(doc["announced"])
     best, extra = {}, {}
     for c in today["pronos"]:
-        if not (is_stat(c) and in_window(c, now) and fresh(c, now) and CB.viable(c)):
+        if not (is_stat(c) and in_window(c, now) and fresh(c, now) and CB.viable(c) and lanes.ticket_ok(c)):      # une famille fantôme est relue, jamais annoncée
             continue
         slot = _app()._slot(c)
         if slot in seen:                             # déjà annoncé (même match, même marché)

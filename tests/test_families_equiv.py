@@ -128,6 +128,34 @@ def test_state_changes_move_exactly_their_decisions():
     print("ok  chaque état déplace exactement ses décisions (lecture, ticket, voie, étiquette, sélecteur, coupes)")
 
 
+def test_fantome_family_never_reaches_a_builder():
+    """Une famille FANTÔME est lue et chiffrée (CLV), mais aucun constructeur de ticket ne la prend : jambes du matin, voie saison (pool, auto, remplaçants), « usable » de la saison. La fenêtre des stats
+    (relue, jamais annoncée ni combinée) est testée dans test_stats_window."""
+    day = date(2026, 10, 19)
+    store.remove(F.FILE) if store.exists(F.FILE) else None
+    F.reset()
+
+    def leg(market, **kw):
+        return {"id": "m1", "key": f"m1|{market}||9.5|Under", "market": market, "name": "Under", "point": 9.5, "sport_key": "soccer_epl", "prob": 0.9, "conf": 0.9, "min_odds": 1.1, "fair": 1.1,
+                "xodds": 1.9, "xev": 0.5, "xref": [1, 2, 9.5], "commence": "2099-01-01T15:00:00Z", "strategy": "stats", "odds": 1.9, "who": None, "group": "soccer", "why": "x"} | kw
+    ctrl, thr = leg("team_shots_total"), leg("team_throws_total")
+    for fam_state in ("hors_ticket", "fantome", "proposee"):
+        F.set_state("throws", fam_state, "essai", day)
+        assert lanes.ticket_ok(thr) is False
+        assert [c["market"] for c in CB.fair_legs([ctrl, thr])] == ["team_shots_total"], fam_state
+        assert not [c for c in CB.quality_legs([thr]) if c["market"] == "team_throws_total"], fam_state
+        sea = lambda c: c | {"lane": "saison", "strategy": "saison", "sval": 1, "id": c["market"]}      # noqa: E731
+        assert CB.season_pool([sea(ctrl), sea(thr)]) and all(c["market"] != "team_throws_total" for c in CB.season_pool([sea(ctrl), sea(thr)])), fam_state
+        plan = CB.season_auto_plan([sea(ctrl), sea(leg("team_fouls_total", id="m2", key="m2|f")) | {"id": "m2"}, sea(leg("team_sot_total", key="m4|s")) | {"id": "m4"}, sea(thr) | {"id": "m3"}])
+        assert plan and all(l["market"] != "team_throws_total" for _, combo in plan for l in (combo[0] if combo else [])), fam_state
+        assert lanes.usable(sea(thr)) is False and lanes.usable(sea(ctrl)) is True, fam_state
+    F.set_state("throws", "jouee", "main", day)
+    assert [c["market"] for c in CB.fair_legs([ctrl, thr])] == ["team_shots_total", "team_throws_total"], "jouee : sur les tickets"
+    store.remove(F.FILE)
+    F.reset()
+    print("ok  famille hors_ticket / fantôme / proposée : aucun constructeur ne la prend (matin, saison) ; jouee : oui")
+
+
 def test_sample_output_identical():
     """`python bot.py --sample` : sortie standard identique à celle d'avant le câblage (fichier d'or, journée fictive déterministe)."""
     env = {k: v for k, v in os.environ.items() if k not in ("DATA_DIR", "TELEGRAM_TOKEN", "XBET_PROXY")}
@@ -142,5 +170,6 @@ if __name__ == "__main__":
     test_defaults_equal_old_lists()
     test_migrated_document_equal_old_lists()
     test_state_changes_move_exactly_their_decisions()
+    test_fantome_family_never_reaches_a_builder()
     test_sample_output_identical()
     print("tests équivalence des familles : OK")
