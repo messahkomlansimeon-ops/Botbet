@@ -1,0 +1,107 @@
+{
+ "prereg": {
+  "declared_by": "superviseur (spécification « Module families », 17/10/2026) ; pré-déclaration rédigée par l'assistant AVANT le code et AVANT toute lecture de l'état des familles",
+  "declared_on": "2026-10-17",
+  "purpose": "cycle de vie automatique des familles de marché : ADMISSION seulement. Ce module ne remplace ni la carte des edges (edgemap) ni la coupure automatique de la voie stats (lanestats) : ils gèrent les cases et les voies, le module gère quelles familles ont le droit d'aller sur un ticket",
+  "document": "data/families.json (document du magasin store) : {famille: {state, voie, since, from, how, demoted}, \"_watch\": {...}, \"_log\": [historique des changements], \"week\": dernier lundi évalué, \"skipped\": {...}}. Lecture : families.state_of(famille) ; absent = état par défaut de DEFAULTS (jamais une erreur)",
+  "states": {
+   "hors_ticket": "calculée, visible dans /match, comptée en calibration, jamais sur un ticket ni en fantôme ; AUCUNE lecture 1xBet dédiée (pas de sous-match, pas de fenêtre des stats, pas de relevé de clôture)",
+   "fantome": "journalisée avec prix 1xBet, xclose, mu/val, jamais sur un ticket ; lecture 1xBet dans les plafonds existants (sous-match, fenêtre des stats, relevé de clôture)",
+   "proposee": "état intermédiaire : se comporte comme fantome (aucun ticket) ; la ligne « 🟢 famille X proposée pour les tickets : familles X on » est dans le bilan du lundi ; ne devient jouee que par la commande manuelle",
+   "jouee": "comportement actuel des familles de voie (sharpgap ou stats)"
+  },
+  "predicates": {
+   "ticket(f)": "vrai seulement si l'état est jouee",
+   "reads(f)": "vrai pour jouee, fantome, proposee : pilote les sous-matchs 1xBet, la fenêtre des stats, le palier ts5, le relevé de clôture, la voie saison",
+   "lane(f)": "le champ `voie` (sharpgap ou stats) de la famille si elle est jouee, sinon None ; remplace ensemble.SHARPGAP_FAMILIES / STATS_LANE dans strategy_of et lanes.lane_of_market",
+   "voie_field": "la voie qu'une famille rejoint si elle est admise est stockée dans `voie` pour chaque famille, pré-déclarée ici : buts, 1N2, double chance, les deux marquent, buts d'équipe -> sharpgap ; corners, cartons, jaunes, tirs, tirs cadrés, fautes -> stats ; touches, hors-jeu -> stats (une famille de comptage d'équipe, même modèle binomial négatif, même relevé 1xBet) ; joueurs -> aucune (voie à définir : jamais admissible tant qu'aucune voie n'existe)"
+  },
+  "initial_state": {
+   "jouee_sharpgap": [
+    "goals",
+    "h2h",
+    "dc",
+    "btts",
+    "team_goals"
+   ],
+   "jouee_stats": [
+    "corners",
+    "cards",
+    "yellow",
+    "shots",
+    "sot",
+    "fouls"
+   ],
+   "fantome": [
+    "stats_cup"
+   ],
+   "hors_ticket": [
+    "throws",
+    "offsides",
+    "player"
+   ],
+   "migration": "écrite par migrate.families_init (une fois, marqueur dans migrations.json) ; tant qu'elle n'a pas tourné, families.state_of lit DEFAULTS : même réponse, donc aucun comportement ne change au déploiement",
+   "proof": "tests/test_families_equiv.py : pour chaque code de famille et plusieurs marchés par famille, les anciennes constantes figées (copiées dans le test) contre lane_of_market, ticket_ok, strategy_of, usable, priced, l'appartenance à MARKET_SUB, les préfixes de la fenêtre des stats, le palier ts5 et les types du sélecteur ; plus la sortie normalisée de `python bot.py --sample` identique avant / après"
+  },
+  "stats_cup": {
+   "what": "les stats de coupe ne sont pas une famille de marché : c'est un contexte (cup = true) de la voie stats, gouverné aujourd'hui par config.STATS_CUPS_MODE (on / ghost / off). Elles figurent dans families.json sous la pseudo-famille `stats_cup`, état initial fantome",
+   "rule": "cup_ok = (STATS_CUPS_MODE == on) OU (STATS_CUPS_MODE != off ET état de stats_cup == jouee). Avec l'état initial fantome, la règle redonne exactement le comportement d'avant pour chacune des trois valeurs de STATS_CUPS_MODE. Les lignes de coupe réglées (cup_log) servent à la règle fantome -> proposee comme celles d'une famille ; stats_cup n'a pas de règle de calibration (hors_ticket -> fantome) ni de rétrogradation par la calibration"
+  },
+  "thresholds": {
+   "FAM_MIN_CALIB": 30,
+   "FAM_MIN_GHOST": 200,
+   "note": "dans config.py (variables d'environnement FAM_MIN_CALIB / FAM_MIN_GHOST) ; le drapeau FAMILIES_AUTO (défaut 1) coupe toutes les transitions automatiques"
+  },
+  "measurements": {
+   "calibration": {
+    "source": "data/fair.json (suivi gratuit de tous les marchés) : lignes de la famille dont le résultat est win ou loss (void et sans résultat exclus)",
+    "announced": "prob de la ligne ; y = 1 si win, 0 si loss ; résidu y - prob",
+    "interval": "moyenne des résidus ± demi-marge à 95 % par grappe de MATCH (champ id), kelly.lanestats.stats(xs, groupes) ; au moins deux matchs distincts, sinon non mesurable",
+    "in_margin": "l'intervalle à 95 % contient zéro (moyenne - h <= 0 <= moyenne + h)",
+    "measurable": "n lignes win/loss >= FAM_MIN_CALIB ET intervalle calculable. Non mesurable N'EST PAS hors marge : aucun changement d'état, la chaîne de deux lundis est rompue"
+   },
+   "ghost_clv": {
+    "source": "journal d'ensemble + archive (lanestats.journal_rows) : lignes de la famille réglées (win / loss) dont le CLV est mesuré (lanestats.x_clv : dernier prix 1xBet à 0-90 min du coup d'envoi, prix non suspendu, pari non retiré), clés uniques",
+    "pass": "nc >= FAM_MIN_GHOST ET moyenne >= 0 ET moyenne - h > 0 (h : demi-marge à 95 % par match)",
+    "scope": "les lignes de la famille quelle que soit leur étiquette de voie (fantome : « fill ») ; pour stats_cup : cup_log"
+   }
+  },
+  "evaluation": {
+   "when": "LE LUNDI SEULEMENT (weekday 0), après edgemap.apply dans le passage du matin ; une seconde exécution le même lundi ne change rien (idempotent, la chaîne ne progresse pas)",
+   "guard": "calibration et CLV lus de documents ILLISIBLES (fair.json, journal d'ensemble) : aucune écriture d'état ce lundi-là, journal `skipped`, ligne du bilan « familles non évaluées : journal X illisible ». Un journal vide ou illisible n'est jamais lu comme « calibration hors marge »",
+   "transitions": {
+    "hors_ticket->fantome": "automatique : mesurable ET dans la marge, un seul lundi",
+    "fantome->proposee": "automatique : la règle ghost_clv passe, un seul lundi ; JAMAIS pour une famille rétrogradée de jouee (retour à la main) ; JAMAIS de passage automatique à jouee",
+    "proposee->jouee": "à la main : commande « familles X on », tracée avec date et auteur dans `_log`",
+    "jouee->fantome": "seulement si edgemap.gate_active() ET la couleur COMMITTÉE de l'agrégat (voie stats, toutes ligues, famille, tous sens) est rouge et lisible (la règle des deux lundis est celle de la carte : une couleur ne change que si constatée deux lundis de suite) ; ne s'applique qu'aux familles de la voie stats (la carte ne couvre pas sharpgap). La coupure de la voie ou d'une ligue (lanestats) n'est PAS recopiée dans l'état des familles (granularité différente) : le tableau l'affiche « coupée par la voie »",
+    "fantome->hors_ticket": "mesurable ET hors marge deux lundis consécutifs à 7 jours EXACTS (enregistrement `_watch`, comme edgemap.apply) ; un lundi manqué, non mesurable ou dans la marge casse la chaîne ; ne s'applique pas à stats_cup ni aux familles rétrogradées de jouee",
+    "return_by_hand": "« familles X on » n'est accepté que depuis proposee, ou depuis fantome pour une famille rétrogradée de jouee ; refusé sinon avec la raison ; autorisation du créateur seul, comme les autres commandes qui changent un état"
+   }
+  },
+  "display": {
+   "familles": "tableau état / résultats / calibration / lignes fantômes / CLV / depuis quand",
+   "status": "une ligne par famille non jouee",
+   "bilan_du_lundi": "les changements d'état de la semaine, et la ligne « 🟢 famille X proposée pour les tickets : familles X on »",
+   "selector": "les types du sélecteur « combi N » sont lus dans l'état : une famille non jouee n'a pas de bouton ; Joueurs (famille player, hors_ticket) disparaît du sélecteur (un type qui ne peut produire aucun ticket) : seule différence visible du déploiement, déclarée"
+  },
+  "scope_of_wiring": {
+   "replaced": [
+    "ensemble.strategy_of (SHARPGAP_FAMILIES / STATS_LANE)",
+    "lanes.lane_of_market, lanes._cup_stat, lanes.usable, lanes.priced (stats de coupe)",
+    "xbet.MARKET_SUB et OFF_LANE_TYPES (fonctions lues à l'usage)",
+    "config.STATS_WINDOW_PREFIX et préfixe ts5 de FAIR_SHOTS_TIERS (filtrés par reads à l'usage)",
+    "statswindow.PREFIX",
+    "cmd_custom.HIDDEN_KINDS et la liste des types de combos.py",
+    "seasonlane : exclusion touches / hors-jeu",
+    "closeread : filtre des familles de la voie stats"
+   ],
+   "left_alone": "les listes qui décrivent une famille sans l'admettre (means.FAMILIES, trends.STATS, calib.PROPS_FAMILIES, settle.SHOT_MARKETS, fmt, watch.STATS, combos.STAT_FAMILIES, app.SWEEP_FAMILIES) ne changent pas",
+   "no_import_time_constants": "aucune de ces listes n'est figée à l'import : le bot Telegram est un processus long, l'état change le lundi ; families.py est un module feuille (importe seulement store et config), relu au plus toutes les 2 s (families.reset() pour les tests)",
+   "oddsonly": "la voie cotes (oddsonly_ledger.json) gèle sa liste de familles dans sa propre pré-déclaration : elle n'utilise plus lanes.ticket_ok mais l'ensemble figé {goals, btts, dc, h2h, team_goals, corners, cards, yellow, shots, sot, fouls} ; une famille rétrogradée ne sort donc pas de la population de la voie cotes en cours de mesure"
+  },
+  "consequence_declared": "à la date du 17/10/2026 le journal gratuit (fair.json de la sauvegarde du 17/10) compte 31 résultats de touches et 21 de hors-jeu réglés : si la calibration des touches tient dans la marge le lundi 19/10, les touches passent en fantome et les lectures du sous-match 55 reprennent (dans les plafonds existants)"
+ },
+ "prereg_sha": "e43b2c7bd1ebf23c9ea642898a1696ad257e04b515fc09d89f6a4ccf7b25f1aa",
+ "written_at": "2026-10-17T09:50+00:00",
+ "amendments": []
+}
