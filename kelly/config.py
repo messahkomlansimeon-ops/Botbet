@@ -455,6 +455,7 @@ LIVE_OPP_GATE = _int("LIVE_OPP_GATE", 8)            # contrôle léger (365score
 LIVE_OPP_MATCHES = _int("LIVE_OPP_MATCHES", 4)      # ... et au moins N matchs avec un bon pari pour l'annoncer
 LIVE_SMALL = _bool("LIVE_SMALL", False)            # 1 : jeunes (U19, U21...), réserves (II, B), amateurs et ligues régionales autorisés en live
 # Équipes inconnues de Kelly préparées à l'avance pour le live (kelly/livedata.py, passage horaire, 365scores via le proxy)
+LIVE_SCORE_EFFECT = _bool("LIVE_SCORE_EFFECT", True)   # effet du score et des cartons rouges sur les corners, tirs, tirs cadrés et fautes restants dans inplay.chance (live_ledger.json) ; 0 : le calcul d'avant, bit pour bit
 LIVE_PREP = _bool("LIVE_PREP", True)                # 0 : pas de préparation (le live n'a que le modèle de force et les profils FotMob / API-Football)
 LIVE_PREP_TEAMS = _int("LIVE_PREP_TEAMS", 100)      # équipes préparées au plus par passage = 50 matchs (~4 Ko chacune ; un samedi : ~900 équipes hors jeunes / réserves)
 LIVE_PREP_SECONDS = _int("LIVE_PREP_SECONDS", 420)  # durée maximale de la préparation d'un passage (1,5 s entre requêtes : S365_BACKFILL_DELAY)

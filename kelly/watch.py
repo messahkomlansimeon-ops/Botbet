@@ -32,7 +32,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import config as C, exposure, fmt, inplay, livedata, quiet, store, telegram
+from . import config as C, exposure, fmt, inplay, livedata, liveeffect, quiet, store, telegram
 from .sources import http, names
 
 FILE = "ticket_watch.json"      # {"legs": {"<ticket>|<pari>": {"state", "score", "gid", "val"}}, "tickets": {ticket: "won"|"lost"}, "opp": {"day", "n", "at"}}
@@ -1079,14 +1079,15 @@ def _pred(gs, leg):
             pr = (got or {}).get("pred") or {}
             if pr.get("lh") and pr.get("la"):
                 gs["pred"] = {"lh": round(float(pr["lh"]), 3), "la": round(float(pr["la"]), 3),
-                              "stats": {k: {"al": v.get("al"), "at": v.get("at")} for k, v in (pr.get("stats") or {}).items() if isinstance(v, dict)}}
+                              "stats": {k: {"al": v.get("al"), "at": v.get("at"), "h": v.get("h"), "a": v.get("a")} for k, v in (pr.get("stats") or {}).items() if isinstance(v, dict)}}
         except Exception as e:                      # noqa: BLE001 - sans modèle, pas de chance pour le 1N2 : rien d'autre ne change
             print(f"[suivi] modèle du match {leg.get('home')} – {leg.get('away')} indisponible : {type(e).__name__}", file=sys.stderr)
     return gs["pred"]
 
 
 def _chance(leg, gs, score, st_g, stats):
-    """(chance du pari maintenant, rythme) ou (None, '') — kelly/inplay.py ; C.WATCH_CHANCES=0 : jamais."""
+    """(chance du pari maintenant, rythme) ou (None, '') — kelly/inplay.py ; C.WATCH_CHANCES=0 : jamais. Statistiques : avec l'effet du score et des cartons rouges (C.LIVE_SCORE_EFFECT) ; la chance SANS
+    l'effet est notée à côté (kelly/liveeffect.py) pour juger l'effet sur des paris réglés."""
     if not C.WATCH_CHANCES:
         return None, ""
     key, side = need(leg)
@@ -1094,8 +1095,14 @@ def _chance(leg, gs, score, st_g, stats):
         return None, ""
     pred = _pred(gs, leg) if (leg.get("market") in ("h2h", "double_chance", "btts") or key != "goals") else None
     try:
-        return inplay.chance(leg, key, side, score, int(st_g.get("minute") or 0), int(st_g.get("period") or (1 if (st_g.get("minute") or 0) <= 45 else 2)),
-                             tuple(st_g.get("red") or (0, 0)), stats, pred)
+        minute = int(st_g.get("minute") or 0)
+        period = int(st_g.get("period") or (1 if minute <= 45 else 2))
+        reds = tuple(st_g.get("red") or (0, 0))
+        out = inplay.chance(leg, key, side, score, minute, period, reds, stats, pred, effect=C.LIVE_SCORE_EFFECT)
+        if key != "goals" and out[0] is not None:
+            raw = inplay.chance(leg, key, side, score, minute, period, reds, stats, pred, effect=False)[0]
+            liveeffect.record(leg, key, side, score, minute, reds, out[0], raw)
+        return out
     except Exception as e:                          # noqa: BLE001
         print(f"[suivi] chance de {leg.get('pick')} non calculée : {type(e).__name__}: {e}", file=sys.stderr)
         return None, ""
@@ -1262,6 +1269,8 @@ def _one_game(d, now, legs, st_g, cache_stats, cache_final, stats_for, final_for
             rec["prov"] = 1                              # décidé en cours de match : revu jusqu'à la fin (but annulé)
         cur = d["legs"].get(k, {})
         d["legs"][k] = {**{x: cur[x] for x in ("nf", "danger", "p", "pre") if x in cur and (x != "p" or st == "live")}, **rec}
+        if stat_leg and finished and st in ("win", "loss") and not rec.get("prov"):
+            liveeffect.settle(leg["key"], st)           # résultat de la chance notée avec / sans l'effet du score (une fois le match fini)
         if line and first:
             (ft_lines if finished else dec_lines).append(line)
             tid = t.get("tid") or t["what"]

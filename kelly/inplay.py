@@ -9,6 +9,13 @@ de la minute, des cartons rouges et des stats du moment. Fonctions pures, aucune
 À la minute 0, sans but ni stat, la chance redonnée est celle d'avant-match : seul le match la fait bouger."""
 from . import live, strength
 
+# Effet du score et des cartons rouges sur ce qu'il reste à venir d'une statistique (live_ledger.json, pré-déclaré le 17/10 AVANT le code ; paramètres FIXES et BORNÉS, jamais appris) :
+# l'équipe MENÉE attaque davantage (ses corners, tirs et tirs cadrés restants x1,15 menée d'un but, x1,25 de deux buts ou plus), celle qui MÈNE se replie (x0,90 / x0,85) ; égalité : 1 ; un carton rouge
+# réduit à dix : ses corners, tirs et tirs cadrés x0,80, ses fautes x1,15 (par carton). Aucun effet sur les cartons, les touches et le hors-jeu. Les buts n'en ont pas ici (live.RED_SELF / RED_OTHER).
+SCORE_MULT = {1: (1.15, 0.90), 2: (1.25, 0.85)}      # écart de buts (plafonné à 2) -> (équipe menée, équipe qui mène)
+SCORE_STATS = ("corners", "shots", "sot")
+RED_MULT = {"corners": 0.80, "shots": 0.80, "sot": 0.80, "fouls": 1.15}
+MULT_BOUNDS = (0.5, 1.5)                             # garde-fou : le facteur d'une équipe ne sort jamais de cette plage
 ALPHA_STATS = 0.10               # dispersion (binomiale négative) d'une stat de match quand le modèle ne la donne pas
 UNITS = {"corners": ("corner", "corners"), "cards": ("carton", "cartons"), "yellow": ("carton jaune", "cartons jaunes"), "shots": ("tir", "tirs"),
          "sot": ("tir cadré", "tirs cadrés"), "fouls": ("faute", "fautes"), "throws": ("touche", "touches"), "offsides": ("hors-jeu", "hors-jeu")}
@@ -52,9 +59,45 @@ def pace(key, val, minute):
     return f"{val} {one if val == 1 else many} à la {minute}e, rythme {rhythm} sur 90 min"
 
 
-def chance(leg, key, side, score, minute, period, reds=None, stats=None, pred=None):
+def team_mults(key, score, reds=None):
+    """(facteur domicile, facteur extérieur) appliqué à ce qui reste à venir de la statistique `key` : effet du score (SCORE_STATS) et des cartons rouges (RED_MULT), bornés à MULT_BOUNDS. (1.0, 1.0) sans effet."""
+    h, a = score
+    rh, ra = reds or (0, 0)
+    mh = ma = 1.0
+    if key in SCORE_STATS and h != a:
+        trail, lead = SCORE_MULT[min(2, abs(h - a))]
+        mh, ma = (lead, trail) if h > a else (trail, lead)
+    f = RED_MULT.get(key)
+    if f:
+        mh, ma = mh * f ** rh, ma * f ** ra
+    lo, hi = MULT_BOUNDS
+    return max(lo, min(hi, mh)), max(lo, min(hi, ma))
+
+
+def shares(key, pred):
+    """Part (domicile, extérieur) de la statistique `key` d'un match : celle des moyennes d'avant-match du modèle (pred["stats"][key]["h" / "a"]) si elles sont connues, sinon 50 / 50 (hypothèse déclarée au ledger)."""
+    st = ((pred or {}).get("stats") or {}).get(key) or {}
+    h, a = st.get("h"), st.get("a")
+    if isinstance(h, (int, float)) and isinstance(a, (int, float)) and h > 0 and a > 0:
+        return h / (h + a), a / (h + a)
+    return 0.5, 0.5
+
+
+def side_mult(key, side, score, reds, pred):
+    """Facteur de ce qui reste à venir pour le côté du pari (« total » : moyenne des deux équipes pondérée par leurs parts)."""
+    mh, ma = team_mults(key, score, reds)
+    if side == "home":
+        return mh
+    if side == "away":
+        return ma
+    sh, sa = shares(key, pred)
+    return sh * mh + sa * ma
+
+
+def chance(leg, key, side, score, minute, period, reds=None, stats=None, pred=None, effect=False):
     """Chance (0 à 1) que le pari `leg` gagne d'ici la fin du match, et le rythme du match pour une stat -> (p, rythme) ; (None, '') si Kelly ne sait
-    pas l'estimer (pas de chance d'avant-match, 1N2 sans modèle, stat inconnue). `key`, `side` : watch.need(leg)."""
+    pas l'estimer (pas de chance d'avant-match, 1N2 sans modèle, stat inconnue). `key`, `side` : watch.need(leg). `effect` : applique l'effet du score et des cartons rouges aux statistiques
+    (team_mults) ; faux par défaut, le suivi des matchs le règle sur C.LIVE_SCORE_EFFECT."""
     p0 = leg.get("prob")
     m, name, point = leg.get("market"), leg.get("name"), leg.get("point")
     h, a = score
@@ -92,7 +135,8 @@ def chance(leg, key, side, score, minute, period, reds=None, stats=None, pred=No
     full = solve_mean(p0, name, point, alpha)
     played = max(0.0, min(90.0, float(minute)))
     rate = (full + val) / (1.0 + played / 90.0)      # l'avant-match compte pour un match entier, le match du jour pour ce qui est joué
-    over = _over(rate * stat_remaining(minute, period), alpha, point - val)
+    mult = side_mult(key, side, score, reds, pred) if effect else 1.0       # effet=False (défaut) : exactement le calcul d'avant (x 1.0 ne change aucun bit)
+    over = _over(rate * stat_remaining(minute, period) * mult, alpha, point - val)
     return (over if name == "Over" else 1.0 - over), pace(key, val, minute)
 
 
