@@ -180,6 +180,11 @@ def test_match_view_keeps_ghost_families_marked():
         assert {c["market"] for c in info} == {"team_shots_total", "team_throws_total"} and {c["market"] for c in CB.shown_pronos([ctrl, thr])} == {"team_shots_total"}, st
         txt = str(fmt.pronos(info, 8, when="09:00"))
         assert "👻 Moins de 9,5 touches" in txt and mark in txt and "💎 Moins de 9,5 touches" not in txt and "💎 Moins de 9,5 tirs" in txt, txt
+    F.set_state("throws", "fantome", "essai", day)
+    unpriced, weak = dict(thr, key="m1|throws-nop", xodds=None), dict(thr, key="m1|throws-weak", prob=0.2, id="m2")
+    assert [c["key"] for c in CB.info_pronos([ctrl, unpriced, weak])] == ["m1|shots"], "sans cote 1xBet ou non viable : cachée (jamais un « mini » qui ressemble à un conseil)"
+    ghost_first = dict(thr, key="m1|throws-best", xev=5.0, id="m3")
+    assert [c["key"] for c in CB.info_pronos([ghost_first, ctrl])] == ["m1|shots", "m1|throws-best"], "les vrais paris d'abord : un fantôme ne pousse pas un 💎 hors de la limite"
     F.set_state("throws", "hors_ticket", "essai", day)
     assert [c["market"] for c in CB.info_pronos([ctrl, thr])] == [c["market"] for c in CB.shown_pronos([ctrl, thr])], "hors_ticket : comme avant"
     F.set_state("throws", "fantome", "essai", day)

@@ -651,7 +651,7 @@ def shown_pronos(pronos):
 
 def info_pronos(pronos):
     """Pronostics de la vue d'INFORMATION (/match, /analyse) : shown_pronos, plus les lignes chiffrées des familles fantôme / proposée (lues pour mesurer le CLV, jamais montrées ailleurs), marquées
-    c["ghost_family"] (« fantome » ou « proposee ») : fmt.pronos les affiche « fantôme (mesure en cours) », sans 💎. Même classement."""
+    c["ghost_family"] (« fantome » ou « proposee ») : fmt.pronos les affiche « fantôme (mesure en cours) », sans 💎. Les vrais paris d'abord (même classement), les lignes en mesure après."""
     real = any(c.get("xodds") for c in pronos)
     base = shown_pronos(pronos)
     keys = {c["key"] for c in base}
@@ -661,7 +661,7 @@ def info_pronos(pronos):
         st = families.state_of(fam)
         if c["key"] not in keys and st in ("fantome", "proposee") and c.get("xodds") and viable(c, info=True):
             extra.append(c | {"ghost_family": st})
-    return sorted(base + extra, key=lambda c: -_show_rank(c, real))
+    return base + sorted(extra, key=lambda c: -_show_rank(c, real))      # les vrais paris d'abord : un fantôme ne pousse jamais un 💎 hors de la limite d'affichage
 
 
 def fair_eligible(c):
