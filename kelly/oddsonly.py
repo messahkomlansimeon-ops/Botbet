@@ -516,6 +516,12 @@ def lifetime(rows):
     return len(gone), cens, opened, med(lo), med(hi)
 
 
+def gone_next_read(rows):
+    """(disparues dès le relevé authentique SUIVANT, disparues) : une ligne disparue à sa 2ᵉ lecture (reads == 2) a disparu au relevé suivant sa première détection."""
+    gone = [r for r in rows if r.get("gone_at")]
+    return sum(1 for r in gone if r.get("reads") == 2), len(gone)
+
+
 def _pc(x, signed=True):
     return (f"{x * 100:+.1f}" if signed else f"{x * 100:.1f}").replace(".", ",").replace("-", "−") + " %"
 
@@ -525,15 +531,17 @@ def stats_block(rows, cover=None):
     from . import lanestats as LS
     val = value_rows(rows)
     out = {"mech": {}, "suspect": sum(1 for r in rows if r.get("status") == "suspect" or r.get("went_suspect")), "moves": sum(1 for r in rows if r.get("mech") == "3")}
-    for m in ("1a", "1b", "1c", "2"):
-        mine = [r for r in val if r["mech"] == m]
+    def cell(mine):
         done = [r for r in mine if LS.settled(r)]
         n, mean, h, gone = LS.clv(done)
         w = sum(1 for r in done if r["result"] == "win")
         ann = [r["p_impl"] for r in done if r.get("p_impl") is not None]
-        out["mech"][m] = {"lines": len(mine), "matches": len({r["id"] for r in mine}), "settled": len(done), "clv_n": n, "clv": mean, "h": h, "gone": gone,
-                          "real": w / len(done) if done else None, "ann": sum(ann) / len(ann) if ann else None,
-                          "clv_matches": len({r["id"] for r in done if LS.x_clv(r) is not None})}
+        return {"lines": len(mine), "matches": len({r["id"] for r in mine}), "settled": len(done), "clv_n": n, "clv": mean, "h": h, "gone": gone,
+                "real": w / len(done) if done else None, "ann": sum(ann) / len(ann) if ann else None,
+                "clv_matches": len({r["id"] for r in done if LS.x_clv(r) is not None})}
+    for m in ("1a", "1b", "1c", "2"):
+        out["mech"][m] = cell([r for r in val if r["mech"] == m])
+    out["cells"] = {(m, f): cell([r for r in val if r["mech"] == m and r.get("family") == f]) for m in ("1a", "1b", "1c", "2") for f in sorted({r.get("family") for r in val if r["mech"] == m and r.get("family")})}
     out["life"] = lifetime([r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2") and r.get("status") in ("value", "suspect")])
     cov = cover or {}
     out["read"] = sum(len(d.get("read", ())) for d in cov.values())
@@ -560,12 +568,23 @@ def load_cover(days=None, today=None):
     return doc
 
 
-def lane_line(days=None, today=None):
-    """Ligne « cotes » du bilan par voie (texte brut) ; '' sans rien de journalisé. Ne lève jamais."""
+def _cell_txt(v):
+    txt = f"{v['lines']} ligne{'s' if v['lines'] > 1 else ''} sur {v['matches']} match{'s' if v['matches'] > 1 else ''}"
+    if v["clv_n"]:
+        txt += f" · CLV {_pc(v['clv'])}" + (f" ± {_pc(v['h'], False)}" if v["h"] is not None else "") + f" sur {v['clv_n']} ({v['clv_matches']} matchs)"
+    elif v["lines"]:
+        txt += " · pas encore de CLV"
+    if v["real"] is not None:
+        txt += f" · réalisé {_pc(v['real'], False)} pour {_pc(v['ann'], False)} annoncé"
+    return txt
+
+
+def lane_lines(days=None, today=None):
+    """Lignes « cotes » du bilan par voie (texte brut) : un résumé puis une ligne par case mécanisme × famille (lignes, CLV avec intervalle par match, réalisé / annoncé) ; [] sans rien de journalisé. Ne lève jamais."""
     try:
         rows = load_rows(days, today)
         if not rows:
-            return ""
+            return []
         b = stats_block(rows, load_cover(days, today))
         tot = sum(v["lines"] for v in b["mech"].values())
         txt = f"cotes (fantôme, aucun pari) : {tot} incohérence{'s' if tot > 1 else ''} ≥ {_pc(EDGE, False)} sur {b['hit']} match{'s' if b['hit'] > 1 else ''}"
@@ -576,12 +595,19 @@ def lane_line(days=None, today=None):
         elif tot:
             txt += " · pas encore de CLV (clôture et règlement à venir)"
         g, c, o, lo, hi = b["life"]
-        if g:
-            txt += f" · disparues {g}, censurées {c}, ouvertes {o}" + (f", durée médiane entre {lo:.0f} et {hi:.0f} min" if lo is not None else "")
-        return txt
+        if g or c or o:
+            nxt, _ = gone_next_read([r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2")])
+            txt += f" · disparues {g} (dont {nxt} dès le relevé suivant), censurées {c}, ouvertes {o}" + (f", durée médiane entre {lo:.0f} et {hi:.0f} min" if lo is not None else "")
+        return [txt] + [f"   cotes · {m} {f} : {_cell_txt(v)}" for (m, f), v in sorted(b["cells"].items()) if v["lines"]]
     except Exception as e:                          # noqa: BLE001
         print(f"[cotes] ligne du bilan illisible : {type(e).__name__}: {e}", file=sys.stderr)
-        return ""
+        return []
+
+
+def lane_line(days=None, today=None):
+    """Première ligne (résumé) du bilan « cotes » ; '' sans rien de journalisé."""
+    out = lane_lines(days, today)
+    return out[0] if out else ""
 
 
 INACTIVE2 = {"cards": "1xBet ne cote pas « tous les cartons »", "yellow": "The Odds API ne cote pas les cartons jaunes", "shots": "The Odds API ne cote pas les tirs",
@@ -602,19 +628,11 @@ def report(args=None, today=None):
         L = [f"Matchs lus : {b['read']} · calculables : {b['comp']} · avec au moins une incohérence ≥ {_pc(EDGE, False)} non suspecte : {b['hit']}" + (f" ({_pc(b['hit'] / b['comp'], False)})" if b["comp"] else "")]
         L.append(f"Suspectes (écart > {_pc(MAX_EDGE, False)}, jamais une valeur) : {b['suspect']} · mouvements de cote journalisés (observation seulement) : {b['moves']}")
         for m, name in (("1a", "1N2 ↔ double chance"), ("1b", "totaux d'équipe → total / les 2 marquent (Poisson : à part)"), ("1c", "lignes successives"), ("2", "retard sur les autres books")):
-            v = b["mech"][m]
-            line = f"• {m} {name} : {v['lines']} ligne{'s' if v['lines'] > 1 else ''} sur {v['matches']} match{'s' if v['matches'] > 1 else ''}"
-            if v["clv_n"]:
-                line += f" · CLV {_pc(v['clv'])}" + (f" ± {_pc(v['h'], False)}" if v["h"] is not None else "") + f" sur {v['clv_n']} ({v['clv_matches']} matchs)"
-            elif v["lines"]:
-                line += " · pas encore de CLV"
-            if v["real"] is not None:
-                line += f" · réalisé {_pc(v['real'], False)} pour {_pc(v['ann'], False)} annoncé"
-            if m == "2":
-                line += " (buts : recouvre sharpgap, preuve non indépendante)"
-            L.append(line)
+            L.append(f"• {m} {name} : {_cell_txt(b['mech'][m])}" + (" (buts : recouvre sharpgap, preuve non indépendante)" if m == "2" else ""))
+            L += [f"    {m} {f} : {_cell_txt(v)}" for (mm, f), v in sorted(b["cells"].items()) if mm == m and v["lines"]]
         g, c, o, lo, hi = b["life"]
-        L.append(f"Durée de vie : {g} disparue{'s' if g > 1 else ''}, {c} censurée{'s' if c > 1 else ''}, {o} ouverte{'s' if o > 1 else ''}"
+        nxt, _ = gone_next_read([r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2")])
+        L.append(f"Durée de vie : {g} disparue{'s' if g > 1 else ''} (dont {nxt} dès le relevé authentique suivant), {c} censurée{'s' if c > 1 else ''}, {o} ouverte{'s' if o > 1 else ''}"
                  + (f" · médiane entre {lo:.0f} et {hi:.0f} min (bornes basse et haute)" if lo is not None else f" · pas de médiane avant {MIN_LIFETIME_N} disparues")
                  + " · relevés environ horaires : lire « disparue en moins d'environ une heure » ou « encore là », pas des minutes ; première vue ≠ début réel (censure à gauche)")
         L.append("Mécanisme 2 inactif : " + " ; ".join(f"{f} ({why})" for f, why in INACTIVE2.items()))

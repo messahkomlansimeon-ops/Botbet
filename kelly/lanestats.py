@@ -294,9 +294,7 @@ def lane_lines(rows, days=None, today=None, plain=False):
         out.append(cl)
     try:
         from . import oddsonly
-        ol = oddsonly.lane_line(days, today)          # voie « cotes » : fantôme, aucun pari
-        if ol:
-            out.append(ol)
+        out += oddsonly.lane_lines(days, today)       # voie « cotes » : fantôme, aucun pari ; ventilée par mécanisme et famille
     except Exception as e:                      # noqa: BLE001
         print(f"[lanes] ligne cotes illisible : {type(e).__name__}: {e}", file=sys.stderr)
     try:

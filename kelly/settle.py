@@ -467,7 +467,7 @@ def settle_oddsonly(now=None, stats_for=None):
     log = store.load(oddsonly.LOG_FILE, [])
     done = {}
     for r in (log if isinstance(log, list) else []):
-        if isinstance(r, dict) and r.get("result") is None and r.get("commence") and r.get("market"):
+        if isinstance(r, dict) and r.get("result") is None and r.get("commence") and r.get("market") and r.get("mech") != "3":      # le mouvement (observation) n'a rien à régler
             try:
                 if _settle_fair_row(r, now, fdata, stats_for or _cached_fstats):
                     done[r["key"]] = {k: r[k] for k in ("result", "final", "val") if k in r}
