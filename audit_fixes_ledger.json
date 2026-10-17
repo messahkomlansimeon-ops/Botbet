@@ -104,6 +104,20 @@
     "combovariants : le prix d'une jambe peut être pris après tk de la ligne ; un relevé entre tk et la prise réelle de la jambe, au même prix, n'est pas écarté (la jambe ne porte pas son instant de prise)",
     "tk est l'instant de l'enregistrement, postérieur ou égal à la lecture réelle : un relevé du cache lu entre les deux est écarté à tort (sens prudent ; perte possible si aucune relecture ne suit)"
    ]
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A4",
+   "prereg_sha_unchanged": true,
+   "by": "assistant",
+   "implemented": "calib.P_MIN/P_MAX = 0,01/0,99 et calib.bound ; calib.calibrate (donc fair.make_pick, xprice lignes alternatives, ensemble.attach), seasonlane.calibrated (calib.factor appliqué à la main) et live.corrected (nouvelle fonction ; un résultat acquis p0 = 0 ou 1 n'est pas touché) passent par la borne. Points d'application de k relevés par grep : calib.calibrate (fair, xprice, ensemble), seasonlane.py calibrated, live.py (correction live) ; les autres usages de calib.factor sont des lectures de k pour l'affichage ou le filtre viable_factor (aucune proba produite).",
+   "measure": {
+    "tool": "tools/audit_fixes_measure.py a4 (testé)",
+    "source": "sauvegarde du 13/10 12:00 : fair.json (8-13/10, 1060 lignes), journal d'ensemble (10-13/10, 1635), tracked.json (8-13/10, 149)",
+    "result": "0 ligne hors de [0,1], 0 ligne hors de [0,01 ; 0,99], 0 ligne refusée par la borne dans cette fenêtre : à cette date aucune famille n'avait un k assez haut pour sortir des bornes (K_RANGE haut = 1,2 exige une famille mesurée sous-confiante avec au moins FAIR_CALIB_MIN résultats). Le défaut est donc démontré par le test mais NON observé dans le journal disponible ; la fenêtre de 14 jours reste à mesurer sur la sauvegarde récente.",
+    "status": "mesure faite sur 6 jours : 0 ; 14 jours EN ATTENTE d'une sauvegarde récente"
+   },
+   "stakes": "aucune règle de mise ne change ; les lignes dont la valeur ne tenait qu'à une proba > 0,99 sont plafonnées (effet nul sur la fenêtre mesurée)."
   }
  ]
 }

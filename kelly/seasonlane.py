@@ -94,7 +94,7 @@ def load_calib():
 
 def calibrated(market, p, sport_key, side, data):
     """Proba du modèle de saison corrigée par la fiabilité MESURÉE sur la voie (calib.factor sur data/season_calib.json, point de départ 1 : pas de prior du rejeu)."""
-    return 0.5 + (p - 0.5) * calib.factor(market, data, sport_key, side, p, base=1.0)
+    return calib.bound(0.5 + (p - 0.5) * calib.factor(market, data, sport_key, side, p, base=1.0))
 
 
 def learn(log):

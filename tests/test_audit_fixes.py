@@ -178,9 +178,33 @@ def test_a1_double_chance_freshness():
     print("ok  A1 : la double chance prend l'heure de lecture du 1X2 d'où vient sa proba sharp (périmé -> stale)")
 
 
+# ---------- A4 : probabilité corrigée bornée ----------
+
+def test_a4_calibrated_probability_bounded():
+    from kelly import calib, fair, store
+    store.save("calib.json", {"goals": [100, 70, 60.0]})                  # famille sous-confiante : k = 1,2 (K_RANGE haut)
+    calib.reset()
+    assert calib.factor("totals") > 1.15
+    ev = {"id": "x", "sport_key": "s", "home_team": "A", "away_team": "B", "commence_time": "2026-10-20T15:00:00Z"}
+    hi = fair.make_pick(ev, "totals", "Over", 0.5, 0.95, "t", "s")        # avant : prob 1,04, min_odds 1,01
+    lo = fair.make_pick(ev, "totals", "Over", 5.5, 0.02, "t", "s")        # avant : prob -0,076, fair -13,16, min_odds -13,82
+    assert hi["prob"] == calib.P_MAX == 0.99 and hi["min_odds"] > 1 and hi["fair"] > 1
+    assert lo["prob"] == calib.P_MIN == 0.01 and lo["min_odds"] > 1 and lo["fair"] > 1, lo
+    assert calib.calibrate("totals", 0.5) == 0.5 and 0.01 <= calib.calibrate("totals", 0.6) <= 0.99, "pas de borne active au milieu : inchangé"
+    assert calib.bound(1.04) == 0.99 and calib.bound(-0.076) == 0.01 and calib.bound(0.3) == 0.3
+    # voie saison : même borne ; live : borne sauf résultat acquis (p0 = 0 ou 1)
+    from kelly import seasonlane
+    assert seasonlane.calibrated("totals", 0.95, "s", "plus", {"goals": [100, 70, 60.0]}) <= 0.99
+    from kelly import live
+    assert live.corrected(0.95, 1.2) == 0.99 and live.corrected(0.02, 1.2) == 0.01 and live.corrected(0.6, 1.0) == 0.6
+    assert abs(live.corrected(1.0, 1.2) - 1.1) < 1e-9 and abs(live.corrected(0.0, 1.2) + 0.1) < 1e-9, "résultat acquis (p0 0 ou 1) : pas touché par la borne"
+    print("ok  A4 : la proba corrigée reste dans [0,01 ; 0,99], la cote minimale reste > 1 (calibrate, voie saison)")
+
+
 def main():
     test_declaration_unchanged()
     test_a1_double_chance_freshness()
+    test_a4_calibrated_probability_bounded()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()

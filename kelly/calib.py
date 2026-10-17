@@ -459,9 +459,17 @@ def trial_line(data=None):
             ).replace("%", " %")
 
 
+P_MIN, P_MAX = 0.01, 0.99      # bornes d'une proba corrigée (A4, audit du 17/10) : k jusqu'à 1,2 sortait de [0, 1] (prob 1,04 ; cote minimale négative)
+
+
+def bound(p):
+    """`p` ramenée dans [P_MIN, P_MAX] : la cote minimale 1 / p x (1 + marge) qui en découle est toujours > 1."""
+    return max(P_MIN, min(P_MAX, p))
+
+
 def calibrate(market, p, data=None, sport_key=None, side=None):
-    """Proba corrigée d'un pronostic de proba brute `p` (championnat `sport_key` et sens `side` facultatifs, voir factor)."""
-    return 0.5 + (p - 0.5) * factor(market, data, sport_key, side, p)
+    """Proba corrigée d'un pronostic de proba brute `p` (championnat `sport_key` et sens `side` facultatifs, voir factor), bornée dans [P_MIN, P_MAX]."""
+    return bound(0.5 + (p - 0.5) * factor(market, data, sport_key, side, p))
 
 
 def rep_market(fam):

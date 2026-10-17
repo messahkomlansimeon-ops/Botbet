@@ -201,6 +201,12 @@ def _logit(p):
     return math.log(p / (1 - p))
 
 
+def corrected(p0, k):
+    """Proba live corrigée du facteur `k`, bornée dans [0,01 ; 0,99] (A4, audit du 17/10) ; un résultat acquis (p0 = 0 ou 1) n'est pas touché."""
+    p = 0.5 + (p0 - 0.5) * k
+    return calib.bound(p) if 0 < p0 < 1 else p
+
+
 def blend(pk, px, w):
     """Mélange en logit de la proba de Kelly `pk` (poids `w`, borné à [0 ; 1]) et de celle de 1xBet sans marge `px` (poids 1 - w)."""
     w = max(0.0, min(1.0, w))
@@ -298,7 +304,7 @@ def legs(raw, now=None, data=None, model_for=None):
             mk, side, point = k
             pk = p_raw[k]
             p0 = blend(pk, p_x[k], kelly_weight(pred.get("src"))) if k in p_x else pk      # ancré sur 1xBet (sans proba de 1xBet : écarté plus bas)
-            p = 0.5 + (p0 - 0.5) * factor(mk, tr, data)         # UNE correction : famille x tranche, mesurée sur les paris retenus
+            p = corrected(p0, factor(mk, tr, data))             # UNE correction : famille x tranche, mesurée sur les paris retenus
             leg = {"key": f"lv{m['gid']}|{mk}||{'' if point is None else point}|{side}", "id": f"lv{m['gid']}", "home": m["home"], "away": m["away"],
                    "sport_key": key or "soccer_live_other", "league": m["league"], "commence": start.isoformat().replace("+00:00", "Z"), "start": start.strftime("%H:%M"),
                    "market": mk, "name": side, "point": point, "who": None, "group": "soccer", "pk": round(pk, 4), "p0": round(p0, 4), "prob": round(p, 4),

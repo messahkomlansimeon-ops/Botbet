@@ -115,7 +115,24 @@ def a1(days=14):
         print(f"    {str(r.get('commence'))[:16]} {r.get('event')} {r.get('pick')} edge {g.get('edge')} sharp_at {g.get('sharp_at')}")
 
 
-POINTS = {"a3": a3, "a1": a1}
+def a4():
+    """A4 — probabilités corrigées hors de [0,01 ; 0,99] dans les journaux (fair.json, journal d'ensemble + archive, tracked.json) et lignes qui seraient refusées avec la borne (espérance
+    prob x cote - 1 positive avant, négative après)."""
+    from kelly import calib, lanestats as LS, store
+    srcs = {"fair.json": store.load("fair.json", []), "journal d'ensemble": LS.journal_rows(), "tracked.json": store.load("tracked.json", [])}
+    print("A4 — probabilités corrigées bornées")
+    for name, rows in srcs.items():
+        rows = [r for r in rows if isinstance(r, dict) and isinstance(r.get("prob"), (int, float))]
+        out01 = [r for r in rows if not 0 <= r["prob"] <= 1]
+        outb = [r for r in rows if not calib.P_MIN <= r["prob"] <= calib.P_MAX]
+        refused = [r for r in outb if r.get("xodds") and r["prob"] * r["xodds"] - 1 >= 0 > calib.bound(r["prob"]) * r["xodds"] - 1]
+        print(f"  {name} : {len(rows)} lignes à prob — fenêtre {window(rows)} ; hors de [0,1] : {len(out01)} ; hors de [{calib.P_MIN},{calib.P_MAX}] : {len(outb)} ; "
+              f"espérance positive avant et négative après la borne : {len(refused)}")
+        for r in outb[:5]:
+            print(f"    {r.get('key') or r.get('id')} prob {r['prob']} xodds {r.get('xodds')}")
+
+
+POINTS = {"a3": a3, "a1": a1, "a4": a4}
 
 
 def main():
