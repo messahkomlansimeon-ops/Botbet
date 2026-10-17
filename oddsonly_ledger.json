@@ -214,7 +214,7 @@
    "by": "assistant, sur décision du superviseur (17/10/2026)",
    "mechanism_2_corners_reference": "corners du mécanisme 2 : la référence est soit le consensus d'au moins 2 books (n_books >= 2), soit Pinnacle SEUL (prob_src = pinnacle avec un seul book), règle déjà celle de sharpgap pour les buts ; fantôme, aucun risque. Chaque ligne corners du mécanisme 2 porte `ref` = « consensus » ou « pinnacle_seul » et le rapport les sépare. Les buts ne changent pas (ref absent)",
    "off_lane_reads": "les sous-matchs 1xBet touches (type 55) et hors-jeu (type 13) ne sont plus relus (xbet.OFF_LANE_TYPES, STATS_WINDOW_PREFIX, ts5) : aucune ligne de la voie n'en dépend (déjà exclus par lanes.ticket_ok)",
-   "cards_closed": "alternate_totals_cards existe dans The Odds API (page des marchés, 17/10/2026 ; bookmakers non précisés) mais compte les cartons selon la définition du book, alors que 1xBet ne compte que les jaunes : prix non comparable, mécanisme 2 cartons reste inactif ; tirs, fautes, jaunes : aucun marché d'équipe chez The Odds API (tirs : props joueurs seulement)"
+   "cards_closed": "cartons : alternate_totals_cards existe dans The Odds API (page des marchés, 17/10/2026 ; bookmakers non précisés par la page, 0 événement avec cartons dans le cache local) mais aucun relevé 1xBet ne produit cette clé (1xBet ne compte que les jaunes, marché team_yellow_total) : le réactiver ne donnerait aucune ligne. Mécanisme 2 cartons laissé inactif, NON RÉACTIVABLE en l'état, en attente de la confirmation du superviseur ; tirs, fautes, jaunes : aucun marché d'équipe chez The Odds API (tirs : props joueurs seulement)"
   }
  ]
 }

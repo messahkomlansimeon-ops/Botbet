@@ -202,6 +202,15 @@ def test_selection_by_kickoff():
     print("ok  sélection : fenêtre du coup d'envoi, cotes fraîches, matchs connus de 1xBet")
 
 
+def test_off_lane_never_selected():
+    """Un vrai pronostic touches / hors-jeu dans la fenêtre n'est ni sélectionné ni compté dans window_ids : plus aucune lecture pour lui."""
+    setup()
+    off = [prono("M1", "team_throws_total"), prono("M2", "team_offsides_total"), prono("M3", "team_throws_home")]
+    assert statswindow.select(off, NOW, statswindow.load(DAY)) == [] and statswindow.window_ids(off, NOW) == set()
+    assert not any(statswindow.is_stat(c) for c in off)
+    print("ok  touches / hors-jeu : jamais dans la fenêtre des stats")
+
+
 def test_selection_caps():
     """Plafonds de données : matchs par passage, relectures par jour et par match, passages sans réponse, délai entre deux relectures."""
     setup()
@@ -323,7 +332,7 @@ def test_combo_sent_once_with_coupon_and_tracking():
     assert str(reply).startswith("✅ Noté") and store.load(fair.COMBOS_FILE, [])[0]["played"]["stake"] == 1000.0, reply
     # 💎 stats annoncés dans UN message (un par match)
     assert len(lst) == 1 and rep["announced"] == len(lst[0].split("💎 ")) - 1 >= 3
-    # deuxième passage, rien de neuf : ni relecture, ni combiné, ni message ; une seule ligne de suivi
+    # deuxième passage : aucune relecture (cotes fraîches) ; le combiné ts5w1 n'est jamais renvoyé (un AUTRE combiné de jambes différentes est permis : un par passage, plafond du jour)
     fx2 = Fx()
     rep2, sent2, coupons2 = with_fakes(lambda: app.run_stats_window(NOW + timedelta(minutes=1), fetch=fx2))
     assert fx2.calls == [] or all(not c["ids"] for c in fx2.calls), "toutes les cotes sont fraîches"
@@ -331,6 +340,7 @@ def test_combo_sent_once_with_coupon_and_tracking():
     assert rows2[0]["keys"] == row["keys"]
     assert all({l["key"] for l in r["legs"]} != {l["key"] for l in row["legs"]} for r in rows2[1:]), "jamais le même combiné deux fois"
     assert all(r["tier"] != "ts5w1" for r in rows2[1:]) and len(rows2) <= 2
+    assert not any(row["coupon"] in str(m) and "COMBINÉ STATS" in str(m) and {l["key"] for l in row["legs"]} <= {k for k in str(m).split()} for m in sent2) and len(coupons2) == len(rows2) - 1
     print("ok  un seul combiné stats : coupon, mise, boutons, suivi ts5w1, jamais renvoyé")
 
 
@@ -916,6 +926,7 @@ def test_readme_documents_window():
 
 if __name__ == "__main__":
     test_selection_by_kickoff()
+    test_off_lane_never_selected()
     test_selection_caps()
     test_pass_reads_only_stat_subgames_and_reprices()
     test_combo_sent_once_with_coupon_and_tracking()

@@ -300,7 +300,7 @@ FAIR_COMBO_MIN_P = 0.60                           # proba Kelly minimale d'une j
 FAIR_COMBO_MIN_Q = 0.40                           # qualité des données minimale (0 à 1)
 FAIR_COMBO_TIERS = ((5, 5.0, 6.5), (12, 12.0, 15.0), (25, 25.0, 32.0))   # (cote mini visée, fourchette de la cote mini totale)
 # Combinés « spécial tirs » à vérifier chez 1xBet, chaque matin : (palier, préfixe des marchés, titre, fourchette de la cote mini)
-# Le préfixe peut être un tuple de préfixes (str.startswith) : « ts5 » mélange tirs, tirs cadrés, fautes, touches et hors-jeu (un pari par match).
+# Le préfixe peut être un tuple de préfixes (str.startswith) : « ts5 » mélange tirs, tirs cadrés et fautes (touches et hors-jeu retirés le 17/10 ; un pari par match).
 FAIR_STATS_TIER = _bool("FAIR_STATS_TIER", True)      # 0 : plus de palier « 🧮 COMBINÉ STATS » (tc5 et tv5 restent)
 FAIR_STATS_PAID = _bool("FAIR_STATS_PAID", True)      # 0 : les matchs payés (cotes réelles) n'ont plus de pronostics tirs / fautes / touches / hors-jeu (comportement d'avant)
 FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0),

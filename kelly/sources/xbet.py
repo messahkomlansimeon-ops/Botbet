@@ -655,7 +655,7 @@ def list_leagues(keys, deadline=None):
 
 
 def prioritise_stats(events, wanted):
-    """`events` avec d'abord les matchs dont on veut des sous-matchs statistiques (tirs, tirs cadrés, fautes, touches, hors-jeu : un gameEvents de plus par
+    """`events` avec d'abord les matchs dont on veut des sous-matchs statistiques (tirs, tirs cadrés, fautes ; touches et hors-jeu ne sont plus relus, hors-jeu : un gameEvents de plus par
     famille, dans `wanted`), puis les autres, chacun dans l'ordre reçu. Si le délai du relevé tombe, ce sont eux qui valent le plus par requête : ils
     nourrissent les combinés de stats. Sans `wanted`, l'ordre ne change pas. Appelé par xprice.apply pour le relevé du matin seulement (les relevés en direct
     gardent l'ordre de l'appelant : combinés et paris montrés d'abord)."""
