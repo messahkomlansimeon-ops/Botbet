@@ -34,6 +34,70 @@
   {
    "at": "2026-10-14T13:01:44+00:00",
    "note": "demi-vie 45 jours : retirée de l'Étape 1. Tranchée le 14/10 sur la fenêtre de développement (rejeu pré-déclaré de la voie `saison`, season_ledger.json, 5 338 matchs, 18 divisions) : 45 jours est moins bon que 110 sur quatre familles de statistiques sur cinq (corners, tirs, tirs cadrés, fautes) et indécise sur les jaunes ; demi-vie 110 CONSERVÉE. Cette entrée ne modifie pas la pré-déclaration `prereg` (aucune hypothèse de demi-vie 45 n'y figurait) : elle ferme seulement la question pour l'Étape 1."
+  },
+  {
+   "at": "2026-10-17T00:00:00+00:00",
+   "decided_by": "superviseur (bilan du 17/10 et section G) ; feu vert de l'Étape 1, biais de sens en première cible",
+   "written_before": "toute lecture des résidus par sens des lignes de référence et toute exécution du rejeu en chaîne ; seuls les EFFECTIFS (lignes par drapeau ref / sval) de la sauvegarde du 17/10 ont été comptés pour rendre la règle exécutable",
+   "observation_motivating": "bilan du 17/10, calibration annoncé / réalisé : « moins de » trop confiants (buts d'équipe 60 % / 69 % sur 107, corners 57 % / 67 % sur 48, tirs 45 % / 65 %), « plus de » sous-estimés (corners 73 % / 66 %)",
+   "H0": {
+    "statement": "sur les lignes de référence (choisies sans regarder le prix), la calibration par sens est juste ; le biais n'apparaît que sur les lignes choisies",
+    "if_holds": "biais de SÉLECTION : la correction va au MOMENT DU CHOIX (retrait vers le marché proportionnel à l'écart)",
+    "if_rejected": "biais de MODÈLE : la correction va dans `means`, PAR SENS",
+    "populations": {
+     "REF": "journal de la voie `saison` (season_log.json + archive arch/sea/ de la sauvegarde), lignes avec ref = 1 et SANS sval (la référence n'est pas la ligne choisie : la ligne la plus proche de FAIR_P_TARGET, choisie sans regarder le prix), réglées win / loss, hors coupes (cup absent)",
+     "CHOSEN": "mêmes journal et période, lignes avec sval dans (0, 1) (jambes à valeur et de remplissage : choisies sur le prix), réglées win / loss, hors coupes",
+     "cups": "les coupes (cup = true) sont rapportées à part, JAMAIS dans le verdict",
+     "why_not_stats_lane": "seul le journal de la voie `saison` porte des lignes de référence choisies sans regarder le prix ; les chiffres du bilan (calib.json) viennent des pronostics de l'ensemble. Le verdict parle donc du modèle de la voie `saison` (season.fit) ; il ne vaut pour `means` / strength que par analogie, ce que le rapport dit"
+    },
+    "families": [
+     "totals",
+     "team_totals",
+     "corners",
+     "cards",
+     "yellow",
+     "shots",
+     "sot",
+     "fouls"
+    ],
+    "sens": "Over = plus, Under = moins (les marchés oui / non, 1N2 et double chance sont hors de ce test)",
+    "probability_field": "p0 (probabilité brute du modèle, avant tout mélange avec le marché) ; en information seulement : pe (probabilité retenue)",
+    "statistic": "résidu e = (1 si gagné, 0 sinon) - p0 ; moyenne et demi-intervalle à 95 % PAR MATCH (lignes d'un même match en un bloc : lanestats.stats), par (famille, sens) et agrégé par sens",
+    "readable": {
+     "cell": "40 lignes et 25 matchs au moins",
+     "aggregate_per_sens": "100 lignes et 30 matchs au moins"
+    },
+    "verdict_rule": {
+     "per_sens": "agrégat REF lisible. H0 REJETÉE pour ce sens si l'IC à 95 % du résidu exclut zéro (négatif pour « moins de » : trop confiant ; positif pour « plus de » : sous-estimé) ; H0 TIENT si l'IC inclut zéro ; NON LISIBLE sinon",
+     "overall": "H0 rejetée si elle l'est pour au moins un sens ; tient si elle tient pour les deux ; sinon non concluant",
+     "selection_size": "en plus, pour chaque sens : résidu CHOSEN - résidu REF (IC par match, deux échantillons) ; la taille du biais de sélection ; l'écart de composition en probabilité entre REF et CHOSEN est rapporté (distribution de p0) et le même résidu est donné sur la tranche commune de p0 (0,55 à 0,75)",
+     "applied": "la règle est CALCULÉE et rapportée, jamais appliquée : aucun réglage n'est modifié par cet outil (tools/audit_sens.py)"
+    },
+    "known_limits": [
+     "la ligne de référence est celle dont p0 est proche de 0,65 : composition en sens et en famille différente de celle des lignes choisies ; trois jours de journal à la première lecture (intervalles larges, verdict probablement non concluant) ; le journal de la voie `saison` ne contient pas toutes les lignes générées (pas de population (a) « toutes les lignes » du prereg : la référence en est le substitut)"
+    ]
+   },
+   "chain": {
+    "tool": "tools/audit_chain.py (rejeu walk-forward football-data, cache disque seulement, fenêtre réservée jamais lue, même découpage que tools/season_replay.py : avant 2025-07-01, lots de 3 jours)",
+    "flags": [
+     "--no-means",
+     "--no-calib",
+     "--no-leg-discount"
+    ],
+    "configs": [
+     "C0 : trois couches éteintes (p0 et mu bruts)",
+     "C1 : C0 + means (facteurs mesurés sur les seuls jours d'avant, comme kelly/replay.py)",
+     "C2 : C1 + calib (kelly/calib.py accumulée sur les seuls jours d'avant, par famille / ligue / sens / tranche)",
+     "C3 : C2 + leg_discount : NON ÉVALUABLE en rejeu (aucun combiné rejoué) ; le drapeau existe, sans effet au niveau ligne, et le rapport le dit ; l'évidence de cette couche vient des jambes de combinés réglées (calib.json, _combo), rapportée en information"
+    ],
+    "criteria": {
+     "means": "log-vraisemblance binomiale négative des comptes (colonnes HC/AC, HY/AY, HS/AS, HST/AST, HF/AF) hors échantillon, écart apparié par match C1 - C0, IC à 95 % par match ; une couche est gardée si l'IC exclut zéro du bon côté",
+     "calib": "une correction de probabilité ne change pas les comptes : critère = log-loss binaire des lignes choisies par le rejeu (fair.best_per_family) hors échantillon, écart apparié par match C2 - C1, mêmes IC ; interprétation déclarée ici AVANT lecture",
+     "by_sens": "chaque écart est aussi donné par sens (plus / moins) et par famille"
+    },
+    "order": "une couche à la fois, dans l'ordre means, calib, leg_discount ; puis, seulement ensuite, les facteurs de contexte (prereg.chain_cleaning.no_context_factor_before)",
+    "report": "tableau complet (par famille et par sens) AVANT toute modification de production ; aucune modification de pari sans lecture écrite dans ce ledger"
+   }
   }
  ]
 }
