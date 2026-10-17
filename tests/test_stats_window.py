@@ -339,8 +339,10 @@ def test_combo_sent_once_with_coupon_and_tracking():
     rows2 = store.load(fair.COMBOS_FILE, [])
     assert rows2[0]["keys"] == row["keys"]
     assert all({l["key"] for l in r["legs"]} != {l["key"] for l in row["legs"]} for r in rows2[1:]), "jamais le même combiné deux fois"
-    assert all(r["tier"] != "ts5w1" for r in rows2[1:]) and len(rows2) <= 2
-    assert not any(row["coupon"] in str(m) and "COMBINÉ STATS" in str(m) and {l["key"] for l in row["legs"]} <= {k for k in str(m).split()} for m in sent2) and len(coupons2) == len(rows2) - 1
+    # règle de production (statswindow.py:18, plan_combo) : UN combiné par passage, plafond STATS_WINDOW_MAX_COMBOS (2) par jour, aucun espacement minimal,
+    # réutilisation PAR PARI (Usage / reuse_cap) : au 2e passage, ts5w2 part avec d'autres jambes, ts5w1 n'est jamais renvoyé
+    assert len(rows2) == 2 and rep2["combo"] == "ts5w2" and rows2[1]["tier"] == "ts5w2" and len(coupons2) == 1, (rep2["combo"], [r["tier"] for r in rows2])
+    assert len([m for m in sent2 if "COMBINÉ STATS" in str(m)]) == 1 and "ts5w1" not in str(rows2[1]["keys"])
     print("ok  un seul combiné stats : coupon, mise, boutons, suivi ts5w1, jamais renvoyé")
 
 
