@@ -50,7 +50,7 @@ def test_gate():
 def test_update_wiring():
     s = open(SCRIPT, encoding="utf-8").read()
     upd = s[s.index("    update)"):s.index("    guard)")]
-    assert upd.index('ci_gate "$new" "$2"') < upd.index("keep_mirror") < upd.index("git pull"), "la CI est vérifiée AVANT de toucher au dépôt"
+    assert upd.index('ci_gate "$new" "$force"') < upd.index("keep_mirror") < upd.index("git pull"), "la CI est vérifiée AVANT de toucher au dépôt"
     assert "git fetch" in upd and "'@{u}'" in upd
     print("ok  « kelly update » : la CI du dernier commit de la branche est vérifiée avant keep_mirror et git pull")
 

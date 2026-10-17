@@ -97,7 +97,33 @@ ci_gate() {      # $1 : commit à installer, $2 : --force ; code 1 = refus
     esac
 }
 
+# passage en cours (matin, horaire, suivi) : « kelly update » et « kelly restart » l'attendent (15 min au plus) au lieu de le couper ; --now coupe quand même.
+# KELLY_PASS_BUSY_FILE (tests) : tant que ce fichier existe, un passage est « en cours » ; KELLY_WAIT_MAX / KELLY_WAIT_STEP : secondes (900 / 30 par défaut).
+busy_pass() {
+    if [ -n "$KELLY_PASS_BUSY_FILE" ]; then [ -e "$KELLY_PASS_BUSY_FILE" ]; return; fi
+    pgrep -f "bot\.py (--daily|--track|--watch)" > /dev/null
+}
+has_flag() { local f="$1"; shift; for a in "$@"; do [ "$a" = "$f" ] && return 0; done; return 1; }
+wait_pass() {      # $@ : les arguments de la commande ; --now : pas d'attente
+    has_flag --now "$@" && return 0
+    busy_pass || return 0
+    local max="${KELLY_WAIT_MAX:-900}" step="${KELLY_WAIT_STEP:-30}" t0 waited left
+    t0=$(date +%s)
+    while busy_pass; do
+        waited=$(( $(date +%s) - t0 ))
+        if [ "$waited" -ge "$max" ]; then
+            echo "⏱️ Passage toujours en cours après $(( max / 60 )) min : j'installe quand même (kelly update --now coupe tout de suite)."
+            return 0
+        fi
+        left=$(( (max - waited + 59) / 60 ))
+        echo "⏳ passage en cours, mise à jour dans ${left} min"
+        sleep "$step"
+    done
+    echo "✅ Passage terminé."
+}
+
 case "$1" in
+    wait-pass) shift; wait_pass "$@" ;;
     ci-state) ci_state "$2" ;;
     ci-gate) ci_gate "$2" "$3" ;;
     start)
@@ -134,18 +160,23 @@ case "$1" in
         echo "🛑 Kelly arrêtée."
         ;;
     restart)
+        shift
+        wait_pass "$@"
         "$0" stop
         "$0" start
         ;;
     update)
+        shift                                   # il ne reste que les options : --force (CI), --now (ne pas attendre un passage)
         # mise à jour SÛRE : la nouvelle version est testée avant d'être lancée ; si elle ne marche pas, retour automatique à la version d'avant
         cd "$DIR" || exit 1
         mkdir -p logs
         old=$(git rev-parse HEAD)
+        force=""; has_flag --force "$@" && force="--force"
         if git fetch -q 2>/dev/null; then       # la CI du commit à installer (le dernier de la branche suivie) doit être verte, avant de toucher à quoi que ce soit
             new=$(git rev-parse '@{u}' 2>/dev/null)
-            if [ -n "$new" ] && [ "$new" != "$old" ]; then ci_gate "$new" "$2" || exit 1; fi
+            if [ -n "$new" ] && [ "$new" != "$old" ]; then ci_gate "$new" "$force" || exit 1; fi
         fi
+        wait_pass "$@"                          # un passage (matin, horaire, suivi) en cours est attendu avant de toucher au code et de relancer
         keep_mirror
         echo "🔄 Mise à jour du dépôt..."
         if ! git pull; then
@@ -172,7 +203,7 @@ case "$1" in
         fi
         ( cd "$DIR" && python tools/config_active.py ) > /dev/null 2>&1      # CONFIG_ACTIVE.md : réglages actifs de cette machine (à chaque mise à jour)
         cp "$DIR/scripts/kelly" "$PREFIX/bin/kelly" && chmod +x "$PREFIX/bin/kelly"
-        exec "$PREFIX/bin/kelly" restart
+        exec "$PREFIX/bin/kelly" restart "$@"
         ;;
     guard)
         # interne (lancé par « kelly start ») : toutes les 5 min, relance Kelly si elle s'est arrêtée sans « kelly stop »
@@ -288,7 +319,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: kelly {start|stop|restart|update|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log|restaurer|test-alerte|fils|erreurs}"
+        echo "Usage: kelly {start|stop|restart [--now]|update [--force] [--now]|logs|logs-avant|status|doctor|suivi|marches|rejeu|rejeu-log|restaurer|test-alerte|fils|erreurs}"
         exit 1
         ;;
 esac
