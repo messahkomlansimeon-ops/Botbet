@@ -3,7 +3,7 @@
 import math
 import sys
 import time
-from . import config as C, combos as CB, budget, chat, custom, exposure, fmt, lanes, money, odds, seasonlane, statswindow, store, telegram, xprice
+from . import config as C, combos as CB, budget, chat, custom, exposure, families, fmt, lanes, money, odds, seasonlane, statswindow, store, telegram, xprice
 from .sources import http, state, xbet
 from .telegram import Html
 from datetime import datetime, timedelta, timezone
@@ -28,10 +28,12 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
     touché « 🔀 » (un échec propose « 🔀 Cote X sans mes matchs » au plus haut atteignable, et « 🎯 Cote N avec mes matchs »). `nlegs` : (N, exact) —
     au plus N paris (« combi 20 max 4 », case « ≤ 4 »), ou exactement N (« combi 20 pile 4 ») ; un échec dit la plus haute cote en N paris et propose
     « ➕ Autoriser plus de paris »."""
-    if kinds and any(k in HIDDEN_KINDS for k in kinds):     # Touches / Hors-jeu (vieux bouton, texte libre) : jamais dans un ticket
-        kinds = [k for k in kinds if k not in HIDDEN_KINDS]
+    hidden = CB.hidden_kinds()
+    if kinds and any(k in hidden for k in kinds):          # type sans famille admise aux tickets (vieux bouton, texte libre) : jamais dans un ticket
+        asked = [label.lower() for k, label, _ in CB.KINDS if k in kinds and k in hidden]
+        kinds = [k for k in kinds if k not in hidden]
         if not kinds:
-            return ("🚫 Les touches et le hors-jeu ne vont dans aucun combiné (familles sans mesure de fiabilité : ils restent visibles dans « match » comme information). "
+            return (f"🚫 Ce type ne va dans aucun combiné ({', '.join(asked)}) : famille pas encore admise aux tickets (elle reste visible dans « match » comme information). "
                     "Choisis un autre type : tirs, fautes, corners, cartons, buts...")
     n_max, exact = (nlegs or (None, False))
     mx, mn = chat.legs_bounds(n_max, exact)        # au plus / pile / au moins (« combi 100 min 15 »)
@@ -173,7 +175,7 @@ def _open_stats(pronos, prefix, now):
     quelques heures avant les matchs, le relevé du matin les a presque tous vus fermés. Les matchs qui commencent dans la fenêtre des stats
     (statswindow.in_window) et dont un pronostic de ces types n'a pas de cote 1xBet sont relus EN DIRECT (xprice.live_check, C.COMBI_OPEN_MAX au
     plus, les plus proches d'abord, jamais au-delà du plafond mensuel de la fenêtre). -> les pronostics à venir, relus ou non. Ne lève jamais."""
-    pre = tuple(p for p in (prefix or A.STAT_PREFIX) if p in A.STAT_PREFIX)
+    pre = tuple(p for p in (prefix or families.window_prefix()) if p in families.window_prefix())
     if not pre or not C.XBET_ENABLED:
         return pronos
     ids, clock = [], time.time()
@@ -202,7 +204,7 @@ def _open_stats(pronos, prefix, now):
 def _not_open(pronos, prefix, now):
     """Ligne « 1xBet n'a pas encore ouvert les paris tirs de 71 matchs… redemande vers 12h30 (21 matchs à 14h00) » d'un « combi » qui échoue ;
     '' si tous les matchs à pronostic stats de ces types ont leur cote (ou si aucun type stats n'est demandé)."""
-    pre = tuple(p for p in (prefix or A.STAT_PREFIX) if p in A.STAT_PREFIX)
+    pre = tuple(p for p in (prefix or families.window_prefix()) if p in families.window_prefix())
     if not pre:
         return ""
     priced = {c["id"] for c in pronos if c.get("xodds") and c["market"].startswith(pre)}
@@ -500,9 +502,6 @@ def _kinds_split(picks, pronos, kinds):
             "demande-les à part.")
 
 
-HIDDEN_KINDS = ("to", "hj")               # Touches et Hors-jeu : familles hors voies (lanes.ticket_ok), jamais dans un ticket : retirées du sélecteur (17/10)
-
-
 def kinds_picker(target, sel=(), n=None):
     """Cases à cocher des types de paris d'un combiné à la cote `target` (après « 🎯 Un combiné » -> cote) : « ✅ Tout » puis les types jouables
     aujourd'hui avec leur nombre de matchs (combos.kinds_available), et « 🎯 Construire le combiné ». Rien de coché = tous les paris.
@@ -510,20 +509,21 @@ def kinds_picker(target, sel=(), n=None):
     today = store.load("today.json", {})
     picks, pronos = A.upcoming(today.get("picks") or []), A.upcoming(today.get("pronos") or [])
     avail = CB.kinds_available(picks, pronos)
+    hidden = CB.hidden_kinds()                      # types sans famille admise aux tickets (états des familles) : ni case, ni ⏳
     wait = {}                                       # pronostics stats solides pas encore ouverts chez 1xBet : relus en construisant (_open_stats)
     for c in A._pending(pronos):
         k = CB.kind_of(c["market"])
-        if k and k not in HIDDEN_KINDS:
+        if k and k not in hidden:
             wait.setdefault(k, set()).add(c["id"])
     wait = {k: len(v) for k, v in wait.items()}
-    sel = [k for k in CB.KIND_CODES if k in set(sel) and k not in HIDDEN_KINDS]
+    sel = [k for k in CB.KIND_CODES if k in set(sel) and k not in hidden]
     t = fmt.trim(target, 1)
     n = str(n) if n else ""                          # « 5 » : au plus 5 ; « 15+ » : au moins 15 ; « » : libre
     num, at_least = (int(n.rstrip("+")) if n.rstrip("+").isdigit() else None), n.endswith("+")
     rows = [[(("✅ " if not sel else "⬜ ") + "Tout", f"ck|{t}||{n}")]]
     items = []
     for k, label, _ in CB.KINDS:
-        if k in HIDDEN_KINDS:
+        if k in hidden:
             continue
         if avail.get(k) or wait.get(k) or k in sel:
             on = k in sel
@@ -553,9 +553,9 @@ def _tier_range(tier):
             return lo, hi, None
     for k, prefix, _, lo, hi in C.FAIR_SHOTS_TIERS:
         if str(k) == str(tier):
-            return lo, hi, prefix
+            return lo, hi, families.filter_prefix(prefix)
     if CB.window_no(tier) is not None:             # « ts5w1 » : combiné de la fenêtre des stats (statswindow), mêmes familles et même fourchette que « ts5 »
-        return C.STATS_WINDOW_COMBO[0], C.STATS_WINDOW_COMBO[1], C.STATS_WINDOW_PREFIX
+        return C.STATS_WINDOW_COMBO[0], C.STATS_WINDOW_COMBO[1], families.window_prefix()
     sn = CB.season_no(tier)
     if sn is not None:                             # « ss10 » : combiné de la voie `saison` (fourchette de son palier) ; jamais remplacé tout seul (voir _update_combos, check)
         return sn * (1 - C.SEASON_SPREAD), sn * (1 + C.SEASON_SPREAD), None

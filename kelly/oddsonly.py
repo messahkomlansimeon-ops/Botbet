@@ -11,7 +11,7 @@ Partie basse : collecte (observe), journal, durée de vie des incohérences."""
 import math
 import sys
 
-from . import config as C, ensemble, lanes, strength
+from . import config as C, ensemble, strength
 
 EDGE = C.ODDSONLY_EDGE
 MAX_EDGE = C.ODDSONLY_MAX_EDGE
@@ -22,6 +22,13 @@ MULTS = (0.5, 1.0, 2.0)                           # 1c : dispersion r essayée =
 FALLBACK_R = {"goals": 100.0, "team_goals": 100.0, "corners": 60.0, "cards": 25.0, "yellow": 25.0, "shots": 40.0, "sot": 25.0, "fouls": 100.0}     # FIGÉES, non apprises (ledger)
 MECHS = ("1a", "1b", "1c", "2", "3")
 GOAL_FAMILIES = frozenset(("goals", "team_goals", "btts", "dc", "h2h"))
+STATS_FAMILIES = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))
+SCOPE = GOAL_FAMILIES | STATS_FAMILIES                # familles de la voie (pré-déclaration oddsonly_ledger.json) : FIGÉES, indépendantes de l'état des familles (families.json)
+
+
+def in_scope(market):
+    """Le marché est-il d'une famille de la voie cotes ? (l'ancien lanes.ticket_ok : liste figée, une famille rétrogradée ne sort pas de la population en cours de mesure)."""
+    return ensemble.family(market or "") in SCOPE
 LADDER_MARKETS_EXCLUDED = frozenset(("btts", "h2h", "double_chance"))
 
 
@@ -152,7 +159,7 @@ def mech_1c(px):
     """Lignes successives d'un même marché : p implicite d'une ligne = loi binomiale négative ajustée SANS elle (leave-one-out). Familles de voie seulement."""
     out = []
     for market in sorted({k[0] for k in px} - LADDER_MARKETS_EXCLUDED):
-        if not lanes.ticket_ok({"market": market}):
+        if not in_scope(market):
             continue
         fam = ensemble.family(market)
         pairs = _team_pairs(px, market)
@@ -188,7 +195,7 @@ def mech_2(px, picks, now, history=None):
     for c in picks or ():
         ref = None
         fam = ensemble.family(c.get("market") or "")
-        if not lanes.ticket_ok(c):
+        if not in_scope(c.get("market")):
             continue
         if fam in GOAL_FAMILIES:
             sh = ensemble.sharp_of(c)
@@ -217,7 +224,7 @@ def evaluate(px, home, away, picks=None, now=None, history=None):
             out += fn(*args)
         except Exception as e:                  # noqa: BLE001 - un mécanisme en échec ne casse ni les autres ni le relevé
             print(f"[cotes] mécanisme {fn.__name__} ignoré : {type(e).__name__}: {e}", file=sys.stderr)
-    return [r for r in out if lanes.ticket_ok({"market": r["market"]}) and r["xodds"] and r["xodds"] > 1]
+    return [r for r in out if in_scope(r["market"]) and r["xodds"] and r["xodds"] > 1]
 
 
 def status_of(edge):
@@ -433,7 +440,7 @@ def _write(work, evals, picks, prev_ms, now_ts):
                 for sid, v in sorted(mv.items(), key=lambda kv: -abs(kv[1]["mv"]))[:MV_TOP]:
                     market, name, point = sels[sid]
                     k = row_key(date, mid, "3", market, name, point)
-                    if k in idx or have >= MV_MAX or not lanes.ticket_ok({"market": market}) or not m["px"].get(sels[sid]):
+                    if k in idx or have >= MV_MAX or not in_scope(market) or not m["px"].get(sels[sid]):
                         continue
                     have += 1
                     row = idx[k] = {"key": k, "id": mid, "home": ev.get("home_team"), "away": ev.get("away_team"), "sport_key": sk, "commence": ev.get("commence_time"),

@@ -23,7 +23,7 @@ os.environ["XBET_PROXY"] = "http://user:secret@proxy.test:80"
 
 import requests  # noqa: E402
 
-from kelly import app, calib, chat, combos as CB, config as C, custom, fair, fmt, money, played, statswindow, store, telegram, xprice  # noqa: E402,F401
+from kelly import app, calib, chat, combos as CB, config as C, custom, fair, families, fmt, money, played, statswindow, store, telegram, xprice  # noqa: E402,F401
 from kelly.sources import fmmatch, http, state, xbet  # noqa: E402
 C.NOVALUE_STAKE = 50.0       # les combinés du jeu d'essai n'ont pas de valeur au sens des voies : mise fixe optionnelle (défaut 0 = suivi en fantôme) pour exercer le flux de mise
 C.NOVALUE_SEND = True       # les combinés des jeux d'essai n'ont pas de valeur au sens des voies : ils doivent être ENVOYÉS pour exercer les messages (défaut du bot : fantôme)
@@ -311,7 +311,7 @@ def test_combo_sent_once_with_coupon_and_tracking():
     row = rows[0]
     assert row["tier"] == "ts5w1" and row["date"] == DAY and 5.0 <= row["min_odds"] <= 7.0 and row["coupon"] == "CODE1" and row["at"] == "17:05"
     assert len({l["id"] for l in row["legs"]}) == len(row["legs"]) >= 2, "un pari par match"
-    assert all(l["market"].startswith(C.STATS_WINDOW_PREFIX) and l["xodds"] and l["xref"] and l["result"] is None for l in row["legs"])
+    assert all(l["market"].startswith(families.window_prefix()) and l["xodds"] and l["xref"] and l["result"] is None for l in row["legs"])
     assert row["stake"] > 0 and row["cur"] == "FCFA"
     prod = 1.0
     for l in row["legs"]:
@@ -323,7 +323,7 @@ def test_combo_sent_once_with_coupon_and_tracking():
     assert "✅ Je l'ai joué — " in str(m.markup) and "Copier le code CODE1" in str(m.markup) and "Vérifier ce combiné" in str(m.markup)
     # suivi comme un combiné du matin : /joue, Mes paris, titre, palier
     assert CB.shots_title("ts5w1") == "🧮 COMBINÉ STATS" and CB.window_no("ts5w1") == 1 and CB.window_no("ts5") is None and CB.window_no("ts5wx") is None
-    assert app._tier_range("ts5w1") == (5.0, 7.0, C.STATS_WINDOW_PREFIX) and app._tier_range("ts5")[:2] == (5.0, 7.0)
+    assert app._tier_range("ts5w1") == (5.0, 7.0, families.window_prefix()) and app._tier_range("ts5")[:2] == (5.0, 7.0)
     t = played.find("vts5w1", DAY)
     assert t is not None and not isinstance(t, str) and t.ref == row["min_odds"]
     assert "Stats n°1 (17:05)" in str(played.todo(DAY)) and played._fair_name("ts5") == "Stats", played.todo(DAY)
@@ -804,7 +804,7 @@ def test_tier_helpers_and_wording():
     assert played._fair_name("ts5w2", True, {"at": "18:05"}) == "Stats n°2 (18:05)" and played._fair_name("ts5w1") == "Stats n°1"
     assert played._fair_name("tc5") == "Tirs cadrés" and played._fair_name("tv5") == "Tirs vers le but" and played._fair_name(12).startswith("À vérifier")
     assert app._of_day("ts5w1") == "stats" and app._of_day("ts5") == "du matin" and app._of_day(5) == "du matin"
-    assert app._tier_range("tc5")[2] == "team_sot_" and app._tier_range("zz") is None
+    assert app._tier_range("tc5")[2] == ("team_sot_",) and app._tier_range("zz") is None
     print("ok  paliers ts5w<n> : titre, nom dans « Mes paris », fourchette, mots des mises à jour")
 
 

@@ -73,7 +73,8 @@ def test_defaults_and_predicates():
     assert F.voie_of("throws") == "stats" and F.voie_of("player") is None and F.voie_of("goals") == "sharpgap"
     assert F.of_market("totals") == "jouee" and F.of_market("team_throws_total") == "hors_ticket" and F.of_market("alternate_totals_corners") == "jouee"
     assert F.filter_prefix(("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_")) == ("team_fouls_", "team_shots_", "team_sot_")
-    assert F.filter_prefix("team_throws_") == () and F.filter_prefix(("player_",)) == ()
+    assert F.filter_prefix("team_throws_") == F.NO_MARKET and F.filter_prefix(("player_",)) == F.NO_MARKET and F.filter_prefix(()) == ()
+    assert not "team_throws_total".startswith(F.NO_MARKET) and F.filter_prefix(("team_shots_",)) == ("team_shots_",)
     assert F.lane_families("sharpgap") == ("goals", "h2h", "dc", "btts", "team_goals") and F.lane_families("stats") == ("corners", "cards", "yellow", "shots", "sot", "fouls")
     print("ok  valeurs par défaut = anciennes listes (voies, tickets, lectures, préfixes)")
 

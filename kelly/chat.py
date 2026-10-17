@@ -515,11 +515,20 @@ def parse_kinds(tokens):
     return ([] if every else [k for k in KIND_CODES if k in found]), unknown
 
 
+def _kinds_text():
+    """Les types du sélecteur dans l'ordre d'aide, sans ceux dont aucune famille n'est admise aux tickets (états des familles)."""
+    from . import combos as CB
+    hidden = set(CB.hidden_kinds())
+    words = (("v", "victoire"), ("dc", "double chance"), ("b", "buts"), ("btts", "les 2 marquent"), ("co", "corners"), ("ca", "cartons"), ("t", "tirs"), ("tc", "tirs cadrés"),
+             ("f", "fautes"), ("to", "touches"), ("hj", "hors-jeu"), ("j", "joueurs"))
+    return ", ".join(w for k, w in words if k not in hidden)
+
+
 def kinds_help(unknown):
     """Réponse à « combi 20 xyz » : le mot inconnu et les types de paris possibles."""
     return (f"❓ « {' '.join(unknown)} » : type de pari inconnu.\n"
             "Exemples : combi 20 tirs fautes · combi 10 victoire max 3 · combi 50 corners audacieux\n"
-            "Types : victoire, double chance, buts, les 2 marquent, corners, cartons, tirs, tirs cadrés, fautes, joueurs, tout.")
+            f"Types : {_kinds_text()}, tout.")
 
 
 def quick(text):

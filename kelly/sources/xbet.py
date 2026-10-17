@@ -27,7 +27,7 @@ import time
 from datetime import datetime
 from urllib.parse import urlencode
 
-from .. import config as C, stats, store
+from .. import config as C, families, stats, store
 from . import http, names, state
 
 SOURCE = "xbet"
@@ -82,8 +82,12 @@ SUBGAMES = {2: ("alternate_totals_corners", "team_corners_home", "team_corners_a
             95: ("team_shots_total", "team_shots_home", "team_shots_away"),
             14: ("team_fouls_total", "team_fouls_home", "team_fouls_away"),
             55: ("team_throws_total", "team_throws_home", "team_throws_away"), 13: ("team_offsides_total", None, None)}
-OFF_LANE_TYPES = frozenset((55, 13))     # touches, hors-jeu : plus aucun ticket (lanes.ticket_ok faux) -> leur sous-match n'est plus relu (une requête de proxy gaspillée par match)
-MARKET_SUB = {m: t for t, ms in SUBGAMES.items() if t not in OFF_LANE_TYPES for m in ms if m}
+
+
+def market_sub():
+    """{marché Kelly: type de sous-match 1xBet} des sous-matchs À LIRE : seulement ceux dont la famille est lue (families.reads : jouee, fantome, proposee). Une famille hors_ticket (touches,
+    hors-jeu aujourd'hui) n'a aucune lecture dédiée : une requête de proxy gaspillée par match. Lue à l'usage (l'état change le lundi), jamais figée à l'import."""
+    return {m: t for t, ms in SUBGAMES.items() for m in ms if m and families.reads(families.family_of(m))}
 MAIN_MARKETS = ("totals", "btts", "double_chance", "h2h")
 # Types de paris 1xBet (cellule {type, cf, parameter}) : 1X2, double chance, plus/moins (total, équipe 1, équipe 2), les 2 marquent
 T_1X2 = {1: "home", 2: "draw", 3: "away"}
@@ -392,7 +396,8 @@ def prices(game, markets, home, away):
     game["cid"] = data.get("constId")
     blocked = set()
     out, subs = parse_main(data, home, away, refs := {}, game["gid"], blocked)
-    for t in sorted({MARKET_SUB[m] for m in markets if m in MARKET_SUB}, key=str):
+    ms = market_sub()
+    for t in sorted({ms[m] for m in markets if m in ms}, key=str):
         if t in subs:
             try:
                 _ladder(_events(subs[t]).get("eventGroups"), *SUBGAMES[t], out, refs, subs[t], blocked)
@@ -662,7 +667,8 @@ def prioritise_stats(events, wanted):
     events = list(events)
     if not wanted:
         return events
-    stat = lambda e: any(m in MARKET_SUB and MARKET_SUB[m] != 2 for m in wanted.get(e[1].get("id"), ()))      # noqa: E731 - type 2 = corners : tous les matchs
+    ms = market_sub()
+    stat = lambda e: any(m in ms and ms[m] != 2 for m in wanted.get(e[1].get("id"), ()))      # noqa: E731 - type 2 = corners : tous les matchs
     return sorted(events, key=lambda e: not stat(e))                                                          # tri stable
 
 

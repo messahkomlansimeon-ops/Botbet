@@ -157,7 +157,7 @@ def test_picker_hides_throws_and_offsides():
         assert "⬜ Fautes (4)" in texts or "✅ Fautes (4)" in texts, texts
     # vieux boutons / texte libre : un type caché est écarté ; s'il ne reste rien, une réponse claire (jamais un « tout » silencieux)
     out = app.custom_combo([], app.upcoming(store.load("today.json", {})["pronos"]), 20.0, DAY, kinds=["to"])
-    assert str(out).startswith("🚫 Les touches et le hors-jeu ne vont dans aucun combiné"), out
+    assert str(out).startswith("🚫 Ce type ne va dans aucun combiné (touches)"), out
     assert "touches" not in chat.kinds_help(["xyz"]) and "hors-jeu" not in chat.kinds_help(["xyz"])
     with Fakes():
         mixed = app.custom_combo([], app.upcoming(store.load("today.json", {})["pronos"]), 20.0, DAY, kinds=["to", "f"])

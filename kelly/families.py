@@ -103,8 +103,12 @@ def _prefix_family(p):
     return "player" if p.startswith("player_") else None
 
 
+NO_MARKET = ("\x00",)                               # préfixe qui ne correspond à aucun marché : un filtre vide ne doit JAMAIS se lire « pas de filtre » (`prefix or tout`)
+
+
 def filter_prefix(prefixes, pred=None):
-    """Les préfixes de marché (« team_fouls_ », « player_ »...) dont la famille satisfait `pred` (défaut : reads) ; ceux dont la famille n'est pas lisible (« team_ ») restent. Tuple."""
+    """Les préfixes de marché (« team_fouls_ », « player_ »...) dont la famille satisfait `pred` (défaut : reads) ; ceux dont la famille n'est pas lisible (« team_ ») restent. Tuple ;
+    NO_MARKET si la liste demandée n'est pas vide mais qu'aucun préfixe ne reste (jamais un tuple vide : les appelants lisent « vide » comme « tous les marchés »)."""
     pred = reads if pred is None else pred
     if isinstance(prefixes, str):
         prefixes = (prefixes,)
@@ -113,7 +117,7 @@ def filter_prefix(prefixes, pred=None):
         f = _prefix_family(p)
         if f is None or pred(f):
             out.append(p)
-    return tuple(out)
+    return tuple(out) or (NO_MARKET if prefixes else ())
 
 
 def window_prefix():
@@ -127,10 +131,15 @@ def lane_families(lane_name):
     return tuple(f for f in names if f not in PSEUDO and lane(f) == lane_name)
 
 
-def cup_ok():
-    """Les stats de coupe peuvent-elles être jouées ? STATS_CUPS_MODE on, ou (pas off et stats_cup jouee) : avec l'état initial fantome, exactement le comportement d'avant."""
+def cup_mode():
+    """« on », « ghost » ou « off » des stats de coupe : STATS_CUPS_MODE, sauf « ghost » + stats_cup jouee = « on » (« off » prime). Avec l'état initial fantome : exactement STATS_CUPS_MODE."""
     m = C.STATS_CUPS_MODE
-    return m == "on" or (m != "off" and state_of("stats_cup") == "jouee")
+    return "on" if m == "ghost" and state_of("stats_cup") == "jouee" else m
+
+
+def cup_ok():
+    """Les stats de coupe peuvent-elles être jouées ?"""
+    return cup_mode() == "on"
 
 
 def snapshot():

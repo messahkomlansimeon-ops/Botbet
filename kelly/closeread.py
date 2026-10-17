@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import config as C, cupstats, ensemble, lanes, seasonlane, store
+from . import config as C, cupstats, ensemble, families, lanes, seasonlane, store
 
 FILE = "xclose_reads.json"            # {"days": {jour Kelly: {"done": {id du match: {gid: instant du relevé ou None}}, "bytes", "requests"}}, "silenced": {...}}
 WINDOW = (35, 60)                     # minutes avant le coup d'envoi : borne basse (1xBet ferme ~30 min avant), borne haute de l'éligibilité
@@ -44,7 +44,7 @@ def _gid(r):
 def eligible_line(r):
     """Ligne non réglée d'une famille de STATS (corners, cartons, tirs, fautes...; pas les buts : leur match principal reste ouvert), avec identifiant de match, référence 1xBet et coup d'envoi."""
     return (isinstance(r, dict) and r.get("result") is None and _gid(r) is not None and _ko(r) is not None
-            and lanes.lane_of_market(r.get("market")) == "stats" and r.get("id") is not None)
+            and families.closeread(families.family_of(r.get("market"))) and r.get("id") is not None)
 
 
 def matches(now):

@@ -68,15 +68,15 @@ def prono(i, market, p=0.66, name="Over", point=7.5, **kw):
 
 
 def test_off_lane_subgames_not_read():
-    """Touches (55) et hors-jeu (13) : plus de requête de sous-match, plus dans la fenêtre des stats ni dans le palier ts5 (ils ne produisent aucun ticket)."""
-    from kelly import config as C, statswindow
+    """Touches (55) et hors-jeu (13), familles hors_ticket : plus de requête de sous-match, plus dans la fenêtre des stats ni dans le palier ts5 (lus à l'usage : families.py)."""
+    from kelly import families, statswindow
     from kelly.sources import xbet
-    assert xbet.OFF_LANE_TYPES == {55, 13} and not any(t in xbet.OFF_LANE_TYPES for t in xbet.MARKET_SUB.values())
-    assert not any(m.startswith(("team_throws", "team_offsides")) for m in xbet.MARKET_SUB)
-    assert {xbet.MARKET_SUB[m] for m in ("team_shots_total", "team_sot_total", "team_fouls_total", "alternate_totals_corners", "team_yellow_total")} == {95, 12, 14, 2, xbet.YELLOW}
-    assert not any(p.startswith(("team_throws", "team_offsides")) for p in C.STATS_WINDOW_PREFIX + statswindow.PREFIX)
+    ms = xbet.market_sub()
+    assert not any(m.startswith(("team_throws", "team_offsides")) for m in ms)
+    assert {ms[m] for m in ("team_shots_total", "team_sot_total", "team_fouls_total", "alternate_totals_corners", "team_yellow_total")} == {95, 12, 14, 2, xbet.YELLOW}
+    assert not any(p.startswith(("team_throws", "team_offsides")) for p in families.window_prefix() + statswindow.prefix())
     ts5 = next(t for t in C.FAIR_SHOTS_TIERS if t[0] == "ts5")
-    assert not any(p.startswith(("team_throws", "team_offsides")) for p in ts5[1])
+    assert not any(p.startswith(("team_throws", "team_offsides")) for p in families.filter_prefix(ts5[1]))
 
 
 def test_fetch_order_stats_first():
@@ -166,7 +166,7 @@ def test_stats_tier():
     assert not isinstance(t, str) and t is not None and "Stats" in played.todo(DAY), t
     assert played._fair_name("ts5") == "Stats" and played._fair_name("tc5") == "Tirs cadrés" and played._fair_name("tv5") == "Tirs vers le but"
     lo, hi, prefix = app._tier_range("ts5")
-    assert (lo, hi) == (5.0, 7.0) and isinstance(prefix, tuple) and app._tier_range("tc5")[2] == "team_sot_"
+    assert (lo, hi) == (5.0, 7.0) and isinstance(prefix, tuple) and app._tier_range("tc5")[2] == ("team_sot_",)
     # relecture du combiné (patch_combo) : un remplaçant ne sort que des familles du palier
     spare = [prono(30, "totals"), prono(31, "team_throws_total")]
     res = CB.patch_combo(legs[:1], pronos[:0] + spare + legs[:1], 5.0, 7.0, fresh_ids={c["id"] for c in legs[:1] + spare}, prefix=prefix)

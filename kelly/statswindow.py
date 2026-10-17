@@ -33,13 +33,17 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-from . import combos as CB, config as C, fair, fmt, lanes, money, quiet, store, telegram, xprice
+from . import combos as CB, config as C, fair, families, fmt, lanes, money, quiet, store, telegram, xprice
 from .sources import fmmatch, xbet
 
 # Marchés relus par la fenêtre : ceux de config.STATS_WINDOW_PREFIX (tirs, tirs cadrés, fautes) + les corners d'UNE équipe et les cartons jaunes (leurs
 # sous-matchs 1xBet ouvrent eux aussi tard ; pas dans les combinés « ts5 », mais jouables seuls). STATS_WINDOW_EXTRA="" les retire.
 EXTRA_PREFIX = tuple(x.strip() for x in os.environ.get("STATS_WINDOW_EXTRA", "team_corners_,team_yellow_").split(",") if x.strip())
-PREFIX = tuple(C.STATS_WINDOW_PREFIX) + EXTRA_PREFIX
+
+
+def prefix():
+    """Marchés relus par la fenêtre À CET INSTANT : families.window_prefix() + les extras, dont la famille est lue (l'état des familles change le lundi)."""
+    return families.window_prefix() + families.filter_prefix(EXTRA_PREFIX)
 FILE = "stats_window.json"          # {"day", "reads": {id: {n, miss, at, priced}}, "combos": [{tier, keys, at, coupon}], "announced": [id|marché], "passes", "bytes", "requests"}
 KB_PER_REQUEST = 6.4                # taille mesurée d'une réponse 1xBet (gameEvents marketType=2, compressée)
 
@@ -61,7 +65,7 @@ def locked():
 
 def is_stat(c):
     """Pronostic d'un marché « stats » (tirs, tirs cadrés, fautes, touches, hors-jeu, corners d'une équipe, cartons jaunes)."""
-    return str(c.get("market") or "").startswith(PREFIX)
+    return str(c.get("market") or "").startswith(prefix())
 
 
 def _ko(c):
@@ -334,7 +338,7 @@ def announce_list(today, doc, now):
     if C.STATS_WINDOW_ANNOUNCE <= 0:
         return []
     seen = {str(s) for s in doc["announced"]} | {str(s) for s in today.get("announced") or []}
-    done = {s.partition("|")[0] for s in seen if s.partition("|")[2].startswith(PREFIX)}      # matchs dont un 💎 stats a déjà été annoncé aujourd'hui
+    done = {s.partition("|")[0] for s in seen if s.partition("|")[2].startswith(prefix())}      # matchs dont un 💎 stats a déjà été annoncé aujourd'hui
     room = C.STATS_WINDOW_DAY_ANNOUNCE - len(doc["announced"])
     best, extra = {}, {}
     for c in today["pronos"]:

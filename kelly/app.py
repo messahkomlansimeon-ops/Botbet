@@ -1325,7 +1325,6 @@ SWEEP_FAMILIES = ("goals", "h2h", "dc", "btts", "team_goals", "corners", "cards"
 SEASON_REBUILD_FILE = "season_rebuild.json"     # {"day", "at"} : dernière reconstruction `saison auto` (écart minimal C.SEASON_REBUILD_GAP)
 
 
-STAT_PREFIX = C.STATS_WINDOW_PREFIX
 _OPEN_READ = {}                     # id du match -> instant de sa dernière relecture par « combi » (le bot tourne en continu : rythme de statswindow.retry_min)
 
 

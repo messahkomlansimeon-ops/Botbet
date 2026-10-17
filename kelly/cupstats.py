@@ -10,16 +10,20 @@ quand le CLV 1xBet des jambes de coupe en fantôme est >= 0 sur C.STATS_CUPS_BAC
 inchangés (voies sharpgap et fill)."""
 import sys
 
-from . import config as C, ensemble, fair, prematch, season, seasonlane, store
+from . import config as C, ensemble, fair, families, prematch, season, seasonlane, store
 
 LOG = "cup_log.json"
 ARCH = "arch/cup/"
-STAT_MARKETS = frozenset(m for m in seasonlane.MARKETS if m in fair.STAT_SPECS or m in (prematch.CORNERS, prematch.CARDS))
+
+
+def stat_markets():
+    """Marchés de stats des coupes À CET INSTANT (seasonlane.markets : familles lues)."""
+    return frozenset(m for m in seasonlane.markets() if m in fair.STAT_SPECS or m in (prematch.CORNERS, prematch.CARDS))
 
 
 def mode():
     """« ghost », « on » ou « off » (C.STATS_CUPS_MODE) ; « off » sans ensemble (aucune étiquette sans lui)."""
-    return C.STATS_CUPS_MODE if C.ENSEMBLE_ENABLED else "off"
+    return families.cup_mode() if C.ENSEMBLE_ENABLED else "off"
 
 
 def make(scan, now, today=None):
@@ -42,12 +46,12 @@ def make(scan, now, today=None):
                 pred = season.cup_predict(models, ev["home_team"], ev["away_team"])
                 if not pred:
                     continue
-                opts, bases = [], {}
+                opts, bases, stat_mk = [], {}, stat_markets()
                 for mk, name, pt, p, base in seasonlane.options(pred, ev["home_team"], ev["away_team"]):
-                    if mk in STAT_MARKETS:
+                    if mk in stat_mk:
                         opts.append((mk, name, pt, p, "coupe : profils de championnat"))
                         bases[(mk, name, pt)] = base
-                for b in fair.best_per_family(opts, STAT_MARKETS, bases):
+                for b in fair.best_per_family(opts, stat_mk, bases):
                     c = fair.make_pick(ev, *b, "coupe")
                     c["alts"] = fair.alternatives(opts, bases, b[0])
                     c["mu"], c["n_min"], c["cup"] = seasonlane.raw_mean(pred, b[0]), min(pred["n"]), True

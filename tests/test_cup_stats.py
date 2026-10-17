@@ -38,7 +38,7 @@ def world():
 def test_make():
     scan = world()
     pronos = cupstats.make(scan, NOW)
-    assert pronos and all(c["cup"] is True and c["id"] in ("c1", "c2") and c["market"] in cupstats.STAT_MARKETS and c["alts"] for c in pronos), pronos[:1]
+    assert pronos and all(c["cup"] is True and c["id"] in ("c1", "c2") and c["market"] in cupstats.stat_markets() and c["alts"] for c in pronos), pronos[:1]
     assert not any(c["market"] in ("totals", "btts", "h2h", "double_chance") or c["market"].startswith("team_totals") for c in pronos), "stats seulement : buts / 1N2 inchangés"
     assert {c["id"] for c in pronos} == {"c1", "c2"}, "match commencé et championnat : jamais"
     assert all(c["src"] == "coupe" and "strategy" not in c for c in pronos)

@@ -7,7 +7,7 @@ L'état de la coupure automatique de la voie stats est dans le document strategy
 il PRIME sur la configuration « on » et ne revient à « on » qu'à la main (reset)."""
 import time
 
-from . import config as C, edgemap, ensemble, store
+from . import config as C, edgemap, ensemble, families, store
 
 STATE_FILE = "strategy_state.json"
 _memo = {"t": 0.0, "v": None}
@@ -38,8 +38,7 @@ def state():
 
 def lane_of_market(market):
     """Voie qui gère la famille d'un marché : « sharpgap », « stats », ou None (touches, hors-jeu, joueurs... : seulement des jambes « fill »)."""
-    fam = ensemble.family(market or "")
-    return "sharpgap" if fam in ensemble.SHARPGAP_FAMILIES else "stats" if fam in ensemble.STATS_LANE else None
+    return families.lane(ensemble.family(market or ""))
 
 
 def _outside_fd(sport_key):
@@ -99,7 +98,7 @@ def usable(c):
     if not C.ENSEMBLE_ENABLED:
         return True
     if _cup_stat(c):                                # stats de coupe : « on » seulement (ghost / off : calculées, journalisées, jamais choisies), voie stats « on » et non coupée
-        return (C.STATS_CUPS_MODE == "on" and C.STRATEGY_STATS == "on" and (state().get("stats") or {}).get("mode") != "ghost"
+        return (families.cup_ok() and C.STRATEGY_STATS == "on" and (state().get("stats") or {}).get("mode") != "ghost"
                 and not (c.get("strategy") == "fill" and not C.FILL_LEGS) and _edge_ok(c))
     if c.get("strategy") == "saison" or c.get("lane") == "saison":              # voie à part : ses interrupteurs, jamais ceux de la voie stats (ligues en fantôme, coupure automatique)
         return season_mode() == "on" and bool(c.get("sval") or C.FILL_LEGS) and _edge_ok(c)

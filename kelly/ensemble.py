@@ -62,7 +62,7 @@ import math
 import sys
 from datetime import date, datetime, timedelta, timezone
 
-from . import calib, config as C, odds, store
+from . import calib, config as C, families, odds, store
 from .sources import xbet
 
 FILE = "ensemble.json"
@@ -107,8 +107,8 @@ def frozen(fam):
     return bool(C.ENSEMBLE_ENABLED) and fam in C.ENSEMBLE_FROZEN_MODEL
 
 
-SHARPGAP_FAMILIES = frozenset(("goals", "btts", "dc", "h2h", "team_goals"))      # voie « sharpgap » : les cinq familles dont le poids du modèle est figé à 0
-STATS_LANE = frozenset(("corners", "cards", "yellow", "shots", "sot", "fouls"))     # voie « stats » : le modèle binomial négatif mélangé au marché
+# Les familles de chaque voie ne sont plus listées ici : families.lane(famille) (états de data/families.json, valeurs initiales = les anciennes listes :
+# sharpgap = buts, 1N2, double chance, les 2 marquent, buts d'équipe ; stats = corners, cartons, jaunes, tirs, tirs cadrés, fautes).
 STRATEGIES = ("sharpgap", "stats", "fill", "live", "saison")                # « live » : jambes des combinés LIVE, hors voies (ni retard 1xBet ni modèle de stats) ; dimensionnement d'avant
 
 
@@ -121,7 +121,8 @@ def strategy_of(c):
     if not c.get("xodds"):
         return None
     fam = family(c["market"])
-    if fam not in SHARPGAP_FAMILIES and fam not in STATS_LANE:
+    lane = families.lane(fam)
+    if lane is None:
         return "fill"
     kind = c.get("xkind")
     if kind is None and is_active(c["market"]):
@@ -131,7 +132,7 @@ def strategy_of(c):
             kind = None
     if kind != "value":
         return "fill"
-    return "sharpgap" if fam in SHARPGAP_FAMILIES else "stats"
+    return lane
 
 
 def strategy_label(row):

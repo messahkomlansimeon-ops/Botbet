@@ -16,7 +16,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from . import calib, catalogue, config as C, ensemble, fair, lanes, odds, prematch, season, store, strength
+from . import calib, catalogue, config as C, ensemble, fair, families, lanes, odds, prematch, season, store, strength
 from .sources import xbet
 
 LOG = "season_log.json"
@@ -27,7 +27,12 @@ STATE_FILE = "season_state.json"
 EVENTS_FILE = "season_events.json"
 SUFFIX = "|saison"
 MARKETS = frozenset(("totals", "btts", "double_chance", "h2h", "team_totals_home", "team_totals_away", prematch.CORNERS, prematch.CARDS)
-                    + tuple(m for m in fair.STAT_SPECS if not m.startswith(("team_throws", "team_offsides"))))
+                    + tuple(fair.STAT_SPECS))
+
+
+def markets():
+    """Marchés du modèle de saison À CET INSTANT : MARKETS dont la famille est lue (families.reads) ; touches et hors-jeu (hors_ticket) n'y sont pas, comme avant."""
+    return frozenset(m for m in MARKETS if families.reads(families.family_of(m)))
 FALLBACK_ALPHA = {"corners": (0.04, 0.03), "cards": (0.06, 0.06), "yellow": (0.06, 0.06), "shots": (0.05, 0.03), "sot": (0.05, 0.04), "fouls": (0.05, 0.03)}      # (équipe, total) : constantes de fair.py
 
 
@@ -130,12 +135,12 @@ def learn(log):
 
 def options(pred, home, away):
     """Lignes de marché du modèle de saison pour un match : [(marché, côté, ligne, proba brute, référence d'un match moyen de la ligue)], marchés de MARKETS, moyennes plausibles."""
-    out = []
+    out, allowed = [], markets()
     for l in strength.lines(pred, home, away):
         mk, pt = l["market"], l["point"]
         if (mk in fair.SIDE_MARKETS or mk == "team_totals") and l.get("side"):
             mk = f"{mk}_{l['side']}"
-        if mk not in MARKETS:
+        if mk not in allowed:
             continue
         if mk in fair.STAT_SPECS:
             s = (pred["stats"] or {}).get(l["stat"])

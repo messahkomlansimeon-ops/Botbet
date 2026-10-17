@@ -568,7 +568,7 @@ def test_migration():
         app.run_commands()
     finally:
         telegram.poll = old_poll
-    assert store.load(migrate.FILE, {}) == {"notes_fcfa": True} and store.load("tracked.json", [])[0]["cur"] == FCFA
+    assert store.load(migrate.FILE, {}) == {"notes_fcfa": True, "families_init": True} and store.load("tracked.json", [])[0]["cur"] == FCFA
     # une lecture impossible n'empêche jamais le démarrage et retente plus tard (pas de marqueur)
     store.save(migrate.FILE, {})
     old_load = migrate.fair.load_combos

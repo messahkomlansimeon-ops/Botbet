@@ -17,7 +17,7 @@ seules jambes de valeur positive (espérance du produit >= 1) ; s'il n'y en a pa
 """
 import math
 
-from . import config as C, ensemble, odds as O
+from . import config as C, ensemble, families, odds as O
 from .prematch import CARDS, CORNERS, goal_weight, mispriced
 
 NEG = float("-inf")
@@ -472,6 +472,14 @@ KINDS = (("v", "Victoire", ("h2h",)), ("dc", "Double chance", ("double_chance",)
          ("t", "Tirs vers le but", ("team_shots_",)), ("tc", "Tirs cadrés", ("team_sot_",)), ("f", "Fautes", ("team_fouls_",)),
          ("to", "Touches", ("team_throws_",)), ("hj", "Hors-jeu", ("team_offsides_",)), ("j", "Joueurs", ("player_",)))
 KIND_CODES = tuple(k for k, _, _ in KINDS)
+KIND_FAMILIES = {"v": ("h2h",), "dc": ("dc",), "b": ("goals", "team_goals"), "btts": ("btts",), "co": ("corners",), "ca": ("cards", "yellow"), "t": ("shots",), "tc": ("sot",),
+                 "f": ("fouls",), "to": ("throws",), "hj": ("offsides",), "j": ("player",)}      # familles de chaque type du sélecteur
+
+
+def hidden_kinds():
+    """Codes des types SANS famille admise aux tickets (families.ticket) À CET INSTANT : retirés du sélecteur et écartés d'un vieux bouton ou du texte libre.
+    État initial : touches, hors-jeu, joueurs (aucune de ces familles ne peut produire un ticket)."""
+    return tuple(k for k in KIND_CODES if not any(families.ticket(f) for f in KIND_FAMILIES[k]))
 
 
 def kinds_prefix(codes):
@@ -747,7 +755,7 @@ def fair_shots_plan(pronos, tiers=None, usage=None):
     usage = usage if usage is not None else Usage()
     out = []
     for target, prefix, _, lo, hi in (tiers if tiers is not None else C.FAIR_SHOTS_TIERS):
-        legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(prefix)]
+        legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(families.filter_prefix(prefix))]
         combo = _fair_best(legs, lo, hi)
         if combo and not ensemble.unsent(combo[0]):   # sans valeur = fantôme : aucune réutilisation consommée
             usage.add(combo[0])
@@ -940,7 +948,7 @@ def fair_stats_window(pronos, usage=None, accept=None):
     aujourd'hui (mêmes règles de réutilisation). -> (jambes, cote, proba) ou None."""
     usage = usage if usage is not None else Usage()
     lo, hi = C.STATS_WINDOW_COMBO
-    legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(C.STATS_WINDOW_PREFIX) and c.get("xodds") and c.get("xref")
+    legs = [c for c in usage.filter(fair_legs(pronos)) if c["market"].startswith(families.window_prefix()) and c.get("xodds") and c.get("xref")
             and (accept is None or accept(c))]
     return best_combo(legs, lo, hi)
 
