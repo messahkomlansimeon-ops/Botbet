@@ -197,6 +197,15 @@
     "ordering": "journal écrit d'abord, état ensuite : une écriture du journal qui échoue laisse l'état en arrière et la lecture est revue",
     "state_days": "un instantané de match est oublié 2 jours après son coup d'envoi"
    }
+  },
+  {
+   "on": "2026-10-17",
+   "before_any_real_read": true,
+   "prereg_sha_unchanged": true,
+   "by": "assistant (lot mesure)",
+   "settlement": "le règlement utilise settle._settle_fair_row mais PAS ensemble.settle_log : son archive compacte (ARCH_COLS) perdrait le mécanisme, la famille et la durée de vie ; le journal garde ses 90 jours, fusion par clé, aucun apprentissage ; le règlement censure aussi les lignes dont le coup d'envoi est passé",
+   "report_definitions": "« matchs lus » = matchs ayant eu au moins une lecture authentique ; « calculables » = au moins une sélection évaluée par 1a, 1b, 1c ou 2 ; « avec incohérence » = au moins une ligne de valeur non suspecte (jamais devenue suspecte) ; lignes de valeur = mécanismes 1 et 2, statut value, went_suspect faux ; médiane de durée de vie avec bornes basse (dernier relevé où l'écart était là) et haute (premier relevé où il a disparu), seulement avec 20 disparues ; commande « incohérences [N] » et ligne « cotes (fantôme, aucun pari) » du bilan par voie",
+   "carte": "la voie « cotes » entre dans la carte (voir edgemap_ledger.json, amendement du 17/10/2026)"
   }
  ]
 }
