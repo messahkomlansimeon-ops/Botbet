@@ -103,7 +103,7 @@ def learn(log):
     data, cal = load_weights(), load_calib()
 
     def learnable(r):
-        return (r.get("ref") and not r.get("cup") and r.get("result") in ("win", "loss") and r.get("key") and r["key"] not in data["done"] and not r.get("ens")
+        return (r.get("ref") and not r.get("cup") and r.get("result") in ("win", "loss") and r.get("key") and r["key"] not in data["done"] and not r.get("ens") and not r.get("doubt")
                 and r.get("pm") is not None and (r.get("px") is not None or r.get("ps") is not None))
     todo = sorted((r for r in log if learnable(r)), key=lambda r: (str(r.get("date") or ""), str(r.get("key") or "")))
     if not todo:

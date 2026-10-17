@@ -244,7 +244,29 @@ def a15():
         print(f"  (c) means, {lbl} : " + (" ; ".join(f"{f} n {a[0]} réel/attendu {a[1] / a[2]:.3f}" for f, a in sorted(acc.items())) or "aucune ligne avec mu et val"))
 
 
-POINTS = {"a3": a3, "a1": a1, "a4": a4, "a13": a13, "a15": a15}
+def a2():
+    """A2 — matchs terminés après prolongation / tirs au but (AET, PEN) dans les listes du jour d'API-Football (fixtures_day.json) et lignes de stats réglées dessus (journal d'ensemble, fair.json) :
+    celles-là auraient été réglées sur les stats de 120 minutes par la voie du journal (_cached_fstats). fixtures.json NE sert PAS (statut figé au premier passage : « NS » pour 148 matchs)."""
+    from kelly import lanestats as LS, settle, store
+    days = store.load("fixtures_day.json", {})
+    et = {}
+    total = 0
+    for day, lst in (days.items() if isinstance(days, dict) else []):
+        for f in lst if isinstance(lst, list) else []:
+            total += 1
+            if f.get("status") in ("AET", "PEN"):
+                et[(day, f.get("home"), f.get("away"))] = f["status"]
+    print("A2 — prolongation / tirs au but")
+    print(f"  source : fixtures_day.json de la copie : {total} matchs sur {len(days) if isinstance(days, dict) else 0} jour(s) ; AET / PEN : {len(et)}")
+    stat_mk = set(settle.FD_MARKETS) | set(settle.SHOT_MARKETS)
+    for name, rows in (("fair.json", store.load("fair.json", [])), ("journal d'ensemble", LS.journal_rows())):
+        hit = [r for r in rows if isinstance(r, dict) and r.get("market") in stat_mk and (str(r.get("commence"))[:10], r.get("home"), r.get("away")) in et]
+        done = [r for r in hit if r.get("result") in ("win", "loss", "push")]
+        print(f"  {name} : lignes de stats sur un match AET / PEN : {len(hit)} dont réglées {len(done)} (win/loss/push)" + "".join(f"\n      {r.get('home')} - {r.get('away')} {r.get('market')} {r.get('name')} {r.get('point')} -> {r.get('result')} ({r.get('final')})" for r in done[:8]))
+    print("  (noms d'équipes comparés à l'identique : un nom différent entre la ligne et la liste du jour n'est pas compté)")
+
+
+POINTS = {"a3": a3, "a1": a1, "a4": a4, "a13": a13, "a15": a15, "a2": a2}
 
 
 def main():

@@ -447,6 +447,8 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
         if zero_stats(full, fst):                      # stats à 0 là où il y en a toujours : manquantes (rien appris de faux)
             fst = None
         b["result"] = settle_pick(full, ev, fst)
+        if isinstance(fst, dict) and fst.get("doubt"):
+            b["doubt"] = True                          # règlement sur des stats dont le statut « 90 minutes » n'est pas garanti : réglé, mais exclu de l'apprentissage (A2)
         if b["result"] in ("win", "loss", "push"):
             b["final"] = final_text(full, ev, fst)
             if b.get("mu") is not None:                 # nombre réel, comparé au nombre attendu (correction des moyennes : kelly/means.py)
@@ -509,8 +511,17 @@ def _cached_fstats(b):
     cur = stats.cached_stats(fx["id"]) if fx else None
     if not cur:
         return None
+    # Les stats d'API-Football comptent les 120 minutes : jamais pour un match après prolongation / tirs au but (comme le chemin principal, match_stats). Le statut vient de la liste du jour
+    # (fixture_result), pas de fixtures.json (figé au premier passage, avant la fin du match). Statut introuvable : règlement douteux (A2, audit du 17/10), exclu de l'apprentissage.
+    try:
+        status = (stats.fixture_result(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"]) or {}).get("status")
+    except Exception as e:                          # noqa: BLE001 - statut inconnu = douteux, jamais une exception
+        print(f"[settle] statut du match introuvable : {type(e).__name__}: {e}", file=sys.stderr)
+        status = None
+    if status in ("AET", "PEN"):
+        return None
     teams = cur.get("teams") or {}
-    return dict(cur, side={"home": teams.get(str(fx["home_id"])), "away": teams.get(str(fx["away_id"]))})
+    return dict(cur, side={"home": teams.get(str(fx["home_id"])), "away": teams.get(str(fx["away_id"]))}, **({} if status == "FT" else {"doubt": True}))
 
 
 def settle_ensemble(now=None, stats_for=None):

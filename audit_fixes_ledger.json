@@ -179,6 +179,25 @@
     "« aucun double comptage au passage d'une version à l'autre » : exact seulement si commence[:10] = date[:10] pour la ligne déjà apprise. Un match de nuit (coup d'envoi après minuit UTC : jour Kelly D, commence[:10] = D+1) appris avant ce correctif puis recréé le lendemain peut être recompté UNE fois, à la transition (effet marginal, une fois).",
     "la sortie de l'outil de mesure compte la calibration par famille/sens et l'horizon sur fair.json seulement"
    ]
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A2",
+   "prereg_sha_unchanged": true,
+   "by": "assistant",
+   "enquete": {
+    "API-Football": "LA DISTINCTION EXISTE. La liste du jour (stats._entry, fixtures_day.json) porte fixture.status.short : FT / AET / PEN (stats.DONE) ; stats.fixture_result la relit et le chemin principal de règlement (settle.match_stats) met fx = None pour AET / PEN. Exemple réel : fixtures_day.json de la sauvegarde du 13/10 (8 jours, 4020 matchs) contient 10 matchs AET / PEN. ATTENTION : fixtures.json (stats.find_fixture) NE convient PAS : son statut est figé au premier passage (148 matchs sur 870 y sont encore « NS » dans la sauvegarde) ; l'entrée du cache de statistiques (stats._entry_from) ne porte aucun statut et ses compteurs sont ceux des 120 minutes.",
+    "FotMob": "LA DISTINCTION EXISTE. header.status.reason.short « FT » / « AET » / « Pen » : fmmatch.parse_match renvoie None pour un match après prolongation et la liste du championnat (fotmob.py) exclut tout sauf FT ; tests/test_audit_settle.py::(prolongation) et tests/test_proxy_backup.py (page de championnat : statut direct / mi-temps / fin / prolongation / reporté).",
+    "365scores": "NON ÉTABLI. s365.parse_results et parse_stats n'acceptent que statusGroup 4 ET statusText « Ended ». Les fixtures du dépôt n'ont que « Ended », « Postponed », « Suspended », « 2nd Half » ; le « After Penalties » de tests/test_s365.py est un exemple construit par le test, pas une réponse réelle ; aucun statut réel de prolongation n'existe dans le dépôt ni dans la sauvegarde du 13/10 (le document s365_matches.json ne garde que les matchs « Ended »). Si un match après prolongation s'écrit « Ended », ses stats de 120 minutes passent pour du temps réglementaire. Aucune lecture réseau faite pour cela. À VÉRIFIER SUR LE TÉLÉPHONE : python tools/audit_s365_status.py (lecture seule du cache disque, aucune requête) liste les statusText présents ; sinon attendre qu'un match de coupe à prolongation passe dans le cache."
+   },
+   "implemented": "settle._cached_fstats (voie du journal : ensemble, coupes, saison, cotes) : statut lu par stats.fixture_result (liste du jour) ; AET / PEN -> None (comme le chemin principal : la ligne retombe sur football-data / FotMob / 365scores, ou reste non réglée puis « unknown ») ; statut introuvable (autre que FT) -> stats rendues avec doubt = True ; settle._settle_fair_row marque la ligne doubt = True ; ensemble.learn, seasonlane.learn et means.learn ignorent les lignes doubt (jamais apprises, le résultat reste visible). Les lignes réglées par 365scores ne sont PAS marquées douteuses (garantie non établie pour 365scores : à décider par le superviseur après la vérification sur le téléphone ; les marquer toutes retirerait de l'apprentissage les ligues sans FotMob détaillé).",
+   "measure": {
+    "tool": "tools/audit_fixes_measure.py a2 (testé)",
+    "source": "sauvegarde du 13/10 12:00 (fixtures_day.json 8 jours, fair.json, journal d'ensemble)",
+    "result": "10 matchs AET / PEN sur 4020 ; 0 ligne de stats (corners, cartons, tirs, fautes, touches, hors-jeu) de fair.json ou du journal d'ensemble sur l'un d'eux : le défaut n'a touché aucune ligne dans cette fenêtre (noms d'équipes comparés à l'identique, un nom différent ne serait pas compté). À relancer sur la sauvegarde récente.",
+    "status": "mesure faite sur 6 jours : 0 ligne ; EN ATTENTE d'une sauvegarde récente"
+   },
+   "stakes": "aucun pari ni mise ne change ; seul l'apprentissage et le règlement du journal sont touchés."
   }
  ]
 }

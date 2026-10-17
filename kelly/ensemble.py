@@ -480,7 +480,7 @@ def learn(rows):
 
     def learnable(r):
         key = r.get("key")
-        if r.get("result") not in ("win", "loss") or not key or key in data["done"] or r.get("ens"):
+        if r.get("result") not in ("win", "loss") or not key or key in data["done"] or r.get("ens") or r.get("doubt"):      # « doubt » : règlement douteux (A2), n'apprend rien
             return False
         pm, px, ps = r.get("pm"), r.get("px"), r.get("ps")
         return (pm is not None and (px is not None or ps is not None)) or (px is not None and ps is not None)

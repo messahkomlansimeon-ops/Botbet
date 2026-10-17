@@ -3,6 +3,7 @@ Chaque test de défaut échoue sur le code d'avant et passe après. Lancer : pyt
 import hashlib
 import json
 import os
+import sys
 import tempfile
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="kelly-auditfix-")
@@ -417,6 +418,112 @@ def test_a15_measure_tool():
     print("ok  A15 : l'outil de mesure (horizon, paires à deux dates, means avant / après)")
 
 
+# ---------- A2 : prolongation, _cached_fstats ----------
+
+def test_a2_extra_time_not_settled_on_120_minutes():
+    from datetime import datetime, timedelta, timezone
+    from kelly import ensemble, means, seasonlane, settle, stats
+    from kelly.sources import fmmatch, s365
+    saved = (fmmatch.match_stats, s365.match_stats, settle.watch_stats, settle.FootballData.stats, settle.FootballData.score, settle.fotmob_score,
+             settle.FootballData.fotmob_score, settle.watch_score, settle.s365_score, stats.enabled, stats.find_fixture, stats.fixture_result, stats.cached_stats, stats.fixture_stats)
+    fmmatch.match_stats = s365.match_stats = settle.watch_stats = lambda b: None
+    settle.FootballData.stats = lambda self, b: None
+    settle.FootballData.score = lambda self, b: None
+    settle.fotmob_score = lambda b, leagues=None: None
+    settle.FootballData.fotmob_score = lambda self, b: None
+    settle.watch_score = lambda b: None
+    settle.s365_score = lambda b, now=None: None
+    now = datetime(2026, 10, 17, 12, tzinfo=timezone.utc)
+    ko = (now - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    entry = {"corners": 11.0, "cards": 3.0, "shots": 20.0, "sot": 8.0, "fouls": 20.0, "d": "2026-10-16",
+             "teams": {"1": {"corners": 6.0, "shots": 12.0, "sot": 5.0, "fouls": 10.0, "cards": 1.0, "yel": 1.0, "nul": []},
+                       "2": {"corners": 5.0, "shots": 8.0, "sot": 3.0, "fouls": 10.0, "cards": 2.0, "yel": 2.0, "nul": []}}}
+    stats.enabled = lambda: True
+    stats.find_fixture = lambda day, home, away, kickoff=None: {"id": 99, "home_id": 1, "away_id": 2, "status": "FT"}      # fixtures.json figé au premier passage : ne dit rien de la prolongation
+    stats.cached_stats = lambda fid: entry
+    stats.fixture_stats = lambda fid, players=True: entry
+    set_status = lambda st: setattr(stats, "fixture_result", lambda day, home, away, kickoff=None: None if st is None else {"id": 99, "status": st, "finished": True, "home": 1, "away": 0})
+
+    def row(market, point, key="k"):
+        return {"key": key, "id": "e", "sport_key": "soccer_uefa_europa_league", "event": "A - B", "home": "A", "away": "B", "commence": ko, "market": market, "point": point,
+                "name": "Under", "result": None, "date": ko[:10], "pm": 0.5, "px": 0.5, "mu": 9.0}
+    try:
+        fd = settle.FootballData()
+        for market, point in (("alternate_totals_corners", 9.5), ("team_corners_home", 4.5)):
+            set_status("AET")                                                 # 11 corners en 120 min, 8 à 90 min : avant, « loss » ; maintenant, non réglé sur ces stats
+            r = row(market, point)
+            settle._settle_fair_row(r, now, fd, settle._cached_fstats)
+            assert r["result"] != "loss" and r.get("final") is None and not r.get("doubt"), r
+            set_status("PEN")
+            r = row(market, point)
+            settle._settle_fair_row(r, now, fd, settle._cached_fstats)
+            assert r["result"] != "loss", r
+        set_status("FT")                                                      # temps réglementaire confirmé : réglé comme avant, aucune réserve
+        r = row("alternate_totals_corners", 9.5)
+        settle._settle_fair_row(r, now, fd, settle._cached_fstats)
+        assert r["result"] == "loss" and not r.get("doubt"), r
+        set_status(None)                                                      # statut introuvable (score donné par une autre source) : réglé mais DOUTEUX
+        settle.watch_score = lambda b: {"id": b["id"], "completed": True, "scores": [{"name": "A", "score": "1"}, {"name": "B", "score": "0"}]}
+        r = row("alternate_totals_corners", 9.5)
+        settle._settle_fair_row(r, now, fd, settle._cached_fstats)
+        assert r["result"] == "loss" and r["doubt"] is True, r
+        # une ligne douteuse n'apprend rien (ensemble, voie saison, moyennes)
+        ok = row("alternate_totals_corners", 9.5, "k_ok") | {"result": "loss", "final": "x", "val": 11.0}
+        bad = dict(ok, key="k_bad", doubt=True)
+        ens_before = ensemble.load()
+        assert ensemble.learn([bad]) == 0 and ensemble.learn([ok]) == 1
+        from datetime import date
+        assert means.learn([bad], date(2026, 10, 18)) == 0 and means.learn([ok], date(2026, 10, 18)) == 1
+        sea = dict(ok, key="s_ok", ref=1, ens=None)
+        assert seasonlane.learn([dict(sea, doubt=True)]) == 0
+    finally:
+        (fmmatch.match_stats, s365.match_stats, settle.watch_stats, settle.FootballData.stats, settle.FootballData.score, settle.fotmob_score,
+         settle.FootballData.fotmob_score, settle.watch_score, settle.s365_score, stats.enabled, stats.find_fixture, stats.fixture_result, stats.cached_stats, stats.fixture_stats) = saved
+    print("ok  A2 : un match AET / PEN n'est plus réglé sur les stats de 120 min (journal), statut introuvable = règlement douteux exclu de l'apprentissage")
+
+
+def test_a2_tools():
+    import contextlib
+    import importlib.util
+    import io
+    import json as _json
+    from kelly import ensemble, store
+    here = os.path.dirname(LEDGER)
+
+    def load_tool(name):
+        spec = importlib.util.spec_from_file_location(name, os.path.join(here, "tools", name + ".py"))
+        t = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(t)
+        return t
+    tool = load_tool("audit_fixes_measure")
+    store.save("fixtures_day.json", {"2026-10-16": [{"id": 1, "status": "AET", "home": "A", "away": "B"}, {"id": 2, "status": "FT", "home": "C", "away": "D"}]})
+    row = {"key": "k", "market": "alternate_totals_corners", "home": "A", "away": "B", "commence": "2026-10-16T12:00:00Z", "result": "loss", "final": "11 corners", "name": "Under", "point": 9.5, "date": "2026-10-16"}
+    store.save("fair.json", [row, dict(row, key="k2", home="C", away="D")])
+    store.save(ensemble.LOG_FILE, [])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        tool.a2()
+    assert "AET / PEN : 1" in out.getvalue() and "fair.json : lignes de stats sur un match AET / PEN : 1 dont réglées 1" in out.getvalue(), out.getvalue()
+    store.save("fair.json", [])
+    # lecture du cache 365scores : un statut inhabituel est listé
+    import tempfile
+    d = tempfile.mkdtemp()
+    open(os.path.join(d, "k0.json"), "w").write(_json.dumps({"url": "https://webws.365scores.com/web/games/results/?x=1"}))
+    open(os.path.join(d, "k0.bin"), "wb").write(_json.dumps({"games": [{"sportId": 1, "statusGroup": 4, "statusText": "Ended"},
+                                                                         {"sportId": 1, "statusGroup": 4, "statusText": "After Extra Time", "homeCompetitor": {"name": "C", "score": 2}, "awayCompetitor": {"name": "D", "score": 1}}]}).encode())
+    s365 = load_tool("audit_s365_status")
+    old_argv = sys.argv
+    sys.argv = ["x", "--cache-dir", d]
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            s365.main()
+    finally:
+        sys.argv = old_argv
+    assert "'After Extra Time' : 1" in out.getvalue() and "statut inhabituel (ni Ended, ni Postponed / Suspended) : 1" in out.getvalue(), out.getvalue()
+    print("ok  A2 : outils de mesure (matchs AET / PEN du journal) et de lecture des statuts 365scores du cache")
+
+
 def main():
     test_declaration_unchanged()
     test_a1_double_chance_freshness()
@@ -427,6 +534,8 @@ def main():
     test_a15_rest_days_until_match_day()
     test_a15_review_gaps()
     test_a15_measure_tool()
+    test_a2_extra_time_not_settled_on_120_minutes()
+    test_a2_tools()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()
