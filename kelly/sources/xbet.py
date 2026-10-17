@@ -82,7 +82,8 @@ SUBGAMES = {2: ("alternate_totals_corners", "team_corners_home", "team_corners_a
             95: ("team_shots_total", "team_shots_home", "team_shots_away"),
             14: ("team_fouls_total", "team_fouls_home", "team_fouls_away"),
             55: ("team_throws_total", "team_throws_home", "team_throws_away"), 13: ("team_offsides_total", None, None)}
-MARKET_SUB = {m: t for t, ms in SUBGAMES.items() for m in ms if m}
+OFF_LANE_TYPES = frozenset((55, 13))     # touches, hors-jeu : plus aucun ticket (lanes.ticket_ok faux) -> leur sous-match n'est plus relu (une requête de proxy gaspillée par match)
+MARKET_SUB = {m: t for t, ms in SUBGAMES.items() if t not in OFF_LANE_TYPES for m in ms if m}
 MAIN_MARKETS = ("totals", "btts", "double_chance", "h2h")
 # Types de paris 1xBet (cellule {type, cf, parameter}) : 1X2, double chance, plus/moins (total, équipe 1, équipe 2), les 2 marquent
 T_1X2 = {1: "home", 2: "draw", 3: "away"}

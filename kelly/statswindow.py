@@ -36,7 +36,7 @@ from datetime import datetime, timedelta
 from . import combos as CB, config as C, fair, fmt, lanes, money, quiet, store, telegram, xprice
 from .sources import fmmatch, xbet
 
-# Marchés relus par la fenêtre : ceux de config.STATS_WINDOW_PREFIX (tirs, tirs cadrés, fautes, touches, hors-jeu) + les corners d'UNE équipe et les cartons jaunes (leurs
+# Marchés relus par la fenêtre : ceux de config.STATS_WINDOW_PREFIX (tirs, tirs cadrés, fautes) + les corners d'UNE équipe et les cartons jaunes (leurs
 # sous-matchs 1xBet ouvrent eux aussi tard ; pas dans les combinés « ts5 », mais jouables seuls). STATS_WINDOW_EXTRA="" les retire.
 EXTRA_PREFIX = tuple(x.strip() for x in os.environ.get("STATS_WINDOW_EXTRA", "team_corners_,team_yellow_").split(",") if x.strip())
 PREFIX = tuple(C.STATS_WINDOW_PREFIX) + EXTRA_PREFIX
@@ -168,7 +168,7 @@ def morning_note(pronos):
         return None
     if not any(is_stat(c) and c.get("xgid") and not c.get("xodds") for c in pronos):
         return None
-    return "🧮 Les paris tirs / fautes / touches arrivent quelques heures avant les matchs (1xBet les ouvre tard)."
+    return "🧮 Les paris tirs / fautes arrivent quelques heures avant les matchs (1xBet les ouvre tard)."
 
 
 # ---------- le passage ----------
@@ -317,7 +317,7 @@ def _settle(app, now, hhmm, day, picked, jobs, got, spent, rep, before=None):
     if new:
         rep["announced"] = len(new)
         quiet.send(telegram.topic(telegram.silent(fmt.pronos(new, limit=C.STATS_WINDOW_ANNOUNCE, title="🧮 Stats ouvertes chez 1xBet", when=hhmm,
-                                 intro="Paris tirs / fautes / touches / hors-jeu devenus jouables avec les cotes 1xBet du moment (1xBet les ouvre quelques heures "
+                                 intro="Paris tirs / fautes devenus jouables avec les cotes 1xBet du moment (1xBet les ouvre quelques heures "
                                        "avant le match et les ferme ~30 min avant). Vérifie la cote avant de valider.")), "combos"))        # annonce : sans sonnerie
     return plan_combo(app, today, doc, fair.load_combos(), now)
 
@@ -409,7 +409,7 @@ def send_combo(app, plan, day, now):
         store.save(FILE, doc)
         kos = sorted(_ko(l) for l in legs)
         span = f"de {kos[0]:%Hh%M} à {kos[-1]:%Hh%M}" if kos[0] != kos[-1] else f"à {kos[0]:%Hh%M}"
-        head = (f"🧮 Les paris stats (tirs, fautes, touches...) viennent de s'ouvrir chez 1xBet pour des matchs {span} : "
+        head = (f"🧮 Les paris stats (tirs, fautes...) viennent de s'ouvrir chez 1xBet pour des matchs {span} : "
                 f"voici un combiné aux cotes de {when}.")
         msg = app._fair_reply((legs, total, prob), head, title=C.STATS_WINDOW_TITLE, stake_txt=app._stake_words(stake, legs=legs), when=when, code=coupon,
                               retry=app.RETRY_BUTTON)

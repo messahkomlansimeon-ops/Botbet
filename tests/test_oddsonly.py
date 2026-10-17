@@ -150,7 +150,13 @@ def test_2():
     cor = pick("alternate_totals_corners", "Over", 9.5, 0.55, n_books=3)
     r = O.mech_2(px, [cor], NOW)
     assert len(r) == 1 and r[0]["overlap_sharpgap"] is False
-    assert O.mech_2(px, [pick("alternate_totals_corners", "Over", 9.5, 0.55, n_books=1)], NOW) == [], "corners : au moins 2 books"
+    assert r[0]["ref"] == "consensus" and "ref" not in O.mech_2(px, [sharp], NOW)[0], "buts : pas d'étiquette ref"
+    assert O.mech_2(px, [pick("alternate_totals_corners", "Over", 9.5, 0.55, n_books=1)], NOW) == [], "corners : 1 seul book ordinaire refusé"
+    assert O.mech_2(px, [pick("alternate_totals_corners", "Over", 9.5, 0.55, src="sharp", n_books=1)], NOW) == [], "corners : un autre book de référence seul ne suffit pas"
+    solo = O.mech_2(px, [pick("alternate_totals_corners", "Over", 9.5, 0.55, src="pinnacle", n_books=1)], NOW)
+    assert len(solo) == 1 and solo[0]["ref"] == "pinnacle_seul" and solo[0]["overlap_sharpgap"] is False, "corners : Pinnacle seul accepté, étiqueté"
+    assert O.mech_2(px, [pick("alternate_totals_corners", "Over", 9.5, 0.55, src="pinnacle", n_books=3)], NOW)[0]["ref"] == "consensus"
+    assert O._new_row(solo[0], "m1", {"home_team": "a", "away_team": "b", "commence_time": "2026-10-18T15:00:00Z"}, "soccer", "2026-10-18", "t")["ref"] == "pinnacle_seul"
     assert O.mech_2(px, [pick("team_shots_total", "Over", 24.5, 0.6)], NOW) == [], "tirs : mécanisme inactif"
     assert O.mech_2(px, [pick("totals", "Over", 2.5, 0.53, src="pinnacle", age_min=400)], NOW) == [], "relevé des books trop vieux"
     assert O.mech_2(px, [pick("team_throws_total", "Over", 10.5, 0.6)], NOW) == []
@@ -189,6 +195,7 @@ def test_declaration_matches_code():
     assert set(pre["families"]["goal"]) == set(O.GOAL_FAMILIES) and set(pre["families"]["stats"]) == {"corners", "cards", "yellow", "shots", "sot", "fouls"}
     am = json.dumps(led["amendments"], ensure_ascii=False)
     assert (O.MV_TOP, O.MV_MAX, O.SYNC_MIN, O.ARCH_DAYS, O.STATE_DAYS) == (5, 20, 10, 90, 2) and "au plus 5 mouvements" in am and "20 lignes de mouvement" in am and "plus de 10 minutes" in am
+    assert "pinnacle_seul" in am and "xbet.OFF_LANE_TYPES" in am and "alternate_totals_cards" in am
     assert "plus de 90 jours" in am and "2 jours après" in am and "40 points" in am and "14 sections" in am and "xbet.odds_time None" in am
     assert O.MECHS == ("1a", "1b", "1c", "2", "3") and pre["voie"]["default"] == "ghost" and C.STRATEGY_ODDSONLY == "ghost"
     print("ok  seuils, dispersions, plages d'overround et familles du code = pré-déclaration (empreinte inchangée)")

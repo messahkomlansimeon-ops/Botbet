@@ -40,8 +40,9 @@ DAY = "2026-10-09"
 NOW = datetime(2026, 10, 9, 17, 5, tzinfo=timezone.utc)
 KO = {"M1": "18:00", "M2": "19:30", "M3": "21:00", "M4": "20:00", "M5": "22:30", "M6": "17:30", "M7": "16:00",
       "M8": "22:00", "M9": "22:00", "M10": "22:00", "Z1": "22:00"}      # fenêtre de 17:05 : 17:50 à 21:05 ; M5 trop tard, M6 trop près, M7 commencé
-FOULS, SHOTS_H, SOT, THROWS_H, THROWS_T, OFFS, SHOTS_T = ("team_fouls_total", "team_shots_home", "team_sot_total", "team_throws_home",
-                                                          "team_throws_total", "team_offsides_total", "team_shots_total")
+# touches et hors-jeu ne sont plus relus (xbet.OFF_LANE_TYPES) : THROWS_* et OFFS désignent des marchés de voie qui jouent le même rôle dans les scénarios
+FOULS, SHOTS_H, SOT, THROWS_H, THROWS_T, OFFS, SHOTS_T = ("team_fouls_total", "team_shots_home", "team_sot_total", "team_fouls_home",
+                                                          "team_shots_total", "team_sot_home", "team_shots_total")
 STAT_MARKETS = (FOULS, SHOTS_H, SOT, THROWS_H, THROWS_T, OFFS, SHOTS_T)
 # prix 1xBet des sous-matchs stats OUVERTS : (match, marché) -> cote du « Under 9.5 » (ou {ligne: cote}) ; ce qui n'y est pas est fermé
 PRICES = {("M1", FOULS): 1.85, ("M1", SHOTS_H): 1.80, ("M1", SOT): 1.70, ("M2", SHOTS_H): 1.90, ("M3", THROWS_T): {9.5: 1.50, 10.5: 1.95},
@@ -255,15 +256,15 @@ def test_pass_reads_only_stat_subgames_and_reprices():
         if mid not in ("M1", "M2", "M3", "M4"):
             continue
         if mid == "M3":
-            c = now_by["M3|team_throws_total||10.5|Under"]                  # la meilleure ligne à la cote 1xBet : 10,5 (1,95), pas 9,5 (1,50 : mal payé)
-            assert c["xodds"] == 1.95 and c["point"] == 10.5 and "M3|team_throws_total||9.5|Under" not in now_by
+            c = now_by["M3|team_shots_total||10.5|Under"]                  # la meilleure ligne à la cote 1xBet : 10,5 (1,95), pas 9,5 (1,50 : mal payé)
+            assert c["xodds"] == 1.95 and c["point"] == 10.5 and "M3|team_shots_total||9.5|Under" not in now_by
         else:
             c = now_by[f"{mid}|{m}||9.5|Under"]
             assert c["xodds"] == price, (mid, m, c)
         assert c["xat"] == "17:05" and c["xref"][0] >= 900 and not c.get("xnone") and c["xodds0"] == c["xodds"], c
-    assert now_by["M2|team_throws_home||9.5|Under"]["xnone"] == 1 and not now_by["M2|team_throws_home||9.5|Under"].get("xodds"), "sous-match fermé : toujours injouable"
+    assert now_by["M2|team_fouls_home||9.5|Under"]["xnone"] == 1 and not now_by["M2|team_fouls_home||9.5|Under"].get("xodds"), "sous-match fermé : toujours injouable"
     # tout le reste est identique : pronostics non stats, matchs hors fenêtre (M5 trop tard, M6 trop près, M7 commencé)
-    moved = {"M3|team_throws_total||9.5|Under"}
+    moved = {"M3|team_shots_total||9.5|Under"}
     for c in before["pronos"]:
         if c["key"] in moved:
             continue
@@ -326,7 +327,10 @@ def test_combo_sent_once_with_coupon_and_tracking():
     fx2 = Fx()
     rep2, sent2, coupons2 = with_fakes(lambda: app.run_stats_window(NOW + timedelta(minutes=1), fetch=fx2))
     assert fx2.calls == [] or all(not c["ids"] for c in fx2.calls), "toutes les cotes sont fraîches"
-    assert sent2 == [] and coupons2 == [] and rep2["combo"] is None and len(store.load(fair.COMBOS_FILE, [])) == 1
+    rows2 = store.load(fair.COMBOS_FILE, [])
+    assert rows2[0]["keys"] == row["keys"]
+    assert all({l["key"] for l in r["legs"]} != {l["key"] for l in row["legs"]} for r in rows2[1:]), "jamais le même combiné deux fois"
+    assert all(r["tier"] != "ts5w1" for r in rows2[1:]) and len(rows2) <= 2
     print("ok  un seul combiné stats : coupon, mise, boutons, suivi ts5w1, jamais renvoyé")
 
 
@@ -359,7 +363,7 @@ def test_dedup_same_legs_and_caps():
         assert r3["combo"] == "ts5w2", r3
         rows = store.load(fair.COMBOS_FILE, [])
         assert [r["tier"] for r in rows] == ["ts5w1", "ts5w2"]
-        assert not {l["id"] for l in rows[0]["legs"]} & {l["id"] for l in rows[1]["legs"]}, "jambes risquées : un seul combiné"
+        assert not {l["key"] for l in rows[0]["legs"]} & {l["key"] for l in rows[1]["legs"]}, "jambes risquées : un seul combiné (par pari ; deux paris d'un même match peuvent servir deux combinés)"
         assert {l["id"] for l in rows[1]["legs"]} & {"M8", "M9", "M10"}
         assert "Stats n°1" in str(played.todo(DAY)) and "Stats n°2" in str(played.todo(DAY))
         r4, s4, _ = with_fakes(lambda: app.run_stats_window(NOW + timedelta(hours=1, minutes=2), fetch=Fx()))
@@ -517,7 +521,7 @@ def test_morning_line():
     """Au matin, des pronostics stats sans cote (1xBet les ouvre tard) : une ligne l'explique ; rien si tout est chiffré ou si 1xBet n'a rien chiffré."""
     today = setup()
     pronos = today["pronos"]
-    line = "🧮 Les paris tirs / fautes / touches arrivent quelques heures avant les matchs (1xBet les ouvre tard)."
+    line = "🧮 Les paris tirs / fautes arrivent quelques heures avant les matchs (1xBet les ouvre tard)."
     assert statswindow.morning_note(pronos) == line
     picks = [{"key": f"k{i}", "id": f"e{i}", "odds": 1.9, "prob": 0.6, "edge": 0.08, "n_books": 14, "weight": 1.0, "score": 0.08, "market": "h2h", "name": f"H{i}",
               "why": "", "pm": None, "commence": f"{DAY}T{12 + i}:00:00Z", "home": f"H{i}", "away": f"A{i}", "event": f"H{i} - A{i}", "league": "L",
@@ -648,17 +652,16 @@ def test_data_budget_and_real_requests():
     ids = [g for _, g in eps]
     assert sorted(g for g in ids if g < 1000) == [101, 102, 103, 104], ids       # le match (pour trouver ses sous-matchs ouverts), M5 M6 M7 hors fenêtre : rien
     subs = {(g // 1000, g % 1000) for g in ids if g >= 1000}
-    assert subs == {(101, 14), (101, 95), (101, 12), (102, 95), (102, 55), (103, 55), (104, 13)}, subs      # UNE requête par famille voulue, jamais les corners (type 2)
+    assert subs == {(101, 14), (101, 95), (101, 12), (102, 95), (102, 14), (103, 95), (104, 12)}, subs      # UNE requête par famille voulue, jamais les corners (type 2)
     assert len(ids) == 11
     kb = len(ids) * statswindow.KB_PER_REQUEST
     assert kb < 80, kb                                                           # ≈ 70 Ko pour 4 matchs
     doc = statswindow.load(DAY)
     assert doc["passes"] == 1 and doc["reads"]["M1"]["n"] == 1
     now_by = by_key()
-    assert now_by["M4|team_offsides_total||9.5|Under"]["xodds"] == 1.85 and now_by["M1|team_shots_home||9.5|Under"]["xodds"] == 1.8
-    assert now_by["M3|team_throws_total||9.5|Under"]["xodds"] == 1.9 and now_by["M2|team_throws_home||9.5|Under"]["xodds"] == 1.9
+    assert now_by["M4|team_sot_home||9.5|Under"]["xodds"] == 1.7 and now_by["M1|team_shots_home||9.5|Under"]["xodds"] == 1.8
+    assert now_by["M3|team_shots_total||9.5|Under"]["xodds"] == 1.8 and now_by["M2|team_fouls_home||9.5|Under"]["xodds"] == 1.85
     assert now_by["M1|team_sot_total||9.5|Under"]["xref"][0] == 101012, now_by["M1|team_sot_total||9.5|Under"]["xref"]      # référence = le sous-match (coupon)
-    assert rep["combo"] is None and not coupons, rep      # M3 (touches) et M4 (hors-jeu) sont hors voies : trop peu de jambes pour une cote 5 à 7 (le combiné est testé avec setup_lane)
     # plafond mensuel : au-delà de STATS_WINDOW_MONTH_PCT % de XBET_MONTH_MB la fenêtre se tait (le matin passe avant)
     setup()
     limit = int(C.XBET_MONTH_MB * 1e6 * C.STATS_WINDOW_MONTH_PCT / 100)
@@ -780,7 +783,7 @@ def test_concurrent_writes_during_network():
     assert today["marker"] == 42 and any(c["key"] == "M7|team_sot_total||9.5|Under" for c in today["pronos"]), "écritures concurrentes conservées"
     now_by = by_key()
     assert now_by[late_leg["key"]] == late_leg, "jambe d'un combiné créé pendant la relecture : jamais remplacée"
-    assert now_by["M1|team_shots_home||9.5|Under"]["xodds"] == 1.8 and now_by["M4|team_offsides_total||9.5|Under"]["xodds"] == 1.85
+    assert now_by["M1|team_shots_home||9.5|Under"]["xodds"] == 1.8 and now_by["M4|team_sot_home||9.5|Under"]["xodds"] == 1.85
     print("ok  écritures concurrentes pendant la relecture : rien de perdu, jambes d'un combiné intactes")
 
 

@@ -67,6 +67,18 @@ def prono(i, market, p=0.66, name="Over", point=7.5, **kw):
             "xref": [9500 + i, 12, point]} | kw
 
 
+def test_off_lane_subgames_not_read():
+    """Touches (55) et hors-jeu (13) : plus de requête de sous-match, plus dans la fenêtre des stats ni dans le palier ts5 (ils ne produisent aucun ticket)."""
+    from kelly import config as C, statswindow
+    from kelly.sources import xbet
+    assert xbet.OFF_LANE_TYPES == {55, 13} and not any(t in xbet.OFF_LANE_TYPES for t in xbet.MARKET_SUB.values())
+    assert not any(m.startswith(("team_throws", "team_offsides")) for m in xbet.MARKET_SUB)
+    assert {xbet.MARKET_SUB[m] for m in ("team_shots_total", "team_sot_total", "team_fouls_total", "alternate_totals_corners", "team_yellow_total")} == {95, 12, 14, 2, xbet.YELLOW}
+    assert not any(p.startswith(("team_throws", "team_offsides")) for p in C.STATS_WINDOW_PREFIX + statswindow.PREFIX)
+    ts5 = next(t for t in C.FAIR_SHOTS_TIERS if t[0] == "ts5")
+    assert not any(p.startswith(("team_throws", "team_offsides")) for p in ts5[1])
+
+
 def test_fetch_order_stats_first():
     """Relevé 1xBet : les matchs dont on veut des sous-matchs stats (requêtes de plus) sont lus avant les autres, chacun dans l'ordre reçu ; si le délai
     tombe, ce sont eux qui valent le plus. Corners seuls ou rien : l'ordre d'avant."""
@@ -75,7 +87,7 @@ def test_fetch_order_stats_first():
     events = [ev(1), ev(2), ev(3), ev(4), ev(5)]
     wanted = {"m1": {"totals", "alternate_totals_corners"}, "m2": {"team_fouls_total"}, "m3": {"alternate_totals_corners"},
               "m4": {"team_shots_home", "team_sot_total"}, "m5": {"team_offsides_total", "totals"}}
-    assert [e["id"] for _, e in xbet.prioritise_stats(events, wanted)] == ["m2", "m4", "m5", "m1", "m3"]
+    assert [e["id"] for _, e in xbet.prioritise_stats(events, wanted)] == ["m2", "m4", "m1", "m3", "m5"], "touches / hors-jeu : plus de sous-match relu, donc plus de priorité"
     assert [e["id"] for _, e in xbet.prioritise_stats(events, None)] == ["m1", "m2", "m3", "m4", "m5"]
     assert [e["id"] for _, e in xbet.prioritise_stats(iter(events), {"m1": {"totals"}})] == ["m1", "m2", "m3", "m4", "m5"]
     # xprice.apply : relevé du matin (lecture par défaut) = stats d'abord ; relevé en direct (fetch fourni) = ordre de l'appelant
@@ -191,6 +203,7 @@ def test_price_to_combo_and_custom():
 
 if __name__ == "__main__":
     test_paid_match_gets_stat_families()
+    test_off_lane_subgames_not_read()
     test_fetch_order_stats_first()
     test_keep_pronos_keeps_every_combo_leg()
     test_stats_tier()

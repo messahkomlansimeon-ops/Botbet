@@ -305,7 +305,7 @@ FAIR_STATS_TIER = _bool("FAIR_STATS_TIER", True)      # 0 : plus de palier « �
 FAIR_STATS_PAID = _bool("FAIR_STATS_PAID", True)      # 0 : les matchs payés (cotes réelles) n'ont plus de pronostics tirs / fautes / touches / hors-jeu (comportement d'avant)
 FAIR_SHOTS_TIERS = (("tc5", "team_sot_", "🎯 COMBINÉ TIRS CADRÉS", 5.0, 7.0),
                     ("tv5", "team_shots_", "🎯 COMBINÉ TIRS VERS LE BUT", 5.0, 7.0)) \
-    + ((("ts5", ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_"), "🧮 COMBINÉ STATS", 5.0, 7.0),) if FAIR_STATS_TIER else ())
+    + ((("ts5", ("team_fouls_", "team_shots_", "team_sot_"), "🧮 COMBINÉ STATS", 5.0, 7.0),) if FAIR_STATS_TIER else ())
 FAIR_TRACK_STATS = _int("FAIR_TRACK_STATS", 100)  # en plus, pronostics de stats (corners, cartons, tirs, fautes...) suivis en silence par jour, réglés sans requête de
                                                   # plus (match déjà relevé, ou CSV football-data) : la fiabilité de ces marchés s'apprend 5 à 10 fois plus vite
 FAIR_TRACK_SHOTS = _int("FAIR_TRACK_SHOTS", 20)  # pronostics tirs / tirs cadrés suivis par jour (fiabilité de Kelly sur ces marchés)
@@ -831,7 +831,7 @@ STATS_WINDOW_COMBO = (5.0, 7.0)                                     # fourchette
 STATS_WINDOW_ANNOUNCE = _int("STATS_WINDOW_ANNOUNCE", 6)            # nouveaux 💎 stats au plus dans un message « 🧮 Stats ouvertes chez 1xBet » (0 : aucun message)
 STATS_WINDOW_DAY_ANNOUNCE = _int("STATS_WINDOW_DAY_ANNOUNCE", 12)   # nouveaux 💎 stats annoncés au plus par jour
 STATS_WINDOW_NOTE = _bool("STATS_WINDOW_NOTE", True)                # 0 : plus de ligne « les paris stats arrivent quelques heures avant les matchs » au message du matin
-STATS_WINDOW_PREFIX = ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_")   # marchés « stats » (ceux de « ts5 »)
+STATS_WINDOW_PREFIX = ("team_fouls_", "team_shots_", "team_sot_")   # marchés « stats » (ceux de « ts5 ») ; touches et hors-jeu retirés le 17/10 (hors voies : aucun ticket)
 STATS_WINDOW_TIER = "ts5w"                                          # palier d'un combiné de la fenêtre : « ts5w1 », « ts5w2 »... (« ts5 » reste celui du matin)
 STATS_WINDOW_TITLE = "🧮 COMBINÉ STATS"
 

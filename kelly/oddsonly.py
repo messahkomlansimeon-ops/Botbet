@@ -186,14 +186,17 @@ def mech_2(px, picks, now, history=None):
     from .sources import xbet
     out = []
     for c in picks or ():
+        ref = None
         fam = ensemble.family(c.get("market") or "")
         if not lanes.ticket_ok(c):
             continue
         if fam in GOAL_FAMILIES:
             sh = ensemble.sharp_of(c)
             p = sh[0] if sh else None
-        elif fam == "corners" and c.get("market") == "alternate_totals_corners" and (c.get("n_books") or 0) >= 2 and c.get("prob_book") is not None:
+        elif fam == "corners" and c.get("market") == "alternate_totals_corners" and c.get("prob_book") is not None and (
+                (c.get("n_books") or 0) >= 2 or c.get("prob_src") == "pinnacle"):       # consensus d'au moins 2 books, OU Pinnacle seul (comme sharpgap)
             p = c["prob_book"]
+            ref = "consensus" if (c.get("n_books") or 0) >= 2 else "pinnacle_seul"
         else:
             continue
         age = books_age_min(c, now)
@@ -202,7 +205,7 @@ def mech_2(px, picks, now, history=None):
         k = xbet.resolve(px, c["market"], c["name"], c.get("point"))
         o = px.get(k) if k else None
         if o and o > 1:
-            out.append(_row("2", k[0], k[1], k[2], o, p, overlap_sharpgap=fam in GOAL_FAMILIES, age_min=round(age)))
+            out.append(_row("2", k[0], k[1], k[2], o, p, overlap_sharpgap=fam in GOAL_FAMILIES, age_min=round(age), **({"ref": ref} if ref else {})))
     return out
 
 
@@ -305,7 +308,7 @@ def _new_row(r, mid, ev, sport_key, date, at):
             "sport_key": sport_key, "commence": ev.get("commence_time"), "date": date, "market": r["market"], "name": r["name"], "point": r["point"],
             "family": r["family"], "mech": r["mech"], "status": r.get("status"), "xodds": r["xodds"], "xref": r.get("xref"), "p_impl": r["p_impl"], "edge": r["edge"],
             "edge_last": r["edge"], "pe": r["p_impl"], "went_suspect": False, "first_at": at, "last_seen_at": at, "gone_at": None, "reads": 1, "censored": None, "xclose": None, "xgone": False,
-            "result": None, "strategy": "cotes"} | {k: r[k] for k in ("overlap_sharpgap", "sens", "nb_mu", "nb_r", "n_lines", "lam", "age_min") if k in r}
+            "result": None, "strategy": "cotes"} | {k: r[k] for k in ("overlap_sharpgap", "sens", "nb_mu", "nb_r", "n_lines", "lam", "age_min", "ref") if k in r}
 
 
 def censor_past(log, now_ts):
@@ -542,6 +545,7 @@ def stats_block(rows, cover=None):
     for m in ("1a", "1b", "1c", "2"):
         out["mech"][m] = cell([r for r in val if r["mech"] == m])
     out["cells"] = {(m, f): cell([r for r in val if r["mech"] == m and r.get("family") == f]) for m in ("1a", "1b", "1c", "2") for f in sorted({r.get("family") for r in val if r["mech"] == m and r.get("family")})}
+    out["refs"] = {ref: cell([r for r in val if r["mech"] == "2" and r.get("family") == "corners" and r.get("ref") == ref]) for ref in ("pinnacle_seul", "consensus")}
     out["life"] = lifetime([r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2") and r.get("status") in ("value", "suspect")])
     cov = cover or {}
     out["read"] = sum(len(d.get("read", ())) for d in cov.values())
@@ -630,6 +634,7 @@ def report(args=None, today=None):
         for m, name in (("1a", "1N2 ↔ double chance"), ("1b", "totaux d'équipe → total / les 2 marquent (Poisson : à part)"), ("1c", "lignes successives"), ("2", "retard sur les autres books")):
             L.append(f"• {m} {name} : {_cell_txt(b['mech'][m])}" + (" (buts : recouvre sharpgap, preuve non indépendante)" if m == "2" else ""))
             L += [f"    {m} {f} : {_cell_txt(v)}" for (mm, f), v in sorted(b["cells"].items()) if mm == m and v["lines"]]
+        L += [f"    2 corners · référence {ref} : {_cell_txt(v)}" for ref, v in b["refs"].items() if v["lines"]]
         g, c, o, lo, hi = b["life"]
         nxt, _ = gone_next_read([r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2")])
         L.append(f"Durée de vie : {g} disparue{'s' if g > 1 else ''} (dont {nxt} dès le relevé authentique suivant), {c} censurée{'s' if c > 1 else ''}, {o} ouverte{'s' if o > 1 else ''}"

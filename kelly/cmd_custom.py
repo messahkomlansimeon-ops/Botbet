@@ -169,7 +169,7 @@ def custom_combo(picks, pronos, target, day, started=False, when=None, kinds=Non
 
 
 def _open_stats(pronos, prefix, now):
-    """« combi N » avec des types stats (tirs, tirs cadrés, fautes, touches, hors-jeu ; tous si `prefix` est None) : 1xBet n'ouvre ces paris que
+    """« combi N » avec des types stats (tirs, tirs cadrés, fautes ; tous si `prefix` est None) : 1xBet n'ouvre ces paris que
     quelques heures avant les matchs, le relevé du matin les a presque tous vus fermés. Les matchs qui commencent dans la fenêtre des stats
     (statswindow.in_window) et dont un pronostic de ces types n'a pas de cote 1xBet sont relus EN DIRECT (xprice.live_check, C.COMBI_OPEN_MAX au
     plus, les plus proches d'abord, jamais au-delà du plafond mensuel de la fenêtre). -> les pronostics à venir, relus ou non. Ne lève jamais."""
