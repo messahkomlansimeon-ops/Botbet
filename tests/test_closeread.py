@@ -52,14 +52,16 @@ def test_window_and_sharing():
              dict(line("n", "m1", ko, 15), xref=None),                               # sans référence 1xBet
              line("e", "m2", ko_in(70), 21),                                         # trop loin
              line("f", "m3", ko_in(30), 31),                                         # 1xBet a fermé (< 35 min)
-             line("g", "m4", ko_in(50), 41)])                                        # pas encore : le passage suivant (10 min plus tard) tombera à 40
+             line("g", "m4", ko_in(55), 41),                                         # pas encore (avance 55 >= 50) : le passage suivant (10 min plus tard) tombera à 45
+             line("h", "m5", ko, 51, "totals"), line("i", "m5", ko, 52, "h2h"),       # buts : le match principal reste ouvert, jamais lus
+             dict(line("j", None, ko, 61), id=None)])                                # sans id de match : ignorée
     rd = Reader()
     rep = CR.run(NOW, read=rd)
-    assert rd.calls == [["11", "12"]], rd.calls                                      # un seul appel : les deux sous-matchs du match, jamais celui des touches
+    assert rd.calls == [["11", "12"]], rd.calls                                      # ni les buts (totals, h2h), ni la ligne sans id                                      # un seul appel : les deux sous-matchs du match, jamais celui des touches
     assert rep["planned"] == 1 and rep["read"] == 1 and rep["ok"] == 2 and rep["bytes"] == 12800 and rep["requests"] == 2, rep
     rep = CR.run(NOW + timedelta(minutes=2), read=rd)
     assert len(rd.calls) == 1 and rep["planned"] == 0, "déjà lu : jamais deux fois"
-    CR.run(NOW + timedelta(minutes=10), read=rd)                                     # m4 à 40 min : lu à son tour
+    CR.run(NOW + timedelta(minutes=10), read=rd)                                     # m4 à 45 min : lu à son tour (45 min)
     assert rd.calls[-1] == ["41"], rd.calls
     d = store.load(CR.FILE, {})["days"]["2026-10-17"]
     assert set(d["done"]) == {"m1", "m4"} and d["requests"] == 3 and d["bytes"] == 19200, d
@@ -148,9 +150,11 @@ def test_month_silence_and_no_observer():
         xbet.OBSERVERS[:] = [lambda out, events: seen.append(1)]
         got, spent, why = xbet.read_closing(["11", "12"])
         assert got == {"11": 1234.5, "12": 1234.5} and why is None and seen == [], (got, seen)
-        xbet._events = lambda gid: (_ for _ in ()).throw(xbet.XbetError("réponse inattendue"))
+        xbet._events = lambda gid: (_ for _ in ()).throw(xbet.XbetError("réponse inattendue (pas un objet JSON)"))
         got, _, _ = xbet.read_closing(["11"])
         assert got == {"11": None}, "sous-match fermé : noté sans relevé, ne lève pas"
+        xbet._events = lambda gid: (_ for _ in ()).throw(xbet.XbetError("ReadTimeout"))
+        assert xbet.read_closing(["11"])[0] == {}, "panne : absent, relu plus tard"
     finally:
         xbet._Session, xbet._events, http._read = old[0], old[1], old[2]
         xbet.OBSERVERS[:] = old[3]
@@ -208,7 +212,7 @@ def test_watch_hook_and_audit():
         def close(self):
             pass
     try:
-        CR.run = lambda now=None, **kw: got.append(now)
+        CR.run = lambda now=None, **kw: got.append(now)             # le passage ne donne pas son heure de début  # noqa
         watch._tickets = lambda now: None
         watch.board = lambda now: None
         watch.opportunity = lambda now: None
@@ -216,7 +220,7 @@ def test_watch_hook_and_audit():
         watch.tick(NOW)
     finally:
         CR.run, watch._tickets, watch.board, watch.opportunity, watch._lock = keep
-    assert got == [NOW], "le passage --watch lance le relevé de clôture"
+    assert got == [None], "le passage --watch lance le relevé de clôture, sans l'heure de son début (périmée après des minutes de tickets)"
     # section G : couverture ≤ 60 min et part du relevé de clôture
     ko = ko_in(60)
     rows = [line(f"k{i}", f"m{i}", ko, i, strategy="stats", xodds=2.0, xclose={"odds": 2.1, "lead_min": lead, "susp": False, **({"src": src} if src else {})})
@@ -226,7 +230,119 @@ def test_watch_hook_and_audit():
     print("ok  crochet du passage --watch ; section G : couverture ≤ 60 min et part close_read")
 
 
+def test_failures_and_retry():
+    ko = ko_in(40)
+    put(ens=[line("a", "m1", ko, 11), line("b", "m1", ko, 12, SOT), line("c", "m2", ko, 21)], sea=[line("d|saison", "m1", ko, 11)])      # m1 : deux sous-matchs, l'un partagé par deux journaux
+    calls = []
+
+    def flaky(gids, deadline=None):
+        calls.append(list(gids))
+        n = len(calls)
+        if n == 1:
+            return {}, (0, 0), "délai dépassé"                                        # panne totale (délai global du passage épuisé) : RIEN n'est enregistré
+        if n == 2:
+            return {"11": NOW.timestamp(), "21": None}, (100, 2), None               # 11 relevé, 21 fermé (réponse « plus de sous-match »), 12 en panne
+        return {g: NOW.timestamp() for g in gids}, (100, 1), None
+    CR.run(NOW, read=flaky)
+    assert calls == [["11", "12", "21"]], calls                                        # 11 une seule fois malgré les deux journaux
+    assert store.load(CR.FILE, {}).get("days") in (None, {}), "panne : rien d'enregistré, rien de compté dans le plafond"
+    CR.run(NOW + timedelta(minutes=1), read=flaky)
+    CR.run(NOW + timedelta(minutes=2), read=flaky)
+    assert calls[2] == ["12"], calls                                                   # seul le sous-match resté en panne est relu ; 21 (fermé) et 11 (relevé) jamais
+    CR.run(NOW + timedelta(minutes=3), read=flaky)
+    assert len(calls) == 3, "tout a répondu : plus rien à lire"
+    d = store.load(CR.FILE, {})["days"]["2026-10-17"]["done"]
+    assert d["m1"].keys() == {"11", "12"} and d["m2"] == {"21": None}, d
+    print("ok  panne = rien d'enregistré et relu ; sous-match fermé noté sans relevé ; seul le sous-match en panne est relu ; sous-match partagé lu une fois")
+
+
+def test_boundaries_and_kelly_day():
+    for lead, want in ((34.9, False), (35, True), (49.9, True), (50, False)):
+        put(ens=[line("a", "m1", NOW + timedelta(minutes=lead), 11)])
+        rd = Reader()
+        CR.run(NOW, read=rd)
+        assert bool(rd.calls) is want, (lead, rd.calls)
+    # jour Kelly : un match de 04:10 UTC vu à 03:25 (jour Kelly précédent) est lu ; un match déjà commencé jamais
+    now = datetime(2026, 10, 18, 3, 25, tzinfo=timezone.utc)
+    put(ens=[line("a", "m1", datetime(2026, 10, 18, 4, 10, tzinfo=timezone.utc), 11), line("b", "m2", now - timedelta(minutes=5), 12)])
+    rd = Reader(at=now.timestamp())
+    CR.run(now, read=rd)
+    assert rd.calls == [["11"]], rd.calls
+    assert CR.kelly_day(datetime(2026, 10, 18, 3, 59, tzinfo=timezone.utc)) == "2026-10-17" and CR.kelly_day(datetime(2026, 10, 18, 4, 0, tzinfo=timezone.utc)) == "2026-10-18"
+    print("ok  bornes 35 incluse / 50 exclue ; jour Kelly (04:00 UTC) ; match de 04:10 vu à 03:25 lu ; match commencé ignoré")
+
+
+def test_priority_hours_lines_and_purge():
+    assert CR.PRIORITY_HOURS == (0, 1, 2, 3, 16, 19, 22, 23)
+    base = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
+    ranks = [CR.rank_key((f"m{h}", {"ko": base.replace(hour=h), "lines": 1})) for h in (0, 3, 16, 19, 22, 23)]
+    assert all(not r[0] for r in ranks), "chaque heure de la liste est prioritaire"
+    assert all(CR.rank_key((f"m{h}", {"ko": base.replace(hour=h), "lines": 1}))[0] for h in (4, 14, 15, 17, 18, 20, 21)), "les autres non"
+    a = CR.rank_key(("a", {"ko": base.replace(hour=14), "lines": 5}))
+    b = CR.rank_key(("b", {"ko": base.replace(hour=14), "lines": 2}))
+    assert a < b, "à tranche égale, le plus de lignes d'abord"
+    # les lignes sont bien comptées (3 lignes contre 1) dans matches()
+    ko = ko_in(40)
+    put(ens=[line("x1", "mx", ko, 1), line("x2", "mx", ko, 1), line("x3", "mx", ko, 1), line("y1", "my", ko, 2)])
+    assert CR.matches(NOW)["mx"]["lines"] == 3 and CR.matches(NOW)["my"]["lines"] == 1
+    # registre purgé à KEEP_DAYS jours, ts non numériques ignorés par l'index
+    days = {f"2026-09-{d:02d}": {"done": {}, "bytes": 0, "requests": 0} for d in range(1, 21)}
+    store.save(CR.FILE, {"days": days, "starts": {"7": "oops"}})
+    CR._record(NOW, {"mz": {"5": 1.0}}, (0, 0))
+    assert len(store.load(CR.FILE, {})["days"]) == CR.KEEP_DAYS
+    store.save(CR.FILE, {"days": {"2026-10-17": {"done": {"m": {"5": "texte", "6": 2.0}}}}})
+    assert CR.index() == {"6": [2.0]}, CR.index()
+    print("ok  tranches prioritaires une à une, plus de lignes d'abord, lignes comptées, registre purgé, index filtré")
+
+
+def test_src_start_and_newer_cache():
+    idx = {"11": [100.0], "start:11": [1000.0]}
+    assert CR.src_of([11, 9, 0], 100.4, idx) == "close_read"
+    assert CR.src_of([11, 9, 0], 1010.0, idx) == "close_read", "tombé dans le cache pendant la lecture, avant l'enregistrement"
+    assert CR.src_of([11, 9, 0], 999.0, idx) == "close_read" and CR.src_of([11, 9, 0], 998.0, idx) == "cache"
+    assert CR.src_of([11, 9, 0], 1000 + CR.SECONDS + 31, idx) == "cache", "relevé de cache PLUS récent que la lecture : pas la nôtre"
+    assert CR.src_of([11, 9, 0], 500.0, idx) == "cache" and CR.src_of([12, 9, 0], 100.0, idx) == "cache" and CR.src_of(None, 1.0, idx) == "cache"
+    print("ok  source : instant exact, pendant la lecture, relevé de cache plus récent ou plus ancien = « cache »")
+
+
+def test_read_closing_ttl():
+    from types import SimpleNamespace
+    ttls, old = [], (xbet._Session, http.fetch, http._read)
+
+    class FakeSession:
+        why, start = None, {"bytes": 0, "requests": 0}
+
+        def full(self):
+            return False
+
+        def call(self, fn, *a):
+            return fn(*a)
+
+        def close(self, what):
+            pass
+    try:
+        xbet._Session = FakeSession
+        http.fetch = lambda url, source, ttl, headers=None, check_robots=True: ttls.append(ttl) or SimpleNamespace(ok=True, stale=False, error=None, content='{"eventGroups": []}')
+        http._read = lambda key: ({"fetched_at": 55.0}, b"{}")
+        got, _, _ = xbet.read_closing(["7"])
+        assert got == {"7": 55.0} and ttls == [0], (got, ttls)                       # TTL 0 : toujours relu sur le réseau, jamais repris du cache
+        # panne réseau : absent du résultat (relu plus tard) ; réponse vide : « fermé » (None)
+        http.fetch = lambda *a, **k: SimpleNamespace(ok=False, stale=False, error="ReadTimeout", content="")
+        assert xbet.read_closing(["7"])[0] == {}
+        http.fetch = lambda *a, **k: SimpleNamespace(ok=True, stale=False, error=None, content="[]")
+        http.invalidate = lambda *a, **k: None
+        assert xbet.read_closing(["7"])[0] == {"7": None}
+    finally:
+        xbet._Session, http.fetch, http._read = old
+    print("ok  read_closing : TTL 0, panne absente du résultat, sous-match fermé = None")
+
+
 def main():
+    test_failures_and_retry()
+    test_boundaries_and_kelly_day()
+    test_priority_hours_lines_and_purge()
+    test_src_start_and_newer_cache()
+    test_read_closing_ttl()
     test_window_and_sharing()
     test_three_journals_and_switch()
     test_cap_and_priority()

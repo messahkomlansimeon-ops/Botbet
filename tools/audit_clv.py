@@ -364,7 +364,7 @@ def section_g(log, lk=None):
                "avant le coup d'envoi, plafond 40 requêtes/jour, interrupteur de config, à chiffrer avec toi avant activation)." if cover < COVERAGE_MIN
                else "AU-DESSUS du seuil : le cache suffit."))
     near = [r for r in good if r["xclose"]["lead_min"] <= LEAD_NEAR_MIN]
-    out.append(f"   Couverture ≤ {LEAD_NEAR_MIN} min : {len(near)}/{len(withref)} = " + (f"{len(near) / len(withref):.0%}" if withref else "0%") + " (relevé de clôture réseau, XCLOSE_READ, depuis le 17/10).")
+    out.append(f"   Couverture ≤ {LEAD_NEAR_MIN} min : {len(near)}/{len(withref)} = " + (f"{len(near) / len(withref):.0%}" if withref else "0%") + ", toutes lignes du journal (le relevé de clôture réseau, XCLOSE_READ, ne couvre que les lignes d'après son installation du 17/10).")
     srcs = [r["xclose"].get("src") for r in good]
     known = [x for x in srcs if x]
     out.append(f"   Part de `xclose` venant du relevé de clôture : {srcs.count('close_read')}/{len(good)} lignes"

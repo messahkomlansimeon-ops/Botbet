@@ -402,11 +402,14 @@ def prices(game, markets, home, away):
     return out
 
 
+CLOSED = "pas un objet JSON"       # message de _events quand 1xBet répond [] / null : le sous-match n'existe plus
+
+
 def read_closing(gids, deadline=None):
     """Relevé de CLÔTURE (kelly/closeread.py) : relit à l'instant le(s) sous-match(s) 1xBet `gids` (GameId de la cote, `xref[0]`) et laisse la réponse dans le cache disque, d'où
     ensemble.mark_x_close la lira (`cached_cell`). Une session à part (proxy, plafond du mois, compteur de données) ; PAS fetch_day : aucun observateur (voie « cotes ») ne voit
     ces lectures partielles (sous-match seul, sans marché principal). Ne lève jamais. -> ({gid: instant du relevé, ou None si 1xBet n'a plus ce sous-match}, (octets, requêtes), raison
-    de l'abandon ou None)."""
+    de l'abandon ou None). Un sous-match en PANNE (réseau, délai, proxy) est absent du résultat : il sera relu au passage suivant."""
     out, why = {}, None
     ses = _Session()
     if ses.why:
@@ -421,9 +424,11 @@ def read_closing(gids, deadline=None):
                     ses.call(_events, g)
                     hit = http._read(http._key(_events_url(g), JSON_H))
                     out[g] = hit[0].get("fetched_at") if hit else None
-                except Exception as e:              # noqa: BLE001 - un sous-match fermé ou en erreur ne fait pas perdre les autres
-                    out[g] = None
-                    print(f"[1xbet] relevé de clôture {g} : {http.scrub(e)}", file=sys.stderr)
+                except Exception as e:              # noqa: BLE001 - un sous-match en erreur ne fait pas perdre les autres
+                    msg = http.scrub(e)
+                    if CLOSED in msg:               # 1xBet n'a plus ce sous-match (fermé) : réponse, pas panne -> noté sans relevé
+                        out[g] = None
+                    print(f"[1xbet] relevé de clôture {g} : {msg}", file=sys.stderr)       # toute autre erreur (réseau, délai, proxy) : ABSENT du résultat, le passage suivant réessaie
     finally:
         spent = _spent(ses.start)
         ses.close(f"clôture de {len(out)} sous-match(s)")
