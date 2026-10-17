@@ -14,13 +14,17 @@ FILE = "live_effect_log.json"
 MAX_ROWS = 2000
 FAMILIES = ("corners", "shots", "sot", "fouls")           # familles dont l'effet change la chance (inplay.SCORE_STATS + fautes des cartons rouges)
 MIN_LEGS = 200                                            # jambes réglées avant de juger (ledger)
+MIN_MATCHES = 30                                          # ... répartis sur au moins 30 matchs (amendement du ledger)
+MAX_MINUTE = 60                                           # première lecture au plus tard à la 60e minute : plus tard, la chance dépend déjà du résultat (amendement du ledger)
 EPS = 1e-4
 
 
 def record(leg, key, side, score, minute, reds, p, p_raw):
     """Note la lecture (une fois par jambe) ; ne lève jamais. -> True si une ligne a été ajoutée."""
     try:
-        if key not in FAMILIES or p is None or p_raw is None or minute < C.LIVE_MIN_MINUTE or not leg.get("key"):
+        if key not in FAMILIES or p is None or p_raw is None or not C.LIVE_MIN_MINUTE <= minute <= MAX_MINUTE or not leg.get("key"):
+            return False
+        if any(r.get("key") == leg["key"] for r in rows()):             # déjà notée : aucune transaction d'écriture (le suivi passe toutes les 10 minutes)
             return False
 
         def add(rows):
@@ -45,6 +49,8 @@ def settle(key, result):
     """Pose le résultat (« win » / « loss ») de la jambe `key` si elle a une ligne sans résultat ; ne lève jamais."""
     try:
         if result not in ("win", "loss"):
+            return False
+        if not any(r.get("key") == key and r.get("result") is None for r in rows()):      # rien à poser : aucune transaction d'écriture
             return False
 
         def put(rows):
@@ -94,6 +100,6 @@ def compare(data=None):
 
 def verdict(c):
     """« mieux » / « pire » / « indécis » / « pas assez de jambes » (MIN_LEGS) pour un résultat de compare() : calculé, jamais appliqué."""
-    if not c or c["n"] < MIN_LEGS or c["half"] is None:
+    if not c or c["n"] < MIN_LEGS or c["matchs"] < MIN_MATCHES or c["half"] is None:
         return "pas assez de jambes"
     return "mieux" if c["ecart"] + c["half"] < 0 else "pire" if c["ecart"] - c["half"] > 0 else "indécis"

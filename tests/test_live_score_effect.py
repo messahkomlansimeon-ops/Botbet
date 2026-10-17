@@ -77,6 +77,11 @@ def test_chance_bit_for_bit_and_direction():
     # rouge au domicile : ses tirs restants baissent
     sh = W.leg(0, "team_shots_home", point=9.5, prob=0.5)
     assert inplay.chance(sh, "shots", "home", (0, 0), 50, 2, (1, 0), {"shots": (6, 5)}, None, True)[0] < inplay.chance(sh, "shots", "home", (0, 0), 50, 2, (1, 0), {"shots": (6, 5)})[0]
+    # fautes : le rouge les augmente (x1,15), le score n'y change rien
+    fl = W.leg(0, "team_fouls_home", point=6.5, prob=0.5)
+    fs = {"fouls": (4, 3)}
+    assert inplay.chance(fl, "fouls", "home", (0, 0), 50, 2, (1, 0), fs, None, True)[0] > inplay.chance(fl, "fouls", "home", (0, 0), 50, 2, (1, 0), fs)[0]
+    assert inplay.chance(fl, "fouls", "home", (2, 0), 50, 2, (0, 0), fs, None, True) == inplay.chance(fl, "fouls", "home", (2, 0), 50, 2, (0, 0), fs)
     # « moins de » : l'effet joue dans l'autre sens (une équipe qui attaque davantage -> moins de chances de rester sous la ligne)
     un = W.leg(0, "team_corners_away", point=4.5, prob=0.5, name="Under")
     assert inplay.chance(un, "corners", "away", (2, 0), 50, 2, (0, 0), {"corners": (2, 2)}, None, True)[0] < inplay.chance(un, "corners", "away", (2, 0), 50, 2, (0, 0), {"corners": (2, 2)})[0]
@@ -91,6 +96,8 @@ def test_ledger_matches_code():
     fx = pre["score_effect"]
     assert {int(k): tuple(v) for k, v in fx["score_mult"].items()} == inplay.SCORE_MULT and fx["red_mult"] == inplay.RED_MULT and tuple(fx["families_score"]) == inplay.SCORE_STATS
     assert tuple(fx["bounds"]) == inplay.MULT_BOUNDS and pre["journal"]["min_legs"] == LE.MIN_LEGS and tuple(pre["journal"]["families"]) == LE.FAMILIES
+    am = led["amendments"][-1]["code"]
+    assert am == f"liveeffect.MAX_MINUTE = {LE.MAX_MINUTE}, liveeffect.MIN_MATCHES = {LE.MIN_MATCHES}" and (LE.MAX_MINUTE, LE.MIN_MATCHES) == (60, 30)
     assert pre["journal"]["min_minute"] == C.LIVE_MIN_MINUTE == 30 and (pre["switch"]["name"], pre["switch"]["default"]) == ("LIVE_SCORE_EFFECT", True) and C.LIVE_SCORE_EFFECT is True
     print("ok  constantes du code = live_ledger.json (empreinte de la pré-déclaration inchangée)")
 
@@ -132,6 +139,47 @@ def test_journal_and_compare():
     print("ok  journal : première lecture à partir de la 30e, une ligne par jambe, résultat une fois ; comparaison avec / sans, verdict (200 jambes), plafond du fichier")
 
 
+def test_journal_edges_and_robustness():
+    store.save(LE.FILE, [])
+    lg = _stat_leg(5)
+    assert not LE.record(lg, "corners", "total", (0, 1), 29, (0, 0), 0.5, 0.45) and LE.record(lg, "corners", "total", (0, 1), 30, (0, 0), 0.5, 0.45), "30e incluse, 29e non"
+    lg2 = _stat_leg(6)
+    assert not LE.record(lg2, "corners", "total", (0, 1), 61, (0, 0), 0.5, 0.45) and LE.record(lg2, "corners", "total", (0, 1), 60, (0, 0), 0.5, 0.45), "60e incluse, 61e non"
+    r = {x["key"]: x for x in LE.rows()}
+    assert r[lg["key"]]["p"] == 0.5 and r[lg["key"]]["p_raw"] == 0.45, "p = avec l'effet, p_raw = sans"
+    # p = 0 ou 1 (arrondi) : jamais de log(0)
+    assert abs(LE.logloss(0.0, 1) - 9.2103403720) < 1e-6 and abs(LE.logloss(1.0, 0) - 9.2103403720) < 1e-6
+    rows = [{"key": f"z{i}", "id": f"m{i}", "fam": "corners", "p": 1.0 if i % 2 else 0.0, "p_raw": 0.5, "result": "win" if i % 2 else "loss"} for i in range(40)]
+    assert LE.compare(rows)["corners"]["n"] == 40
+    # grappes par MATCH (id), pas par jambe : 2 jambes du même match sont une grappe ; demi-marge exacte
+    pairs = [{"key": f"a{i}", "id": "m1", "fam": "corners", "p": 0.9, "p_raw": 0.5, "result": "win"} for i in range(2)] + [{"key": f"b{i}", "id": "m2", "fam": "corners", "p": 0.1, "p_raw": 0.5, "result": "win"} for i in range(2)]
+    c = LE.compare(pairs)["corners"]
+    d = [LE.logloss(0.9, 1) - LE.logloss(0.5, 1)] * 2 + [LE.logloss(0.1, 1) - LE.logloss(0.5, 1)] * 2
+    m = sum(d) / 4
+    assert c["matchs"] == 2 and abs(c["half"] - 1.96 * ((2 / 1) * ((2 * (d[0] - m)) ** 2 + (2 * (d[2] - m)) ** 2)) ** 0.5 / 4) < 1e-12, c
+    # verdict : 200 jambes ET 30 matchs ; bornes écart +- demi-marge
+    base = {"n": 300, "matchs": 29, "ecart": -0.5, "half": 0.1}
+    assert LE.verdict(base) == "pas assez de jambes" and LE.verdict(dict(base, matchs=30)) == "mieux" and LE.verdict(dict(base, n=199, matchs=30)) == "pas assez de jambes"
+    assert LE.verdict(dict(base, matchs=30, ecart=-0.1, half=0.1)) == "indécis" and LE.verdict(dict(base, matchs=30, ecart=0.1, half=0.1)) == "indécis" and LE.verdict(dict(base, matchs=30, ecart=0.11, half=0.1)) == "pire"
+    # plafond : tout le réglé part quand les non réglées remplissent le fichier
+    store.save(LE.FILE, [{"key": f"s{i}", "fam": "corners", "result": "win", "p": 0.5, "p_raw": 0.5} for i in range(10)] + [{"key": f"u{i}", "fam": "corners", "result": None, "p": 0.5, "p_raw": 0.5} for i in range(LE.MAX_ROWS)])
+    assert LE.record(_stat_leg(7), "corners", "home", (0, 0), 40, (0, 0), 0.5, 0.5)
+    rows_ = LE.rows()
+    assert len(rows_) == LE.MAX_ROWS and not any(x["key"].startswith("s") for x in rows_) and rows_[-1]["key"] == _stat_leg(7)["key"]
+    # aucune transaction d'écriture quand il n'y a rien à poser
+    calls = []
+    old = store.update
+    store.update = lambda *a, **k: calls.append(a) or old(*a, **k)
+    try:
+        LE.record(_stat_leg(7), "corners", "home", (0, 0), 41, (0, 0), 0.5, 0.5)
+        LE.settle("inconnue", "win")
+        LE.settle(_stat_leg(7)["key"], "loss")
+        assert len(calls) == 1, "settle de la ligne existante : une transaction ; les deux autres appels n'en ouvrent aucune"
+    finally:
+        store.update = old
+    print("ok  journal : 30e et 60e incluses, p / p_raw, p = 0 ou 1 sans log(0), grappes par match, verdict 200 jambes et 30 matchs, plafond, aucune écriture inutile")
+
+
 def test_watch_wiring():
     store.save(watch.FILE, {})
     store.save(LE.FILE, [])
@@ -154,8 +202,14 @@ def test_watch_wiring():
                     assert rows[0]["p"] == rows[0]["p_raw"], "LIVE_SCORE_EFFECT=0 : la chance d'avant"
                 W.run(60, {0: W.live((0, 2), 60, red=(1, 0))}, {"corners": (9, 5)})
                 assert len(LE.rows()) == 1, "une seule ligne par jambe"
+                # décidé en cours de match (provisoire, match non fini) : pas de résultat posé
+                assert LE.rows()[0]["result"] is None, "le résultat n'est posé qu'à la fin du match et hors décision provisoire"
                 W.run(115, {0: {"live": False, "ended": True, "score": (0, 2), "minute": 90}}, {"corners": (10, 6)})
                 assert LE.rows()[0]["result"] == "win", LE.rows()
+                row = LE.rows()[0]
+                direct = inplay.chance(lg, "corners", "total", (0, 2), 41, 1 if 41 <= 45 else 2, (1, 0), stats, None, effect=True)[0]
+                raw = inplay.chance(lg, "corners", "total", (0, 2), 41, 1, (1, 0), stats, None, effect=False)[0]
+                assert abs(row["p_raw"] - round(raw, 4)) < 1e-9 and (not flag or abs(row["p"] - round(direct, 4)) < 1e-9), (row, direct, raw)
     finally:
         C.LIVE_SCORE_EFFECT = old
     print("ok  suivi : chance avec effet affichée et chance sans effet notée à côté, une ligne par jambe, résultat à la fin ; LIVE_SCORE_EFFECT=0 : chances identiques")
@@ -167,6 +221,7 @@ def main():
     test_chance_bit_for_bit_and_direction()
     test_ledger_matches_code()
     test_journal_and_compare()
+    test_journal_edges_and_robustness()
     test_watch_wiring()
     print("tests effet du score en direct : OK")
 

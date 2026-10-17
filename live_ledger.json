@@ -69,5 +69,18 @@
  },
  "prereg_sha": "5ea111afff4e09aa1d5c797fac917a16b878e0e5d41a42d84ca1c91c8cfd2dae",
  "written_at": "2026-10-17",
- "amendments": []
+ "amendments": [
+  {
+   "at": "2026-10-17",
+   "after": "relecture adverse du commit A (avant toute donnée réelle)",
+   "journal": [
+    "première lecture entre la 30e et la 60e minute INCLUSES (au-delà, la chance dépend déjà du résultat : pas de ligne)",
+    "verdict : 200 jambes réglées ET au moins 30 matchs",
+    "biais de sélection assumé : les jambes déjà tranchées avant leur première lecture en direct, ou jamais lues entre la 30e et la 60e minute, ne sont pas journalisées",
+    "la famille « fouls » ne diffère de « sans effet » qu'au carton rouge : son verdict sera presque toujours « indécis » ou « pas assez de jambes »",
+    "les paris suivis sont ceux de tickets joués : échantillon choisi"
+   ],
+   "code": "liveeffect.MAX_MINUTE = 60, liveeffect.MIN_MATCHES = 30"
+  }
+ ]
 }
