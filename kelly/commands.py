@@ -3,7 +3,7 @@
 import math
 import sys
 import time
-from . import config as C, combos as CB, live as LV, cache, calib, chat, confirm, edgemap, fmt, lanes, learn, migrate, monde, money, oddsonly, played, progress, resultats, settle, sources, store, telegram, track
+from . import config as C, combos as CB, live as LV, cache, calib, chat, confirm, edgemap, fmt, lanes, learn, migrate, monde, money, morningcmd, oddsonly, played, progress, resultats, settle, sources, store, telegram, track
 from .sources import xbet
 from .telegram import Html
 from datetime import timedelta
@@ -85,6 +85,8 @@ def _handle_command(text):
         return lanes.command(args)
     if cmd in ("/incoherences", "/incohérences"):                   # rapport de la voie cotes (fantôme, kelly/oddsonly.py)
         return oddsonly.report(args)
+    if cmd == "/matin":                             # « matin » : relance le passage du matin s'il n'est pas fait ; « matin force » le refait (kelly/morningcmd.py)
+        return morningcmd.handle(args)
     if cmd == "/carte":                             # « carte [stats | saison] » : carte des edges par case (kelly/edgemap.py)
         return edgemap.report(args)
     if cmd == "/saison":

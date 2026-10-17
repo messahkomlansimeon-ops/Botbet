@@ -14,7 +14,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BOT = os.path.join(ROOT, "bot.py")
@@ -162,6 +162,20 @@ def mark_done(state, args, now, epoch, rc):
         key = {"--xbet": "xbet_day", "--evening": "evening_day", "--export": "export_day", "--tune": "tune_day"}.get(name)
         if key:
             state[key] = day
+
+
+def take_daily_request(path=None):
+    """Demande de matin déposée par la commande Telegram (data/daily_request.json, kelly/morningcmd.py) : la rend ({"force": bool}) et la supprime, ou None (absente, illisible, vieille de
+    plus de 45 min). Lue sans importer kelly."""
+    p = path or os.path.join(os.environ.get("DATA_DIR") or os.path.join(ROOT, "data"), "daily_request.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            d = json.load(f)
+        os.remove(p)
+        at = datetime.fromisoformat(d["at"])
+        return {"force": bool(d.get("force"))} if datetime.now(timezone.utc) - at <= timedelta(minutes=45) else None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
 
 
 def state_path():
@@ -736,6 +750,10 @@ class Runner:
                                                     + f" avant {DAILY_LAST_HOUR}h UTC). Prochain passage demain à {DAILY_HOUR:02d}h00.")
         with self.state_lock:
             todo = [a for a in self.plan(now, self.state, epoch) if not (self.watch_thread and a[0] == "--watch")]
+        req = take_daily_request()                      # commande Telegram « matin » / « matin force » : lancé tout de suite, une seule fois
+        if req is not None:
+            log("matin demandé par Telegram" + (" (force)" if req["force"] else ""))
+            todo = [["--daily"] + (["--force"] if req["force"] else [])] + [a for a in todo if a[0] != "--daily"]
         for args in todo:
             if STOP.is_set():
                 break

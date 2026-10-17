@@ -171,16 +171,28 @@ def main(argv):
             print(f"{store.import_dir(src)} document(s) restauré(s) depuis {src or store.backup_dir()}")
     else:
         force = "--force" in argv
-        if sample or "--no-lock" in argv:       # --sample : dossier temporaire, aucun verrou ; --no-lock : déjà sous `flock` (unité systemd), en reprendre un bloquerait
+        if sample:                              # --sample : dossier temporaire, aucun verrou
             sys.exit(app.daily_entry(sample, force=force))
-        from kelly import store
-        try:                                    # tout le matin (~30 min) sous le verrou des données : sans lui, un « Je l'ai joué » ou un budget traité par --serve
-            with store.data_lock(wait=1800, reentrant=True, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):   # pendant ce temps était écrasé et perdu
-                code = app.daily_entry(sample, force=force)
-        except store.LockTimeout:
-            print("Kelly travaille depuis plus de 30 minutes : passage du matin abandonné", file=sys.stderr)
-            sys.exit(1)
-        sys.exit(code)
+        from kelly import passlock
+        with passlock.hold("daily") as got:     # un seul matin à la fois (commande « matin », runner, ligne de commande) : le second se retire sans rien faire
+            if not got:
+                print("[daily] ignoré : un autre passage du matin tourne déjà (verrou data/daily.lock)", file=sys.stderr)
+                sys.exit(0)
+            _daily_locked(app, argv, force)
+
+
+def _daily_locked(app, argv, force):
+    """Le matin, une fois le verrou « daily » pris (voir main)."""
+    if "--no-lock" in argv:                     # déjà sous `flock` (unité systemd), en reprendre un bloquerait
+        sys.exit(app.daily_entry(False, force=force))
+    from kelly import store
+    try:                                        # tout le matin (~30 min) sous le verrou des données : sans lui, un « Je l'ai joué » ou un budget traité par --serve
+        with store.data_lock(wait=1800, reentrant=True, on_busy=lambda: print("Kelly travaille : attente de la fin du passage...")):   # pendant ce temps était écrasé et perdu
+            code = app.daily_entry(False, force=force)
+    except store.LockTimeout:
+        print("Kelly travaille depuis plus de 30 minutes : passage du matin abandonné", file=sys.stderr)
+        sys.exit(1)
+    sys.exit(code)
 
 
 if __name__ == "__main__":
