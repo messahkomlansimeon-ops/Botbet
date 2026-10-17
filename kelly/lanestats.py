@@ -7,7 +7,7 @@ import math
 import sys
 from collections import defaultdict
 
-from . import config as C, ensemble, store
+from . import config as C, ensemble, families, store
 
 LEAD_OK_MIN = 90
 LANES = ("sharpgap", "stats", "stats_cup", "fill", "live", "saison", "saison_cup")        # saison_cup : les jambes `saison` de COUPE (cup = true), séparées au bilan
@@ -185,10 +185,10 @@ def cup_line(days=None, today=None, plain=False):
         w = sum(1 for r in rows if r["result"] == "win")
         ann = [r["pm"] for r in rows if r.get("pm") is not None]
         n, m, h, _ = clv(rows)
-        txt = f"stats (coupes, {C.STATS_CUPS_MODE}) : {w} gagnée{'s' if w > 1 else ''} sur {len(rows)} ({round(w / len(rows) * 100)} %)" + (f" · annoncé {round(sum(ann) / len(ann) * 100)} %" if ann else "")
+        txt = f"stats (coupes, {families.cup_mode()}) : {w} gagnée{'s' if w > 1 else ''} sur {len(rows)} ({round(w / len(rows) * 100)} %)" + (f" · annoncé {round(sum(ann) / len(ann) * 100)} %" if ann else "")
         if n:
             txt += f" · {'prix pris contre le dernier prix 1xBet' if plain else 'CLV 1xBet'} {_pc(m)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" (sur {n}/{C.STATS_CUPS_BACK_N} lignes)"
-            if n >= C.STATS_CUPS_BACK_N and m >= 0 and C.STATS_CUPS_MODE != "on":
+            if n >= C.STATS_CUPS_BACK_N and m >= 0 and families.cup_mode() != "on":
                 txt += f" · ✅ règle de retour atteinte : à la main, STATS_CUPS_MODE=on"
         return txt
     except Exception as e:                      # noqa: BLE001

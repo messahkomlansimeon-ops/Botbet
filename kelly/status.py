@@ -443,6 +443,10 @@ def report(now=None):
         from . import lanes
         from . import lanestats
         blocks.append([fmt.b("🎛️ Voies")] + [fmt.esc(x) for x in lanes.lines()])
+        from . import familyeval
+        fl = familyeval.status_lines()
+        if fl:
+            blocks[-1] += [fmt.esc("Familles non jouées :")] + [fmt.esc("  " + x) for x in fl]
         from . import configactive
         blocks[-1].append(fmt.esc(configactive.stamp()))                 # « réglages : CONFIG_ACTIVE.md du 14/10 »
         from . import gapdist

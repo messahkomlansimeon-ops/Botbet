@@ -87,6 +87,9 @@ def _handle_command(text):
         return oddsonly.report(args)
     if cmd == "/matin":                             # « matin » : relance le passage du matin s'il n'est pas fait ; « matin force » le refait (kelly/morningcmd.py)
         return morningcmd.handle(args)
+    if cmd == "/familles":                         # « familles » : états des familles de marché ; « familles X on » : jouer une famille proposée (kelly/familyeval.py)
+        from . import familyeval
+        return familyeval.command(args)
     if cmd == "/carte":                             # « carte [stats | saison] » : carte des edges par case (kelly/edgemap.py)
         return edgemap.report(args)
     if cmd == "/saison":

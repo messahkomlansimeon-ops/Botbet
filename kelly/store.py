@@ -22,7 +22,7 @@ NO_EXPORT = ("strength_", "progress.json", "telegram_later.json", "snap/", "arch
 # Documents précieux (apprentissage, tes paris, ton capital) : un instantané par jour (snapshot, SNAP_DAYS jours) ; s'il devient illisible (JSON abîmé), il
 # est remis tel qu'il était au dernier instantané (load), jamais remplacé en silence par un document vide ; chaque réparation est notée (REPAIRS).
 PROTECTED = ("strategy_state.json", "calib.json", "calib_boot.json", "means.json", "ensemble.json", "live_calib.json", "tuning.json", "model.json",
-             "bets.json", "tracked.json", "fair.json", "fair_combos.json", "mybudget.json", "season_weights.json", "season_calib.json")
+             "bets.json", "tracked.json", "fair.json", "fair_combos.json", "mybudget.json", "season_weights.json", "season_calib.json", "families.json")
 RECOMPUTED = ("tuning.json", "model.json")     # refaits en entier à chaque calcul : abîmés sans instantané, le prochain calcul les remplace (jamais gelés)
 SNAP, SNAP_DAYS = "snap/", 3
 REPAIRS = "repairs.json"        # [{"name", "at", "from" (jour de l'instantané) ou None (aucun : document gelé), "said"}]

@@ -11,7 +11,7 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, confirm, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
-               cupstats, edgemap, oddsonly, resultats, seasonlane, xprice, xworld)
+               cupstats, edgemap, familyeval, oddsonly, resultats, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
 from .telegram import Html
 
@@ -498,6 +498,7 @@ def morning_report(now):
         print(f"[saison] journal : {len(got_sea[0])} ligne(s) réglée(s), {got_sea[1]} apprise(s)", file=sys.stderr)
     cut = _step("coupure automatique de la voie stats", lambda: lanestats.apply(now.date()), [])      # après le règlement : juge les lignes réglées ; le message passe en PREMIER
     _step("carte des edges", lambda: edgemap.apply(now.date()))            # le lundi seulement, après la coupure : lecture seule, aucun pari ne change tant que EDGEMAP_GATE est éteint
+    _step("familles de marché", lambda: familyeval.apply(now.date()))      # le lundi seulement, après la carte : admission des familles (hors_ticket -> fantome -> proposee), jamais jouee toute seule
     cut_msgs = _step("état des voies", lanestats.cut_lines, [])
     if cut_msgs:
         cut_msg = Html("\n".join(fmt.esc(x) for x in cut_msgs))
@@ -1269,6 +1270,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
    🧮 <b>Incohérences</b> (écris <i>incohérences</i>, <i>incohérences 7</i>) : la voie « cotes » (fantôme), prix 1xBet incohérents entre eux, durée de vie, CLV
    🌅 <b>Matin</b> (écris <i>matin</i>) : relance le passage du matin s'il n'est pas fait ; <i>matin force</i> le refait (les combinés déjà enregistrés sont renvoyés tels quels, sans doublon)
    🗺️ <b>Carte</b> (écris <i>carte</i>, <i>carte stats</i>, <i>carte saison</i>) : où les voies stats et saison battent le dernier prix 1xBet, case par case (lecture seule)
+   🧬 <b>Familles</b> (écris <i>familles</i>) : l'état de chaque famille de marché (hors ticket, fantôme, proposée, jouée), calibration et CLV ; <i>familles X on</i> joue une famille proposée
    🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
    🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage) · ❓ <b>Aide</b> · 🔄 <b>Actualiser les cotes</b>
 Le bouton <b>/</b> à gauche de la zone de saisie liste aussi les commandes principales.

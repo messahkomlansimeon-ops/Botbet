@@ -29,6 +29,7 @@ DEFAULTS = {
     "stats_cup": ("fantome", "stats"),             # pseudo-famille : les stats de COUPE (contexte, pas un marché) ; voir lanes.cup_ok
     "throws": ("hors_ticket", "stats"), "offsides": ("hors_ticket", "stats"), "player": ("hors_ticket", None),
 }
+KNOWN_TEAM = frozenset(("corners", "yellow", "shots", "sot", "fouls", "throws", "offsides"))      # familles dont les marchés commencent par « team_<famille>_ »
 PSEUDO = frozenset(("stats_cup",))                  # pas de marché derrière : jamais une famille de calib.family
 _memo = {"t": 0.0, "v": None}
 
@@ -99,7 +100,8 @@ def of_market(market):
 def _prefix_family(p):
     p = str(p)
     if p.startswith("team_"):
-        return p.split("_")[1]
+        f = p.split("_")[1]
+        return f if f in KNOWN_TEAM else None          # « team_ », « team_totals_ » : pas une famille de comptage connue, le préfixe reste
     return "player" if p.startswith("player_") else None
 
 
@@ -197,6 +199,8 @@ def commit(changes, watch, week, day):
 
     def fn(d):
         d = dict(d) if isinstance(d, dict) else {}
+        if d.get("week") == str(week)[:10]:                # un autre processus a déjà évalué ce lundi (relu DANS la transaction) : rien d'écrit
+            return None, None
         for fam, new, how, dem in changes:
             r = _change(d, fam, new, how, day, "auto", dem)
             if r:

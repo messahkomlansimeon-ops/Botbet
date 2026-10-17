@@ -74,6 +74,7 @@ def test_defaults_and_predicates():
     assert F.of_market("totals") == "jouee" and F.of_market("team_throws_total") == "hors_ticket" and F.of_market("alternate_totals_corners") == "jouee"
     assert F.filter_prefix(("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_")) == ("team_fouls_", "team_shots_", "team_sot_")
     assert F.filter_prefix("team_throws_") == F.NO_MARKET and F.filter_prefix(("player_",)) == F.NO_MARKET and F.filter_prefix(()) == ()
+    assert F.filter_prefix(("team_", "team_totals_", "h2h")) == ("team_", "team_totals_", "h2h"), "préfixes sans famille connue : conservés"
     assert not "team_throws_total".startswith(F.NO_MARKET) and F.filter_prefix(("team_shots_",)) == ("team_shots_",)
     assert F.lane_families("sharpgap") == ("goals", "h2h", "dc", "btts", "team_goals") and F.lane_families("stats") == ("corners", "cards", "yellow", "shots", "sot", "fouls")
     print("ok  valeurs par défaut = anciennes listes (voies, tickets, lectures, préfixes)")
@@ -260,7 +261,95 @@ def test_history_and_set_state():
     store.save(F.FILE, {"throws": "abîmé", "corners": {"state": "n'importe quoi"}, "_log": "x"})
     F.reset()
     assert F.state_of("throws") == "hors_ticket" and F.state_of("corners") == "jouee" and F.history() == [], "document abîmé : valeurs par défaut"
-    print("ok  historique tracé avec date et auteur ; document abîmé = défauts")
+    from kelly import store as st
+    assert "families.json" in st.PROTECTED
+    reset(doc={"throws": {"state": "fantome", "voie": "stats"}})
+    assert F.commit([("throws", "proposee", "x", False)], {}, MON, MON) and F.state_of("throws") == "proposee"
+    assert F.commit([("throws", "jouee", "y", False)], {}, MON, MON) == [] and F.state_of("throws") == "proposee", "même lundi déjà écrit (relu dans la transaction) : rien"
+    print("ok  historique tracé avec date et auteur ; document abîmé = défauts ; un lundi n'est écrit qu'une fois")
+
+
+def test_display_and_command():
+    from kelly import chat, status, weekly
+    reset(fair=interleaved(TH, 40, 0.6, 0.6), journal=ghost(TH, 210, 0.03), doc={"throws": {"state": "proposee", "voie": "stats", "since": "2026-10-19", "demoted": False},
+                                                                         "corners": {"state": "fantome", "voie": "stats", "since": "2026-10-19", "demoted": True, "from": "jouee"}})
+    txt = FE.report()
+    assert "touches : proposée depuis le 19/10" in txt and "40 résultats" in txt and "dans la marge" in txt and "CLV" in txt and "corners : fantôme" in txt and "(rétrogradée)" in txt
+    assert "offsides" not in txt and "hors-jeu : hors ticket" in txt and "stats de coupe : fantôme" in txt and "calibration : sans objet" in txt
+    assert "buts : jouée" in txt and txt.index("buts : jouée") < txt.index("touches : proposée") < txt.index("hors-jeu : hors ticket"), "ordre : jouées, proposées, fantômes, hors ticket"
+    sl = FE.status_lines()
+    assert any("touches : proposée" in x for x in sl) and not any("buts" in x for x in sl) and len(sl) == 5, sl
+    wl = FE.weekly_lines(MON)
+    assert "🟢 famille touches proposée pour les tickets : familles throws on" in wl, wl
+    assert chat.WORDS["familles"] == "/familles" and chat.WORDS["famille"] == "/familles"
+    # familles X on : seulement depuis proposee, ou une famille rétrogradée ; sinon refus avec la raison
+    r = FE.command(["offsides", "on"], MON)
+    assert r.startswith("🚫") and "hors ticket" in r and F.state_of("offsides") == "hors_ticket"
+    r = FE.command(["player", "on"], MON)
+    assert r.startswith("🚫") and "aucune voie" in r and F.state_of("player") == "hors_ticket"
+    r = FE.command(["goals", "on"], MON)
+    assert "déjà jouée" in r
+    assert FE.command(["inconnue", "on"], MON).startswith("❓") and FE.command(["throws"], MON).startswith("Usage")
+    reset(fair=[], journal=[], doc={"shots": {"state": "fantome", "voie": "stats", "demoted": False}})
+    assert FE.command(["tirs", "on"], MON).startswith("🚫") and "pas encore proposée" in FE.command(["tirs", "on"], MON) and F.state_of("shots") == "fantome"
+    reset(fair=[], journal=[], doc={"throws": {"state": "proposee", "voie": "stats", "demoted": False}, "corners": {"state": "fantome", "voie": "stats", "demoted": True}})
+    r = FE.command(["touches", "on"], MON)
+    assert r.startswith("✅ touches est jouée depuis le 19/10/2026") and F.state_of("throws") == "jouee" and F.ticket("throws") and F.lane("throws") == "stats"
+    assert F.history()[-1] == {"fam": "throws", "from": "proposee", "to": "jouee", "on": "2026-10-19", "how": "main", "by": "superviseur"}
+    r = FE.command(["corners", "on"], MON)
+    assert r.startswith("✅") and F.state_of("corners") == "jouee" and F.doc()["corners"]["demoted"] is False
+    reset(fair=[], journal=[], doc={"stats_cup": {"state": "proposee", "voie": "stats", "demoted": False}})
+    assert FE.command(["coupes", "on"], MON).startswith("✅") and F.state_of("stats_cup") == "jouee"
+    # tout le chemin « automatique puis main » : fantome -> proposee le lundi, puis « familles X on » -> jouee
+    reset(fair=interleaved(TH, 40, 0.6, 0.6), journal=ghost(TH, 200, 0.03), doc={"throws": {"state": "fantome", "voie": "stats", "demoted": False}})
+    FE.apply(MON)
+    assert F.state_of("throws") == "proposee" and not F.ticket("throws")
+    assert any("touches : fantôme → proposée" in x for x in FE.weekly_lines(MON))
+    FE.command(["throws", "on"], MON + timedelta(days=1))
+    assert F.state_of("throws") == "jouee"
+    # lundi non évalué : dit dans le bilan
+    reset(fair=[], journal=[])
+    store.remove(ensemble.LOG_FILE)
+    FE.apply(MON)
+    assert any("familles non évaluées le lundi 2026-10-19" in x for x in FE.weekly_lines(MON)), FE.weekly_lines(MON)
+    src = open(os.path.join(os.path.dirname(LEDGER), "kelly", "app.py"), encoding="utf-8").read()
+    assert 0 <= src.index("edgemap.apply(now.date())") < src.index("familyeval.apply(now.date())"), "évaluation des familles : le lundi, après la carte"
+    print("ok  affichage (tableau, status, bilan du lundi) et commande « familles X on » (conditions, refus, trace)")
+
+
+def test_review_gaps():
+    """Trous relevés par la relecture : seuil exact, borne basse de la marge, lignes de coupe hors du journal d'ensemble, garde `demoted` de decide, porte de la carte."""
+    reset()
+    assert FE.calib_stat("throws", interleaved(TH, 30, 0.6, 0.6))["measurable"] and not FE.calib_stat("throws", interleaved(TH, 29, 0.6, 0.6))["measurable"], "30 résultats : mesurable"
+    under = FE.calib_stat("throws", interleaved(TH, 60, 0.9, 0.5))
+    assert under["measurable"] and not under["in_margin"], "sous-confiante (90 % réalisé pour 50 % annoncé) : hors marge aussi"
+    cupline = dict(ghost(TH, 1, 0.03)[0], cup=True)
+    assert FE.ghost_rows("throws", [cupline]) == [] and FE.ghost_rows("throws", [dict(cupline, cup=False)]) != []
+    snap = {"corners": {"state": "fantome", "voie": "stats", "demoted": True}, "throws": {"state": "fantome", "voie": "stats", "demoted": False}}
+    gh = {"passed": True, "clv": 0.03, "nc": 250}
+    ch, _ = FE.decide(MON, snap, {}, {"corners": gh, "throws": gh}, set(), {})
+    assert [c[0] for c in ch] == ["throws"], "decide seul : une famille rétrogradée n'est jamais proposée"
+    ch, w = FE.decide(MON, {"throws": {"state": "hors_ticket", "voie": "stats"}}, {"throws": {"measurable": True, "in_margin": True, "n": 40}}, {}, set(), {})
+    assert ch[0][:2] == ("throws", "fantome") and w == {}
+    # carte : porte (mécanisme allumé + 4 semaines) et filtre de voie
+    from kelly import edgemap
+    red = {"c": "red", "r": True}
+    store.save(edgemap.STATE_FILE, {"first": "2026-01-01", "week": str(edgemap._today()), "colours": {edgemap.key_of("stats", "*", "corners", "*"): red, edgemap.key_of("stats", "*", "cards", "*"): {"c": "green", "r": True},
+                                                                                                  edgemap.key_of("stats", "*", "goals", "*"): red}})
+    edgemap.reset()
+    C.EDGEMAP_GATE = False
+    assert FE.red_families() == set(), "mécanisme éteint : jamais de rétrogradation"
+    C.EDGEMAP_GATE = True
+    try:
+        assert FE.red_families() == {"corners"}, "rouge committée de la voie stats seulement (goals n'est pas de la voie stats, cards est verte)"
+        store.save(edgemap.STATE_FILE, {"first": str(edgemap._today()), "week": str(edgemap._today()), "colours": {edgemap.key_of("stats", "*", "corners", "*"): red}})
+        edgemap.reset()
+        assert FE.red_families() == set(), "moins de 28 jours depuis le premier lundi : le mécanisme n'agit pas encore"
+    finally:
+        C.EDGEMAP_GATE = False
+        store.remove(edgemap.STATE_FILE)
+        edgemap.reset()
+    print("ok  trous de la relecture : seuil exact, borne basse, coupes exclues, garde demoted, porte de la carte")
 
 
 def test_declaration_matches_code():
@@ -290,5 +379,7 @@ if __name__ == "__main__":
     test_jouee_to_fantome_by_map()
     test_guard_and_switch()
     test_history_and_set_state()
+    test_display_and_command()
+    test_review_gaps()
     test_declaration_matches_code()
     print("tests familles de marché : OK")

@@ -168,7 +168,7 @@ def lines():
     ghost = sorted(set(C.STATS_GHOST_LEAGUES) | set(st.get("leagues") or {}))
     out.append("Stats en fantôme : " + ("toutes les ligues hors football-data" if C.STATS_GHOST_OUTSIDE_FD else "aucune par défaut")
                + (f" + {', '.join(ghost[:6])}{'…' if len(ghost) > 6 else ''}" if ghost else ""))
-    out.append(f"Stats de coupe : {C.STATS_CUPS_MODE} (profils de championnat, journal à part ; retour à « on » à la main si le CLV 1xBet fantôme est ≥ 0 sur {C.STATS_CUPS_BACK_N} lignes)")
+    out.append(f"Stats de coupe : {families.cup_mode()} (profils de championnat, journal à part ; retour à « on » à la main si le CLV 1xBet fantôme est ≥ 0 sur {C.STATS_CUPS_BACK_N} lignes)")
     return out
 
 

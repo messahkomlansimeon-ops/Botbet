@@ -102,6 +102,13 @@ def message(now=None):
     except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
         print(f"[weekly] carte illisible : {type(e).__name__}: {e}", file=sys.stderr)
     try:
+        from . import familyeval
+        fam = familyeval.weekly_lines(now.date())   # changements d'état de la semaine et familles proposées (« familles X on »)
+        if fam:
+            blocks.append(["🧬 <b>Familles de marché</b>"] + [fmt.esc("• " + x) if not x.startswith("🟢") else fmt.esc(x) for x in fam])
+    except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
+        print(f"[weekly] familles illisibles : {type(e).__name__}: {e}", file=sys.stderr)
+    try:
         from . import closeread
         cr = closeread.report_lines(days=7)         # coût du relevé de clôture des marchés de stats (octets et requêtes par jour, enregistrés)
         if cr:

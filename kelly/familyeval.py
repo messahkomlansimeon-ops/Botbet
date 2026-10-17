@@ -148,3 +148,136 @@ def apply(today=None):
     except Exception as e:                          # noqa: BLE001 - l'évaluation ne bloque jamais le message du matin
         print(f"[familles] évaluation ignorée : {type(e).__name__}: {e}", file=sys.stderr)
         return None
+
+
+# ---------- affichage et commande ----------
+
+LABELS = calib.LABELS | {"stats_cup": "stats de coupe"}
+ALIASES = {"touche": "throws", "touches": "throws", "horsjeu": "offsides", "hors-jeu": "offsides", "joueurs": "player", "joueur": "player", "coupe": "stats_cup", "coupes": "stats_cup",
+           "statsdecoupe": "stats_cup", "tirs": "shots", "tir": "shots", "cadres": "sot", "fautes": "fouls", "faute": "fouls", "cartons": "cards", "carton": "cards", "jaunes": "yellow",
+           "1n2": "h2h", "victoire": "h2h", "buts": "goals", "equipe": "team_goals"}
+ICON = {"hors_ticket": "⚫", "fantome": "👻", "proposee": "🟢", "jouee": "✅"}
+STATE_TEXT = {"hors_ticket": "hors ticket", "fantome": "fantôme", "proposee": "proposée", "jouee": "jouée"}
+
+
+def _pc(x, signed=False):
+    return LS._pc(x, signed)
+
+
+def label(fam):
+    return LABELS.get(fam, fam)
+
+
+def resolve(word):
+    """Famille nommée par `word` (code, libellé, alias ; sans accents ni casse) ou None."""
+    from . import played
+    w = played.norm(str(word or "")).strip(" .?!")
+    if not w:
+        return None
+    for f in list(F.snapshot()) + list(LABELS):
+        if w == played.norm(f) or w == played.norm(label(f)).replace(" ", ""):
+            return f
+    for k, f in ALIASES.items():
+        if w == played.norm(k).replace(" ", ""):
+            return f
+    return None
+
+
+def since_text(rec):
+    s = rec.get("since")
+    return f"depuis le {s[8:10]}/{s[5:7]}" if isinstance(s, str) and len(s) >= 10 else "depuis l'origine"
+
+
+def _row(fam, rec, fair_rows, journal):
+    """Une ligne du tableau « familles » : état · depuis · résultats · calibration · lignes fantômes · CLV."""
+    st = rec["state"]
+    parts = [f"{ICON[st]} {label(fam)} : {STATE_TEXT[st]}" + (" (rétrogradée)" if rec.get("demoted") and st != "jouee" else "") + f" {since_text(rec)}"]
+    if fam in F.PSEUDO:
+        parts.append("calibration : sans objet (contexte, pas un marché)")
+    else:
+        c = calib_stat(fam, fair_rows)
+        if c["n"]:
+            real = f"réalisé {_pc(c['real'])} pour {_pc(c['ann'])} annoncé"
+            verdict = "non mesurable" if not c["measurable"] else ("dans la marge" if c["in_margin"] else "HORS marge")
+            parts.append(f"{c['n']} résultat{'s' if c['n'] > 1 else ''} · {real} ± {_pc(c['h'])} ({verdict})" if c["h"] is not None else f"{c['n']} résultat{'s' if c['n'] > 1 else ''} · {real} (non mesurable)")
+        else:
+            parts.append("aucun résultat")
+    if st != "jouee" or fam in F.PSEUDO:
+        g = ghost_stat(fam, journal)
+        parts.append(f"{g['n']} ligne{'s' if g['n'] > 1 else ''} fantôme{'s' if g['n'] > 1 else ''} réglée{'s' if g['n'] > 1 else ''}" + (f" · CLV {_pc(g['clv'], True)} ± {_pc(g['h'])} sur {g['nc']}" if g["nc"] else " · pas de CLV mesuré"))
+    if st == "jouee" and rec.get("voie") == "stats":
+        from . import lanes
+        if lanes.mode("stats") != "on":
+            parts.append("coupée par la voie")
+    return " · ".join(parts)
+
+
+def report(args=()):
+    """Commande `familles` : tableau état / résultats / calibration / lignes fantômes / CLV / depuis quand. Ne lève jamais."""
+    try:
+        snap = F.snapshot()
+        fair_rows = store.load(FAIR_FILE, []) if readable(FAIR_FILE) else []
+        journal = LS.journal_rows()
+        d = F.doc()
+        out = ["🧬 Familles de marché (admission aux tickets : hors ticket → fantôme → proposée → jouée)",
+               f"évaluation le lundi seulement ({'automatique' if C.FAMILIES_AUTO else 'AUTOMATIQUE COUPÉE (FAMILIES_AUTO=0)'}) · dernier lundi évalué : {d.get('week') or 'aucun'}"
+               f" · seuils : {C.FAM_MIN_CALIB} résultats (calibration), {C.FAM_MIN_GHOST} lignes fantômes (CLV)"]
+        order = sorted(snap, key=lambda f: (["jouee", "proposee", "fantome", "hors_ticket"].index(snap[f]["state"]), f))
+        out += [_row(f, snap[f], fair_rows, journal) for f in order]
+        out.append("« familles X on » : jouer une famille proposée (ou rétrogradée par la carte) ; jamais automatique.")
+        return "\n".join(out)
+    except Exception as e:                          # noqa: BLE001
+        print(f"[familles] affichage illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return "🧬 Les familles sont illisibles pour l'instant (voir kelly logs)."
+
+
+def status_lines():
+    """Une ligne par famille NON jouée (état et depuis quand) ; [] si toutes sont jouées."""
+    snap = F.snapshot()
+    return [f"{ICON[r['state']]} {label(f)} : {STATE_TEXT[r['state']]} {since_text(r)}" for f, r in sorted(snap.items()) if r["state"] != "jouee"]
+
+
+def weekly_lines(today=None):
+    """Bloc du bilan du lundi : changements d'état de la semaine, familles proposées (« familles X on »), lundi non évalué. [] sans rien à dire."""
+    try:
+        day = date.fromisoformat(str(today or _today())[:10])
+        d = F.doc()
+        out = []
+        sk = d.get("skipped") if isinstance(d.get("skipped"), dict) else None
+        if sk and str(sk.get("week", "")) >= str(d.get("week") or ""):
+            out.append(f"familles non évaluées le lundi {sk.get('week')} : journal {', '.join(sk.get('docs', []))} illisible")
+        since = str(day - timedelta(days=6))
+        for x in F.history(60):
+            if str(x.get("on", "")) >= since:
+                out.append(f"{label(x['fam'])} : {STATE_TEXT.get(x['from'], x['from'])} → {STATE_TEXT.get(x['to'], x['to'])} ({x.get('how')})")
+        out += [f"🟢 famille {label(f)} proposée pour les tickets : familles {f} on" for f, r in sorted(F.snapshot().items()) if r["state"] == "proposee"]
+        return out
+    except Exception as e:                          # noqa: BLE001
+        print(f"[familles] bilan illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return []
+
+
+def command(args=(), today=None):
+    """« familles » (tableau) ; « familles X on » : joue une famille PROPOSÉE, ou rétrogradée de jouee (retour à la main) ; refuse le reste avec la raison. Tracé avec date dans families.json."""
+    words = [str(a) for a in (args or ())]
+    if not words:
+        return report()
+    if len(words) < 2 or words[-1].lower() != "on":
+        return "Usage : « familles » (tableau) ou « familles <famille> on » (jouer une famille proposée)."
+    fam = resolve(" ".join(words[:-1]))
+    if fam is None:
+        return "❓ Famille inconnue : " + " ".join(words[:-1]) + ". Familles : " + ", ".join(sorted(label(f) for f in F.snapshot())) + "."
+    rec = F.snapshot().get(fam) or {}
+    st, name = rec.get("state"), label(fam)
+    day = date.fromisoformat(str(today or _today())[:10])
+    if st == "jouee":
+        return f"ℹ️ {name} est déjà jouée."
+    if rec.get("voie") is None:
+        return f"🚫 {name} : aucune voie définie, jamais admissible aux tickets."
+    if st == "proposee" or (st == "fantome" and rec.get("demoted")):
+        r = F.set_state(fam, "jouee", "main", day, by="superviseur", demoted=False)
+        extra = " (STATS_CUPS_MODE=off prime encore.)" if fam == "stats_cup" and C.STATS_CUPS_MODE == "off" else ""
+        return f"✅ {name} est jouée depuis le {day:%d/%m/%Y} ({STATE_TEXT[r[0]]} → jouée, à la main).{extra}" if r else f"ℹ️ {name} est déjà jouée."
+    if st == "fantome":
+        return (f"🚫 {name} est en fantôme : pas encore proposée (il faut {C.FAM_MIN_GHOST} lignes fantômes réglées à CLV 1xBet ≥ 0, intervalle sans zéro, évalué le lundi).")
+    return f"🚫 {name} est hors ticket : elle doit d'abord passer fantôme (≥ {C.FAM_MIN_CALIB} résultats, calibration dans la marge, évalué le lundi)."
