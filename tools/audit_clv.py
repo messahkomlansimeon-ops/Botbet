@@ -321,6 +321,7 @@ def section_e(rows, log):
 
 STATS_PREFIXES = ("team_shots", "team_sot", "team_fouls", "team_throws", "team_offsides", "team_corners", "alternate_totals_corners", "alternate_totals_cards",
                   "team_yellow", "team_cards")
+LEAD_NEAR_MIN = 60                # couverture « ≤ 60 min » (relevé de clôture du 17/10), à côté de ≤ 90 min
 LEAD_OK_MIN = 90                  # un relevé 1xBet ≤ 90 min avant le coup d'envoi compte comme « clôture » (décision 3 : seuil de couverture 70 %)
 COVERAGE_MIN = 0.70
 
@@ -362,6 +363,13 @@ def section_g(log, lk=None):
                "SOUS le seuil : relever réellement le prix 1xBet à la clôture (décision 3 : lignes portant un pari réel ou fantôme, un relevé par match dans les 90 min "
                "avant le coup d'envoi, plafond 40 requêtes/jour, interrupteur de config, à chiffrer avec toi avant activation)." if cover < COVERAGE_MIN
                else "AU-DESSUS du seuil : le cache suffit."))
+    near = [r for r in good if r["xclose"]["lead_min"] <= LEAD_NEAR_MIN]
+    out.append(f"   Couverture ≤ {LEAD_NEAR_MIN} min : {len(near)}/{len(withref)} = " + (f"{len(near) / len(withref):.0%}" if withref else "0%") + " (relevé de clôture réseau, XCLOSE_READ, depuis le 17/10).")
+    srcs = [r["xclose"].get("src") for r in good]
+    known = [x for x in srcs if x]
+    out.append(f"   Part de `xclose` venant du relevé de clôture : {srcs.count('close_read')}/{len(good)} lignes"
+               + (f" ({srcs.count('close_read') / len(good):.0%}) ; {len(good) - len(known)} sans source (lignes d'avant le relevé de clôture)" if good else "")
+               + (f" ; {known.count('cache')} lues dans le cache" if known else "") + ".")
     out.append("   Rappel : 1xBet ferme les sous-matchs de stats ≈ 30 min avant le match et Kelly ne les relit plus à moins de 45 min : « le dernier prix » est au mieux")
     out.append("   un prix de 45 à 105 min avant le coup d'envoi, pas une vraie clôture ; une couverture basse peut venir de l'HORAIRE (famille relue seulement le matin,")
     out.append("   match de nuit) autant que d'un défaut : lire la couverture par famille et par heure avant de décider d'un relevé réseau.")

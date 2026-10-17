@@ -402,6 +402,34 @@ def prices(game, markets, home, away):
     return out
 
 
+def read_closing(gids, deadline=None):
+    """Relevé de CLÔTURE (kelly/closeread.py) : relit à l'instant le(s) sous-match(s) 1xBet `gids` (GameId de la cote, `xref[0]`) et laisse la réponse dans le cache disque, d'où
+    ensemble.mark_x_close la lira (`cached_cell`). Une session à part (proxy, plafond du mois, compteur de données) ; PAS fetch_day : aucun observateur (voie « cotes ») ne voit
+    ces lectures partielles (sous-match seul, sans marché principal). Ne lève jamais. -> ({gid: instant du relevé, ou None si 1xBet n'a plus ce sous-match}, (octets, requêtes), raison
+    de l'abandon ou None)."""
+    out, why = {}, None
+    ses = _Session()
+    if ses.why:
+        return out, (0, 0), ses.why
+    try:
+        with live_mode(0):                          # TTL 0 : toujours relu, jamais repris du cache
+            for g in gids:
+                if (deadline and time.monotonic() > deadline) or ses.full():
+                    why = "délai dépassé" if not ses.full() else "plafond du mois atteint" if not state.is_blocked(SOURCE) else "1xBet refuse l'accès"
+                    break
+                try:
+                    ses.call(_events, g)
+                    hit = http._read(http._key(_events_url(g), JSON_H))
+                    out[g] = hit[0].get("fetched_at") if hit else None
+                except Exception as e:              # noqa: BLE001 - un sous-match fermé ou en erreur ne fait pas perdre les autres
+                    out[g] = None
+                    print(f"[1xbet] relevé de clôture {g} : {http.scrub(e)}", file=sys.stderr)
+    finally:
+        spent = _spent(ses.start)
+        ses.close(f"clôture de {len(out)} sous-match(s)")
+    return out, spent, why
+
+
 def match_url(const_id):
     """Page publique du match chez 1xBet (l'id du championnat et les noms sont complétés par le site) ; None sans id."""
     return f"{BASE}/fr/line/football/1/{const_id}" if const_id else None

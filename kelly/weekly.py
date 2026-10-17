@@ -102,6 +102,13 @@ def message(now=None):
     except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
         print(f"[weekly] carte illisible : {type(e).__name__}: {e}", file=sys.stderr)
     try:
+        from . import closeread
+        cr = closeread.report_lines(days=7)         # coût du relevé de clôture des marchés de stats (octets et requêtes par jour, enregistrés)
+        if cr:
+            blocks.append(["⏱️ <b>Relevé de clôture</b> " + fmt.i("(prix 1xBet 35 à 60 min avant les matchs de stats)")] + [f"• {fmt.esc(x)}" for x in cr])
+    except Exception as e:                          # noqa: BLE001 - le hebdo ne dépend jamais de ce bloc
+        print(f"[weekly] relevé de clôture illisible : {type(e).__name__}: {e}", file=sys.stderr)
+    try:
         from . import combovariants
         cv = combovariants.lines()                  # lecture du lundi : sur toute la période suivie (la règle pré-déclarée compte des paliers et des jours cumulés)
         if cv:

@@ -833,4 +833,10 @@ STATS_WINDOW_NOTE = _bool("STATS_WINDOW_NOTE", True)                # 0 : plus d
 STATS_WINDOW_PREFIX = ("team_fouls_", "team_throws_", "team_offsides_", "team_shots_", "team_sot_")   # marchés « stats » (ceux de « ts5 »)
 STATS_WINDOW_TIER = "ts5w"                                          # palier d'un combiné de la fenêtre : « ts5w1 », « ts5w2 »... (« ts5 » reste celui du matin)
 STATS_WINDOW_TITLE = "🧮 COMBINÉ STATS"
+
+# Relevé réseau de CLÔTURE des marchés de stats (kelly/closeread.py, passage --watch toutes les 10 min) : pour chaque match qui porte une ligne de stats du journal (ensemble, saison, coupes) et commence dans
+# 35 à 60 min, UNE lecture 1xBet fraîche de chaque sous-match, écrite ensuite dans `xclose` (src "close_read"). Priorité aux tranches horaires à couverture < 60 %.
+XCLOSE_READ = _bool("XCLOSE_READ", True)                            # 0 : plus de relevé de clôture (le cache seul, comme avant)
+XCLOSE_READS_DAY = _int("XCLOSE_READS_DAY", 40)                     # matchs lus au plus par jour Kelly
+XCLOSE_MONTH_PCT = _float("XCLOSE_MONTH_PCT", 85)                   # % du plafond mensuel (XBET_MONTH_MB) au-delà duquel le relevé se tait (et le dit)
 # ===================================================================================================================================

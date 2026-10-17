@@ -394,6 +394,11 @@ def xbet_lines(now=None):
             recent = False
         if recent:
             out.append(f"❌ Proxy Webshare : {http.cause(p['refused'])}")
+    try:
+        from . import closeread
+        out += [("" if x.startswith("⚠️") else "ℹ️ ") + x for x in closeread.report_lines()]
+    except Exception as e:                      # noqa: BLE001
+        print(f"[status] relevé de clôture illisible : {type(e).__name__}: {e}", file=sys.stderr)
     return out
 
 

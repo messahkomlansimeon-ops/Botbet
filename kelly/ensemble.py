@@ -779,7 +779,8 @@ def shadow_of(c, pm, px, ps):
     return out
 
 
-X_CLOSE_WINDOW_MIN = 150          # on relit le cache 1xBet des lignes dont le match commence dans moins de 150 min (et jusqu'à 10 min après le coup d'envoi)
+X_CLOSE_WINDOW_MIN = 150          # on relit le cache 1xBet des lignes dont le match commence dans moins de 150 min (et jusqu'à X_CLOSE_AFTER_MIN min après le coup d'envoi)
+X_CLOSE_AFTER_MIN = 240           # un relevé de clôture fait à KO - 35 min n'est vu par le passage horaire qu'après le coup d'envoi : la ligne reste lue tant qu'elle n'est pas réglée ; seul un relevé d'AVANT le coup d'envoi compte
 
 
 def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
@@ -795,6 +796,8 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
         if not isinstance(log, list):
             return 0
         n = 0
+        from . import closeread
+        idx = closeread.index()                            # relevés de clôture faits par kelly/closeread.py : marqués src = "close_read"
         for r in log:
             if r.get("result") is not None or not r.get("xref") or not r.get("commence"):
                 continue
@@ -805,12 +808,14 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
                 ahead = (ko - now).total_seconds() / 60
             except (ValueError, TypeError):
                 continue
-            if not -10 <= ahead <= window_min:
+            if not -X_CLOSE_AFTER_MIN <= ahead <= window_min:
                 continue
             cell = xbet.cached_cell(r["xref"])
             if cell is None or not isinstance(cell.at, (int, float)):
                 continue
             lead = round((ko.timestamp() - cell.at) / 60)
+            if lead < 0:
+                continue                                   # relevé d'après le coup d'envoi (suivi en direct dans le même cache) : pas une clôture
             if cell.cf is None:                            # le relevé en cache ne propose plus ce pari : on garde le dernier prix connu
                 if not r.get("xgone"):
                     r["xgone"] = {"lead_min": lead}
@@ -820,7 +825,7 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
             if old.get("read_ts") is not None and old["read_ts"] >= cell.at:
                 continue                                   # rien de plus récent que ce qu'on a déjà
             r["xclose"] = {"odds": cell.cf, "read": datetime.fromtimestamp(cell.at, timezone.utc).isoformat(timespec="minutes"), "read_ts": cell.at,
-                           "lead_min": lead, "susp": bool(cell.blocked)}
+                           "lead_min": lead, "susp": bool(cell.blocked), "src": closeread.src_of(r["xref"], cell.at, idx)}
             r.pop("xgone", None)                           # le pari est de nouveau listé (suspendu puis rouvert) : un prix plus récent existe
             n += 1
         if n:
@@ -834,7 +839,7 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
 ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
 ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref", "pe", "swhy", "refused", "cup", "mu", "val", "final")
 # mu / val / final : nombre attendu, nombre réel et score final (collecte des coupes ; une colonne ajoutée en fin reste compatible avec les anciennes lignes)
-# xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
+# xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1, source « close_read » / « cache » ou None (anciennes lignes)] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
 # règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
 
 
@@ -842,7 +847,7 @@ def _pack(r):
     xc = r.get("xclose") or {}
     sh = r.get("shadow") or {}
     return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
-            [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp")))] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
+            [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp"))), xc.get("src")] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
             r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
             r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref"), r.get("pe"), r.get("swhy"), r.get("refused"), r.get("cup"), r.get("mu"), r.get("val"), r.get("final")]
 
@@ -855,6 +860,8 @@ def unpack_archive_row(key, day, vals):
            "px": d["px"], "ps": d["ps"], "xodds": d["xodds"], "result": d["result"], "archived": True}
     if d["xclose"]:
         out["xclose"] = {"odds": d["xclose"][0], "lead_min": d["xclose"][1], "susp": bool(d["xclose"][2]) if len(d["xclose"]) > 2 else False}
+        if len(d["xclose"]) > 3 and d["xclose"][3]:                     # src : « close_read » / « cache » (absent des lignes d'avant le 17/10)
+            out["xclose"]["src"] = d["xclose"][3]
     if d["xref"]:
         out["xref"] = d["xref"]
     if d["xgone"] is not None:

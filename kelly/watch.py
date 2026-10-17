@@ -1610,6 +1610,11 @@ def tick(now=None):
                 print("[suivi] opportunité live : message envoyé", file=sys.stderr)
         except Exception as e:                      # noqa: BLE001
             print(f"[suivi] opportunité live ignorée : {http.err(e)}", file=sys.stderr)
+        try:
+            from . import closeread
+            closeread.run(now)                          # relevé de clôture des marchés de stats (35 à 60 min avant le coup d'envoi) : n'écrit pas les journaux, ne lève jamais
+        except Exception as e:                      # noqa: BLE001
+            print(f"[suivi] relevé de clôture ignoré : {http.err(e)}", file=sys.stderr)
     finally:
         http.set_deadline(None)
         lock.close()
