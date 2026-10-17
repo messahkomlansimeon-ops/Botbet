@@ -1,0 +1,61 @@
+{
+ "prereg": {
+  "origin": "Décision du superviseur du 17/10 sur l'audit en 9 relectures du 17/10 (aucun fichier modifié par l'audit). Lot A à livrer avant lundi 19/10 08h00 UTC, un commit par point, dans cet ordre : A3, A1, A4, A13, A15, A2. Chaque point : cette pré-déclaration (committée AVANT le code), correctif + test qui échoue avant / passe après, relecture adverse terminée avant le push, CI verte. Les mesures arrivent en AMENDEMENTS (la pré-déclaration ne change pas, son sha256 est testé).",
+  "rules_common": {
+   "no_real_stake_rule_change": "Les règles de mise (money.py) ne changent pas dans ce lot. A1, A4, A13 et A15 peuvent changer des probabilités, donc des mises : chaque amendement de mesure dit combien de lignes de la fenêtre auraient une décision ou une mise différente.",
+   "forbidden": "aucun changement de User-Agent, d'en-têtes, de rythme ou de volume de lecture vers une source ; aucun secret dans CONFIG_ACTIVE ; aucun push avant relecture adverse terminée.",
+   "measurement": "outil unique tools/audit_fixes_measure.py, lit DATA_DIR (une copie ici, la base du téléphone là-bas). Chaque amendement de mesure dit sa SOURCE et sa FENÊTRE de dates. Au moment de l'écriture, la seule base disponible sur la machine de développement est la sauvegarde du 13/10 12:00 (8-13/10) : la fenêtre de 14 jours demandée n'est pas mesurable avant l'arrivée d'une sauvegarde récente du téléphone ; ce qui date d'après le 13/10 (relevé de clôture, voie saison automatique, familles) n'y est pas.",
+   "fails_before_passes_after": "le test de chaque point est lancé sur le code d'avant (échec vu), puis après (passage vu), pycache purgé entre les deux."
+  },
+  "A3": {
+   "constat": "lanestats.x_clv peut comparer le prix pris à la lecture même qui l'a fourni : valeur 0 au lieu de « non mesuré ». Producteurs : ensemble.mark_x_close (ne compare jamais cell.at à l'instant de la prise) et oddsonly._close (xclose posé depuis la lecture de première détection, lead 60 min -> xclose.odds == xodds). Effet : zéros qui gonflent n, _matches et nc/matches de la carte et tirent la moyenne vers 0 (seuils de coupure, couleurs de la carte, CLV fantôme des familles).",
+   "regle": "Un xclose dont l'instant de lecture est antérieur ou égal à l'instant de la lecture qui a servi à la prise n'est PAS une clôture : x_clv renvoie None. mark_x_close ne pose jamais un xclose issu d'un relevé antérieur ou égal à la prise. Instant de la prise : champ « tk » (instant de l'enregistrement, ensemble.record, ajouté à toute ligne écrite à partir de ce commit) ; pour oddsonly : « first_at » ; la comparaison oddsonly est xclose.read <= first_at (même granularité, même format). Lignes anciennes sans « tk » : xclose avec src == « cache » ET odds == xodds = « non mesuré » (règle du superviseur, perte assumée de vrais zéros). Les xclose sans instant de lecture (track.py : age_min) ne sont pas touchés.",
+   "alternative_non_appliquee": "le champ « at » (instant d'enregistrement, minute entière) borne la prise par le haut ; il sert seulement à CHIFFRER la perte (lignes anciennes avec read_ts > at et prix inchangé = vrais zéros écartés). La règle appliquée reste celle du superviseur.",
+   "effet_attendu": "les zéros d'auto-comparaison passent à None ; la moyenne CLV s'éloigne de 0 dans le sens réel ; n et matches de la carte baissent d'autant. Aucun pari ne change ce lundi (EDGEMAP_GATE éteint) ; la carte et le CLV fantôme des familles se lisent avec le correctif.",
+   "mesure": "par voie : nombre de lignes dont le CLV passe de 0 à None, moyenne CLV avant/après, vrais zéros écartés par la règle de repli.",
+   "ledgers_touches": "edgemap_ledger.json (fenêtre 0-90 min du CLV) et families_ledger.json (CLV fantôme contre le dernier prix 1xBet) : un amendement chacun, prereg inchangée."
+  },
+  "A1": {
+   "constat": "odds.py : la probabilité sharp d'une double chance est remplacée par la somme du consensus 1X2 (lecture bulk), mais c['sharp_at'] reste l'instant de lecture du marché double chance (read_m['double_chance']). Le contrôle de fraîcheur de sharpgap (120 min) et ensemble.attach jugent sur la mauvaise horloge.",
+   "regle": "Quand le consensus double chance est remplacé par la somme du 1X2, sharp_at = read_m['h2h'] (à défaut read_at). Le contrôle de 120 min s'applique à cet instant. L'instant du 1X2 est aussi gardé dans l'enregistrement (champ sharp_src_at) pour compter les cas.",
+   "effet_attendu": "les alertes 💰 double chance dont le 1X2 de référence a plus de 120 min ne partent plus ; l'erreur inverse (double chance plus vieille que le 1X2) ne change pas.",
+   "mesure": "nombre d'alertes 💰 double chance des 14 derniers jours qui n'auraient pas dû partir ; si l'instant du 1X2 n'est pas enregistré dans les alertes passées, une borne (alertes double chance avec un bulk du cache) est donnée et dit « borne », pas un compte exact.",
+   "stakes": "une alerte 💰 retirée = une mise conseillée en moins ; aucune règle de mise ne change."
+  },
+  "A4": {
+   "constat": "calib.calibrate : 0,5 + (p - 0,5) x k avec k jusqu'à 1,2 sans borne. Observé : prob 1,04 ; prob -0,076, fair -13,16, min_odds -13,82 pour p0 = 0,02 (toute cote passe).",
+   "regle": "La probabilité corrigée est bornée dans [0,01 ; 0,99] à chaque point d'application de k (calibrate, la correction par cases _fine, xprice lignes alternatives, live) ; la cote minimale dérivée est donc toujours > 1. Une probabilité déjà brute à 1,0 pour un résultat acquis (live) n'est pas touchée par la borne.",
+   "effet_attendu": "plus aucune probabilité hors de [0,1] ni de cote minimale <= 1 ; les lignes qui sortaient des bornes sont plafonnées, et celles dont la valeur ne tient qu'à une probabilité > 0,99 sont refusées.",
+   "mesure": "lignes du journal dont la probabilité corrigée sortait de [0,1], et combien seraient refusées avec la borne."
+  },
+  "A13": {
+   "constat": "combos.season_auto_plan (~880) : la première jambe qui échoue à _auto_ok fait break : elle reste en tête de la liste, le plan sort avec moins de 2 jambes et la journée n'a aucun combiné saison (observé : [] au lieu d'un combiné à 4,1).",
+   "regle": "Une jambe de tête qui ne passe pas _auto_ok est SAUTÉE (continue) et sort de la liste des candidats DE CE COMBINÉ ; la boucle continue avec les suivantes ; break seulement quand MAX_LEGS est atteint. La jambe sautée peut ouvrir le combiné suivant (comportement déjà décrit par la docstring). La boucle se termine toujours : chaque tour retire au moins une jambe de la liste.",
+   "effet_attendu": "les journées dont le plan était vide à cause d'une seule jambe de tête ont ≥ 1 combiné ; aucun combiné qui existait déjà ne change.",
+   "mesure": "rejouer les 14 derniers jours : nombre de jours où le plan passe de [] à ≥ 1 combiné, et les cotes obtenues (si le journal de la voie saison de la base disponible le permet ; sinon dit)."
+  },
+  "A15": {
+   "constat": "(1) means.py:114 : la clé de déduplication utilise la date de suivi, pas le jour du match : un match suivi deux jours sur le même marché compte deux fois dans n. (2) strength.py:977 : les jours de repos sont calculés jusqu'à aujourd'hui, pas jusqu'au jour du match (sous-estimés de 1 à 2 jours pour un match à J+1 ou J+2 : facteur de repos trop pénalisant, biais vers Under).",
+   "regle": "(1) clé = jour du match (commence[:10]) en priorité, puis date. (2) predict reçoit le jour du match (commence) dans features._deep et analysis_text ; market_grid (live) inchangé. Demi-vie et autres réglages inchangés.",
+   "mesure": "le rejeu saison passée (replay.py:124 passe déjà le jour du match) ne verra aucune différence sur le repos : la mesure obligatoire est donc (a) l'horizon réel de production dans le journal (jour de calcul contre commence) et l'écart de repos qui en résulte, avec l'écart de calibration par famille et par sens (plus/moins) sur les lignes concernées, (b) le nombre de paires (id, marché) vues à deux dates dans fair et ensemble_log, (c) le rapport réel/attendu de means avant/après. Ce résultat alimente l'Étape 1 (H0 biais de sélection contre biais de modèle).",
+   "interdit": "ne pas toucher à la demi-vie ni aux autres réglages."
+  },
+  "A2": {
+   "constat": "settle._cached_fstats (503-513) ne contrôle pas le statut : stats des 120 min d'un match AET / PEN réglées comme du temps réglementaire. Le chemin principal match_stats met fx = None pour AET / PEN.",
+   "enquete_obligatoire": "documenter dans ce ledger comment chaque source distingue un match terminé à 90 min d'un match terminé après prolongation (statut, champ, exemple réel) : API-Football (le cache garde-t-il le statut ?), 365scores (statusText « ended » après prolongation ?), FotMob. Aucune lecture réseau pour cela : exemples pris dans le dépôt (tests, sondes) et la sauvegarde.",
+   "regle_si_la_distinction_existe": "_cached_fstats règle les marchés de stats sur le temps réglementaire uniquement ; une ligne réglée sur un match à prolongation sans cette garantie est marquée « règlement douteux » et exclue de l'apprentissage.",
+   "regle_sinon": "ne rien changer, le dire, proposer une solution (vérification à lancer sur le téléphone)."
+  },
+  "extra_labels": {
+   "constat": "Les libellés « contre Pinnacle » (sharpgap.summary_line, describe, CLV gap) décrivent un consensus 70 % références (exchanges compris) + 30 % books mous.",
+   "regle": "Les étiquettes disent « contre consensus » partout où le consensus mêle des books mous ; aucune décision ne change. Ledger seul pour la voie sharpgap : combien de lignes des 14 derniers jours changeraient de statut si la référence était Pinnacle seul quand il est présent. Le superviseur tranche lundi. Si le journal ne garde pas de prix Pinnacle par ligne, l'amendement dit que ce n'est pas reconstructible."
+  },
+  "extra_avant_limite": {
+   "constat": "Les tickets du 13/10 notés avant l'introduction de la limite du jour (commit 54b8c86) dépassent la limite d'aujourd'hui : ils faussent les moyennes par ticket.",
+   "regle": "Liste FIGÉE d'identifiants de tickets (pas une règle d'heure : l'heure du commit n'est pas celle du déploiement sur le téléphone) dans cet amendement ; le bilan les marque « avant limite » et les exclut des moyennes par ticket, jamais du total."
+  }
+ },
+ "prereg_sha": "0ac7a7c23277320ebb6bcbd9518da616e8ca7d68bafa44e1a122353a458644e4",
+ "written_at": "2026-10-17T00:00:00+00:00",
+ "amendments": []
+}

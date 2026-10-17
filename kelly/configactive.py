@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILE = os.path.join(ROOT, "CONFIG_ACTIVE.md")
 TITLE = "# Réglages actifs de Kelly"
 SECRET_WORDS = {"KEY", "TOKEN", "SECRET", "PASS", "PASSWORD", "PASSWD", "PROXY", "APIKEY"}
-LEDGERS = ("audit_reserve_ledger.json", "season_ledger.json", "step1_ledger.json", "combos_ledger.json", "edgemap_ledger.json", "oddsonly_ledger.json", "live_ledger.json", "families_ledger.json")
+LEDGERS = ("audit_reserve_ledger.json", "season_ledger.json", "step1_ledger.json", "combos_ledger.json", "edgemap_ledger.json", "oddsonly_ledger.json", "live_ledger.json", "families_ledger.json", "audit_fixes_ledger.json")
 # (groupe, motifs sur le nom) : le premier qui correspond gagne
 GROUPS = (
     ("sharpgap", r"^(SHARPGAP|STRATEGY_SHARPGAP|KELLY_FRACTION_SHARPGAP|SHARP_|XALERT|GAP)"),
