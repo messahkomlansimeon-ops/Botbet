@@ -63,6 +63,8 @@ def x_clv(r, taken=None):
     if (r.get("xgone") or not price or not isinstance(xc, dict) or not xc.get("odds") or xc.get("lead_min") is None
             or not 0 <= xc["lead_min"] <= LEAD_OK_MIN or xc.get("susp")):
         return None                                 # relevé avant le match seulement (pas en jeu), prix jouable (pas suspendu), pari non retiré
+    if ensemble.not_a_close(r, xc):
+        return None                                 # lu à l'instant de la prise ou avant : le prix pris comparé à la lecture même qui l'a donné n'est pas un CLV (A3, audit du 17/10)
     try:
         return math.log(float(price) / float(xc["odds"]))
     except (TypeError, ValueError, ZeroDivisionError):

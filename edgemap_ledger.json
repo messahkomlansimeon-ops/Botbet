@@ -95,6 +95,12 @@
    "by": "demande de l'utilisateur (voie cotes « et dans carte », 17/10/2026) ; amendement écrit AVANT la première évaluation du lundi 19/10/2026",
    "voie_cotes": "une cinquième voie « cotes » (affichée « cotes (fantôme) ») entre dans la carte : population = lignes de oddsonly_log.json des mécanismes 1a, 1b, 1c et 2, de statut « value » à la première détection, jamais devenues suspectes (went_suspect faux), RÉGLÉES, une clé une seule fois ; ligue = sport_key, famille = calib.family(marché), sens = plus (Over) / moins (Under) / autre ; mesures, seuils (100 / 300 lignes à CLV mesuré, 30 matchs), couleurs, cascade, cadence du lundi et règle des deux lundis IDENTIQUES aux autres voies ; annoncé = p_impl (champ pe)",
    "caveats": "la case ne distingue pas les mécanismes (1a, 1b, 1c et 2 sont mélangés dans une case voie × ligue × famille × sens) : la lecture par mécanisme est celle de la commande « incohérences » ; EDGEMAP_GATE ne s'applique pas à cette voie (aucune jambe : lanes.usable ne la lit jamais), elle est en lecture seule ; aucune case ne sera lisible avant des semaines de collecte et de règlement"
+  },
+  {
+   "on": "2026-10-17",
+   "prereg_unchanged": true,
+   "by": "assistant, lot A3 de l'audit du 17/10",
+   "note": "La mesure « CLV » de la carte (lanestats.x_clv, fenêtre 0-90 min) exclut désormais un xclose lu à l'instant de la prise ou avant (zéros d'auto-comparaison). Aucune règle de la pré-déclaration ne change ; n et matches de la carte baissent d'autant. Détail : audit_fixes_ledger.json, point A3."
   }
  ]
 }

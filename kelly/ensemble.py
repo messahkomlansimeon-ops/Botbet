@@ -740,7 +740,7 @@ def record(rows, day, now=None, name=LOG_FILE, shadow=True):
             continue
         row = {k: c.get(k) for k in ROW} | {"prob": None if pm is None else round(pm, 4), "pm": None if pm is None else round(pm, 4),
                                             "px": None if px is None else round(px, 4), "ps": None if ps is None else round(ps, 4),
-                                            "date": str(day), "at": now.isoformat(timespec="minutes"), "result": None}
+                                            "date": str(day), "at": now.isoformat(timespec="minutes"), "tk": round(now.timestamp(), 3), "result": None}
         if c.get("xref"):
             row["xref"] = c["xref"]                        # audit : [GameId, Type, Param] 1xBet de la prise (hors ROW)
         if c.get("strategy"):
@@ -780,6 +780,47 @@ def shadow_of(c, pm, px, ps):
     return out
 
 
+def ts_of(v):
+    """Instant (secondes UTC) d'un nombre ou d'un horodatage ISO ; None sinon (jamais d'exception)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).timestamp()
+    except (ValueError, TypeError):
+        return None
+
+
+def take_ts(r):
+    """Instant de la lecture qui a servi à PRENDRE le prix de la ligne : « tk » (ensemble.record, depuis le correctif A3 de l'audit du 17/10) ou « first_at » (voie cotes) ; None pour une
+    ligne plus ancienne."""
+    t = ts_of(r.get("tk"))
+    return t if t is not None else ts_of(r.get("first_at"))
+
+
+def close_read_ts(xc):
+    """Instant de la lecture d'un `xclose` : « read_ts » (cache) ou « read » (voie cotes) ; None s'il n'en porte pas (xclose de track.py, lignes d'archive)."""
+    if not isinstance(xc, dict):
+        return None
+    t = ts_of(xc.get("read_ts"))
+    return t if t is not None else ts_of(xc.get("read"))
+
+
+def not_a_close(r, xc=None):
+    """Vrai si le `xclose` de la ligne n'est PAS une clôture : lu à l'instant de la prise ou avant (il compare le prix pris à la lecture même qui l'a donné : CLV 0 au lieu de « non mesuré »).
+    Ligne qui porte l'instant de sa prise : comparaison exacte. Ligne plus ancienne (sans « tk » ni « first_at ») : un xclose de source « cache » au même prix que la prise est
+    traité comme non mesuré (règle du superviseur du 17/10 ; perte assumée de vrais zéros, chiffrée dans audit_fixes_ledger.json)."""
+    xc = r.get("xclose") if xc is None else xc
+    if not isinstance(xc, dict):
+        return False
+    take, seen = take_ts(r), close_read_ts(xc)
+    if take is not None:
+        return seen is not None and seen <= take
+    return xc.get("src") == "cache" and xc.get("odds") is not None and r.get("xodds") is not None and xc.get("odds") == r.get("xodds")
+
+
 X_CLOSE_WINDOW_MIN = 150          # on relit le cache 1xBet des lignes dont le match commence dans moins de 150 min (et jusqu'à X_CLOSE_AFTER_MIN min après le coup d'envoi)
 X_CLOSE_AFTER_MIN = 240           # un relevé de clôture fait à KO - 35 min n'est vu par le passage horaire qu'après le coup d'envoi : la ligne reste lue tant qu'elle n'est pas réglée ; seul un relevé d'AVANT le coup d'envoi compte
 
@@ -815,6 +856,9 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
             if cell is None or not isinstance(cell.at, (int, float)):
                 continue
             lead = round((ko.timestamp() - cell.at) / 60)
+            take = take_ts(r)
+            if take is not None and cell.at <= take:
+                continue                                   # relevé de l'instant de la prise ou d'avant : ce n'est pas une clôture (A3, audit du 17/10)
             if lead < 0:
                 continue                                   # relevé d'après le coup d'envoi (suivi en direct dans le même cache) : pas une clôture
             if cell.cf is None:                            # le relevé en cache ne propose plus ce pari : on garde le dernier prix connu

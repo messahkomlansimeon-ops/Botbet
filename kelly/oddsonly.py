@@ -386,6 +386,10 @@ def _update_row(row, r, at):
 
 def _close(row, m, sel, at, lead):
     """xclose : dernier prix NON suspendu de la sélection lu à 0-90 min du match ; cellule retirée alors que son marché est lu : xgone ; suspendue : on garde le dernier bon prix."""
+    first = ensemble.ts_of(row.get("first_at"))
+    seen = ensemble.ts_of(at)
+    if first is not None and seen is not None and seen <= first:
+        return                                      # lecture de la détection elle-même : le prix pris n'est pas sa propre clôture (A3, audit du 17/10)
     o = m["px"].get(sel)
     if o:
         row["xclose"] = {"odds": o, "read": at, "lead_min": round(lead), "susp": False}

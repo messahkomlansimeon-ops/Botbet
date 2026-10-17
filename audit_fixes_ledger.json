@@ -57,5 +57,20 @@
  },
  "prereg_sha": "0ac7a7c23277320ebb6bcbd9518da616e8ca7d68bafa44e1a122353a458644e4",
  "written_at": "2026-10-17T00:00:00+00:00",
- "amendments": []
+ "amendments": [
+  {
+   "on": "2026-10-17",
+   "point": "A3",
+   "prereg_sha_unchanged": true,
+   "by": "assistant",
+   "implemented": "ensemble.ts_of / take_ts / close_read_ts / not_a_close ; ensemble.record écrit « tk » (instant de l'enregistrement) ; mark_x_close ne pose jamais un relevé antérieur ou égal à la prise ; lanestats.x_clv renvoie None quand not_a_close ; oddsonly._close ne pose pas de xclose depuis la lecture de première détection. Tous les consommateurs (carte, CLV fantôme des familles, courbes, voie cotes, jambes de combinés) passent par lanestats.x_clv.",
+   "archive": "les lignes d'archive (ARCH_COLS) ne portent ni tk ni read_ts : elles relèvent de la règle de repli (src « cache » et prix inchangé = non mesuré) ; les lignes écrites à partir de ce commit n'ont jamais de xclose antérieur ou égal à la prise (mark_x_close), donc aucune perte de plus.",
+   "measure": {
+    "tool": "tools/audit_fixes_measure.py a3 (testé)",
+    "source": "sauvegarde du 13/10 12:00 (kelly.db du zip du 13/10), journal d'ensemble 10-13/10",
+    "result": "0 ligne avec xclose dans cette base (le relevé de clôture et mark_x_close sont postérieurs) : AUCUN chiffre avant/après possible ici. Les chiffres par voie (lignes qui passent de 0 à None, moyenne CLV avant/après, vrais zéros écartés par la règle de repli) sont à produire en lançant l'outil sur une sauvegarde récente du téléphone ; l'amendement suivant les portera.",
+    "status": "EN ATTENTE d'une sauvegarde récente"
+   }
+  }
+ ]
 }

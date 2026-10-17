@@ -103,5 +103,12 @@
  },
  "prereg_sha": "e43b2c7bd1ebf23c9ea642898a1696ad257e04b515fc09d89f6a4ccf7b25f1aa",
  "written_at": "2026-10-17T09:50+00:00",
- "amendments": []
+ "amendments": [
+  {
+   "on": "2026-10-17",
+   "prereg_unchanged": true,
+   "by": "assistant, lot A3 de l'audit du 17/10",
+   "note": "Le CLV fantôme (lanestats.x_clv contre le dernier prix 1xBet) exclut désormais un xclose lu à l'instant de la prise ou avant. Les seuils FAM_MIN_CALIB / FAM_MIN_GHOST et les règles de transition ne changent pas ; les zéros d'auto-comparaison ne comptent plus dans les 200 lignes ni dans la moyenne. Détail : audit_fixes_ledger.json, point A3."
+  }
+ ]
 }

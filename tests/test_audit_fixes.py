@@ -20,8 +20,100 @@ def test_declaration_unchanged():
     print("ok  audit_fixes_ledger.json : pré-déclaration inchangée")
 
 
+# ---------- A3 : CLV contre sa propre lecture ----------
+
+def test_a3_x_clv_own_read():
+    from kelly import ensemble, lanestats as LS
+    base = {"xodds": 1.9, "commence": "2026-10-20T19:45:00Z"}
+    close = lambda ts, odds=1.9, **k: {"odds": odds, "read_ts": ts, "lead_min": 55, "susp": False, "src": "cache"} | k
+    tk = 1_792_263_000.0
+    # ligne qui porte l'instant de sa prise (tk)
+    assert LS.x_clv(base | {"tk": tk, "xclose": close(tk)}) is None, "lecture de la prise elle-même : pas une clôture"
+    assert LS.x_clv(base | {"tk": tk, "xclose": close(tk - 30)}) is None, "lecture d'avant la prise : pas une clôture"
+    v = LS.x_clv(base | {"tk": tk, "xclose": close(tk + 1, odds=1.9)})
+    assert v == 0.0, "strictement après la prise, prix inchangé : un VRAI zéro, mesuré"
+    assert LS.x_clv(base | {"tk": tk, "xclose": close(tk + 600, odds=1.7)}) > 0
+    # lignes anciennes (sans tk) : cache + même prix = non mesuré ; close_read au même prix = vrai zéro
+    assert LS.x_clv(base | {"xclose": close(tk)}) is None
+    assert LS.x_clv(base | {"xclose": close(tk, src="close_read")}) == 0.0
+    assert LS.x_clv(base | {"xclose": close(tk, odds=1.8)}) > 0, "prix différent : lu plus tard, mesuré"
+    # voie cotes : first_at / xclose.read (même format)
+    o = base | {"first_at": "2026-10-20T18:50+00:00"}
+    assert LS.x_clv(o | {"xclose": {"odds": 1.9, "read": "2026-10-20T18:50+00:00", "lead_min": 55, "susp": False}}) is None
+    assert LS.x_clv(o | {"xclose": {"odds": 1.7, "read": "2026-10-20T19:05+00:00", "lead_min": 40, "susp": False}}) > 0
+    # xclose sans instant de lecture (track.py) : inchangé
+    assert LS.x_clv(base | {"xclose": {"odds": 1.7, "age_min": 5, "lead_min": 40, "susp": False}}) > 0
+    assert ensemble.not_a_close({"xclose": None}) is False
+    print("ok  A3 : x_clv ne compare plus le prix pris à sa propre lecture (tk, first_at, lignes anciennes, vrais zéros gardés)")
+
+
+def test_a3_mark_x_close_and_record():
+    from datetime import datetime, timedelta, timezone
+    from kelly import closeread, ensemble, store
+    from kelly.sources import xbet
+    now = datetime(2026, 10, 20, 18, 51, tzinfo=timezone.utc)
+    ko = now + timedelta(minutes=54)
+    c = {"key": "m|team_corners_total||9.5|Over", "id": "m", "sport_key": "soccer_epl", "home": "h", "away": "a", "commence": ko.isoformat(), "market": "team_corners_total",
+         "name": "Over", "point": 9.5, "prob": 0.6, "p0": 0.6, "p_model": 0.6, "p_x": 0.55, "p_sharp": 0.57, "xodds": 1.9, "strategy": "stats", "xref": [1, 2, 9.5]}
+    take = now - timedelta(seconds=40)
+    store.save(ensemble.LOG_FILE, [])
+    assert ensemble.record([c], "2026-10-20", take) == 1
+    row = store.load(ensemble.LOG_FILE, [])[0]
+    assert abs(row["tk"] - take.timestamp()) < 0.01, "l'instant de la prise est enregistré"
+    old_cell, old_idx = xbet.cached_cell, closeread.index
+    closeread.index = lambda: {}
+    try:
+        xbet.cached_cell = lambda ref: xbet.Cell(1.9, take.timestamp(), False)
+        assert ensemble.mark_x_close(now) == 0 and "xclose" not in store.load(ensemble.LOG_FILE, [])[0], "relevé de l'instant de la prise : jamais posé"
+        xbet.cached_cell = lambda ref: xbet.Cell(1.9, take.timestamp() - 600, False)
+        assert ensemble.mark_x_close(now) == 0, "relevé d'avant la prise : jamais posé"
+        xbet.cached_cell = lambda ref: xbet.Cell(1.8, take.timestamp() + 1, False)
+        assert ensemble.mark_x_close(now) == 1 and store.load(ensemble.LOG_FILE, [])[0]["xclose"]["odds"] == 1.8, "relevé strictement postérieur : posé"
+    finally:
+        xbet.cached_cell, closeread.index = old_cell, old_idx
+    print("ok  A3 : record garde l'instant de la prise ; mark_x_close ne pose jamais un relevé antérieur ou égal à la prise")
+
+
+def test_a3_oddsonly_close_skips_own_read():
+    from kelly import oddsonly
+    row = {"first_at": "2026-10-20T18:50+00:00", "xodds": 2.2, "xclose": None, "market": "totals", "name": "Over", "point": 2.5}
+    m = {"px": {("totals", "Over", 2.5): 2.2}, "blocked": ()}
+    oddsonly._close(row, m, ("totals", "Over", 2.5), "2026-10-20T18:50+00:00", 55)
+    assert row["xclose"] is None, "la lecture de la détection n'est pas sa propre clôture"
+    oddsonly._close(row, m, ("totals", "Over", 2.5), "2026-10-20T19:05+00:00", 40)
+    assert row["xclose"]["odds"] == 2.2 and row["xclose"]["lead_min"] == 40
+    print("ok  A3 : la voie cotes ne pose pas de xclose depuis sa propre lecture de détection")
+
+
+def test_a3_measure_tool():
+    import contextlib
+    import importlib.util
+    import io
+    from kelly import ensemble, store
+    spec = importlib.util.spec_from_file_location("audit_fixes_measure", os.path.join(os.path.dirname(LEDGER), "tools", "audit_fixes_measure.py"))
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    tk = 1_792_263_000.0
+
+    def row(i, **k):
+        return {"key": f"k{i}", "id": f"i{i}", "date": "2026-10-20", "result": "win", "strategy": "stats", "xodds": 1.9, "at": "2026-10-17T18:50+00:00"} | k
+
+    close = lambda ts, odds, **k: {"odds": odds, "read_ts": ts, "lead_min": 55, "susp": False, "src": "cache"} | k
+    store.save(ensemble.LOG_FILE, [row(1, tk=tk, xclose=close(tk, 1.9)), row(2, tk=tk, xclose=close(tk + 900, 1.7)), row(3, xclose=close(tk + 900, 1.9)), row(4, xclose=close(tk, 1.9))])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        tool.a3()
+    txt = out.getvalue()
+    assert "lignes à xclose    4" in txt and "avant    4 -> après    1" in txt and "passent de mesuré à None    3" in txt and "vrais zéros écartés par la règle de repli : 1" in txt, txt
+    print("ok  A3 : l'outil de mesure compte les zéros d'auto-comparaison et les vrais zéros écartés")
+
+
 def main():
     test_declaration_unchanged()
+    test_a3_measure_tool()
+    test_a3_x_clv_own_read()
+    test_a3_mark_x_close_and_record()
+    test_a3_oddsonly_close_skips_own_read()
     print("tests correctifs de l'audit : OK")
 
 
