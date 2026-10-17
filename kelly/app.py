@@ -11,9 +11,12 @@ import requests
 
 from . import (apistats, bankroll, bootstrap, budget, cache, calib, catalogue, chat, combos as CB, confirm, combovariants, config as C, custom, dayhealth, ensemble, fair, fmt, freeclose, gapbets, gapdist, lanes, lanestats,
                exposure, learn, live as LV, migrate, monde, money, odds, played, progress, settle, sharpgap, sources, stats, statswindow, store, strength, telegram, track, weekly, xalerts,
-               cupstats, edgemap, resultats, seasonlane, xprice, xworld)
+               cupstats, edgemap, oddsonly, resultats, seasonlane, xprice, xworld)
 from .sources import fmmatch, http, state, xbet
 from .telegram import Html
+
+if oddsonly.observe not in xbet.OBSERVERS:             # voie « cotes » (fantôme) : observe chaque relevé 1xBet déjà fait, aucune requête de plus
+    xbet.OBSERVERS.append(oddsonly.observe)
 
 DISCLAIMER = Html("<i>Probabilités estimées, aucun gain garanti. Les grosses cotes passent très rarement : "
                   "mise petit. 18+</i>")

@@ -632,6 +632,9 @@ def prioritise_stats(events, wanted):
     return sorted(events, key=lambda e: not stat(e))                                                          # tri stable
 
 
+OBSERVERS = []                                  # fonctions (cotes_lues, événements) appelées après chaque fetch_day
+
+
 def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, fresh_min=None, record=True):
     """Cotes 1xBet des matchs Kelly `events` ([(clé, événement)] dans l'ordre de priorité) : {id Kelly: {"gid", "px"}}. Un
     événement qui porte "xgid" (id 1xBet déjà connu : relevé du matin, championnat vu par 1xBet) est lu directement, sans menu ni
@@ -697,6 +700,11 @@ def fetch_day(events, deadline=None, max_matches=None, wanted=None, live=False, 
         if record:                                  # un relevé annexe (voie `saison`) ne remplace pas le compte rendu du relevé principal
             state.record_run(SOURCE, len(out), errors)
             _note_run(len(out), len(events), cut, errors)
+    for fn in OBSERVERS:                            # observateurs (voie « cotes » : kelly/oddsonly.py) : lecture seule du résultat, aucune requête, ne lèvent jamais
+        try:
+            fn(out, events)
+        except Exception as e:                      # noqa: BLE001
+            print(f"[1xbet] observateur ignoré : {type(e).__name__}: {e}", file=sys.stderr)
     return out
 
 
