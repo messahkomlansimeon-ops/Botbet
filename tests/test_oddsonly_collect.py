@@ -112,6 +112,65 @@ def test_censoring():
     print("ok  censure : cellule disparue, coup d'envoi (jamais comptées comme disparues)")
 
 
+def test_no_fabricated_read_and_windows():
+    """Cache muet (odds_time None) : le match est sauté ; lecture après le coup d'envoi : ignorée ; xclose seulement à 0-90 min et jamais écrasé par un relevé suspendu ; marché absent du relevé : la ligne reste ouverte."""
+    store.save(O.LOG_FILE, [])
+    store.save(O.STATE_FILE, {})
+    old = xbet.odds_time
+    try:
+        found = {"m1": {"gid": 1, "px": px_with(1.12), "refs": {}, "blocked": set()}}
+        xbet.odds_time = lambda gids: None
+        O.observe(found, EV, at(12))
+        assert store.load(O.LOG_FILE, []) == [] and store.load(O.STATE_FILE, {}) == {}, "cache muet : aucune lecture fabriquée"
+        xbet.odds_time = lambda gids: at(21).timestamp()
+        O.observe(found, EV, at(21))
+        assert store.load(O.LOG_FILE, []) == [], "lecture après le coup d'envoi : ignorée"
+        k1x = O.row_key("2026-10-17", "m1", "1a", "double_chance", f"{T.H} or Draw", None)
+        rows = read(at(12), px_with(1.12))
+        assert rows[k1x]["xclose"] is None, "lead > 90 min : pas une clôture"
+        rows = read(at(18, 45), px_with(1.12))
+        assert rows[k1x]["xclose"]["lead_min"] == 75 and rows[k1x]["xclose"]["susp"] is False
+        good = rows[k1x]["xclose"]
+        rows = read(at(19, 30), px_with(1.12), blocked={DCK}) if False else rows
+        px_b = px_with(1.12)
+        px_b.pop(DCK)
+        rows = read(at(19, 30), px_b, blocked={DCK})
+        assert rows[k1x]["xclose"] == good and rows[k1x]["xgone"] is False, "suspendue : on garde le dernier prix non suspendu"
+        # marché absent du relevé (famille non demandée à ce passage) : la ligne reste ouverte, ni censurée ni xgone
+        store.save(O.LOG_FILE, [])
+        store.save(O.STATE_FILE, {})
+        read(at(12), px_with(1.12))
+        rows = read(at(13), {k: v for k, v in px_with(1.12).items() if k[0] == "h2h"})
+        assert rows[k1x]["censored"] is None and rows[k1x]["gone_at"] is None and rows[k1x]["xgone"] is False
+    finally:
+        xbet.odds_time = old
+    print("ok  pas de lecture fabriquée, fenêtre xclose 0-90 min, suspendue ne remplace pas un bon prix, marché non relu = ligne ouverte")
+
+
+def test_state_after_log_and_mv_cap():
+    store.save(O.LOG_FILE, [])
+    store.save(O.STATE_FILE, {})
+    old, real_update = xbet.odds_time, store.update
+    try:
+        def fail_log(name, fn, default):
+            if name == O.LOG_FILE:
+                raise OSError("base refusée")
+            return real_update(name, fn, default)
+        store.update = fail_log
+        read(at(12), px_with(1.12))
+        assert store.load(O.STATE_FILE, {}) == {}, "journal non écrit : l'état n'avance pas (la lecture sera revue)"
+        store.update = real_update
+        rows = read(at(12), px_with(1.12))
+        assert any(r["mech"] == "1a" for r in rows.values()), "la lecture non perdue est journalisée au passage suivant"
+        # mouvement : au plus MV_TOP lignes par match et par relevé
+        big = {k: round(v * 1.2, 3) for k, v in px_with(1.12).items()}
+        rows = read(at(13), big)
+        assert 0 < sum(1 for r in rows.values() if r["mech"] == "3") <= O.MV_TOP
+    finally:
+        xbet.odds_time, store.update = old, real_update
+    print("ok  l'état n'avance qu'après le journal ; mouvement plafonné")
+
+
 def test_off_and_observer_hook():
     from kelly import config as C
     store.save(O.LOG_FILE, [])
@@ -137,5 +196,7 @@ def test_off_and_observer_hook():
 if __name__ == "__main__":
     test_collect()
     test_censoring()
+    test_no_fabricated_read_and_windows()
+    test_state_after_log_and_mv_cap()
     test_off_and_observer_hook()
     print("tests voie cotes (collecte) : OK")

@@ -79,7 +79,7 @@ def test_1b():
     px |= ladder("totals", lambda L: pois_over(lh + la, L), (1.5, 2.5, 3.5))
     px |= {("btts", "Yes", None): odds((1 - math.exp(-lh)) * (1 - math.exp(-la))), ("btts", "No", None): odds(1 - (1 - math.exp(-lh)) * (1 - math.exp(-la)))}
     rows = O.mech_1b(px)
-    assert len(rows) == 8 and all(-0.10 < r["edge"] < 0.01 for r in rows), [(r["market"], r["name"], r["point"], r["edge"]) for r in rows]
+    assert len(rows) == 8 and all(-0.09 < r["edge"] < -0.01 for r in rows), [(r["market"], r["name"], r["point"], r["edge"]) for r in rows]
     px2 = dict(px)
     px2[("totals", "Over", 2.5)] = round(px[("totals", "Over", 2.5)] * 1.12, 3)
     hit = by(O.mech_1b(px2), market="totals", name="Over", point=2.5)
@@ -114,6 +114,27 @@ def test_1c():
     print("ok  1c : lignes successives en leave-one-out, rejets (< 4 paires, ligne entière, touches, hors-jeu)")
 
 
+def test_1c_leave_one_out_spy():
+    """Le leave-one-out est vérifié DANS mech_1c : l'ajustement d'une ligne ne reçoit jamais cette ligne."""
+    seen = []
+    real = O.fit_nb
+
+    def spy(pairs, fam):
+        seen.append(sorted(L for L, _ in pairs))
+        return real(pairs, fam)
+    px = ladder("alternate_totals_corners", lambda L: nb_over(10.0, 60.0, L), (7.5, 8.5, 9.5, 10.5, 11.5, 12.5))
+    O.fit_nb = spy
+    try:
+        rows = O.mech_1c(px)
+    finally:
+        O.fit_nb = real
+    tested = sorted({r["point"] for r in rows})
+    assert tested == [7.5, 8.5, 9.5, 10.5, 11.5, 12.5] and len(seen) == 6
+    for L, used in zip(tested, seen):
+        assert L not in used and len(used) == 5, (L, used)
+    print("ok  1c : l'ajustement de chaque ligne exclut cette ligne (leave-one-out sous test direct)")
+
+
 def pick(market, name, point, p, n_books=3, src="consensus", age_min=10, **kw):
     t = NOW.timestamp() - age_min * 60
     return {"key": f"m1|{market}|{point}|{name}", "id": "m1", "market": market, "name": name, "point": point, "prob_book": p, "prob_src": src, "n_books": n_books,
@@ -133,6 +154,8 @@ def test_2():
     assert O.mech_2(px, [pick("team_shots_total", "Over", 24.5, 0.6)], NOW) == [], "tirs : mécanisme inactif"
     assert O.mech_2(px, [pick("totals", "Over", 2.5, 0.53, src="pinnacle", age_min=400)], NOW) == [], "relevé des books trop vieux"
     assert O.mech_2(px, [pick("team_throws_total", "Over", 10.5, 0.6)], NOW) == []
+    assert O.mech_2(px, [pick("totals", "Over", 2.5, 0.53, src="pinnacle", age_min=-30)], NOW) == [], "books plus récents que la lecture 1xBet de plus de 10 min : retard déjà comblé"
+    assert O.mech_2(px, [pick("totals", "Over", 2.5, 0.53, src="pinnacle", age_min=-5)], NOW), "tolérance de synchronisation"
     print("ok  2 : retard sur les books (buts via Pinnacle avec recouvrement sharpgap, corners à 2 books, tirs inactif, âge)")
 
 
@@ -164,6 +187,9 @@ def test_declaration_matches_code():
     assert (O.MIN_PAIRS, O.MIN_TEAM_PAIRS) == (4, 2) and "au moins 4 paires" in pre["mechanisms"]["1c"]["rule"] and "au moins 2 paires" in pre["mechanisms"]["1b"]["rule"]
     assert list(ensemble.OVERROUND) == pre["demargination"]["overround"]["ordinary"] and list(ensemble.DC_OVERROUND) == pre["demargination"]["overround"]["double_chance"]
     assert set(pre["families"]["goal"]) == set(O.GOAL_FAMILIES) and set(pre["families"]["stats"]) == {"corners", "cards", "yellow", "shots", "sot", "fouls"}
+    am = json.dumps(led["amendments"], ensure_ascii=False)
+    assert (O.MV_TOP, O.MV_MAX, O.SYNC_MIN, O.ARCH_DAYS, O.STATE_DAYS) == (5, 20, 10, 90, 2) and "au plus 5 mouvements" in am and "20 lignes de mouvement" in am and "plus de 10 minutes" in am
+    assert "plus de 90 jours" in am and "2 jours après" in am and "40 points" in am and "14 sections" in am and "xbet.odds_time None" in am
     assert O.MECHS == ("1a", "1b", "1c", "2", "3") and pre["voie"]["default"] == "ghost" and C.STRATEGY_ODDSONLY == "ghost"
     print("ok  seuils, dispersions, plages d'overround et familles du code = pré-déclaration (empreinte inchangée)")
 
@@ -172,6 +198,7 @@ if __name__ == "__main__":
     test_1a()
     test_1b()
     test_1c()
+    test_1c_leave_one_out_spy()
     test_2()
     test_status_and_movement()
     test_evaluate_filters_off_lane()
