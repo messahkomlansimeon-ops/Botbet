@@ -10,7 +10,7 @@ sans l'archivage de track.save), et une seconde exécution ne change rien.
 """
 import sys
 
-from . import fair, money, store
+from . import fair, families, money, store
 
 FILE = "migrations.json"
 
@@ -54,11 +54,28 @@ def notes_fcfa():
     return n
 
 
+def families_init():
+    """Migration « familles » : écrit l'état initial de data/families.json (families.DEFAULTS : voies actuelles jouee, stats de coupe fantome, touches / hors-jeu / joueurs hors_ticket). Ne change aucun
+    comportement (families.state_of répondait déjà les mêmes valeurs sans le document). -> 1 si écrit, 0 si déjà fait."""
+    done = store.load(FILE, {})
+    done = done if isinstance(done, dict) else {}
+    if done.get("families_init"):
+        return 0
+    from datetime import datetime, timezone
+    wrote = families.ensure(datetime.now(timezone.utc).date())
+    store.save(FILE, store.load(FILE, {}) | {"families_init": True})
+    if wrote:
+        print("[migration] familles : état initial écrit (aucun comportement ne change)", file=sys.stderr)
+    return 1 if wrote else 0
+
+
 def ensure():
     """Lance les migrations pas encore faites (au démarrage du bot et de chaque passage). Ne lève jamais : une migration en échec sera
     retentée au prochain démarrage (son marqueur n'est posé qu'à la fin). -> nombre de lignes migrées."""
     try:
-        return notes_fcfa()
+        n = notes_fcfa()
+        families_init()
+        return n
     except Exception as e:                          # noqa: BLE001 - la migration ne doit jamais empêcher le bot de répondre
         print(f"[migration] ignorée : {type(e).__name__}: {e}", file=sys.stderr)
         return 0

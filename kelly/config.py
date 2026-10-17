@@ -831,6 +831,10 @@ STATS_WINDOW_COMBO = (5.0, 7.0)                                     # fourchette
 STATS_WINDOW_ANNOUNCE = _int("STATS_WINDOW_ANNOUNCE", 6)            # nouveaux 💎 stats au plus dans un message « 🧮 Stats ouvertes chez 1xBet » (0 : aucun message)
 STATS_WINDOW_DAY_ANNOUNCE = _int("STATS_WINDOW_DAY_ANNOUNCE", 12)   # nouveaux 💎 stats annoncés au plus par jour
 STATS_WINDOW_NOTE = _bool("STATS_WINDOW_NOTE", True)                # 0 : plus de ligne « les paris stats arrivent quelques heures avant les matchs » au message du matin
+# Familles de marché (kelly/families.py, familyeval.py ; pré-déclaration families_ledger.json) : cycle de vie hors_ticket -> fantome -> proposee -> jouee.
+FAM_MIN_CALIB = _int("FAM_MIN_CALIB", 30)         # résultats réglés (win / loss) pour juger la calibration d'une famille (hors_ticket -> fantome, fantome -> hors_ticket)
+FAM_MIN_GHOST = _int("FAM_MIN_GHOST", 200)        # lignes fantômes réglées à CLV mesuré pour proposer une famille (fantome -> proposee)
+FAMILIES_AUTO = _bool("FAMILIES_AUTO", True)      # 0 : aucune transition automatique du lundi (l'état ne change qu'à la main)
 STATS_WINDOW_PREFIX = ("team_fouls_", "team_shots_", "team_sot_")   # marchés « stats » (ceux de « ts5 ») ; touches et hors-jeu retirés le 17/10 (hors voies : aucun ticket)
 STATS_WINDOW_TIER = "ts5w"                                          # palier d'un combiné de la fenêtre : « ts5w1 », « ts5w2 »... (« ts5 » reste celui du matin)
 STATS_WINDOW_TITLE = "🧮 COMBINÉ STATS"
