@@ -419,6 +419,8 @@ def test_save_coupon():
     # Échec réseau -> None, ne lève jamais
     with patch("kelly.sources.http.post", return_value=Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", None, error="HTTP 500")):
         assert xbet.save_coupon(legs) is None
+    t = store.load(xbet.COUPON_TRACE, [])[-1]
+    assert t["tries"] == 1 and t["ok"] is False and t["attempts"] == [{"kind": "reseau", "http": None}]       # réseau/proxy : distinct d'un refus de 1xBet
 
     # Échec applicatif Success: false (refus explicite sans code connu comme passager) -> None, UN seul essai (aucune attente)
     err_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": False, "Error": "Erreur"}).encode("utf-8"), 200)
@@ -432,6 +434,11 @@ def test_save_coupon():
         assert xbet.save_coupon(legs) is None
         assert m.call_count == 1 + len(xbet.COUPON_BACKOFF)          # refus passager : un essai par attente, pas plus
         assert [c.args[0] for c in sl.call_args_list] == list(xbet.COUPON_BACKOFF) == sorted(xbet.COUPON_BACKOFF)    # attentes croissantes
+    # Trace du refus : 4 essais, pas abouti, raison traduite, automatique (pas de commande)
+    tr = store.load(xbet.COUPON_TRACE, [])
+    assert tr and tr[-1]["tries"] == 4 and tr[-1]["ok"] is False and tr[-1]["manual"] is False and tr[-1]["legs"] == len(legs)
+    assert tr[-1]["reasons"][0] == "panne passagère chez 1xBet" and 0 <= tr[-1]["hour"] < 24
+    assert [x["code"] for x in tr[-1]["attempts"]] == [161627] * 4 and all(x["kind"] == "refus" for x in tr[-1]["attempts"])     # le code brut, pas seulement sa traduction
     # Success vrai sans code : le ticket a pu être créé, jamais rejoué
     nocode = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": True, "Value": None}).encode("utf-8"), 200)
     with patch("kelly.sources.http.post", return_value=nocode) as m, patch("kelly.sources.xbet.time.sleep") as sl:
@@ -441,6 +448,12 @@ def test_save_coupon():
     ok_res = Result("https://1xbet.ci/service-api/LiveBet/Open/SaveCoupon", json.dumps({"Success": True, "Value": "AP89E"}).encode("utf-8"), 200)
     with patch("kelly.sources.http.post", side_effect=[tmp, tmp, ok_res]), patch("kelly.sources.xbet.time.sleep") as sl:
         assert xbet.save_coupon(legs) == "AP89E" and sl.call_count == 2       # accepté au 3e essai : on s'arrête là
+    t = store.load(xbet.COUPON_TRACE, [])[-1]
+    assert t["tries"] == 3 and t["ok"] is True                                 # refusé deux fois puis abouti : la trace le dit
+    n = len(store.load(xbet.COUPON_TRACE, []))
+    with patch("kelly.sources.http.post", return_value=ok_res):
+        assert xbet.save_coupon(legs) == "AP89E"
+    assert len(store.load(xbet.COUPON_TRACE, [])) == n                         # accepté du premier coup : aucune trace
 
     # Pendant une commande Telegram, l'utilisateur qui attend est prévenu de chaque refus passager (raison de 1xBet), puis du code accepté
     said = []

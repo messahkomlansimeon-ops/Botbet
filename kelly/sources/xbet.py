@@ -24,7 +24,7 @@ from collections import namedtuple
 from contextlib import contextmanager
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 from .. import config as C, families, stats, store
@@ -826,22 +826,27 @@ def save_coupon(legs):
             status = getattr(r, "status", None)
             if r is not None and getattr(r, "blocked", False):
                 _coupon_fail(f"HTTP {status or '?'} {r.error or 'accès refusé'} : 1xBet coupé 24 h", legs)
+                attempt.err = {"kind": "bloque", "http": status}
                 return None, False                  # 403 / 429 / Cloudflare / vérification : la source est coupée (state.block), jamais d'insistance
             if not r or not r.ok or not r.content:
                 _coupon_fail(f"HTTP {status or '?'} {getattr(r, 'error', '') or 'réponse vide'}", legs)
+                attempt.err = {"kind": "reseau", "http": status}
                 return None, False                  # coupure ou erreur réseau : le ticket a pu être créé, jamais renvoyé
             try:
                 data = json.loads(r.content)
             except ValueError:
                 _coupon_fail(f"HTTP {status or '?'} : réponse illisible (pas du JSON)", legs)
+                attempt.err = {"kind": "illisible", "http": status}
                 return None, False
             if not isinstance(data, dict):
                 _coupon_fail(f"HTTP {status or '?'} : réponse inattendue ({type(data).__name__})", legs)
+                attempt.err = {"kind": "illisible", "http": status}
                 return None, False
             if not data.get("Success"):
                 _coupon_fail(json.dumps({k: data.get(k) for k in ("Error", "ErrorCode", "Value") if data.get(k) not in (None, "")},
                                         ensure_ascii=False), legs)
                 attempt.why = _coupon_why(data)
+                attempt.err = {"kind": "refus", "http": status, "code": data.get("ErrorCode")}
                 return None, data.get("ErrorCode") in COUPON_TRANSIENT      # seul un refus connu comme passager vaut un nouvel essai
             val = data.get("Value")
             if isinstance(val, str) and val.strip():
@@ -849,29 +854,58 @@ def save_coupon(legs):
             if isinstance(val, dict) and val.get("Guid"):
                 return str(val["Guid"]).strip(), False
             _coupon_fail("réponse sans code : " + str(val)[:200], legs)
+            attempt.err = {"kind": "sans_code", "http": status}
             return None, False                      # Success vrai sans code : le ticket a pu être créé, jamais renvoyé
         except Exception as e:                      # noqa: BLE001 - un échec de coupon ne bloque jamais l'envoi du combiné
             _coupon_fail(http.err(e), legs)
+            attempt.err = {"kind": "exception", "http": None}
         return None, False
     # refus intermittents de 1xBet (même ticket accepté quelques minutes plus tard) : nouveaux essais à attente croissante
     # (COUPON_BACKOFF), seulement après un « non » explicite ET connu comme passager (COUPON_TRANSIENT : ErrorCode 161627) : aucun ticket n'a été
     # créé. Les autres refus (Success faux) sont définitifs, et un Success vrai n'est JAMAIS rejoué (le ticket peut exister).
     try:
-        attempt.why, _notice.sent = "", False
+        attempt.why, attempt.err, _notice.sent = "", None, False
         code, again = attempt()
+        tries, reasons = 1, [attempt.why]
+        errs = [attempt.err]
         for i, wait in enumerate(COUPON_BACKOFF, 2):
             if code or not again:
                 break
             _notice(f"⏳ 1xBet a refusé le code coupon" + (f" (« {attempt.why} »)" if attempt.why else "")
                     + f" : nouvel essai dans {wait:g} s ({i}/{len(COUPON_BACKOFF) + 1})…")
-            attempt.why = ""
+            attempt.why, attempt.err = "", None
             time.sleep(wait)
             code, again = attempt()
+            tries += 1
+            reasons.append(attempt.why)
+            errs.append(attempt.err)
+        if tries > 1 or not code:
+            _refusal_trace(code, tries, reasons, errs, len(legs), live)
         if code and _notice.sent:
             _notice("✅ 1xBet a accepté le code coupon.")
         return code
     finally:
         ses.close("enregistrement du coupon")
+
+
+COUPON_TRACE = "coupon_refusals.json"
+COUPON_TRACE_MAX = 300
+
+
+def _refusal_trace(code, tries, reasons, errs, n_legs, live):
+    """Trace d'un coupon refusé au moins une fois (heure UTC, essais, raisons, abouti ou non, automatique ou commande) : sert à voir si les refus
+    tombent à des heures précises (panne chez 1xBet) ou au hasard, avant de décider d'un second passage différé. Ne lève jamais."""
+    try:
+        now = datetime.now(timezone.utc)
+        row = {"ts": now.isoformat(timespec="seconds"), "hour": now.hour, "tries": tries, "ok": bool(code), "reasons": [r for r in reasons if r][:4], "attempts": [e for e in errs if e][:4],
+               "legs": n_legs, "live": bool(live), "manual": _NOTICE is not None}
+
+        def fn(d):
+            d = d if isinstance(d, list) else []
+            return (d + [row])[-COUPON_TRACE_MAX:], None
+        store.update(COUPON_TRACE, fn, [])
+    except Exception as e:                          # noqa: BLE001 - une trace manquante ne bloque jamais le code coupon
+        print(f"[1xbet] trace du refus non écrite : {http.err(e)}", file=sys.stderr)
 
 
 COUPON_ERRORS = {161627: "panne passagère chez 1xBet"}     # ErrorCode de SaveCoupon -> raison en français (161627 : « Сбой вызова, попробуйте позже. »)
