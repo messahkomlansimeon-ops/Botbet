@@ -118,6 +118,21 @@
     "status": "mesure faite sur 6 jours : 0 ; 14 jours EN ATTENTE d'une sauvegarde récente"
    },
    "stakes": "aucune règle de mise ne change ; les lignes dont la valeur ne tenait qu'à une proba > 0,99 sont plafonnées (effet nul sur la fenêtre mesurée)."
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A13",
+   "prereg_sha_unchanged": true,
+   "by": "assistant",
+   "implemented": "combos.season_auto_plan : (1) une TÊTE qui échoue seule à _auto_ok est SAUTÉE (continue) au lieu d'arrêter le plan ; (2) une tête qui PASSE seule (p 0,30 >= SEASON_AUTO_MIN_P) mais ne s'associe à aucune autre jambe (0,30 x 0,70 = 0,21 < 0,25) laissait un seul élément dans `taken` -> le plan s'arrêtait (c'est le cas exact de la reproduction de l'audit) : elle est écartée du reste du passage (ensemble `dropped`, pas consommée) et les suivantes peuvent former un combiné. La boucle se termine : chaque retour ajoute au moins une jambe à `dropped` ou à `used`. DÉROGATION À LA RÈGLE DU SUPERVISEUR : « continue » pour toute jambe qui échoue et « break seulement à MAX_LEGS » a été essayé : il casse l'invariant « valeur d'abord, remplissage ensuite » (tests/test_season_auto.py::test_fill_after_value_and_ghost_no_share échoue : une petite jambe de remplissage se glissait dans un combiné de valeur arrêté par la cote maximale). Une fois le combiné commencé, la première jambe qui ne passe pas le ferme donc comme avant (break) ; seul le cas « tête » change. À valider par le superviseur.",
+   "correction_of_prereg": "la pré-déclaration disait « aucun combiné qui existait déjà ne change » : avec la règle retenue (tête seulement), un combiné déjà formé est inchangé ; ce qui change, ce sont les jours dont le plan était vide ou court à cause d'une tête bloquante (un combiné ou un combiné de plus). Mesuré par le rejeu (tools/audit_fixes_measure.py a13) dès qu'une sauvegarde récente existe.",
+   "measure": {
+    "tool": "tools/audit_fixes_measure.py a13 (testé sur un journal synthétique)",
+    "source": "sauvegarde du 13/10 12:00",
+    "result": "season_log.json absent de cette base (la voie saison automatique est postérieure) : AUCUN rejeu possible ici. À lancer sur la sauvegarde récente du téléphone : jours où le plan change, jours où il passe de [] à au moins un combiné, cotes obtenues.",
+    "status": "EN ATTENTE d'une sauvegarde récente"
+   },
+   "stakes": "aucune règle de mise ne change ; des combinés saison supplémentaires peuvent apparaître (leurs mises suivent les règles existantes : voie saison, Kelly par voie, plafond loterie)."
   }
  ]
 }

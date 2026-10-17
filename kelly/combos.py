@@ -866,7 +866,7 @@ def season_signature():
 def season_auto_plan(legs, usage=None, max_combos=None, busy_tiers=(), exclude=()):
     """Combinés `saison` à paliers ADAPTATIFS : [(palier « ssa4.2 », (jambes, cote, proba))]. Toutes les jambes (plusieurs marchés par match possibles) sont classées valeur d'abord (sval) puis par p x cote
     décroissant ; le combiné k prend les meilleures jambes encore libres (une par match dans un combiné), tant que l'espérance du combiné reste >= C.SEASON_AUTO_MIN_EV et la cote <= C.SEASON_AUTO_MAX_ODDS (arrêt à la
-    première jambe qui ne passe pas : elle ouvre le combiné suivant). Arrêt : moins de 2 jambes utilisables, C.SEASON_AUTO_MAX_COMBOS combinés ou C.MAX_LEGS jambes. Aucune jambe n'est partagée
+    première jambe qui ne passe pas une fois le combiné commencé ; une tête qui échoue seule est sautée, et une tête qui passe seule mais ne s'associe à aucune autre est écartée du reste du passage). Arrêt : moins de 2 jambes utilisables, C.SEASON_AUTO_MAX_COMBOS combinés ou C.MAX_LEGS jambes. Aucune jambe n'est partagée
     entre deux combinés, envoyés ou en fantôme (un autre marché du même match peut aller dans un autre combiné). Le palier porte la cote réelle (« ssa4.2 ») : jamais deux fois le même dans la journée. Un combiné envoyé consomme `usage` comme les autres."""
     usage = usage if usage is not None else Usage()
     limit = C.SEASON_AUTO_MAX_COMBOS if max_combos is None else max_combos      # `max_combos` : places restantes (reconstruction à la demande) ; `busy_tiers` : paliers déjà pris dans la journée (fermés compris) ; `exclude` : matchs interdits (combinés notés joués)
@@ -876,21 +876,29 @@ def season_auto_plan(legs, usage=None, max_combos=None, busy_tiers=(), exclude=(
     pool = usage.filter([c | {"odds": c.get("xodds") or c.get("odds")} for c in legs if c.get("xodds") and c.get("lane") == "saison" and lanes.ticket_ok(c) and str(c.get("id")) not in exclude and lanes.ticket_ok(c)])
     ranked = sorted((c for c in pool if c.get("sval") or C.FILL_LEGS), key=key, reverse=True)      # TOUTES les jambes (plusieurs marchés par match) ; FILL_LEGS éteint : jamais de remplissage
     out, used = [], set()                            # used : jambes (match, marché, sélection, ligne) déjà prises par un combiné de ce passage
+    dropped = set()                                  # jambes de tête qui n'ont pu former aucun combiné : sautées pour la suite du passage (A13), pas consommées
     busy_tiers = {str(t) for t in busy_tiers}
     while len(out) < limit:
-        free = [c for c in ranked if leg_id(c) not in used]
+        free = [c for c in ranked if leg_id(c) not in used and leg_id(c) not in dropped]
         taken, ev_prod, odds, p_all, matches = [], 1.0, 1.0, 1.0, set()
         for c in free:
             if c["id"] in matches:                   # un seul pari par match DANS un combiné ; un autre marché du même match peut aller dans le combiné suivant
                 continue
-            if len(taken) >= C.MAX_LEGS or not _auto_ok(ev_prod * c["prob"] * c["odds"], odds * c["odds"], p_all * c["prob"]):
+            if len(taken) >= C.MAX_LEGS:
                 break
+            if not _auto_ok(ev_prod * c["prob"] * c["odds"], odds * c["odds"], p_all * c["prob"]):
+                if taken:
+                    break                            # le combiné est plein (espérance, cote ou probabilité) : fermé comme avant (les jambes de valeur passent avant le remplissage)
+                continue                             # tête qui échoue SEULE : sautée, les suivantes restent candidates (A13 : avant, `break` la laissait en tête et le plan s'arrêtait)
             taken.append(c)
             matches.add(c["id"])
             ev_prod *= c["prob"] * c["odds"]
             odds *= c["odds"]
             p_all *= c["prob"]
         if len(taken) < 2:
+            if taken and len(free) > 1:              # la tête passe seule mais aucune autre jambe ne s'y joint : elle est écartée du reste du passage, les suivantes peuvent former un combiné
+                dropped |= {leg_id(c) for c in taken}
+                continue
             break
         used |= {leg_id(c) for c in taken}
         legs_ = sorted(taken, key=lambda c: (c.get("commence", ""), str(c["id"])))

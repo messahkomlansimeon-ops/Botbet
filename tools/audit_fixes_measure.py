@@ -132,7 +132,59 @@ def a4():
             print(f"    {r.get('key') or r.get('id')} prob {r['prob']} xodds {r.get('xodds')}")
 
 
-POINTS = {"a3": a3, "a1": a1, "a4": a4}
+def _old_season_auto_plan(CB, C, legs, usage, limit):
+    """season_auto_plan d'AVANT A13 (arrêt à la première jambe qui ne passe pas), pour le comparatif ; mêmes règles que kelly/combos.py par ailleurs."""
+    ranked = sorted((c for c in usage.filter(legs) if c.get("sval") or C.FILL_LEGS), key=lambda c: (1 if c.get("sval") else 0, c["prob"] * c["odds"]), reverse=True)
+    out, used = [], set()
+    while len(out) < limit:
+        free = [c for c in ranked if CB.leg_id(c) not in used]
+        taken, ev_prod, odds, p_all, matches = [], 1.0, 1.0, 1.0, set()
+        for c in free:
+            if c["id"] in matches:
+                continue
+            if len(taken) >= C.MAX_LEGS or not CB._auto_ok(ev_prod * c["prob"] * c["odds"], odds * c["odds"], p_all * c["prob"]):
+                break
+            taken.append(c)
+            matches.add(c["id"])
+            ev_prod *= c["prob"] * c["odds"]
+            odds *= c["odds"]
+            p_all *= c["prob"]
+        if len(taken) < 2:
+            break
+        used |= {CB.leg_id(c) for c in taken}
+        out.append((taken, odds))
+    return out
+
+
+def a13():
+    """A13 — season_auto_plan : par jour, plan d'avant (break) et plan d'après (jambe sautée), reconstruits depuis le journal de la voie saison (lignes à prix 1xBet, proba retenue `pe`)."""
+    from kelly import combos as CB, config as C, ensemble, lanes, seasonlane, store
+    log = [r for r in store.load(seasonlane.LOG, []) if isinstance(r, dict) and r.get("xodds") and (r.get("sval") or C.FILL_LEGS)]
+    print("A13 — plan saison automatique, avant / après")
+    if not log:
+        print("  Aucune ligne du journal saison dans cette base (season_log.json absent ou vide) : rien à rejouer.")
+        return
+    days = defaultdict(list)
+    for r in log:
+        days[str(r.get("date"))[:10]].append(r | {"odds": r["xodds"], "prob": r.get("pe") or r.get("prob") or 0.0, "lane": "saison"})
+    old_ok, old_unsent = lanes.ticket_ok, ensemble.unsent
+    lanes.ticket_ok, ensemble.unsent = (lambda c: True), (lambda legs: False)
+    print(f"  source : season_log.json de la copie, {len(days)} jour(s) du {min(days)} au {max(days)}")
+    changed = empty_to_some = 0
+    try:
+        for d, legs in sorted(days.items()):
+            before = _old_season_auto_plan(CB, C, legs, CB.Usage(), C.SEASON_AUTO_MAX_COMBOS)
+            after = [(x[0], x[1]) for _, x in CB.season_auto_plan(legs, CB.Usage())]
+            same = [([c["key"] for c in a], round(o, 2)) for a, o in before] == [([c["key"] for c in a], round(o, 2)) for a, o in after]
+            changed += not same
+            empty_to_some += (not before and bool(after))
+            print(f"    {d}: {len(legs)} jambes ; avant {len(before)} combiné(s) {[round(o, 2) for _, o in before]} -> après {len(after)} {[round(o, 2) for _, o in after]}{'' if same else '  <- change'}")
+    finally:
+        lanes.ticket_ok, ensemble.unsent = old_ok, old_unsent
+    print(f"  jours où le plan change : {changed}/{len(days)} ; jours où il passe de [] à au moins un combiné : {empty_to_some}")
+
+
+POINTS = {"a3": a3, "a1": a1, "a4": a4, "a13": a13}
 
 
 def main():

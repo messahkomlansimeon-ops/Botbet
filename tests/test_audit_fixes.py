@@ -201,10 +201,68 @@ def test_a4_calibrated_probability_bounded():
     print("ok  A4 : la proba corrigée reste dans [0,01 ; 0,99], la cote minimale reste > 1 (calibrate, voie saison)")
 
 
+# ---------- A13 : season_auto_plan, une jambe de tête ne bloque plus le plan ----------
+
+def _a13_legs(*specs):
+    return [{"id": str(i), "key": f"{i}|totals||2.5|Over|saison", "odds": o, "xodds": o, "prob": p, "lane": "saison", "sval": 1,
+             "commence": f"2026-10-17T1{i}:00:00Z", "market": "totals", "name": "Over", "point": 2.5, "strategy": "saison"} for i, (p, o) in specs]
+
+
+def test_a13_season_auto_plan_head_leg():
+    from kelly import combos as CB, config as C, ensemble, lanes
+    old = (lanes.ticket_ok, ensemble.unsent)
+    lanes.ticket_ok, ensemble.unsent = (lambda c: True), (lambda legs: False)
+    try:
+        assert C.SEASON_AUTO_MIN_P == 0.25
+        plan = lambda legs, **k: [(t, [c["id"] for c in x[0]], round(x[1], 2)) for t, x in CB.season_auto_plan(legs, CB.Usage(), **k)]
+        bcd = [(2, (0.70, 1.6)), (3, (0.70, 1.6)), (4, (0.70, 1.6))]
+        ref = plan(_a13_legs(*bcd))
+        assert ref == [("ssa4.1", ["2", "3", "4"], 4.1)], ref
+        # tête qui passe seule (p 0,30 >= 0,25) mais qui ne s'associe à aucune autre (0,30 x 0,70 = 0,21 < 0,25) : avant, [] ; maintenant le combiné des autres
+        assert plan(_a13_legs((1, (0.30, 4.0)), *bcd)) == ref
+        # tête qui échoue SEULE (p 0,20 < 0,25) : avant, `break` -> [] ; maintenant sautée
+        assert plan(_a13_legs((1, (0.20, 8.0)), *bcd)) == ref
+        # deux têtes bloquantes de suite : la boucle se termine et trouve quand même le combiné
+        assert plan(_a13_legs((1, (0.30, 4.0)), (5, (0.22, 8.0)), *bcd)) == ref
+        # rien ne peut former un combiné : liste vide, la boucle se termine
+        assert plan(_a13_legs((1, (0.30, 4.0)), (5, (0.22, 8.0)))) == []
+        assert plan(_a13_legs((2, (0.70, 1.6)))) == [], "une seule jambe : jamais de combiné"
+        # une tête qui dépasse la cote maximale à elle seule est sautée
+        big = _a13_legs((1, (0.60, C.SEASON_AUTO_MAX_ODDS + 5)), *bcd)
+        assert plan(big) == ref, plan(big)
+        # un combiné commencé se ferme à la première jambe qui ne passe pas (comme avant : les jambes de valeur passent avant le remplissage, test_season_auto) : une petite jambe en queue ne s'y glisse pas
+        tail = _a13_legs((2, (0.70, 1.6)), (3, (0.70, 1.6)), (4, (0.70, 1.6)), (5, (0.30, 1.05)))
+        tail[3]["sval"] = 0
+        assert plan(tail) == ref, plan(tail)
+    finally:
+        lanes.ticket_ok, ensemble.unsent = old
+    print("ok  A13 : une jambe de tête qui ne passe pas (seule ou à deux) n'arrête plus le plan saison ; la boucle se termine")
+
+
+def test_a13_measure_tool():
+    import contextlib
+    import importlib.util
+    import io
+    from kelly import seasonlane, store
+    spec = importlib.util.spec_from_file_location("audit_fixes_measure", os.path.join(os.path.dirname(LEDGER), "tools", "audit_fixes_measure.py"))
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    rows = [l | {"date": "2026-10-17", "pe": l["prob"], "result": None} for l in _a13_legs((1, (0.30, 4.0)), (2, (0.70, 1.6)), (3, (0.70, 1.6)), (4, (0.70, 1.6)))]
+    store.save(seasonlane.LOG, rows)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        tool.a13()
+    txt = out.getvalue()
+    assert "avant 0 combiné(s) [] -> après 1 [4.1]" in txt and "passe de [] à au moins un combiné : 1" in txt, txt
+    print("ok  A13 : l'outil de mesure rejoue les jours depuis le journal saison (avant / après)")
+
+
 def main():
     test_declaration_unchanged()
     test_a1_double_chance_freshness()
     test_a4_calibrated_probability_bounded()
+    test_a13_season_auto_plan_head_leg()
+    test_a13_measure_tool()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()
