@@ -1,0 +1,166 @@
+{
+ "prereg": {
+  "declared_by": "utilisateur (spécification « voie cotes », 17/10/2026) ; pré-déclaration rédigée par l'assistant AVANT le code et AVANT toute lecture de données réelles de cette voie (aucune ligne du journal oddsonly n'existe)",
+  "declared_on": "2026-10-17",
+  "question": "les incohérences de prix internes à 1xBet (et son retard sur d'autres books) sont-elles réelles, assez durables pour être jouées à la main, et le prix pris bat-il le dernier prix 1xBet ? Aucune statistique d'équipe, aucun modèle de force : seulement des cotes",
+  "voie": {
+   "name": "cotes",
+   "label": "cotes",
+   "flag": "STRATEGY_ODDSONLY",
+   "default": "ghost",
+   "rule": "fantôme : calculée et journalisée, jamais choisie ; aucune jambe de combiné, aucune mise, aucun code coupon, aucun apprentissage ; la valeur « on » est REFUSÉE dans ce lot (lue comme ghost) et le restera tant que la règle de retour n'est pas remplie ET décidée par le superviseur",
+   "isolation": "lignes dans oddsonly_log.json seulement (jamais ensemble.LOG_FILE, jamais le journal des stats / saison) ; ni ensemble.STRATEGIES ni lanestats.LANES ne reçoivent la voie dans ce lot ; settle_log reçoit un apprenant NUL"
+  },
+  "reads": {
+   "source": "les relevés 1xBet DÉJÀ faits (matin, 15 h, passages horaires, fenêtre des stats, saison) : aucune relecture, aucun appel réseau, aucun changement de `wanted` ; la voie observe le résultat de xbet.fetch_day et ne lit que le cache disque pour l'heure de lecture",
+   "genuine_read": "un relevé d'un match est « authentique » si l'heure de lecture du cache 1xBet (xbet.odds_time des GameId de ses cotes) est NOUVELLE pour ce match ; un résultat servi par le cache à la même heure n'est pas une nouvelle lecture (sinon la survie serait fabriquée)",
+   "prematch_only": "lectures faites avant le coup d'envoi (commence > heure de lecture) ; les relevés « live » de la fenêtre des stats sont des lectures d'avant-match et comptent",
+   "coverage": "px ne contient les échelles de stats (corners, cartons jaunes, tirs, tirs cadrés, fautes) que pour les familles demandées (`wanted`) par les pronostics du jour : la couverture suit les pronostics existants et est rapportée telle quelle"
+  },
+  "families": {
+   "goal": [
+    "goals",
+    "team_goals",
+    "btts",
+    "dc",
+    "h2h"
+   ],
+   "stats": [
+    "corners",
+    "cards",
+    "yellow",
+    "shots",
+    "sot",
+    "fouls"
+   ],
+   "excluded": "touches, hors-jeu, stats joueurs et toute famille hors voies (lanes.ticket_ok faux) : jamais détectées ni journalisées",
+   "note": "le texte de la demande dit « cinq de stats » ; la voie stats en compte six (STATS_LANE) : les six sont prises"
+  },
+  "demargination": {
+   "two_way": "ensemble.devig (Shin) sur la paire Over/Under d'une MÊME ligne ; None -> ligne ignorée",
+   "three_way": "ensemble.devig sur 1N2 complet",
+   "double_chance": "ensemble.devig_mass (masse 2) sur les trois issues",
+   "overround": {
+    "ordinary": [
+     0.98,
+     1.3
+    ],
+    "double_chance": [
+     1.96,
+     2.6
+    ]
+   },
+   "lines": "lignes en .5 seulement (pas de remboursement) : une ligne entière est ignorée",
+   "suspended": "une cellule suspendue (blocked) ou manquante rend sa paire / son marché inutilisable pour ce relevé"
+  },
+  "mechanisms": {
+   "1a": {
+    "name": "cohérence 1N2 <-> double chance",
+    "rule": "identité exacte p(1X)=p(1)+p(X), p(12)=p(1)+p(2), p(X2)=p(X)+p(2) ; DEUX sens : p implicite des 1N2 depuis la double chance (p1=a+b-1, pX=a+c-1, p2=b+c-1 avec a=p(1X), b=p(12), c=p(X2)) et p implicite des doubles chances depuis le 1N2 ; écart = p_implicite x cote - 1 de la sélection testée"
+   },
+   "1b": {
+    "name": "cohérence totaux d'équipe <-> total du match <-> les 2 marquent",
+    "rule": "deux Poisson indépendantes dont les moyennes lambda_dom, lambda_ext sont ajustées par moindres carrés sur les probabilités démarginées des échelles de buts de CHAQUE équipe (au moins 2 paires en .5 par équipe) ; p implicite du total du match = Poisson(lambda_dom+lambda_ext) ; p implicite de « les 2 marquent oui » = (1-exp(-lambda_dom))(1-exp(-lambda_ext)) ; écart sur les sélections du total (Over/Under) et des 2 marquent (Yes/No)",
+    "caveat": "l'hypothèse d'indépendance Poisson est elle-même une source d'écart apparent (corrélation des buts, surdispersion) : 1b est rapporté À PART de 1a et 1c, jamais fondu avec eux"
+   },
+   "1c": {
+    "name": "cohérence des lignes successives d'un même marché",
+    "rule": "une seule loi binomiale négative (moyenne mu, taille r : variance mu + mu^2/r) ajustée par moindres carrés sur les probabilités démarginées des paires en .5 d'une échelle ; p implicite d'une ligne = ajustement SANS cette ligne (leave-one-out : la ligne testée ne participe pas à son propre ajustement) ; au moins 4 paires pour tester (3 pour ajuster) ; mu cherché par balayage fin, r parmi {0,5 ; 1 ; 2} x la dispersion de repli de la famille, retenu au moindre carré ; avec moins de 3 autres paires la dispersion de repli est utilisée seule",
+    "fallback_r": {
+     "goals": 100.0,
+     "team_goals": 100.0,
+     "corners": 60.0,
+     "cards": 25.0,
+     "yellow": 25.0,
+     "shots": 40.0,
+     "sot": 25.0,
+     "fouls": 100.0
+    },
+    "fallback_note": "valeurs FIGÉES, non apprises, choisies avant toute lecture ; l'importation de valeurs apprises ferait dépendre la voie des autres voies"
+   },
+   "2": {
+    "name": "retard sur les autres books",
+    "rule": "écart = p_books x cote 1xBet - 1 ; p_books = proba démarginée (prob_book) du pari réel de The Odds API (même match, marché, côté, ligne) ; buts (goals, team_goals, btts, dc, h2h) : seulement si la proba vient d'un book de référence (ensemble.sharp_of : Pinnacle / sharp) ; corners : consensus d'au moins 2 books ; l'âge du relevé des books doit être connu et <= ENSEMBLE_SHARP_MAX_AGE_MIN",
+    "inactive": {
+     "cards": "1xBet ne cote pas « tous les cartons » comme The Odds API (alternate_totals_cards)",
+     "yellow": "The Odds API ne cote pas les cartons jaunes seuls",
+     "shots": "The Odds API ne cote pas les tirs",
+     "sot": "The Odds API ne cote pas les tirs cadrés",
+     "fouls": "The Odds API ne cote pas les fautes"
+    },
+    "overlap": "pour les familles de buts ce mécanisme recouvre la voie sharpgap existante (même Pinnacle) : ses lignes portent `overlap_sharpgap = true` et ne sont PAS une preuve indépendante"
+   },
+   "3": {
+    "name": "mouvement",
+    "status": "OBSERVATION SEULEMENT : journalisé, jamais compté comme valeur dans ce lot",
+    "rule": "log(cote 1xBet au relevé authentique courant / cote au relevé authentique précédent du même match, voie à part : instantanés propres à la voie), et log de la proba des books de référence sur la même période quand elle existe ; une ligne n'est journalisée que si |mouvement 1xBet| >= 0,03 ; odds_history.json n'est PAS un historique 1xBet (consensus The Odds API, un seul point par pari) et n'est pas utilisé pour cela"
+   }
+  },
+  "decision": {
+   "value_leg": "jambe cotes « à valeur » si l'écart d'un mécanisme 1 (1a, 1b ou 1c) ou 2 est >= ODDSONLY_EDGE (0,03) et <= ODDSONLY_MAX_EDGE (0,15)",
+   "suspect": "un écart > ODDSONLY_MAX_EDGE est journalisé comme SUSPECT (cellule manquante, marché suspendu), compté dans le rapport, JAMAIS traité comme valeur",
+   "controls": "overround existant (ensemble.OVERROUND / DC_OVERROUND) sur chaque marché démarginé ; prix > 1 ; pari non suspendu",
+   "mechanism_3": "jamais une valeur"
+  },
+  "journal": {
+   "file": "oddsonly_log.json",
+   "archive_days": 90,
+   "granularity": "UNE ligne par (jour, match, sélection, mécanisme [1a|1b|1c|2|3]) à la PREMIÈRE détection ; les relevés suivants ne mettent à jour que les champs de survie (last_seen_at, gone_at, nombre de relevés, écart courant)",
+   "fields": [
+    "key",
+    "id",
+    "home",
+    "away",
+    "sport_key",
+    "commence",
+    "date",
+    "market",
+    "name",
+    "point",
+    "family",
+    "mech",
+    "status",
+    "xodds",
+    "xref",
+    "p_impl",
+    "edge",
+    "first_at",
+    "last_seen_at",
+    "gone_at",
+    "reads",
+    "censored",
+    "xclose",
+    "xgone",
+    "result",
+    "strategy",
+    "overlap_sharpgap"
+   ],
+   "xclose": "dernier prix 1xBet de la MÊME sélection tiré des relevés de la voie, à 0-90 minutes du coup d'envoi, non suspendu (mêmes filtres que lanestats.x_clv, LEAD_OK_MIN = 90) ; pari retiré par 1xBet : xgone",
+   "settlement": "règlement gratuit habituel (settle._settle_fair_row) ; aucun apprentissage (apprenant nul)"
+  },
+  "lifetime": {
+   "definition": "une incohérence DISPARAÎT quand son écart recalculé à un relevé authentique ultérieur du même match passe sous ODDSONLY_EDGE (0,03) ; durée = intervalle [dernier relevé où l'écart était >= 0,03 - première détection ; premier relevé où il est < 0,03 - première détection] en minutes (donnée par intervalle)",
+   "censored": "censurée si le coup d'envoi arrive, si la cellule disparaît ou est suspendue, ou s'il n'y a plus de relevé authentique : jamais comptée comme disparue",
+   "median_rule": "médiane rapportée sur les incohérences disparues seulement, avec borne basse ET borne haute, et la part censurée à côté ; une médiane n'est donnée qu'avec au moins 20 incohérences disparues",
+   "resolution": "avec des relevés environ horaires, la mesure dit surtout « disparue en moins d'environ une heure » ou « encore là » : elle ne sera pas lue avec une précision de minutes"
+  },
+  "measures": {
+   "clv": "log(prix pris / xclose), moyenne et demi-marge à 95 % avec erreur-type PAR MATCH (lanestats.stats), par mécanisme et par famille ; lignes de statut « value » seulement (les lignes suspectes et le mouvement sont rapportés à part)",
+   "realised_announced": "réalisé = gagnées / réglées ; annoncé = moyenne de p_impl (la proba implicite, pas une proba de modèle)",
+   "return_rule": "CLV moyen >= 0 avec intervalle à 95 % excluant zéro (borne basse > 0) sur au moins 300 lignes de valeur à CLV mesuré ET 30 matchs distincts (même règle que la voie stats) : condition NÉCESSAIRE pour que le superviseur envisage « on » ; jamais suffisante, jamais automatique",
+   "result_metrics": {
+    "share_matches": "part des matchs authentiquement lus et calculables (au moins un marché évaluable par 1a, 1b, 1c ou 2) qui ont au moins une incohérence >= 3 % non suspecte ; dénominateur = ces matchs",
+    "median_lifetime": "voir lifetime",
+    "clv_by_mechanism": "CLV par mécanisme (1a, 1b, 1c, 2 séparés), avec le nombre de lignes et de matchs"
+   },
+   "comparisons": "cases = mécanisme x famille : aucune correction de comparaisons multiples ; le rapport donne le nombre de cases lisibles pour qu'une poignée de cases significatives ne soit pas lue comme un signal"
+  },
+  "report": {
+   "first_report": "lundi 19/10/2026, après le premier week-end de collecte (17-18/10) : collecte et incohérences brutes ; le CLV demande la clôture et le règlement : il ne sera lisible qu'avec les semaines suivantes"
+  },
+  "not_done": "rien n'est appris, aucune jambe de combiné, aucune mise, aucun code coupon, aucune relecture 1xBet en plus, aucune écriture hors oddsonly_log.json / ses instantanés / son archive",
+  "edgemap": "l'ajout de la voie « cotes » à la carte des edges exige un amendement de edgemap_ledger.json AVANT la première évaluation du 19/10 ; sinon la voie n'entre pas dans la carte (sa propre ligne de bilan suffit)"
+ },
+ "prereg_sha": "89bbf5a0da312319bf5c92632369d0056eac0e1361def79773d1e63b97d57d89",
+ "written_at": "2026-10-17T10:00:00+00:00"
+}
