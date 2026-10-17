@@ -162,5 +162,41 @@
   "edgemap": "l'ajout de la voie « cotes » à la carte des edges exige un amendement de edgemap_ledger.json AVANT la première évaluation du 19/10 ; sinon la voie n'entre pas dans la carte (sa propre ligne de bilan suffit)"
  },
  "prereg_sha": "89bbf5a0da312319bf5c92632369d0056eac0e1361def79773d1e63b97d57d89",
- "written_at": "2026-10-17T10:00:00+00:00"
+ "written_at": "2026-10-17T10:00:00+00:00",
+ "amendments": [
+  {
+   "on": "2026-10-17",
+   "before_any_real_read": true,
+   "prereg_sha_unchanged": true,
+   "by": "assistant, après relecture adverse des commits f36c901 / 1fdddf9 / ec04a47 (aucune ligne réelle n'existait : la voie n'a encore rien collecté)",
+   "written_at_correction": "`written_at` du bloc d'origine (2026-10-17T10:00:00+00:00) n'est pas l'heure réelle ; le commit f36c901 (ledger seul) précède le code dans l'historique git, qui fait foi",
+   "declared_precisions": {
+    "fit_constants": "ajustement de mu : grille de 40 points géométriques de 0,2 à 2,5 x (plus grande ligne) + 3, puis 14 sections d'or ; Poisson (r = None) pour 1b ; avec moins de 3 paires le repli seul est une branche défensive (inatteignable : 1c exige 4 paires)",
+    "price_control": "une cote testée doit être > 1",
+    "recurrence": "UNE ligne par (jour, match, mécanisme, sélection) : une ligne disparue ou censurée n'est JAMAIS rouverte et une réapparition n'est pas journalisée (la clé existe déjà)",
+    "left_censoring": "first_at est le premier relevé authentique où l'incohérence a été VUE, pas son début réel : les durées sont sous-estimées (censure à gauche), et le rapport le dit",
+    "status_frozen": "le statut (value / suspect) est celui de la première détection ; si l'écart d'une ligne value dépasse ensuite ODDSONLY_MAX_EDGE, went_suspect passe à vrai et la ligne est EXCLUE du CLV ; une ligne suspect ne redevient jamais valeur",
+    "censored_labels": "censored = « cellule » (la sélection n'est plus dans un marché pourtant relu : retirée ou suspendue), « non_calculable » (la sélection est là mais son mécanisme ne se recalcule plus : moins de 4 paires, books trop vieux...), « coup d'envoi » ; si le MARCHÉ entier n'est pas dans le relevé (famille non demandée à ce passage), la ligne reste OUVERTE, ni censurée ni xgone",
+    "xclose": "dernier prix NON suspendu lu à 0-90 minutes du match ; un relevé suspendu ne remplace jamais un bon prix (il n'écrit qu'une entrée susp si aucun prix n'existe) ; xgone = la cellule manque d'un marché relu et n'est pas suspendue, définitif",
+    "authentic_read": "si le cache ne donne aucune heure de lecture (xbet.odds_time None), le match est SAUTÉ : aucune lecture n'est fabriquée",
+    "mechanism_2_sync": "les probas des books ne doivent pas être plus récentes que la lecture 1xBet de plus de 10 minutes (sinon le retard serait déjà comblé) ni plus vieilles que ENSEMBLE_SHARP_MAX_AGE_MIN ; même règle de synchronisation pour la proba de référence du mécanisme 3",
+    "mechanism_3_cap": "au plus 5 mouvements (les plus forts) journalisés par match et par relevé, 20 lignes de mouvement par match ; seuil 0,03 ; statut « watch » ; champs mv et mv_ref",
+    "fields": [
+     "edge_last",
+     "went_suspect",
+     "nb_mu",
+     "nb_r",
+     "n_lines",
+     "lam",
+     "sens",
+     "age_min",
+     "mv",
+     "mv_ref"
+    ],
+    "volume": "lignes de plus de 90 jours retirées du journal à chaque écriture ; le règlement (lot suivant) les archive avant (settle_log, apprenant nul)",
+    "ordering": "journal écrit d'abord, état ensuite : une écriture du journal qui échoue laisse l'état en arrière et la lecture est revue",
+    "state_days": "un instantané de match est oublié 2 jours après son coup d'envoi"
+   }
+  }
+ ]
 }
