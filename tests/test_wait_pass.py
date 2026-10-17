@@ -45,7 +45,7 @@ def test_wiring():
     s = open(SCRIPT, encoding="utf-8").read()
     upd = s[s.index("    update)"):s.index("    guard)")]
     assert upd.index("ci_gate") < upd.index("wait_pass") < upd.index("keep_mirror") < upd.index("git pull"), "update : CI, puis attente du passage, puis miroir et git pull"
-    assert 'exec "$PREFIX/bin/kelly" restart "$@"' in upd and "shift" in upd
+    assert 'exec "$PREFIX/bin/kelly" restart --now "$@"' in upd and "shift" in upd, "update a déjà attendu : le restart final ne ré-attend pas 15 min"
     rs = s[s.index("    restart)"):s.index("    update)")]
     assert rs.index("wait_pass") < rs.index('"$0" stop'), "restart : attendre avant d'arrêter"
     assert "pgrep -f \"bot\\.py (--daily|--track|--watch)\"" in s
