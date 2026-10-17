@@ -458,6 +458,33 @@ def _settle_fair_row(b, now, fdata, stats_for=None):
     return bool(b.get("result"))
 
 
+def settle_oddsonly(now=None, stats_for=None):
+    """Règle les lignes de la voie `cotes` (oddsonly_log.json) avec le même règlement gratuit (_settle_fair_row), SANS archive compacte ni apprentissage (l'archive d'ensemble perdrait le mécanisme et la durée de vie) :
+    le journal garde ses 90 jours. Fusionne par clé dans une transaction (une écriture de la collecte entre-temps n'est pas perdue). -> nombre de lignes réglées."""
+    from . import oddsonly
+    now = now or datetime.now(timezone.utc)
+    fdata = FootballData()
+    log = store.load(oddsonly.LOG_FILE, [])
+    done = {}
+    for r in (log if isinstance(log, list) else []):
+        if isinstance(r, dict) and r.get("result") is None and r.get("commence") and r.get("market"):
+            try:
+                if _settle_fair_row(r, now, fdata, stats_for or _cached_fstats):
+                    done[r["key"]] = {k: r[k] for k in ("result", "final", "val") if k in r}
+            except Exception as e:                      # noqa: BLE001 - une ligne bancale ne bloque pas les autres
+                print(f"[cotes] ligne {r.get('key')} non réglée : {type(e).__name__}: {e}", file=sys.stderr)
+
+    def merge(cur):
+        cur = cur if isinstance(cur, list) else []
+        for r in cur:
+            if isinstance(r, dict) and r.get("key") in done:
+                r.update(done[r["key"]])
+        oddsonly.censor_past(cur, now.timestamp())
+        return cur, None
+    store.update(oddsonly.LOG_FILE, merge, [])
+    return len(done)
+
+
 def settle_fair(now=None, stats_for=None):
     """Règle les pronostics sans cote (data/fair.json) avec les mêmes sources gratuites que les paris (API-Football,
     puis CSV football-data) : jamais de crédit, jamais d'annulation payante. -> (toutes les lignes, lignes réglées cette fois)."""

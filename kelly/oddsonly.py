@@ -243,6 +243,7 @@ def movement(px_now, px_prev, ref_now=None, ref_prev=None):
 
 LOG_FILE = "oddsonly_log.json"
 STATE_FILE = "oddsonly_state.json"
+COVER_FILE = "oddsonly_cover.json"                # couverture par jour : matchs lus / calculables, sélections évaluées par mécanisme et famille
 ARCH_DAYS = 90                                    # lignes de plus de 90 jours retirées du journal (le règlement les archive avant : settle_log)
 LEAD_OK_MIN = 90                                  # xclose : relevé à 0-90 minutes du coup d'envoi (comme lanestats.x_clv)
 STATE_DAYS = 2                                    # un instantané de match plus vieux que son coup d'envoi + 2 jours est oublié
@@ -303,7 +304,7 @@ def _new_row(r, mid, ev, sport_key, date, at):
     return {"key": row_key(date, mid, r["mech"], r["market"], r["name"], r["point"]), "id": mid, "home": ev.get("home_team"), "away": ev.get("away_team"),
             "sport_key": sport_key, "commence": ev.get("commence_time"), "date": date, "market": r["market"], "name": r["name"], "point": r["point"],
             "family": r["family"], "mech": r["mech"], "status": r.get("status"), "xodds": r["xodds"], "xref": r.get("xref"), "p_impl": r["p_impl"], "edge": r["edge"],
-            "edge_last": r["edge"], "went_suspect": False, "first_at": at, "last_seen_at": at, "gone_at": None, "reads": 1, "censored": None, "xclose": None, "xgone": False,
+            "edge_last": r["edge"], "pe": r["p_impl"], "went_suspect": False, "first_at": at, "last_seen_at": at, "gone_at": None, "reads": 1, "censored": None, "xclose": None, "xgone": False,
             "result": None, "strategy": "cotes"} | {k: r[k] for k in ("overlap_sharpgap", "sens", "nb_mu", "nb_r", "n_lines", "lam", "age_min") if k in r}
 
 
@@ -454,3 +455,175 @@ def _write(work, evals, picks, prev_ms, now_ts):
         return {"matches": {k: v for k, v in ms.items() if (v.get("ko") or 0) + STATE_DAYS * 86400 > now_ts}}, None
 
     store.update(STATE_FILE, upd_state, {})
+
+    def upd_cover(doc):
+        """Couverture par jour : matchs lus, matchs calculables (au moins un marché évalué par 1a, 1b, 1c ou 2), sélections évaluées par mécanisme et famille (dénominateurs du rapport)."""
+        doc = doc if isinstance(doc, dict) else {}
+        for mid, sk, ev, m, rt, ko in work:
+            day = datetime.fromtimestamp(ko, timezone.utc).date().isoformat()
+            d = doc.setdefault(day, {"read": [], "comp": [], "ev": {}})
+            if mid not in d["read"]:
+                d["read"].append(mid)
+            evs = [r for r in evals.get(mid, ()) if r["mech"] in ("1a", "1b", "1c", "2")]
+            if evs and mid not in d["comp"]:
+                d["comp"].append(mid)
+            for r in evs:
+                k = f"{r['mech']}|{r['family']}"
+                d["ev"][k] = d["ev"].get(k, 0) + 1
+        keep = sorted(doc)[-(ARCH_DAYS + 3):]
+        return {k: doc[k] for k in keep}, None
+
+    store.update(COVER_FILE, upd_cover, {})
+
+
+# ---------- règlement et mesure ----------
+
+MIN_LIFETIME_N = 20                               # médiane de durée de vie : au moins 20 incohérences disparues
+RETURN_N, RETURN_MATCHES = 300, 30                # règle de retour (ledger) : lignes de valeur à CLV mesuré et matchs distincts
+
+
+def load_rows(days=None, today=None):
+    """Lignes du journal de la période (liste vide si illisible)."""
+    from datetime import date, timedelta
+    from . import store
+    log = store.load(LOG_FILE, [])
+    log = [r for r in log if isinstance(r, dict)] if isinstance(log, list) else []
+    if days:
+        cut = str((date.fromisoformat(str(today)[:10]) if today else date.today()) - timedelta(days=days))
+        log = [r for r in log if (r.get("date") or "") >= cut]
+    return log
+
+
+def value_rows(rows):
+    """Lignes de VALEUR au sens du ledger : mécanismes 1 et 2, statut « value » à la première détection, jamais devenues suspectes."""
+    return [r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2") and r.get("status") == "value" and not r.get("went_suspect")]
+
+
+def lifetime(rows):
+    """(disparues, censurées, ouvertes, médiane basse, médiane haute) en minutes : intervalle [dernier relevé où l'écart était là ; premier relevé où il a disparu], depuis la première détection. Médianes seulement avec MIN_LIFETIME_N disparues."""
+    from datetime import datetime
+
+    def mins(a, b):
+        return (datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() / 60
+    gone = [r for r in rows if r.get("gone_at")]
+    lo = sorted(mins(r["first_at"], r["last_seen_at"]) for r in gone)
+    hi = sorted(mins(r["first_at"], r["gone_at"]) for r in gone)
+    cens = sum(1 for r in rows if r.get("censored") and not r.get("gone_at"))
+    opened = sum(1 for r in rows if not r.get("censored") and not r.get("gone_at"))
+
+    def med(v):
+        return None if len(v) < MIN_LIFETIME_N else (v[len(v) // 2] if len(v) % 2 else (v[len(v) // 2 - 1] + v[len(v) // 2]) / 2)
+    return len(gone), cens, opened, med(lo), med(hi)
+
+
+def _pc(x, signed=True):
+    return (f"{x * 100:+.1f}" if signed else f"{x * 100:.1f}").replace(".", ",").replace("-", "−") + " %"
+
+
+def stats_block(rows, cover=None):
+    """Chiffres du rapport (dict) : matchs lus / calculables / avec incohérence, lignes par mécanisme, suspects, durée de vie, CLV par mécanisme, réalisé / annoncé."""
+    from . import lanestats as LS
+    val = value_rows(rows)
+    out = {"mech": {}, "suspect": sum(1 for r in rows if r.get("status") == "suspect" or r.get("went_suspect")), "moves": sum(1 for r in rows if r.get("mech") == "3")}
+    for m in ("1a", "1b", "1c", "2"):
+        mine = [r for r in val if r["mech"] == m]
+        done = [r for r in mine if LS.settled(r)]
+        n, mean, h, gone = LS.clv(done)
+        w = sum(1 for r in done if r["result"] == "win")
+        ann = [r["p_impl"] for r in done if r.get("p_impl") is not None]
+        out["mech"][m] = {"lines": len(mine), "matches": len({r["id"] for r in mine}), "settled": len(done), "clv_n": n, "clv": mean, "h": h, "gone": gone,
+                          "real": w / len(done) if done else None, "ann": sum(ann) / len(ann) if ann else None,
+                          "clv_matches": len({r["id"] for r in done if LS.x_clv(r) is not None})}
+    out["life"] = lifetime([r for r in rows if r.get("mech") in ("1a", "1b", "1c", "2") and r.get("status") in ("value", "suspect")])
+    cov = cover or {}
+    out["read"] = sum(len(d.get("read", ())) for d in cov.values())
+    out["comp"] = sum(len(d.get("comp", ())) for d in cov.values())
+    out["hit"] = len({(r["date"], r["id"]) for r in val})
+    out["ev"] = {}
+    for d in cov.values():
+        for k, n in (d.get("ev") or {}).items():
+            out["ev"][k] = out["ev"].get(k, 0) + n
+    all_val = [r for r in val if LS.settled(r)]
+    n, mean, h, _ = LS.clv(all_val)
+    out["all_clv"] = (n, mean, h, len({r["id"] for r in all_val if LS.x_clv(r) is not None}))
+    return out
+
+
+def load_cover(days=None, today=None):
+    from datetime import date, timedelta
+    from . import store
+    doc = store.load(COVER_FILE, {})
+    doc = doc if isinstance(doc, dict) else {}
+    if days:
+        cut = str((date.fromisoformat(str(today)[:10]) if today else date.today()) - timedelta(days=days))
+        doc = {k: v for k, v in doc.items() if k >= cut}
+    return doc
+
+
+def lane_line(days=None, today=None):
+    """Ligne « cotes » du bilan par voie (texte brut) ; '' sans rien de journalisé. Ne lève jamais."""
+    try:
+        rows = load_rows(days, today)
+        if not rows:
+            return ""
+        b = stats_block(rows, load_cover(days, today))
+        tot = sum(v["lines"] for v in b["mech"].values())
+        txt = f"cotes (fantôme, aucun pari) : {tot} incohérence{'s' if tot > 1 else ''} ≥ {_pc(EDGE, False)} sur {b['hit']} match{'s' if b['hit'] > 1 else ''}"
+        txt += " (" + ", ".join(f"{m} {v['lines']}" for m, v in b["mech"].items() if v["lines"]) + ")" if tot else ""
+        n, mean, h, k = b["all_clv"]
+        if n:
+            txt += f" · prix pris contre le dernier prix 1xBet {_pc(mean)}" + (f" ± {_pc(h, False)}" if h is not None else "") + f" sur {n} ({k} matchs)"
+        elif tot:
+            txt += " · pas encore de CLV (clôture et règlement à venir)"
+        g, c, o, lo, hi = b["life"]
+        if g:
+            txt += f" · disparues {g}, censurées {c}, ouvertes {o}" + (f", durée médiane entre {lo:.0f} et {hi:.0f} min" if lo is not None else "")
+        return txt
+    except Exception as e:                          # noqa: BLE001
+        print(f"[cotes] ligne du bilan illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return ""
+
+
+INACTIVE2 = {"cards": "1xBet ne cote pas « tous les cartons »", "yellow": "The Odds API ne cote pas les cartons jaunes", "shots": "The Odds API ne cote pas les tirs",
+             "sot": "The Odds API ne cote pas les tirs cadrés", "fouls": "The Odds API ne cote pas les fautes"}
+
+
+def report(args=None, today=None):
+    """Commande « incohérences [N] » : le rapport de la voie cotes en texte brut."""
+    from . import fmt
+    try:
+        days = next((int(a) for a in (args or ()) if str(a).isdigit() and len(str(a)) <= 3), None)
+        rows = load_rows(days, today)
+        cover = load_cover(days, today)
+        head = f"🧮 Voie cotes (fantôme : aucune jambe, aucune mise){f' · {days} derniers jours' if days else ''}"
+        if not rows and not cover:
+            return fmt.Html(fmt.b(fmt.esc(head)) + "\n\nRien collecté pour l'instant : la voie lit les relevés 1xBet déjà faits (matin, 15 h, passages horaires), aucune requête de plus.")
+        b = stats_block(rows, cover)
+        L = [f"Matchs lus : {b['read']} · calculables : {b['comp']} · avec au moins une incohérence ≥ {_pc(EDGE, False)} non suspecte : {b['hit']}" + (f" ({_pc(b['hit'] / b['comp'], False)})" if b["comp"] else "")]
+        L.append(f"Suspectes (écart > {_pc(MAX_EDGE, False)}, jamais une valeur) : {b['suspect']} · mouvements de cote journalisés (observation seulement) : {b['moves']}")
+        for m, name in (("1a", "1N2 ↔ double chance"), ("1b", "totaux d'équipe → total / les 2 marquent (Poisson : à part)"), ("1c", "lignes successives"), ("2", "retard sur les autres books")):
+            v = b["mech"][m]
+            line = f"• {m} {name} : {v['lines']} ligne{'s' if v['lines'] > 1 else ''} sur {v['matches']} match{'s' if v['matches'] > 1 else ''}"
+            if v["clv_n"]:
+                line += f" · CLV {_pc(v['clv'])}" + (f" ± {_pc(v['h'], False)}" if v["h"] is not None else "") + f" sur {v['clv_n']} ({v['clv_matches']} matchs)"
+            elif v["lines"]:
+                line += " · pas encore de CLV"
+            if v["real"] is not None:
+                line += f" · réalisé {_pc(v['real'], False)} pour {_pc(v['ann'], False)} annoncé"
+            if m == "2":
+                line += " (buts : recouvre sharpgap, preuve non indépendante)"
+            L.append(line)
+        g, c, o, lo, hi = b["life"]
+        L.append(f"Durée de vie : {g} disparue{'s' if g > 1 else ''}, {c} censurée{'s' if c > 1 else ''}, {o} ouverte{'s' if o > 1 else ''}"
+                 + (f" · médiane entre {lo:.0f} et {hi:.0f} min (bornes basse et haute)" if lo is not None else f" · pas de médiane avant {MIN_LIFETIME_N} disparues")
+                 + " · relevés environ horaires : lire « disparue en moins d'environ une heure » ou « encore là », pas des minutes ; première vue ≠ début réel (censure à gauche)")
+        L.append("Mécanisme 2 inactif : " + " ; ".join(f"{f} ({why})" for f, why in INACTIVE2.items()))
+        ev = ", ".join(f"{k.replace('|', '/')} {n}" for k, n in sorted(b["ev"].items())) or "rien"
+        L.append(f"Sélections évaluées (mécanisme/famille) : {ev}")
+        n, mean, h, k = b["all_clv"]
+        L.append(f"Règle de retour (nécessaire, jamais suffisante, décision du superviseur) : CLV ≥ 0 borne basse > 0 sur {RETURN_N} lignes et {RETURN_MATCHES} matchs : {n}/{RETURN_N} lignes, {k}/{RETURN_MATCHES} matchs"
+                 + (f", CLV {_pc(mean)}" if n else "") + ". Cases mécanisme × famille : aucune correction de comparaisons multiples.")
+        return fmt.Html(fmt.b(fmt.esc(head)) + "\n\n" + "\n".join(fmt.esc(x) for x in L))
+    except Exception as e:                          # noqa: BLE001
+        print(f"[cotes] rapport illisible : {type(e).__name__}: {e}", file=sys.stderr)
+        return "Rapport de la voie cotes illisible pour l'instant (voir /erreurs)."

@@ -293,6 +293,13 @@ def lane_lines(rows, days=None, today=None, plain=False):
     if cl:
         out.append(cl)
     try:
+        from . import oddsonly
+        ol = oddsonly.lane_line(days, today)          # voie « cotes » : fantôme, aucun pari
+        if ol:
+            out.append(ol)
+    except Exception as e:                      # noqa: BLE001
+        print(f"[lanes] ligne cotes illisible : {type(e).__name__}: {e}", file=sys.stderr)
+    try:
         cm = combo_money(days, today)
     except Exception as e:                      # noqa: BLE001
         print(f"[lanes] argent des combinés illisible : {type(e).__name__}: {e}", file=sys.stderr)

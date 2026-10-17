@@ -19,8 +19,8 @@ from datetime import date, datetime, timedelta, timezone
 from . import calib, config as C, lanestats as LS, store
 
 STATE_FILE = "edgemap_state.json"
-VOIES = ("stats", "stats_cup", "saison", "saison_cup")
-VOIE_LABEL = {"stats": "stats", "stats_cup": "stats (coupes)", "saison": "saison", "saison_cup": "saison (coupes)"}
+VOIES = ("stats", "stats_cup", "saison", "saison_cup", "cotes")
+VOIE_LABEL = {"stats": "stats", "stats_cup": "stats (coupes)", "saison": "saison", "saison_cup": "saison (coupes)", "cotes": "cotes (fantôme)"}
 CASE_MIN = 100                                 # lignes à CLV mesuré pour lire une case
 AGG_MIN = 300                                  # ... pour lire un agrégat (toutes ligues)
 MIN_MATCHES = 30                               # matchs distincts (comme la coupure de la voie stats)
@@ -57,7 +57,7 @@ def voie_of(c):
 
 def voie_rows():
     """{voie: lignes RÉGLÉES de la population pré-déclarée}, une même clé une seule fois."""
-    from . import cupstats, seasonlane
+    from . import cupstats, oddsonly, seasonlane
     out = {v: [] for v in VOIES}
     seen = set()
 
@@ -76,6 +76,8 @@ def voie_rows():
     for r in seasonlane.journal_rows():
         if isinstance(r, dict) and r.get("sval") == 1:
             put("saison_cup" if r.get("cup") else "saison", r)
+    for r in oddsonly.value_rows(oddsonly.load_rows()):         # voie « cotes » (fantôme, lecture seule) : incohérences de valeur réglées, jamais devenues suspectes
+        put("cotes", r)
     return out
 
 

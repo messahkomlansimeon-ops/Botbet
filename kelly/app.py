@@ -492,6 +492,7 @@ def morning_report(now):
     msgs += _step("pronostics sans cote", lambda: fair_report(now), [])
     got_ens = _step("journal des avis de l'ensemble", lambda: settle.settle_ensemble(now))      # après le règlement des pronostics : leurs stats sont en cache
     _step("journal des stats de coupe", lambda: settle.settle_cups(now))                      # même règlement gratuit, journal à part, rien n'est appris
+    _step("journal de la voie cotes", lambda: settle.settle_oddsonly(now))            # fantôme : même règlement gratuit, aucun apprentissage
     got_sea = _step("journal de la voie saison", lambda: settle.settle_season(now))              # même règlement gratuit, journal et apprentissage à part
     if got_sea and (got_sea[0] or got_sea[1]):
         print(f"[saison] journal : {len(got_sea[0])} ligne(s) réglée(s), {got_sea[1]} apprise(s)", file=sys.stderr)
@@ -1682,6 +1683,7 @@ HELP = Html("""<b>🤖 Kelly — mode d'emploi</b>
    📈 <b>Tendances</b> : les championnats et les équipes qui obtiennent ou concèdent le plus de corners, cartons, tirs, fautes…
    🎯 <b>Combis</b> (écris <i>combis</i>, <i>combis 7</i>) : les résultats de tes combinés, jour par jour · 🌱 <i>saison résultats</i> : ceux de la voie saison, séparés
    📉 <b>Courbes</b> (ou écris <i>courbes</i>) : deux images, ton capital jour après jour et ton CLV 1xBet cumulé avec son intervalle
+   🧮 <b>Incohérences</b> (écris <i>incohérences</i>, <i>incohérences 7</i>) : la voie « cotes » (fantôme), prix 1xBet incohérents entre eux, durée de vie, CLV
    🗺️ <b>Carte</b> (écris <i>carte</i>, <i>carte stats</i>, <i>carte saison</i>) : où les voies stats et saison battent le dernier prix 1xBet, case par case (lecture seule)
    🧮 <b>Marchés</b> : marché par marché (buts, corners, tirs…), si Kelly est fiable, si elle fait mieux que 1xBet, et lesquels sont écartés des combinés
    🩺 <b>Status</b> : l'état de Kelly (services, sources, quotas, apprentissage) · ❓ <b>Aide</b> · 🔄 <b>Actualiser les cotes</b>
@@ -2184,6 +2186,8 @@ def _handle_command(text):
         return money.max_loss_command(args)
     if cmd == "/voies":
         return lanes.command(args)
+    if cmd in ("/incoherences", "/incohérences"):                   # rapport de la voie cotes (fantôme, kelly/oddsonly.py)
+        return oddsonly.report(args)
     if cmd == "/carte":                             # « carte [stats | saison] » : carte des edges par case (kelly/edgemap.py)
         return edgemap.report(args)
     if cmd == "/saison":

@@ -226,7 +226,7 @@ def test_declaration_matches_code():
     th = pre["thresholds"]
     assert (th["case_min_clv_lines"], th["aggregate_min_clv_lines"], th["min_distinct_matches"]) == (E.CASE_MIN, E.AGG_MIN, E.MIN_MATCHES) == (100, 300, 30)
     assert "14 jours" in json.dumps(led["amendments"], ensure_ascii=False) and E.STALE_DAYS == 14
-    assert E.GATE_WAIT_DAYS == 28 and E.VOIES == ("stats", "stats_cup", "saison", "saison_cup")
+    assert E.GATE_WAIT_DAYS == 28 and E.VOIES == ("stats", "stats_cup", "saison", "saison_cup", "cotes") and "cinquième voie « cotes »" in json.dumps(led["amendments"], ensure_ascii=False)
     print("ok  seuils et voies du code = pré-déclaration (empreinte inchangée)")
 
 
