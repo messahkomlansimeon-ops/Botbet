@@ -492,6 +492,8 @@ def test_a2_extra_time_not_settled_on_120_minutes():
     from kelly import lanestats as LS
     d = ensemble.unpack_archive_row("k", "2026-10-16", ensemble._pack(dict(ok, doubt=True)))
     assert d["doubt"] is True and not LS.settled(d) and LS.settled(dict(ok))
+    import inspect
+    assert '"doubt"' in inspect.getsource(settle.settle_oddsonly), "la voie cotes recopie doubt dans son journal"
     print("ok  A2 : un match AET / PEN n'est plus réglé sur les stats de 120 min (journal), statut introuvable = règlement douteux exclu de l'apprentissage")
 
 
@@ -537,6 +539,23 @@ def test_a2_tools():
     print("ok  A2 : outils de mesure (matchs AET / PEN du journal) et de lecture des statuts 365scores du cache")
 
 
+def test_extra_before_limit_marker():
+    from kelly import money
+    mk = lambda tier, date_, stake, res: {"tier": tier, "date": date_, "result": res, "odds": 5.0, "played": {"odds": 5.0, "stake": stake, "at": date_ + "T05:40+00:00"}, "legs": [], "keys": []}
+    bets = {"combos": [mk("🛡️ SÛR (cote 5 à 7)", "2026-10-13", 1500.0, "loss"), mk("🛡️ SÛR (cote 5 à 7)", "2026-10-14", 300.0, "loss")]}
+    assert money.before_limit(bets["combos"][0]) and not money.before_limit(bets["combos"][1])
+    lines = money.summary_lines(bets, [], [], today="2026-10-15")
+    assert any("dont 1 ticket noté avant la limite du jour (13/10), compté dans le total" in l for l in lines), lines
+    assert any("% de la mise récupérée" in l for l in lines), lines                       # la jauge reste là quand la mention s'ajoute (bug relevé à la relecture)
+    assert not money.before_limit({"date": "2026-10-13", "tier": "7"}) and not money.before_limit({"date": "2026-10-14", "tier": "m1"})
+    assert lines[0].startswith("7 derniers jours : ") and "sur 2" in lines[0], lines             # le total garde les deux tickets
+    lines2 = money.summary_lines({"combos": [bets["combos"][1]]}, [], [], today="2026-10-15")
+    assert not any("avant la limite" in l for l in lines2)
+    ids = {f"{c['date']}|{c['tier']}" for c in bets["combos"]}
+    assert "2026-10-13|🛡️ SÛR (cote 5 à 7)" in money.BEFORE_LIMIT and "2026-10-14|🛡️ SÛR (cote 5 à 7)" not in money.BEFORE_LIMIT and len(money.BEFORE_LIMIT) == 5, ids
+    print("ok  complément : tickets du 13/10 d'avant la limite marqués (liste figée), dans le total du bilan")
+
+
 def main():
     test_declaration_unchanged()
     test_a1_double_chance_freshness()
@@ -549,6 +568,7 @@ def main():
     test_a15_measure_tool()
     test_a2_extra_time_not_settled_on_120_minutes()
     test_a2_tools()
+    test_extra_before_limit_marker()
     test_a3_measure_tool()
     test_a3_x_clv_own_read()
     test_a3_mark_x_close_and_record()

@@ -24,7 +24,7 @@ Phase 2 (paris suivis) : le matin (app.run_daily) la section « 💰 1xBet paie 
 son code coupon et son bouton « ✅ Je l'ai joué » ; aux relevés (15:00, mise à jour manuelle) et aux passages horaires (clôture), xalerts en annonce de nouveaux
 APRÈS avoir relu le prix 1xBet en direct et recalculé l'écart à ce prix (check). Chaque pari annoncé est numéroté « g<n> » dans data/sharpgap_sent.json (dédoublonné
 par clé et par jour : jamais deux fois le même pari, au plus C.SHARPGAP_MAX_DAY par jour) et suivi comme les autres paris (track.record_gap : note, argent,
-clôture, règlement, bilan). Sa clôture mesure l'écart contre Pinnacle : r["gap_edge_close"] = cote prise x proba de clôture sans marge - 1 (track.close,
+clôture, règlement, bilan). Sa clôture mesure l'écart contre Pinnacle (chemin gratuit : sa vraie clôture football-data ; chemin payant : la moyenne des books pesée, voir track.close) : r["gap_edge_close"] = cote prise x proba de clôture sans marge - 1 (track.close,
 freeclose.fill : « CLV moyen contre Pinnacle », summary_line).
 """
 from collections import Counter
