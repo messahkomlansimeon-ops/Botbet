@@ -524,6 +524,16 @@ def _fx_load():
     return raw, meta if isinstance(meta, dict) else {}
 
 
+def cached_status(day, fixture_id):
+    """Statut (FT, AET, PEN, NS...) d'un match d'après les listes du jour DÉJÀ en cache (data/fixtures_day.json) ; None si la liste du jour ou le match n'y est pas. Lecture du disque seulement :
+    jamais une requête (le règlement du journal ne doit pas entamer le quota, A2 de l'audit du 17/10). Le statut de fixtures.json est figé au premier passage : il ne sert pas."""
+    lst = _fx_load()[0].get(str(day)[:10])
+    for f in lst if isinstance(lst, list) else []:
+        if isinstance(f, dict) and f.get("id") == fixture_id:
+            return f.get("status")
+    return None
+
+
 def _day_fixtures(day):
     """Tous les matchs du jour (UTC), en un seul appel par jour, mis en cache.
     - jour passé dont tous les matchs sont terminés : pour toujours, zéro requête ;

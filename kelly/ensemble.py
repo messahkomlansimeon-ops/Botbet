@@ -640,8 +640,8 @@ def _arrow(w, prior):
 
 
 def lines(data=None, short=False):
-    """Une ligne par famille apprise, en mots simples : « buts : Kelly compte pour 12 % (prévu 12 %), Pinnacle 75 % du marché (prévu 75 %) — 130 résultats »
-    (« Kelly » : poids du modèle face au marché ; « Pinnacle » : part des books de référence dans l'avis du marché face à 1xBet). `short` (bilan détaillé) :
+    """Une ligne par famille apprise, en mots simples : « buts : Kelly compte pour 12 % (prévu 12 %), books de référence 75 % du marché (prévu 75 %) — 130 résultats »
+    (« Kelly » : poids du modèle face au marché ; « books de référence » : part des books de référence dans l'avis du marché face à 1xBet). `short` (bilan détaillé) :
     « Corners · 53 % ↑ · 75 % · 165 », les familles les plus suivies d'abord (↑ / ↓ : plus ou moins que prévu au départ)."""
     d = load() if data is None else data
     out = []
@@ -652,10 +652,10 @@ def lines(data=None, short=False):
     for fam in sorted(d.get("fam") or {}):
         w = weights(fam, d)
         if w["frozen"]:
-            out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour 0 % (figé par l'audit du 14/10 : le modèle ne bat pas Pinnacle), Pinnacle "
+            out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour 0 % (figé par l'audit du 14/10 : le modèle ne bat pas Pinnacle), books de référence "
                        f"{w['ws'] * 100:.0f} % du marché (prévu {w['prior_ws'] * 100:.0f} %) — {w['n_m']:.0f} résultats")
             continue
-        out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour {w['wm'] * 100:.0f} % (prévu {w['prior_wm'] * 100:.0f} %), Pinnacle "
+        out.append(f"{calib.LABELS.get(fam, fam)} : Kelly compte pour {w['wm'] * 100:.0f} % (prévu {w['prior_wm'] * 100:.0f} %), books de référence "
                    f"{w['ws'] * 100:.0f} % du marché (prévu {w['prior_ws'] * 100:.0f} %) — {w['n_m']:.0f} résultats")
     return out
 
@@ -882,8 +882,8 @@ def mark_x_close(now=None, name=LOG_FILE, window_min=X_CLOSE_WINDOW_MIN):
 
 
 ARCH_PREFIX = "arch/ens/"          # un document par jour de la ligne : {"cols": ARCH_COLS, "rows": {clé: [valeurs dans l'ordre de cols]}} ; lu par les outils d'audit SEULEMENT
-ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref", "pe", "swhy", "refused", "cup", "mu", "val", "final")
-# mu / val / final : nombre attendu, nombre réel et score final (collecte des coupes ; une colonne ajoutée en fin reste compatible avec les anciennes lignes)
+ARCH_COLS = ("market", "id", "name", "point", "commence", "pm", "px", "ps", "xodds", "xclose", "xgone", "result", "shadow", "strategy", "xref", "sport_key", "sval", "ref", "pe", "swhy", "refused", "cup", "mu", "val", "final", "doubt")
+# doubt : règlement douteux (A2, audit du 17/10) ; mu / val / final : nombre attendu, nombre réel et score final (collecte des coupes ; une colonne ajoutée en fin reste compatible avec les anciennes lignes)
 # xclose : [cote, avance en minutes sur le coup d'envoi, prix suspendu 0/1, source « close_read » / « cache » ou None (anciennes lignes), vérifiée 0/1 (A3 : relevé postérieur à la prise, contrôlé avant l'archivage)] ; xgone : avance en minutes ou None ; shadow : [espérance du modèle seul, model_value 0/1, ancienne
 # règle ok 0/1, ancienne règle kind, ancienne proba] ; strategy : étiquette de la voie (posée plus tard, None d'ici là) ; xref : référence 1xBet de la prise
 
@@ -897,7 +897,7 @@ def _pack(r):
     return [r.get("market"), r.get("id"), r.get("name"), r.get("point"), r.get("commence"), r.get("pm"), r.get("px"), r.get("ps"), r.get("xodds"),
             [xc.get("odds"), xc.get("lead_min"), int(bool(xc.get("susp"))), xc.get("src"), int(verified)] if xc.get("odds") else None, (r.get("xgone") or {}).get("lead_min") if r.get("xgone") else None,
             r.get("result"), [sh.get("ev"), int(bool(sh.get("model_value"))), int(bool(sh.get("old_ok"))), sh.get("old_kind"), sh.get("old_p")] if sh else None,
-            r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref"), r.get("pe"), r.get("swhy"), r.get("refused"), r.get("cup"), r.get("mu"), r.get("val"), r.get("final")]
+            r.get("strategy"), r.get("xref"), r.get("sport_key"), r.get("sval"), r.get("ref"), r.get("pe"), r.get("swhy"), r.get("refused"), r.get("cup"), r.get("mu"), r.get("val"), r.get("final"), r.get("doubt")]
 
 
 def unpack_archive_row(key, day, vals):
@@ -923,7 +923,7 @@ def unpack_archive_row(key, day, vals):
         out["strategy"] = d["strategy"]
     if d["sport_key"]:                                  # la ligue : la coupure automatique de la voie stats se juge par ligue
         out["sport_key"] = d["sport_key"]
-    for k in ("sval", "ref", "pe", "swhy", "refused", "cup", "mu", "val", "final"):  # voie `saison` : jambe à valeur / de remplissage, ligne de référence, proba retenue
+    for k in ("sval", "ref", "pe", "swhy", "refused", "cup", "mu", "val", "final", "doubt"):  # voie `saison` : jambe à valeur / de remplissage, ligne de référence, proba retenue
         if d.get(k) is not None:
             out[k] = d[k]
     return out

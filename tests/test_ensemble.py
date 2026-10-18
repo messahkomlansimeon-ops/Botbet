@@ -625,7 +625,7 @@ def test_sharpgap():
     assert x["age_min"] == 20 and x["x_age_min"] == 20 and x["mins_to_start"] == 180 and x["src"] == "pinnacle" and x["key"] == ok["key"]
     assert abs(x["kelly_f"] - 0.05 / 1.1) < 1e-4
     d = sharpgap.describe(x)
-    assert d["title"] == "Home1 gagne" and d["line"] == "1xBet 2,10 · juste 2,00 (Pinnacle) · +5,0 %" and "il y a 20 min" in d["age"] and "dans 180 min" in d["age"], d
+    assert d["title"] == "Home1 gagne" and d["line"] == "1xBet 2,10 · juste 2,00 (moyenne des books, Pinnacle pesé) · +5,0 %" and "il y a 20 min" in d["age"] and "dans 180 min" in d["age"], d
     assert sharpgap.find(today, NOW, history={}) == res["cands"]
     # filtres : chacun compté sous sa raison
     cases = {

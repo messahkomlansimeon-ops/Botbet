@@ -442,7 +442,14 @@ def test_a2_extra_time_not_settled_on_120_minutes():
     stats.find_fixture = lambda day, home, away, kickoff=None: {"id": 99, "home_id": 1, "away_id": 2, "status": "FT"}      # fixtures.json figé au premier passage : ne dit rien de la prolongation
     stats.cached_stats = lambda fid: entry
     stats.fixture_stats = lambda fid, players=True: entry
-    set_status = lambda st: setattr(stats, "fixture_result", lambda day, home, away, kickoff=None: None if st is None else {"id": 99, "status": st, "finished": True, "home": 1, "away": 0})
+    from kelly import store as _store
+    calls = {"net": 0}
+    saved_get = stats.get
+    stats.get = lambda *a, **k: calls.__setitem__("net", calls["net"] + 1)           # toute requête API-Football est comptée : le règlement du journal n'en fait aucune de plus
+    stats.fixture_result = lambda day, home, away, kickoff=None: {"id": 99, "status": "FT", "finished": True, "home": 1, "away": 0}      # le score (football_score), pas le statut des stats
+
+    def set_status(st):
+        _store.save("fixtures_day.json", {ko[:10]: [] if st is None else [{"id": 99, "status": st, "home": "A", "away": "B", "gh": 1, "ga": 0}]})
 
     def row(market, point, key="k"):
         return {"key": key, "id": "e", "sport_key": "soccer_uefa_europa_league", "event": "A - B", "home": "A", "away": "B", "commence": ko, "market": market, "point": point,
@@ -479,6 +486,12 @@ def test_a2_extra_time_not_settled_on_120_minutes():
     finally:
         (fmmatch.match_stats, s365.match_stats, settle.watch_stats, settle.FootballData.stats, settle.FootballData.score, settle.fotmob_score,
          settle.FootballData.fotmob_score, settle.watch_score, settle.s365_score, stats.enabled, stats.find_fixture, stats.fixture_result, stats.cached_stats, stats.fixture_stats) = saved
+        stats.get = saved_get
+    assert calls["net"] == 0, calls
+    # le drapeau survit : archive aller-retour, mesures de voie (lanestats.settled), copie de la voie cotes
+    from kelly import lanestats as LS
+    d = ensemble.unpack_archive_row("k", "2026-10-16", ensemble._pack(dict(ok, doubt=True)))
+    assert d["doubt"] is True and not LS.settled(d) and LS.settled(dict(ok))
     print("ok  A2 : un match AET / PEN n'est plus réglé sur les stats de 120 min (journal), statut introuvable = règlement douteux exclu de l'apprentissage")
 
 

@@ -198,6 +198,18 @@
     "status": "mesure faite sur 6 jours : 0 ligne ; EN ATTENTE d'une sauvegarde récente"
    },
    "stakes": "aucun pari ni mise ne change ; seul l'apprentissage et le règlement du journal sont touchés."
+  },
+  {
+   "on": "2026-10-17",
+   "point": "A2",
+   "prereg_sha_unchanged": true,
+   "by": "assistant, après relecture adverse du commit A2",
+   "review_fixes": [
+    "RÉSEAU : le statut était lu par stats.fixture_result, qui peut appeler _day_fixtures et télécharger /fixtures (liste purgée après 10 jours, match encore NS) : une requête de plus par jour concerné et par passage, contre la règle « aucun changement de volume de lecture » ; remplacé par stats.cached_status, lecture du disque seulement (fixtures_day.json) ; le test compte les appels à stats.get : zéro",
+    "le drapeau doubt est conservé par l'archive (colonne ARCH_COLS « doubt », une colonne ajoutée en fin reste compatible), par la voie cotes (settle_oddsonly le recopie) et exclu des mesures de voie (lanestats.settled : un règlement douteux ne compte ni dans le CLV ni dans la coupure automatique ni dans la carte)",
+    "statut absent de la liste du jour en cache, ou autre que FT (NS resté dans une liste, 1H/2H/ET...) : doubt, prudent"
+   ],
+   "new_finding_not_fixed": "apistats.py:290 et 426 : l'apprentissage des profils d'équipe (corners, cartons, tirs, fautes) prend tout match de statut stats.DONE (FT, AET, PEN) et y ajoute les stats de 120 minutes alors que les buts utilisent le score du temps réglementaire : les moyennes qui alimentent mu sont faussées par les prolongations. Même famille de défaut, hors du périmètre demandé : proposé au LOT B."
   }
  ]
 }

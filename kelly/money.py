@@ -659,6 +659,16 @@ def gain(x):
     return played_gain(x)
 
 
+# Tickets du 13/10 notés AVANT l'introduction de la limite du jour (commit 54b8c86, 13/10 07:26 UTC ; notés entre 05:32 et 06:04 UTC) : LISTE FIGÉE (« date|palier »), pas une règle d'heure
+# (l'heure du commit n'est pas celle du déploiement sur le téléphone). Ils comptent dans le total du bilan, pas dans les moyennes par ticket (audit du 17/10, audit_fixes_ledger.json).
+BEFORE_LIMIT = frozenset(("2026-10-13|5", "2026-10-13|12", "2026-10-13|m1", "2026-10-13|m3", "2026-10-13|🛡️ SÛR (cote 5 à 7)"))
+
+
+def before_limit(x):
+    """Ticket noté avant la limite du jour (liste figée BEFORE_LIMIT) ?"""
+    return f"{x.get('date')}|{x.get('tier')}" in BEFORE_LIMIT
+
+
 def items(bets, rows, fair_rows):
     from .played import gap_rows, single_rows
     return list(bets.get("combos", [])) + single_rows(rows, bets.get("combos", [])) + gap_rows(rows) + list(fair_rows)
@@ -695,6 +705,9 @@ def summary_lines(bets, rows, fair_rows, today=None):
         n, total, staked = len(done), sum(g for _, g in done), sum(x["played"]["stake"] for x, _ in done)
         won = sum(1 for x, _ in done if x["result"] == "win")
         out.append(f"{label} : {signed(round(total))} · {won} gagné{'s' if won > 1 else ''} sur {n}")
+        early = sum(1 for x, _ in done if before_limit(x))
+        if early:                                   # dans le total, hors des moyennes par ticket : ils dépassaient la limite d'aujourd'hui
+            out.append(f"   dont {early} ticket{'s' if early > 1 else ''} noté{'s' if early > 1 else ''} avant la limite du jour (13/10) : dans le total, pas dans les moyennes par ticket")
         if staked and len(out) == 1:                # en perte : la part de la mise revenue (jauge) ; en gain : ce que la mise a rapporté
             back = max(0.0, (staked + total) / staked)
             out.append(f"{fmt.bar(back)} {round(back * 100)} % de la mise récupérée" if back < 1 else

@@ -52,7 +52,7 @@ def journal_rows():
 
 
 def settled(r):
-    return r.get("result") in ("win", "loss")
+    return r.get("result") in ("win", "loss") and not r.get("doubt")             # règlement douteux (A2, audit du 17/10) : hors des mesures de voie
 
 
 def x_clv(r, taken=None):

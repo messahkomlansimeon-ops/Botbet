@@ -266,7 +266,23 @@ def a2():
     print("  (noms d'équipes comparés à l'identique : un nom différent entre la ligne et la liste du jour n'est pas compté)")
 
 
-POINTS = {"a3": a3, "a1": a1, "a4": a4, "a13": a13, "a15": a15, "a2": a2}
+def pinnacle():
+    """Complément — voie sharpgap : combien de lignes changeraient de statut si la référence était Pinnacle seul quand il est présent ? Le prix de Pinnacle seul n'est PAS gardé par ligne (prob_book / p_sharp
+    = SHARP_WEIGHT x moyenne des books de référence + le reste x moyenne des autres books) : le comptage exact n'est pas reconstructible ; l'outil donne la répartition des écarts par source et le poids."""
+    from kelly import config as C, track
+    rows = [r for r in track.load() if isinstance(r, dict) and (r.get("sharpgap") or (r.get("mark") or {}).get("sharpgap"))]
+    print("Complément — référence Pinnacle seul")
+    by = defaultdict(int)
+    for r in rows:
+        g = r.get("gap") or {}
+        by[(g.get("src"), g.get("n_sharp"))] += 1
+    print(f"  source : tracked.json de la copie, {len(rows)} écarts sharp, fenêtre {window(rows)}")
+    print(f"  SHARP_WEIGHT = {C.SHARP_WEIGHT} (part des books de référence dans la proba ; le reste vient des books mous)")
+    print("  écarts par (source, nombre de books de référence) : " + (", ".join(f"{k}: {v}" for k, v in sorted(by.items(), key=str)) or "aucun"))
+    print("  NON reconstructible : le prix de Pinnacle seul n'est pas enregistré par ligne ; pour la suite, il faudrait journaliser p_pinnacle (une décision du superviseur).")
+
+
+POINTS = {"pinnacle": pinnacle, "a3": a3, "a1": a1, "a4": a4, "a13": a13, "a15": a15, "a2": a2}
 
 
 def main():

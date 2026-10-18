@@ -472,7 +472,7 @@ def settle_oddsonly(now=None, stats_for=None):
         if isinstance(r, dict) and r.get("result") is None and r.get("commence") and r.get("market") and r.get("mech") != "3":      # le mouvement (observation) n'a rien à régler
             try:
                 if _settle_fair_row(r, now, fdata, stats_for or _cached_fstats):
-                    done[r["key"]] = {k: r[k] for k in ("result", "final", "val") if k in r}
+                    done[r["key"]] = {k: r[k] for k in ("result", "final", "val", "doubt") if k in r}
             except Exception as e:                      # noqa: BLE001 - une ligne bancale ne bloque pas les autres
                 print(f"[cotes] ligne {r.get('key')} non réglée : {type(e).__name__}: {e}", file=sys.stderr)
 
@@ -512,9 +512,10 @@ def _cached_fstats(b):
     if not cur:
         return None
     # Les stats d'API-Football comptent les 120 minutes : jamais pour un match après prolongation / tirs au but (comme le chemin principal, match_stats). Le statut vient de la liste du jour
-    # (fixture_result), pas de fixtures.json (figé au premier passage, avant la fin du match). Statut introuvable : règlement douteux (A2, audit du 17/10), exclu de l'apprentissage.
+    # DÉJÀ en cache (stats.cached_status : aucune requête), pas de fixtures.json (figé au premier passage, avant la fin du match). Statut introuvable ou pas « FT » : règlement douteux
+    # (A2, audit du 17/10), exclu de l'apprentissage.
     try:
-        status = (stats.fixture_result(b["commence"][:10], b["home"], b["away"], kickoff=b["commence"]) or {}).get("status")
+        status = stats.cached_status(str(b["commence"])[:10], fx["id"])
     except Exception as e:                          # noqa: BLE001 - statut inconnu = douteux, jamais une exception
         print(f"[settle] statut du match introuvable : {type(e).__name__}: {e}", file=sys.stderr)
         status = None
@@ -873,7 +874,7 @@ def _bilan_detail(bets, days, rows, picks, combos):
         blocks.append(["🎲 <b>Suivi gratuit</b>"] + [e(x) for x in free])
     el = ensemble.lines(short=True)
     if el:
-        blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(avis de Kelly · part de Pinnacle · résultats)")] + [e(x) for x in el]
+        blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(avis de Kelly · part des books de référence · résultats)")] + [e(x) for x in el]
                       + [fmt.i("ℹ️ ↑ / ↓ : Kelly pèse plus ou moins que prévu au départ.")])
     fam, _ = _reliability_lines(note=False)
     if fam:

@@ -174,9 +174,9 @@ def _n(x, d=2):
 
 
 def describe(x):
-    """Textes prêts à afficher (sans HTML) : {"title", "line", "age"}. title : le pari ; line : « 1xBet 1,95 · juste 1,81 (Pinnacle) · +7,7 % » ;
+    """Textes prêts à afficher (sans HTML) : {"title", "line", "age"}. title : le pari ; line : « 1xBet 1,95 · juste 1,81 (moyenne des books, Pinnacle pesé) · +7,7 % » ;
     age : « relevé sharp il y a 12 min · match dans 95 min »."""
-    book = "Pinnacle" if x["src"] == "pinnacle" else f"{x['n_sharp']} books de référence"
+    book = "moyenne des books, Pinnacle pesé" if x["src"] == "pinnacle" else f"moyenne des books, {x['n_sharp']} de référence"      # prob_book mêle les books de référence et 30 % de books mous (odds.consensus) : ce n'est pas Pinnacle seul
     age = "âge du relevé sharp inconnu" if x.get("age_min") is None else f"relevé sharp il y a {x['age_min']} min"
     return {"title": x.get("pick") or x["name"],
             "line": f"1xBet {_n(x['xodds'])} · juste {_n(x['fair_odds'])} ({book}) · {x['edge'] * 100:+.1f} %".replace(".", ","),
@@ -248,7 +248,7 @@ def close_edge(xodds, p_close):
 
 
 def summary_line(rows, days=None, today=None):
-    """« Paris 1xBet en retard : 7 suivis (3 joués), CLV moyen contre Pinnacle +2,1 % (5 mesurés) » (texte brut) ; '' sans pari suivi. CLV : moyenne de
+    """« Paris 1xBet en retard : 7 suivis (3 joués), CLV moyen contre la moyenne des books +2,1 % (5 mesurés) » (texte brut) ; '' sans pari suivi. CLV : moyenne de
     r["gap_edge_close"] (close_edge) des paris dont la clôture vient de Pinnacle (r["gap_close_src"] « pinnacle »)."""
     mine = [r for r in rows if r.get("sharpgap") and r.get("sent")]
     if days:
@@ -261,6 +261,6 @@ def summary_line(rows, days=None, today=None):
     txt = f"Paris 1xBet en retard : {len(mine)} suivi{'s' if len(mine) > 1 else ''} ({played_} joué{'s' if played_ > 1 else ''})"
     if m:
         v = sum(m) / len(m) * 100
-        txt += (f", CLV moyen contre Pinnacle {'+' if v >= 0 else '−'}{fmt.num(abs(v), 1)} % "
-                f"(cote prise face à la cote finale de Pinnacle, {len(m)} mesuré{'s' if len(m) > 1 else ''})")
+        txt += (f", CLV moyen contre la moyenne des books {'+' if v >= 0 else '−'}{fmt.num(abs(v), 1)} % "
+                f"(cote prise face à la cote finale de la moyenne des books, {len(m)} mesuré{'s' if len(m) > 1 else ''})")
     return txt

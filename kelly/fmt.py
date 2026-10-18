@@ -567,7 +567,7 @@ def pronos(items, limit=10, title=None, intro=None, when=None):
 # ---------- « 💰 1xBet paie plus que le marché » (kelly/sharpgap.py) ----------
 
 GAP_TITLE = "💰 1xBet paie plus que le marché"
-GAP_INTRO = ("La cote 1xBet est au-dessus de la cote juste des books de référence (Pinnacle, marge retirée) : ce n'est pas un avis de Kelly sur le match, "
+GAP_INTRO = ("La cote 1xBet est au-dessus de la cote juste de la moyenne des books (Pinnacle et autres books de référence pesés, marge retirée) : ce n'est pas un avis de Kelly sur le match, "
              "c'est un prix en retard chez 1xBet. Vérifie la cote avant de valider.")
 
 

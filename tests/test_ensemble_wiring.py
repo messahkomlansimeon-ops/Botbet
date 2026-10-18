@@ -658,8 +658,8 @@ def test_morning_gap_section_and_tracking():
         assert len(gm) == 1, [str(m)[:60] for m in msgs]
         msg, text = gm[0], fmt.plain(str(gm[0]))
         # contenu : l'explication, un bloc par pari (match, cotes, âge du relevé, mise, code coupon), les boutons « ✅ Je l'ai joué » g1..g3
-        assert text.startswith("💰 1xBet paie plus que le marché · 08:55\nLa cote 1xBet est au-dessus de la cote juste des books de référence (Pinnacle, marge retirée)")
-        assert "Home2 – Away2" in text and "Home2 gagne — 1xBet 2,18 · juste 2,04 (Pinnacle) · +7,0 %" in text and "relevé sharp il y a 20 min · match dans 600 min" in text
+        assert text.startswith("💰 1xBet paie plus que le marché · 08:55\nLa cote 1xBet est au-dessus de la cote juste de la moyenne des books (Pinnacle et autres books de référence pesés, marge retirée)")
+        assert "Home2 – Away2" in text and "Home2 gagne — 1xBet 2,18 · juste 2,04 (moyenne des books, Pinnacle pesé) · +7,0 %" in text and "relevé sharp il y a 20 min · match dans 600 min" in text
         assert "Home1" not in text, "le pari du jour (e1) n'est pas repris"
         assert text.count("🎟️ Code coupon 1xBet : CODE") == 3 and text.count("💰 Mise conseillée : ") == 3 and "pas de mise" not in text
         assert [("e2", cands[1]["xodds"])] in f.coupons and [("e4", cands[3]["xodds"])] in f.coupons, "un code coupon par pari seul, à la cote 1xBet lue"
@@ -1154,21 +1154,21 @@ def test_weekly_bilan_and_morning_results():
     reset()
     gaps = settled_gap_rows()
     line = sharpgap.summary_line(track.load())
-    assert line == "Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre Pinnacle +2,3 % (cote prise face à la cote finale de Pinnacle, 3 mesurés)", line
+    assert line == "Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre la moyenne des books +2,3 % (cote prise face à la cote finale de la moyenne des books, 3 mesurés)", line
     assert sharpgap.summary_line([]) == "" and "CLV" not in sharpgap.summary_line([r | {"gap_edge_close": None} for r in track.load()])
     assert sharpgap.summary_line(track.load(), days=7, today="2030-02-01") == "", "hors de la période"
     # poids appris : une ligne par famille, en mots simples
     E.learn([{"key": f"w{i}", "date": DAY, "market": "totals", "result": "win" if i % 2 else "loss", "pm": 0.7, "px": 0.55, "ps": 0.6} for i in range(40)])
     lines = E.lines()
-    assert lines and lines[0].startswith("buts : Kelly compte pour 12 % (prévu 12 %), Pinnacle 75 % du marché (prévu 75 %) — 4"), lines
+    assert lines and lines[0].startswith("buts : Kelly compte pour 12 % (prévu 12 %), books de référence 75 % du marché (prévu 75 %) — 4"), lines
     # la semaine
     msg = fmt.plain(str(weekly.message(datetime(2030, 1, 2, 4, 0, tzinfo=UTC))))
     assert "⚖️ Qui Kelly écoute (appris sur les résultats" in msg and "buts : Kelly compte pour 12 %" in msg, msg
-    assert "💰 Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre Pinnacle +2,3 %" in msg, msg
+    assert "💰 Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre la moyenne des books +2,3 %" in msg, msg
     # /bilan : la ligne en mots simples, le détail avec les poids appris
     bets = store.load("bets.json", {"picks": [], "combos": []})
     simple = fmt.plain(str(settle.bilan(bets)))
-    assert "💰 Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre Pinnacle +2,3 %" in simple, simple
+    assert "💰 Paris 1xBet en retard : 4 suivis (1 joué), CLV moyen contre la moyenne des books +2,3 %" in simple, simple
     detail = settle.bilan(bets, detail=True)
     assert "Paris 1xBet en retard : 4 suivis" in detail and "Qui Kelly écoute</b>" in detail and "\nButs · 12 % · " in detail, detail
     # rien de tel sans données : pas de ligne

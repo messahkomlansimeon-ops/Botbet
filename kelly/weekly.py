@@ -128,7 +128,7 @@ def message(now=None):
         blocks.append(["📏 <b>Fiabilité par marché</b> " + fmt.i("(les résultats récents comptent plus)")] + [fmt.esc(x) for x in fam])
     el = ensemble.lines()
     if el:
-        blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(appris sur les résultats : son poids face au marché, Pinnacle face à 1xBet)")]
+        blocks.append(["⚖️ <b>Qui Kelly écoute</b> " + fmt.i("(appris sur les résultats : son poids face au marché, books de référence face à 1xBet)")]
                       + [fmt.esc(x) for x in el])
     lg = calib.league_rows(data)
     if len(lg) >= 2:
